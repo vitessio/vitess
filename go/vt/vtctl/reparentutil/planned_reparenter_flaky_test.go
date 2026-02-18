@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -456,8 +455,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -1173,8 +1171,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -1772,8 +1769,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -1931,8 +1927,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -2464,8 +2459,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -3361,8 +3355,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -3558,7 +3551,8 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                   "success - promote replica required",
 			durability:             policy.DurabilitySemiSync,
 			promoteReplicaRequired: true,
@@ -3634,7 +3628,8 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                   "Promote replica failed",
 			durability:             policy.DurabilitySemiSync,
 			promoteReplicaRequired: true,
@@ -4119,7 +4114,7 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: fmt.Errorf("primary status failed"),
+						Error: errors.New("primary status failed"),
 					},
 					"zone1-0000000201": {
 						Statuses: map[string]string{
@@ -4225,8 +4220,7 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 

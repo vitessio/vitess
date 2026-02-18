@@ -29,7 +29,6 @@ import (
 )
 
 func TestRevertible(t *testing.T) {
-
 	type revertibleTestCase struct {
 		name       string
 		fromSchema string
@@ -41,7 +40,7 @@ func TestRevertible(t *testing.T) {
 		expandedColumnNames         string
 	}
 
-	var testCases = []revertibleTestCase{
+	testCases := []revertibleTestCase{
 		{
 			name:       "identical schemas",
 			fromSchema: `id int primary key, i1 int not null default 0`,
@@ -185,9 +184,7 @@ func TestRevertible(t *testing.T) {
 		},
 	}
 
-	var (
-		createTableWrapper = `CREATE TABLE t (%s)`
-	)
+	createTableWrapper := `CREATE TABLE t (%s)`
 
 	senv := schemadiff.NewTestEnv()
 	venv := vtenv.NewTestEnv()

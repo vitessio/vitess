@@ -515,7 +515,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
 	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
 ) ([]*topodatapb.Tablet, error) {
-
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
 		replicaMutex               sync.Mutex
@@ -679,7 +678,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			return replicasStartedReplication, nil
 		}
 	}
-
 }
 
 // isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
@@ -872,7 +870,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
@@ -906,7 +904,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs))
 			continue
 		}
 		updatedValidCandidates[alias] = validCandidates[alias]

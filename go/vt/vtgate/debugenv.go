@@ -130,7 +130,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	addIntVar := func(varname string, f func() int) {
 		vars = append(vars, envValue{
 			VarName: varname,
-			Value:   fmt.Sprintf("%v", f()),
+			Value:   strconv.Itoa(f()),
 		})
 	}
 	addDurationVar := func(varname string, f func() time.Duration) {
@@ -163,7 +163,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
 		if err := debugEnvRow.Execute(w, v); err != nil {
-			log.Errorf("debugenv: couldn't execute template: %v", err)
+			log.Error(fmt.Sprintf("debugenv: couldn't execute template: %v", err))
 		}
 	}
 	w.Write(endTable)

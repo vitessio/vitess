@@ -77,7 +77,6 @@ func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTa
 				OpCode: engine.EqualUnique,
 			},
 		}
-
 	}
 	// Find the tableInfo for the given id
 	ti, err := ctx.SemTable.TableInfoFor(id)
@@ -284,7 +283,6 @@ func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
 		return nil, found
-
 	}
 	return nil, false
 }
@@ -632,10 +630,8 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 
 func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
-		for _, col := range v.ColVindex.Columns {
-			if column.Name.Equal(col) {
-				return true
-			}
+		if slices.ContainsFunc(v.ColVindex.Columns, column.Name.Equal) {
+			return true
 		}
 	}
 	return false

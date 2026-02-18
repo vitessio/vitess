@@ -30,9 +30,11 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
-const timerInitialValue = 10000
-const defaultTimeout = 3
-const defaultStackLimit = 0
+const (
+	timerInitialValue = 10000
+	defaultTimeout    = 3
+	defaultStackLimit = 0
+)
 
 type Matcher struct {
 	pattern *Pattern
@@ -1251,7 +1253,6 @@ func (m *Matcher) isWordBoundary(pos int) bool {
 
 	prevCIsWord := false
 	for pos > m.lookStart {
-
 		prevChar := charAt(m.input, pos-1)
 		pos--
 		if !(uprops.HasBinaryProperty(prevChar, uprops.UCharGraphemeExtend) || uchar.CharType(prevChar) == uchar.FormatChar) {

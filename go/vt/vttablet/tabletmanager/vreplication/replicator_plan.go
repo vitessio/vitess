@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -409,12 +408,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// present. So we have to account for this by unsetting the data bit so
 						// that the column's current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
-						escapedName := sqlescape.EscapeID(field.Name)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(afterVals[i].RawStr(), escapedName),
-						)))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
@@ -510,9 +507,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
 						buf.WriteByte('\'')
-						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(diff, buf.String()),
-						))
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, diff, buf.String()))
 						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
@@ -680,6 +676,7 @@ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariab
 	}
 	return sql, nil
 }
+
 func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	query, err := getQuery(pq, bindvars)
 	if err != nil {

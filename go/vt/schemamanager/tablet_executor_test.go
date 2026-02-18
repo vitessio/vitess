@@ -18,7 +18,7 @@ package schemamanager
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -35,9 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var (
-	testWaitReplicasTimeout = 10 * time.Second
-)
+var testWaitReplicasTimeout = 10 * time.Second
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)
@@ -53,8 +51,7 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -331,7 +328,7 @@ func TestBatchSQLs(t *testing.T) {
 		},
 	}
 	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%d", tcase.batchSize), func(t *testing.T) {
+		t.Run(strconv.Itoa(tcase.batchSize), func(t *testing.T) {
 			batchedSQLs := batchSQLs(sqls, tcase.batchSize)
 			assert.Equal(t, tcase.expectSQLs, batchedSQLs)
 		})

@@ -78,10 +78,12 @@ type TestState struct {
 
 var testState = &TestState{}
 
-var positions map[string]string
-var allEvents []*binlogdatapb.VEvent
-var muAllEvents sync.Mutex
-var callbacks map[string]func()
+var (
+	positions   map[string]string
+	allEvents   []*binlogdatapb.VEvent
+	muAllEvents sync.Mutex
+	callbacks   map[string]func()
+)
 
 func TestVStreamCopyFilterValidations(t *testing.T) {
 	if testing.Short() {
@@ -103,7 +105,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
+	getUVStreamer := func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
 			ctx:        ctx,
 			cancel:     cancel,
@@ -119,7 +121,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		}
 		return uvs
 	}
-	var testFilter = func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
+	testFilter := func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
 		uvs := getUVStreamer(&binlogdatapb.Filter{Rules: rules}, tablePKs)
 		if expectedError == "" {
 			require.NoError(t, uvs.init())
@@ -163,7 +165,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/x.*"}}, nil, []string{""}, "stream needs a position or a table to copy"})
 
 	for _, tc := range testCases {
-		log.Infof("Running %v", tc.rules)
+		log.Info(fmt.Sprintf("Running %v", tc.rules))
 		testFilter(tc.rules, tc.tablePKs, tc.expected, tc.expectedError)
 	}
 }
@@ -214,10 +216,9 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Info("Inserting row for fast forward to find, locking t2")
 		conn.ExecuteFetch("lock tables t2 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+2)
-		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
+		log.Info("Position after second insert into t1: " + primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks[fmt.Sprintf("OTHER.*%s t3", copyPhaseStart)] = func() {
@@ -229,10 +230,9 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		conn.ExecuteFetch("lock tables t3 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+3)
 		insertRow(t, "t2", 2, numInitialRows+2)
-		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
+		log.Info("Position after third insert into t1: " + primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks["COPY_COMPLETED"] = func() {
@@ -264,14 +264,14 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	var lastRowEventSeen bool
 
 	callbacks["ROW.*t3.*13390"] = func() {
-		log.Infof("Saw last row event")
+		log.Info("Saw last row event")
 		lastRowEventSeen = true
 	}
 
 	callbacks["COMMIT"] = func() {
-		log.Infof("Got commit, lastRowSeen is %t", lastRowEventSeen)
+		log.Info(fmt.Sprintf("Got commit, lastRowSeen is %t", lastRowEventSeen))
 		if lastRowEventSeen {
-			log.Infof("Found last row event, canceling context")
+			log.Info("Found last row event, canceling context")
 			cancel()
 		}
 	}
@@ -283,7 +283,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		printAllEvents("Timed out")
 		t.Fatal("Timed out waiting for events")
 	case <-ctx.Done():
-		log.Infof("Received context.Done, ending test")
+		log.Info("Received context.Done, ending test")
 	}
 	muAllEvents.Lock()
 	defer muAllEvents.Unlock()
@@ -291,7 +291,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		printAllEvents(fmt.Sprintf("Received %d events, expected %d", len(allEvents), numExpectedEvents))
 		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
 	} else {
-		log.Infof("Successfully received %d events", numExpectedEvents)
+		log.Info(fmt.Sprintf("Successfully received %d events", numExpectedEvents))
 	}
 	validateReceivedEvents(t)
 	validateMetrics(t)
@@ -374,7 +374,7 @@ func initTables(t *testing.T, tables []string) {
 		tableName := table
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
-		positions[fmt.Sprintf("%sBulkInsert", table)] = primaryPosition(t)
+		positions[table+"BulkInsert"] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			ctx := context.Background()
@@ -394,7 +394,7 @@ func initTables(t *testing.T, tables []string) {
 					"commit",
 				}
 				env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-				log.Infof("Position after first insert into t1 and t2: %s", primaryPosition(t))
+				log.Info("Position after first insert into t1 and t2: " + primaryPosition(t))
 			}
 		}
 	}
@@ -410,8 +410,7 @@ func initTables(t *testing.T, tables []string) {
 			"commit",
 		}
 		env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-		log.Infof("Position after insert into t1 and t2 after t2 complete: %s", primaryPosition(t))
-
+		log.Info("Position after insert into t1 and t2 after t2 complete: " + primaryPosition(t))
 	}
 	positions["afterInitialInsert"] = primaryPosition(t)
 }
@@ -422,14 +421,14 @@ func initialize(t *testing.T) {
 	positions = make(map[string]string)
 	initTables(t, testState.tables)
 	callbacks["gtid.*"+positions["afterInitialInsert"]] = func() {
-		log.Infof("Callback: afterInitialInsert")
+		log.Info("Callback: afterInitialInsert")
 	}
 }
 
 func getRule(table string) *binlogdatapb.Rule {
 	return &binlogdatapb.Rule{
 		Match:  table,
-		Filter: fmt.Sprintf("select * from %s", table),
+		Filter: "select * from " + table,
 	}
 }
 
@@ -448,9 +447,9 @@ func insertRow(t *testing.T, table string, idx int, id int) {
 }
 
 func printAllEvents(msg string) {
-	log.Errorf("%s: Received %d events", msg, len(allEvents))
+	log.Error(fmt.Sprintf("%s: Received %d events", msg, len(allEvents)))
 	for i, ev := range allEvents {
-		log.Errorf("%d:\t%s", i, ev)
+		log.Error(fmt.Sprintf("%d:\t%s", i, ev))
 	}
 }
 

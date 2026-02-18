@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -100,8 +101,8 @@ type uvstreamerConfig struct {
 
 func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
 	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
-	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
-
+	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -115,7 +116,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		}
 		err := send(evs)
 		if err != nil {
-			log.Infof("uvstreamer replicate send() returned with err %v", err)
+			log.Info(fmt.Sprintf("uvstreamer replicate send() returned with err %v", err))
 		}
 		return err
 	}
@@ -200,7 +201,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 		plan.tablePK = tablePK
 		uvs.plans[tableName] = plan
 		uvs.tablesToCopy = append(uvs.tablesToCopy, tableName)
-
 	}
 	sort.Strings(uvs.tablesToCopy)
 	return nil
@@ -213,7 +213,6 @@ func matchTable(tableName string, filter *binlogdatapb.Filter, tables map[string
 	}
 	found := false
 	for _, rule := range filter.Rules {
-
 		switch {
 		case tableName == rule.Match:
 			found = true
@@ -257,7 +256,7 @@ func getQuery(tableName string, filter string) string {
 }
 
 func (uvs *uvstreamer) Cancel() {
-	log.Infof("uvstreamer context is being cancelled")
+	log.Info("uvstreamer context is being cancelled")
 	uvs.cancel()
 }
 
@@ -343,27 +342,27 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
-		log.Infof("uvstreamer catchup/fastforward send() returning with send error %v", err)
+		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward send() returning with send error %v", err))
 		return err
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
 			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
-				log.Infof("Reached stop position %v, returning io.EOF", uvs.stopPos)
+				log.Info(fmt.Sprintf("Reached stop position %v, returning io.EOF", uvs.stopPos))
 				err = io.EOF
 			}
 		}
 	}
 	if err != nil {
-		log.Infof("uvstreamer catchup/fastforward returning with EOF error %v", err)
+		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward returning with EOF error %v", err))
 		uvs.vse.errorCounts.Add("Send", 1)
 	}
 	return err
 }
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
-	log.Infof("sendEventsForCurrentPos")
+	log.Info("sendEventsForCurrentPos")
 	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: replication.EncodePosition(uvs.pos),
@@ -417,10 +416,10 @@ func (uvs *uvstreamer) currentPosition() (replication.Position, error) {
 // 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
 // 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
 //
-// If TablesToCopy option is not nil, copy only the tables listed in TablesToCopy.
-// For other tables not in TablesToCopy, if startPos is set, perform catchup starting from startPos.
+// If table copy phase should run based on one of the previous states, then only copy the tables in
+// TablesToCopy list.
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ || len(uvs.options.GetTablesToCopy()) > 0 /* copy specific tables */ {
+	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
@@ -431,7 +430,7 @@ func (uvs *uvstreamer) init() error {
 		}
 	}
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
-		return fmt.Errorf("stream needs a position or a table to copy")
+		return errors.New("stream needs a position or a table to copy")
 	}
 	return nil
 }
@@ -445,7 +444,7 @@ func (uvs *uvstreamer) Stream() error {
 	if len(uvs.plans) > 0 {
 		log.Info("TablePKs is not nil: starting vs.copy()")
 		if err := uvs.copy(uvs.ctx); err != nil {
-			log.Infof("uvstreamer.Stream() copy returned with err %s", err)
+			log.Info(fmt.Sprintf("uvstreamer.Stream() copy returned with err %s", err))
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
@@ -546,7 +545,7 @@ func (uvs *uvstreamer) copyComplete(tableName string) error {
 
 func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	if gtid == "" {
-		return fmt.Errorf("empty gtid passed to setPosition")
+		return errors.New("empty gtid passed to setPosition")
 	}
 	pos, err := replication.DecodePosition(gtid)
 	if err != nil {

@@ -86,7 +86,7 @@ type MissingParams struct {
 }
 
 func (e *MissingParams) Error() string {
-	return fmt.Sprintf("missing required params: %s", strings.Join(e.Params, ", "))
+	return "missing required params: " + strings.Join(e.Params, ", ")
 }
 
 func (e *MissingParams) Code() string    { return "missing params" }

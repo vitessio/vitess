@@ -44,7 +44,7 @@ var databaseCreatorPlugins = map[string]DBDDLPlugin{}
 // A duplicate plugin will generate a panic.
 func DBDDLRegister(name string, plugin DBDDLPlugin) {
 	if _, ok := databaseCreatorPlugins[name]; ok {
-		panic(fmt.Sprintf("%s is already registered", name))
+		panic(name + " is already registered")
 	}
 	databaseCreatorPlugins[name] = plugin
 }
@@ -90,7 +90,7 @@ func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	name := vcursor.GetDBDDLPluginName()
 	plugin, ok := databaseCreatorPlugins[name]
 	if !ok {
-		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
+		log.Error(fmt.Sprintf("'%s' database ddl plugin is not registered. Falling back to default plugin", name))
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
 

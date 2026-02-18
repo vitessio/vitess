@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -65,7 +66,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !catArgs.Force || err != zk.ErrNoNode {
-				log.Warningf("cat: cannot access %v: %v", zkPath, err)
+				log.Warn(fmt.Sprintf("cat: cannot access %v: %v", zkPath, err))
 			}
 			continue
 		}
@@ -77,7 +78,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if catArgs.DecodeProto {
 			decoded, err = topo.DecodeContent(zkPath, data, false)
 			if err != nil {
-				log.Warningf("cat: cannot proto decode %v: %v", zkPath, err)
+				log.Warn(fmt.Sprintf("cat: cannot proto decode %v: %v", zkPath, err))
 				decoded = string(data)
 			}
 		} else {
@@ -89,7 +90,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if hasError {
-		return fmt.Errorf("cat: some paths had errors")
+		return errors.New("cat: some paths had errors")
 	}
 	return nil
 }

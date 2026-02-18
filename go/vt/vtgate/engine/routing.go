@@ -19,6 +19,8 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"maps"
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -260,7 +262,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	// we only have table_schema to work with
 	destinations, _, err := vcursor.ResolveDestinations(ctx, specifiedKS, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 	if err != nil {
-		log.Errorf("failed to route information_schema query to keyspace [%s]", specifiedKS)
+		log.Error(fmt.Sprintf("failed to route information_schema query to keyspace [%s]", specifiedKS))
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 		return defaultRoute()
 	}
@@ -498,7 +500,6 @@ func resolveShards(
 	destinations, err := vindex.Map(ctx, vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -563,7 +564,6 @@ func resolveShardsBetween(ctx context.Context, vcursor VCursor, vindex vindexes.
 	destinations, err := vindex.RangeMap(ctx, vcursor, vindexKeys[0], vindexKeys[1])
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -574,9 +574,7 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
 	for i, vals := range mapVals {
 		newbv := make(map[string]*querypb.BindVariable, len(bv)+1)
-		for k, v := range bv {
-			newbv[k] = v
-		}
+		maps.Copy(newbv, bv)
 		newbv[ListVarName] = &querypb.BindVariable{
 			Type:   querypb.Type_TUPLE,
 			Values: vals,
@@ -590,9 +588,7 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
 	for i, shardVals := range mapVals {
 		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
-		for k, v := range bv {
-			newbv[k] = v
-		}
+		maps.Copy(newbv, bv)
 		for j, vals := range shardVals {
 			if _, found := isSingleVal[j]; found {
 				// this vindex column is non-tuple column hence listVal bind variable is not required to be set.

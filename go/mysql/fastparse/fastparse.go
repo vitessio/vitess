@@ -38,7 +38,7 @@ func ParseUint64WithNeg(s string, base int) (uint64, error) {
 // but on error it will return the best effort value of what it has parsed so far.
 func parseUint64(s string, base int, allowNeg bool) (uint64, error) {
 	if len(s) == 0 {
-		return 0, fmt.Errorf("cannot parse uint64 from empty string")
+		return 0, errors.New("cannot parse uint64 from empty string")
 	}
 	if base < 2 || base > 36 {
 		return 0, fmt.Errorf("invalid base %d; must be in [2, 36]", base)
@@ -138,7 +138,7 @@ var ErrOverflow = errors.New("overflow")
 // but on error it will return the best effort value of what it has parsed so far.
 func ParseInt64(s string, base int) (int64, error) {
 	if len(s) == 0 {
-		return 0, fmt.Errorf("cannot parse int64 from empty string")
+		return 0, errors.New("cannot parse int64 from empty string")
 	}
 	if base < 2 || base > 36 {
 		return 0, fmt.Errorf("invalid base %d; must be in [2, 36]", base)
@@ -245,7 +245,7 @@ next:
 // but on error it will return the best effort value of what it has parsed so far.
 func ParseFloat64(s string) (float64, error) {
 	if len(s) == 0 {
-		return 0.0, fmt.Errorf("cannot parse float64 from empty string")
+		return 0.0, errors.New("cannot parse float64 from empty string")
 	}
 	i := uint(0)
 	for i < uint(len(s)) {

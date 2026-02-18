@@ -18,6 +18,7 @@ package tb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
 	"testing"
@@ -62,11 +63,11 @@ func TestFunction(t *testing.T) {
 
 func TestErrorf(t *testing.T) {
 	s1 := stackError{
-		err:        fmt.Errorf("err1"),
+		err:        errors.New("err1"),
 		stackTrace: "stackTrace1",
 	}
 	s2 := stackError{
-		err:        fmt.Errorf("err2"),
+		err:        errors.New("err2"),
 		stackTrace: "stackTrace2",
 	}
 	err := Errorf("test msg %v %v", s1, s2)

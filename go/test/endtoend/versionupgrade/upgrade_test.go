@@ -81,7 +81,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -126,7 +126,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestShards(t *testing.T) {
@@ -134,13 +133,12 @@ func TestShards(t *testing.T) {
 }
 
 func TestDeploySchema(t *testing.T) {
-
 	if clusterInstance.ReusingVTDATAROOT {
 		// we assume data is already deployed
 		return
 	}
 	// Create n tables, populate
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
 
 		{
@@ -160,7 +158,6 @@ func TestDeploySchema(t *testing.T) {
 }
 
 func TestTablesExist(t *testing.T) {
-
 	checkTables(t, "", totalTableCount)
 }
 
@@ -182,7 +179,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 // TestTablesData checks the data in tables
 func TestTablesData(t *testing.T) {
 	// Create n tables, populate
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
 
 		for i := range clusterInstance.Keyspaces[0].Shards {

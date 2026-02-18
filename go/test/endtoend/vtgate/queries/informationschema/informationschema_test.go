@@ -133,7 +133,7 @@ func TestUseSystemSchema(t *testing.T) {
 	defer closer()
 
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
-		mcmp.Exec(fmt.Sprintf("use %s", dbname))
+		mcmp.Exec("use " + dbname)
 		mcmp.Exec(`select @@max_allowed_packet from dual`)
 	}
 }
@@ -163,7 +163,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	qr2 := utils.Exec(t, mcmp.VtConn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	connParams := vtParams
 	connParams.DbName = "information_schema"
 	conn2, err := mysql.Connect(ctx, &connParams)
@@ -212,7 +212,7 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, conn, "set workload = "+workload)
 			utils.Exec(t, conn, "start transaction")
 			utils.Exec(t, conn, `select connection_id()`)
 			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)

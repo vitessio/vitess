@@ -94,13 +94,13 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:   tableName,
-				Schema: fmt.Sprintf("%s_schema", tableName),
+				Schema: tableName + "_schema",
 			}},
 		}
 		env.tmc.schema[ms.TargetKeyspace+"."+ts.TargetTable] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:   ts.TargetTable,
-				Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
+				Schema: ts.TargetTable + "_schema",
 			}},
 		}
 	}
@@ -287,9 +287,9 @@ func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	stmts := strings.Split(change.SQL, ";")
+	stmts := strings.SplitSeq(change.SQL, ";")
 
-	for _, stmt := range stmts {
+	for stmt := range stmts {
 		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:        []byte(stmt),
 			MaxRows:      0,

@@ -203,8 +203,7 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 		"repeated, comma-separated list of tags to use when discovering hosts to connect to. "+
 			"the semantics of the tags may depend on the specific discovery implementation used.")
 	fs.Var(&opts.BalancerPolicy, "grpc-balancer-policy",
-		fmt.Sprintf("Specify a load balancer policy to use for resolvers built by these options (the default grpc behavior is pick_first). Valid choices are %s",
-			strings.Join(allBalancerPolicies, ",")))
+		"Specify a load balancer policy to use for resolvers built by these options (the default grpc behavior is pick_first). Valid choices are "+strings.Join(allBalancerPolicies, ","))
 
 	fs.DurationVar(&opts.MinDiscoveryInterval, "min-rediscovery-interval", time.Second*30,
 		"Minimum amount of time to wait between successful discovery resolution calls. "+
@@ -371,17 +370,17 @@ func (r *resolver) watch() {
 		case nil:
 			switch len(state.Addresses) {
 			case 0:
-				log.Warningf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster)
+				log.Warn(fmt.Sprintf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster))
 			default:
-				log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster)
+				log.Info(fmt.Sprintf("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster))
 			}
 
 			if updateErr := r.cc.UpdateState(*state); updateErr != nil {
-				log.Errorf("%s: failed to update %ss addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, updateErr)
+				log.Error(fmt.Sprintf("%s: failed to update %ss addresses (cluster %s): %s", logPrefix, r.component, r.cluster, updateErr))
 				err = updateErr
 			}
 		default:
-			log.Errorf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err)
+			log.Error(fmt.Sprintf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err))
 			r.cc.ReportError(err)
 		}
 
@@ -426,7 +425,7 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 	span.Annotate("cluster_id", r.cluster)
 	span.Annotate("component", r.component)
 
-	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster)
+	log.Info(fmt.Sprintf("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster))
 
 	ctx, cancel := context.WithTimeout(ctx, r.opts.DiscoveryTimeout)
 	defer cancel()

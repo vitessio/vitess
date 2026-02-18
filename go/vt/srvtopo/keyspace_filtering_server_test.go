@@ -18,7 +18,7 @@ package srvtopo
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -71,8 +71,7 @@ func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
 }
 
 func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, nil)
 	got, gotErr := f.GetTopoServer()
 	if gotErr != nil {
@@ -110,24 +109,21 @@ func doTestGetSrvKeyspaceNames(
 }
 
 func TestFilteringServerGetSrvKeyspameNamesFiltersEverythingOut(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, nil)
 	doTestGetSrvKeyspaceNames(t, f, stockCell, []string{}, nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesFiltersKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, stockFilters)
 	doTestGetSrvKeyspaceNames(t, f, stockCell, stockFilters, nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesPassesThroughErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
-	wantErr := fmt.Errorf("some badcell error")
+	wantErr := errors.New("some badcell error")
 	mock.SrvKeyspaceNamesError = wantErr
 	doTestGetSrvKeyspaceNames(t, f, "badcell", stockFilters, wantErr)
 }
@@ -148,17 +144,15 @@ func doTestGetSrvKeyspace(
 }
 
 func TestFilteringServerGetSrvKeyspaceReturnsSelectedKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspace = stockKeyspaces["bar"]
 	doTestGetSrvKeyspace(t, f, stockCell, "bar", stockKeyspaces["bar"], nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	wantErr := fmt.Errorf("some error")
+	ctx := t.Context()
+	wantErr := errors.New("some error")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspace = stockKeyspaces["bar"]
 	mock.SrvKeyspaceError = wantErr
@@ -166,8 +160,7 @@ func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
 }
 
 func TestFilteringServerGetSrvKeyspaceFilters(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	wantErr := topo.NewError(topo.NoNode, "foo")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspaceError = wantErr
@@ -175,8 +168,7 @@ func TestFilteringServerGetSrvKeyspaceFilters(t *testing.T) {
 }
 
 func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
 
 	allowed := map[string]bool{}
@@ -212,10 +204,9 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 }
 
 func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
-	wantErr := fmt.Errorf("some err")
+	wantErr := errors.New("some err")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.WatchedSrvVSchema = nil
 	mock.WatchedSrvVSchemaError = wantErr

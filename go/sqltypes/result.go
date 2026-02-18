@@ -18,6 +18,7 @@ package sqltypes
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 
@@ -284,7 +285,7 @@ func hashCodeForRow(val []Value) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%v", val)
 
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // MakeRowTrusted converts a *querypb.Row to []Value based on the types

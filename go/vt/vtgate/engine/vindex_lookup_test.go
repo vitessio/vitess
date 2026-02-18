@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -65,9 +66,9 @@ func TestVindexLookup(t *testing.T) {
 
 	result, err := vdxLookup.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	fp.ExpectLog(t, []string{`Execute from: type:TUPLE values:{type:INT64 value:"1"} false`})
+	fp.ExpectLog(t, []string{fmt.Sprintf(`Execute from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}}})})
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -77,7 +78,7 @@ func TestVindexLookup(t *testing.T) {
 	result, err = wrapStreamExecute(vdxLookup, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.Int64BindVariable(1)),
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -116,9 +117,9 @@ func TestVindexLookupTruncate(t *testing.T) {
 		"foo", "bar", "baz")
 	result, err := vdxLookup.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	fp.ExpectLog(t, []string{`Execute from: type:TUPLE values:{type:INT64 value:"1"} false`})
+	fp.ExpectLog(t, []string{fmt.Sprintf(`Execute from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}}})})
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, result, wantRes)
@@ -128,7 +129,7 @@ func TestVindexLookupTruncate(t *testing.T) {
 	result, err = wrapStreamExecute(vdxLookup, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.Int64BindVariable(1)),
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, result, wantRes)

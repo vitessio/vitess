@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -1841,7 +1842,12 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 
 	results, err := executorStream(ctx, executor, "select id from `user`")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60"`)
+	target := &querypb.Target{
+		Keyspace:   "TestExecutor",
+		Shard:      "40-60",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	assert.Contains(t, err.Error(), fmt.Sprintf(`no healthy tablet available for '%s'`, target.String()))
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Nil(t, results)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
@@ -1963,9 +1969,9 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(3 - i)),
@@ -2005,8 +2011,8 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				// i%4 ensures that there are duplicates across shards.
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
-				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarChar(strconv.Itoa(i % 4)),
+				sqltypes.NewVarBinary(strconv.Itoa(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -2036,12 +2042,12 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
-				sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
+				sqltypes.NewVarChar(strconv.Itoa(3 - i)),
 			}
 			wantResult.Rows = append(wantResult.Rows, row)
 		}
@@ -2101,7 +2107,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(int32(3 - i)),
@@ -2136,8 +2142,8 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
-				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarChar(strconv.Itoa(i % 4)),
+				sqltypes.NewVarBinary(strconv.Itoa(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -2163,10 +2169,10 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
+			sqltypes.NewVarChar(strconv.Itoa(3 - i)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
@@ -2230,10 +2236,10 @@ func TestSelectScatterAggregate(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
+			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -2292,10 +2298,10 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			{Name: "sum(foo)", Type: sqltypes.Decimal, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
+			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -2582,11 +2588,11 @@ func TestVarJoin(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
-	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
-	if got != want {
-		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
-	}
+	want := []*querypb.BoundQuery{{
+		Sql:           "select u2.id from `user` as u2 where u2.id = :u1_col",
+		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
+	}}
+	utils.MustMatch(t, want, sbc2.Queries)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
@@ -2617,11 +2623,11 @@ func TestVarJoinStream(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
-	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
-	if got != want {
-		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
-	}
+	want := []*querypb.BoundQuery{{
+		Sql:           "select u2.id from `user` as u2 where u2.id = :u1_col",
+		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
+	}}
+	utils.MustMatch(t, want, sbc2.Queries)
 
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
@@ -2951,12 +2957,12 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	require.Equal(t, 2, len(sbc2.Queries))
 
 	// sub query is evaluated first, and sees a limit of 1
-	assert.Equal(t, `type:INT64 value:"1"`, sbc1.Queries[0].BindVariables["__upper_limit"].String())
-	assert.Equal(t, `type:INT64 value:"1"`, sbc2.Queries[0].BindVariables["__upper_limit"].String())
+	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc2.Queries[0].BindVariables["__upper_limit"])
 
 	// outer limit is only applied to the outer query
-	assert.Equal(t, `type:INT64 value:"100"`, sbc1.Queries[1].BindVariables["__upper_limit"].String())
-	assert.Equal(t, `type:INT64 value:"100"`, sbc2.Queries[1].BindVariables["__upper_limit"].String())
+	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc1.Queries[1].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc2.Queries[1].BindVariables["__upper_limit"])
 }
 
 func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
@@ -3306,7 +3312,7 @@ func TestPrepareWithUnsupportedQuery(t *testing.T) {
 		{Name: "a", Type: querypb.Type_NULL_TYPE},
 		{Name: "b", Type: querypb.Type_NULL_TYPE},
 		{Name: "c", Type: querypb.Type_NULL_TYPE},
-		{Name: "row_number() over ( partition by x)", Type: querypb.Type_NULL_TYPE},
+		{Name: "row_number() over (partition by x)", Type: querypb.Type_NULL_TYPE},
 	}
 	require.Equal(t, wantFields, fields)
 
@@ -3408,7 +3414,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantSession, session.Session, "")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 
@@ -3421,7 +3427,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err = exec(executor, session, "select release_lock('lock name') from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }
@@ -3479,46 +3485,50 @@ func TestSelectFromInformationSchema(t *testing.T) {
 }
 
 func TestStreamOrderByWithMultipleResults(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := utils.LeakCheckContext(t)
 
-	// Special setup: Don't use createExecutorEnv.
-	cell := "aa"
-	hc := discovery.NewFakeHealthCheck(nil)
-	u := createSandbox(KsTestUnsharded)
-	s := createSandbox(KsTestSharded)
-	s.VSchema = executorVSchema
-	u.VSchema = unshardedVSchema
-	serv := newSandboxForCells(ctx, []string{cell})
-	resolver := newTestResolver(ctx, hc, serv, cell)
-	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	count := 1
-	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
-		sbc.SetResults([]*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
-		})
-		count++
-	}
-	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
-	executor.SetQueryLogger(queryLogger)
-	defer executor.Close()
-	// some sleep for all goroutines to start
-	time.Sleep(100 * time.Millisecond)
-	before := runtime.NumGoroutine()
+		// Special setup: Don't use createExecutorEnv.
+		cell := "aa"
+		hc := discovery.NewFakeHealthCheck(nil)
+		u := createSandbox(KsTestUnsharded)
+		s := createSandbox(KsTestSharded)
+		s.VSchema = executorVSchema
+		u.VSchema = unshardedVSchema
+		serv := newSandboxForCells(ctx, []string{cell})
+		resolver := newTestResolver(ctx, hc, serv, cell)
+		shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+		count := 1
+		for _, shard := range shards {
+			sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+			sbc.SetResults([]*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
+			})
+			count++
+		}
+		queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+		plans := DefaultPlanCache()
+		executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+		executor.SetQueryLogger(queryLogger)
+		defer executor.Close()
 
-	query := "select id, col from user order by id"
-	gotResult, err := executorStream(ctx, executor, query)
-	require.NoError(t, err)
+		// some sleep for all goroutines to start
+		synctest.Wait()
+		before := runtime.NumGoroutine()
 
-	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
-		"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
-	assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
-	// some sleep to close all goroutines.
-	time.Sleep(100 * time.Millisecond)
-	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+		query := "select id, col from user order by id"
+		gotResult, err := executorStream(ctx, executor, query)
+		require.NoError(t, err)
+
+		wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
+			"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
+		assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
+
+		// some sleep to close all goroutines.
+		synctest.Wait()
+		assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+	})
 }
 
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
@@ -4108,7 +4118,7 @@ func TestMultiColPartial(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.where, func(t *testing.T) {
-			sql := fmt.Sprintf("select * from multicoltbl where %s", tcase.where)
+			sql := "select * from multicoltbl where " + tcase.where
 			_, err := executor.Execute(ctx, nil, "TestMultiCol", session, sql, nil, false)
 			require.NoError(t, err)
 			var shards []string
@@ -4148,49 +4158,49 @@ func TestSelectAggregationNoData(t *testing.T) {
 		sql         string
 		sandboxRes  *sqltypes.Result
 		expSandboxQ string
-		expField    string
+		expField    []*querypb.Field
 		expRow      string
 	}{
 		{
 			sql:         `select count(distinct col) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64")),
 			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"count(distinct col)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(distinct col)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select count(*) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"),
 			expSandboxQ: "select count(*) from `user`",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[]`,
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64")),
 			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
+			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary")),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
+			expField:    []*querypb.Field{{Name: "col2", Type: querypb.Type_INT64, Charset: 63, Flags: 32768}, {Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[]`,
 		},
 	}
@@ -4206,7 +4216,7 @@ func TestSelectAggregationNoData(t *testing.T) {
 			}
 			qr, err := executorExec(ctx, executor, session, tc.sql, nil)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
+			require.Equal(t, tc.expField, qr.Fields)
 			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
 			require.Len(t, conns[0].Queries, 1)
 			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
@@ -4239,105 +4249,105 @@ func TestSelectAggregationData(t *testing.T) {
 		sql         string
 		sandboxRes  *sqltypes.Result
 		expSandboxQ string
-		expField    string
+		expField    []*querypb.Field
 		expRow      string
 	}{
 		{
 			sql:         `select count(distinct col) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|weight_string(col)", "int64|varbinary"), "1|NULL", "2|NULL", "2|NULL", "3|NULL"),
 			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"count(distinct col)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(distinct col)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(3)]]`,
 		},
 		{
 			sql:         `select count(*) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "3"),
 			expSandboxQ: "select count(*) from `user`",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|3|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(1) INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|2|NULL", "2|1|NULL", "3|4|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64"), "100|200|1", "200|300|1"),
 			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
+			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary"), "100|3|1|NULL", "200|2|1|NULL"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
-			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
+			expField:    []*querypb.Field{{Name: "col2", Type: querypb.Type_INT64, Charset: 63, Flags: 32768}, {Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{
 			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "1|a", "2|b"),
 			expSandboxQ: "select x.id, x.col1 from (select id, col1 from `user`) as x limit 2",
-			expField:    `[name:"count(col1)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(col1)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
 			expSandboxQ: "select x.col2, x.col1, weight_string(x.col2) from (select col2, col1 from `user`) as x limit 9",
-			expField:    `[name:"count(col1)" type:INT64 name:"col2" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "count(col1)", Type: querypb.Type_INT64}, {Name: "col2", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(4) INT64(2)] [INT64(5) INT64(3)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 9) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|1|a", "b|null|b"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 9",
-			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "count(col2)", Type: querypb.Type_INT64}},
 			expRow:      `[[VARCHAR("a") INT64(5)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 32) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "null|1|null", "null|null|null", "a|1|a", "b|null|b"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 32",
-			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "count(col2)", Type: querypb.Type_INT64}},
 			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|3|a"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_DECIMAL}},
 			expRow:      `[[VARCHAR("a") DECIMAL(12)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") FLOAT64(8)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|x|a"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") FLOAT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|null|a"),
 			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
-			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:FLOAT64]`,
+			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") NULL]]`,
 		},
 	}
@@ -4353,7 +4363,7 @@ func TestSelectAggregationData(t *testing.T) {
 			}
 			qr, err := executorExec(ctx, executor, session, tc.sql, nil)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
+			require.Equal(t, tc.expField, qr.Fields)
 			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
 			require.Len(t, conns[0].Queries, 1)
 			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
@@ -4604,11 +4614,11 @@ func TestStreamJoinQuery(t *testing.T) {
 		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
 	}
 	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		wantResult.Rows = append(wantResult.Rows, wantRow)
 	}
 	require.Equal(t, len(wantResult.Rows), len(result.Rows))
-	for idx := 0; idx < 64; idx++ {
+	for idx := range 64 {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
 }

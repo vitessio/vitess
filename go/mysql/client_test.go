@@ -98,9 +98,7 @@ func TestConnectTimeout(t *testing.T) {
 
 	// Now the server will listen, but close all connections on accept.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -109,7 +107,7 @@ func TestConnectTimeout(t *testing.T) {
 			}
 			conn.Close()
 		}
-	}()
+	})
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "initial packet read failed", "", "")

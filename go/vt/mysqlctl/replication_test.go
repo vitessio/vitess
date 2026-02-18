@@ -18,7 +18,7 @@ package mysqlctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math"
 	"net"
 	"strings"
@@ -40,7 +40,6 @@ func testRedacted(t *testing.T, source, expected string) {
 }
 
 func TestRedactSourcePassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE REPLICATION SOURCE TO
   SOURCE_PASSWORD = 'AAA',
@@ -71,7 +70,6 @@ func TestRedactSourcePassword(t *testing.T) {
 }
 
 func TestRedactMasterPassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA',
@@ -99,6 +97,11 @@ func TestRedactMasterPassword(t *testing.T) {
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`)
+}
+
+func TestRedactIdentifiedByPassword(t *testing.T) {
+	testRedacted(t, "CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY 'secret' REQUIRE SSL",
+		"CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY '****' REQUIRE SSL")
 }
 
 func TestRedactPassword(t *testing.T) {
@@ -137,7 +140,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	err := WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.NoError(t, err)
 
-	fakemysqld.ReplicationStatusError = fmt.Errorf("test error")
+	fakemysqld.ReplicationStatusError = errors.New("test error")
 	err = WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.ErrorContains(t, err, "test error")
 
@@ -748,8 +751,7 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))

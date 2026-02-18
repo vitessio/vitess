@@ -187,7 +187,6 @@ func (ins *Insert) getInsertShardedQueries(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-
 	// vindexRowsValues builds the values of all vindex columns.
 	// the 3-d structure indexes are colVindex, row, col. Note that
 	// ins.Values indexes are colVindex, col, row. So, the conversion

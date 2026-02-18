@@ -90,7 +90,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	// Throw error in this case
 	for _, e := range entries {
 		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 		}
 	}
 
@@ -217,7 +217,7 @@ func (s *Server) unlock(ctx context.Context, lockPath string) error {
 		// If someone else has the lock, we can't remove it,
 		// but we don't need to.
 		if err != api.ErrLockInUse {
-			log.Warningf("failed to clean up lock file %v: %v", lockPath, err)
+			log.Warn(fmt.Sprintf("failed to clean up lock file %v: %v", lockPath, err))
 		}
 	}
 

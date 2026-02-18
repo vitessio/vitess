@@ -82,7 +82,7 @@ func (db *LocalCluster) randomField(name, t string, allowNull bool) (string, err
 }
 
 func (db *LocalCluster) populateTable(dbname, table string) error {
-	fieldInfo, err := db.Query(fmt.Sprintf("DESCRIBE %s", table), dbname, 1024)
+	fieldInfo, err := db.Query("DESCRIBE "+table, dbname, 1024)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (db *LocalCluster) populateTable(dbname, table string) error {
 		fieldNames []string
 	)
 
-	for i := 0; i < numRows; i++ {
+	for range numRows {
 		var fields []string
 		for _, row := range fieldInfo.Rows {
 			fieldName := row[0].ToString()

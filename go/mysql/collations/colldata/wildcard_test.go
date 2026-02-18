@@ -36,7 +36,6 @@ func testWildcardMatches(t *testing.T, collName string, chOne, chMany, chEsc run
 			pat := coll.Wildcard([]byte(tc.pat), chOne, chMany, chEsc)
 			match := pat.Match([]byte(tc.in))
 			assert.Equal(t, tc.match, match, "%q LIKE %q = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-
 		}
 	})
 }
@@ -345,7 +344,6 @@ func TestWildcardMatches(t *testing.T) {
 			wildcard := newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identity, nil, []byte(tc.pat), '?', '*', '\\')
 			match := wildcard.Match([]byte(tc.in))
 			assert.Equal(t, tc.match, match, "wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-
 		}
 	})
 
@@ -354,7 +352,6 @@ func TestWildcardMatches(t *testing.T) {
 			wildcard := newEightbitWildcardMatcher(&sortOrderIdentity, nil, []byte(tc.pat), '?', '*', '\\')
 			match := wildcard.Match([]byte(tc.in))
 			assert.Equal(t, tc.match, match, "wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-
 		}
 	})
 

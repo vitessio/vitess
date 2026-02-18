@@ -104,14 +104,12 @@ func (p *pathGen) addStep(
 		slice:     slice,
 	}
 	p.steps = append(p.steps, s)
-
 }
 
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
 	val := types.TypeString(t, noQualifier)
 	_ = val
-	for i := 0; i < strct.NumFields(); i++ {
-		field := strct.Field(i)
+	for field := range strct.Fields() {
 		// Check if the field type implements the interface
 		if types.Implements(field.Type(), spi.iface()) {
 			p.addStep(t, field.Type(), field.Name(), false)

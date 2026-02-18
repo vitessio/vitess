@@ -135,5 +135,4 @@ func AddDefaultQueries(db *fakesqldb.DB) {
 
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
-
 }

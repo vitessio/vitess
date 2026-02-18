@@ -110,7 +110,7 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 }
 
 // ThrottleMetric has the probed metric for a tablet
-type ThrottleMetric struct { // nolint:revive
+type ThrottleMetric struct {
 	Name  MetricName
 	Scope Scope
 	Alias string
@@ -118,7 +118,7 @@ type ThrottleMetric struct { // nolint:revive
 	Err   error
 }
 
-type ThrottleMetrics map[MetricName]*ThrottleMetric // nolint:revive
+type ThrottleMetrics map[MetricName]*ThrottleMetric
 
 // NewThrottleMetric creates a new ThrottleMetric
 func NewThrottleMetric() *ThrottleMetric {

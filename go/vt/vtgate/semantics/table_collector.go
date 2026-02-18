@@ -326,7 +326,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 
 	tableInfo, found = tc.done[node]
 	if !found {
-		tableInfo, err = tc.earlyTableCollector.getTableInfo(node, t, tc.scoper)
+		tableInfo, err = tc.getTableInfo(node, t, tc.scoper)
 		if err != nil {
 			return err
 		}
@@ -384,7 +384,6 @@ func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableEx
 	if sc != nil && len(sc.commonTableExprScopes) > 0 {
 		cte := sc.commonTableExprScopes[len(sc.commonTableExprScopes)-1]
 		if cte.ID.String() == t.Name.String() {
-
 			if err := checkValidRecursiveCTE(cteDef); err != nil {
 				return nil, err
 			}

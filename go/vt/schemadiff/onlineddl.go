@@ -45,12 +45,10 @@ const (
 	ForeignKeyConstraintType
 )
 
-var (
-	constraintIndicatorMap = map[int]string{
-		int(CheckConstraintType):      "chk",
-		int(ForeignKeyConstraintType): "fk",
-	}
-)
+var constraintIndicatorMap = map[int]string{
+	int(CheckConstraintType):      "chk",
+	int(ForeignKeyConstraintType): "fk",
+}
 
 func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
 	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {
@@ -310,7 +308,7 @@ func GetExpandedColumns(
 	err error,
 ) {
 	if len(sourceColumns.Entities) != len(targetColumns.Entities) {
-		return nil, nil, fmt.Errorf("source and target columns must be of same length")
+		return nil, nil, errors.New("source and target columns must be of same length")
 	}
 
 	expandedEntities := []*ColumnDefinitionEntity{}
@@ -616,7 +614,7 @@ func OnlineDDLMigrationTablesAnalysis(
 	}
 
 	for _, uk := range analysis.RemovedUniqueKeys.Names() {
-		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("unique constraint removed: %s", uk))
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, "unique constraint removed: "+uk)
 	}
 	for _, name := range analysis.DroppedNoDefaultColumns.Names() {
 		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("column %s dropped, and had no default value", name))
@@ -671,7 +669,7 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType || node.Type == sqlparser.ConstraintType {
 				// drop a check or a foreign key constraint
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {

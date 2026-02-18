@@ -330,7 +330,6 @@ func TestCFCComputeKsidXxhash(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestCFCVerifyNoHash(t *testing.T) {
@@ -365,7 +364,6 @@ func TestCFCVerifyWithHash(t *testing.T) {
 	out, err = pcfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{true}, out)
-
 }
 
 func TestCFCMap(t *testing.T) {

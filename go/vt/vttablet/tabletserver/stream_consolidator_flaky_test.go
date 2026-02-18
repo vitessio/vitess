@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -61,7 +61,7 @@ type consolidationTest struct {
 }
 
 func generateResultSizes(size, count int) (r []*sqltypes.Result) {
-	for i := 0; i < count; i++ {
+	for i := range count {
 		rows, _ := sqltypes.NewValue(querypb.Type_BINARY, make([]byte, size))
 		item := &sqltypes.Result{InsertID: uint64(i), Rows: [][]sqltypes.Value{
 			{rows},
@@ -113,14 +113,14 @@ func (ct *consolidationTest) waitForResults(worker int, count int64) {
 func (ct *consolidationTest) run(workers int, generateCallback func(int) (string, StreamCallback)) {
 	if ct.results == nil {
 		ct.results = make([]*consolidationResult, workers)
-		for i := 0; i < workers; i++ {
+		for i := range workers {
 			ct.results[i] = &consolidationResult{}
 		}
 	}
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		wg.Add(1)
 
 		go func(worker int) {
@@ -178,7 +178,7 @@ func TestConsolidatorErrorPropagation(t *testing.T) {
 			cc: NewStreamConsolidator(128*1024, 2*1024, nocleanup),
 			leaderCallback: func(callback StreamCallback) error {
 				time.Sleep(100 * time.Millisecond)
-				return fmt.Errorf("mysqld error")
+				return errors.New("mysqld error")
 			},
 		}
 
@@ -205,7 +205,7 @@ func TestConsolidatorErrorPropagation(t *testing.T) {
 				var rows int
 				return "select 1", func(result *sqltypes.Result) error {
 					if rows > 5 {
-						return fmt.Errorf("leader streaming client disconnected")
+						return errors.New("leader streaming client disconnected")
 					}
 					rows++
 					return nil
@@ -243,7 +243,7 @@ func TestConsolidatorErrorPropagation(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			return "select 1", func(result *sqltypes.Result) error {
 				if worker == 3 && result.InsertID == 5 {
-					return fmt.Errorf("follower stream disconnected")
+					return errors.New("follower stream disconnected")
 				}
 				return nil
 			}

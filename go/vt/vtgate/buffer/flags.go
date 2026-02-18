@@ -19,6 +19,7 @@ package buffer
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &bufferEnabled, "enable-buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
 	utils.SetFlagBoolVar(fs, &bufferEnabledDryRun, "enable-buffer-dry-run", false, "Detect and log failover events, but do not actually buffer requests.")
 
-	utils.SetFlagDurationVar(fs, &bufferWindow, "buffer-window", 10*time.Second, "Duration for how long a request should be buffered at most.")
+	utils.SetFlagDurationVar(fs, &bufferWindow, "buffer-window", 10*time.Second, "Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration).")
 	utils.SetFlagIntVar(fs, &bufferSize, "buffer-size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
 	utils.SetFlagDurationVar(fs, &bufferMaxFailoverDuration, "buffer-max-failover-duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
 	utils.SetFlagDurationVar(fs, &bufferMinTimeBetweenFailovers, "buffer-min-time-between-failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
@@ -110,7 +111,7 @@ func keyspaceShardsToSets(list string) (map[string]bool, map[string]bool) {
 		return keyspaces, shards
 	}
 
-	for _, item := range strings.Split(list, ",") {
+	for item := range strings.SplitSeq(list, ",") {
 		if strings.Contains(item, "/") {
 			shards[item] = true
 		} else {
@@ -168,17 +169,18 @@ func NewDefaultConfig() *Config {
 
 func NewConfigFromFlags() *Config {
 	if err := verifyFlags(); err != nil {
-		log.Fatalf("Invalid buffer configuration: %v", err)
+		log.Error(fmt.Sprintf("Invalid buffer configuration: %v", err))
+		os.Exit(1)
 	}
 	bufferSizeStat.Set(int64(bufferSize))
 	keyspaces, shards := keyspaceShardsToSets(bufferKeyspaceShards)
 
 	if bufferEnabledDryRun {
-		log.Infof("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
+		log.Info("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
 	}
 
 	if bufferEnabled {
-		log.Infof("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
+		log.Info("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
 		header := "Buffering limited to configured "
@@ -198,12 +200,12 @@ func NewConfigFromFlags() *Config {
 			if bufferEnabledDryRun {
 				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
 			}
-			log.Infof("%v.%v", limited, dryRunOverride)
+			log.Info(fmt.Sprintf("%v.%v", limited, dryRunOverride))
 		}
 	}
 
 	if !bufferEnabledDryRun && !bufferEnabled {
-		log.Infof("vtgate buffer not enabled.")
+		log.Info("vtgate buffer not enabled.")
 	}
 
 	return &Config{

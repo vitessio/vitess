@@ -22,16 +22,14 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 )
 
-var (
-	// reshard is the base command for all actions related to reshard.
-	reshard = &cobra.Command{
-		Use:                   "Reshard --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
-		Short:                 "Perform commands related to resharding a keyspace.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"reshard"},
-		Args:                  cobra.ExactArgs(1),
-	}
-)
+// reshard is the base command for all actions related to reshard.
+var reshard = &cobra.Command{
+	Use:                   "Reshard --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
+	Short:                 "Perform commands related to resharding a keyspace.",
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"reshard"},
+	Args:                  cobra.ExactArgs(1),
+}
 
 func registerReshardCommands(root *cobra.Command) {
 	common.AddCommonFlags(reshard)
@@ -45,8 +43,13 @@ func registerReshardCommands(root *cobra.Command) {
 	reshard.AddCommand(common.GetShowCommand(opts))
 	reshard.AddCommand(common.GetStatusCommand(opts))
 
-	reshard.AddCommand(common.GetStartCommand(opts))
-	reshard.AddCommand(common.GetStopCommand(opts))
+	startCommand := common.GetStartCommand(opts)
+	common.AddShardSubsetFlag(startCommand, &common.StartStopOptions.Shards)
+	reshard.AddCommand(startCommand)
+
+	stopCommand := common.GetStopCommand(opts)
+	common.AddShardSubsetFlag(stopCommand, &common.StartStopOptions.Shards)
+	reshard.AddCommand(stopCommand)
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, false)

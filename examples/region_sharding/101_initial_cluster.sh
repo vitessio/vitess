@@ -37,7 +37,7 @@ SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ../common/scripts/vttablet-up.sh
 vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=none main || fail "Failed to set keyspace durability policy on the main keyspace"
 
 # start vtorc
-../common/scripts/vtorc-up.sh
+CELL=zone1 ../common/scripts/vtorc-up.sh
 
 # Wait for a primary tablet to be elected in the shard and for it
 # to become healthy/sherving.

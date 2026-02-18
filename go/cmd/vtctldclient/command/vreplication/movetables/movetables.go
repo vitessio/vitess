@@ -78,8 +78,13 @@ func registerCommands(root *cobra.Command) {
 	common.AddShardSubsetFlag(statusCommand, &common.StatusOptions.Shards)
 	base.AddCommand(statusCommand)
 
-	base.AddCommand(common.GetStartCommand(opts))
-	base.AddCommand(common.GetStopCommand(opts))
+	startCommand := common.GetStartCommand(opts)
+	common.AddShardSubsetFlag(startCommand, &common.StartStopOptions.Shards)
+	base.AddCommand(startCommand)
+
+	stopCommand := common.GetStopCommand(opts)
+	common.AddShardSubsetFlag(stopCommand, &common.StartStopOptions.Shards)
+	base.AddCommand(stopCommand)
 
 	mirrorTrafficCommand := common.GetMirrorTrafficCommand(opts)
 	mirrorTrafficCommand.Flags().Var((*topoproto.TabletTypeListFlag)(&common.MirrorTrafficOptions.TabletTypes), "tablet-types", "Tablet types to mirror traffic for.")

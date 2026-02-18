@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 
@@ -42,9 +43,7 @@ func (base *FlagsByImpl) Merge(override map[string]map[string]string) {
 			(*base)[impl] = map[string]string{}
 		}
 
-		for k, v := range flags {
-			(*base)[impl][k] = v
-		}
+		maps.Copy((*base)[impl], flags)
 	}
 }
 
@@ -109,12 +108,11 @@ func (cf *ClustersFlag) Set(value string) error {
 	return nil
 }
 
-// nolint:gochecknoglobals
 var discoveryFlagRegexp = regexp.MustCompile(`^discovery-(?P<impl>\w+)-(?P<flag>.+)$`)
 
 func parseFlag(cfg *Config, value string) error {
-	args := strings.Split(value, ",")
-	for _, arg := range args {
+	args := strings.SplitSeq(value, ",")
+	for arg := range args {
 		var (
 			name string
 			val  string
@@ -257,7 +255,7 @@ func parseOne(cfg *Config, name string, val string) error {
 			match := discoveryFlagRegexp.FindStringSubmatch(name)
 			if match == nil {
 				// not a discovery flag
-				log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
+				log.Warn(fmt.Sprintf("Attempted to parse %q as a discovery flag, ignoring ...", name))
 				return nil
 			}
 

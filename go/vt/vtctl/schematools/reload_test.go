@@ -18,6 +18,7 @@ package schematools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -67,7 +68,7 @@ func (tmc *reloadSchemaTMC) ReloadSchema(ctx context.Context, tablet *topodatapb
 	}()
 
 	if tmc.results == nil {
-		return fmt.Errorf("no results set on reloadSchemaTMC")
+		return errors.New("no results set on reloadSchemaTMC")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -328,8 +329,7 @@ func TestReloadShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			defer ts.Close()
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{

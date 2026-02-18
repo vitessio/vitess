@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-svgr/client" />
 declare namespace Vite {
   interface ImportMetaEnv {
       MODE: 'development' | 'production' | 'development';

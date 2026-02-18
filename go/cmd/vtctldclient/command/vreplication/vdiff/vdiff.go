@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -119,13 +120,13 @@ var (
 		}
 		// Enforce non-negative values for limits and max options.
 		if createOptions.Limit < 1 {
-			return fmt.Errorf("--limit must be a positive value")
+			return errors.New("--limit must be a positive value")
 		}
 		if createOptions.MaxReportSampleRows < 0 {
-			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
+			return errors.New("--max-report-sample-rows must not be a negative value")
 		}
 		if createOptions.MaxExtraRowsToCompare < 0 {
-			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
+			return errors.New("--max-extra-rows-to-compare must not be a negative value")
 		}
 		return nil
 	}
@@ -301,7 +302,6 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		RowDiffColumnTruncateAt:     createOptions.RowDiffColumnTruncateAt,
 		AutoStart:                   &createOptions.AutoStart,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 				return err
 			}
 		} else {
-			data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.UUID))
+			data = fmt.Appendf(nil, "VDiff %s scheduled on target shards, use show to view progress", resp.UUID)
 		}
 		fmt.Println(string(data))
 	}
@@ -362,7 +362,6 @@ func commandDelete(cmd *cobra.Command, args []string) error {
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Arg:            deleteOptions.Arg,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -385,7 +384,6 @@ func commandResume(cmd *cobra.Command, args []string) error {
 		Uuid:           resumeOptions.UUID.String(),
 		TargetShards:   resumeOptions.TargetShards,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -438,7 +436,7 @@ HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
 {{if (eq .State "started")}}Progress:     {{printf "%.2f" .Progress.Percentage}}%{{if .Progress.ETA}}, ETA: {{.Progress.ETA}}{{end}}{{end}}
 {{if .CompletedAt}}CompletedAt:  {{.CompletedAt}}{{end}}
-{{range $table := .TableSummaryMap}} 
+{{range $table := .SortedTableSummaries}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
 	ProcessedRows:    {{$table.RowsCompared}}
@@ -626,7 +624,6 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Arg:            showOptions.Arg,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -651,7 +648,6 @@ func commandStop(cmd *cobra.Command, args []string) error {
 		Uuid:           stopOptions.UUID.String(),
 		TargetShards:   stopOptions.TargetShards,
 	})
-
 	if err != nil {
 		return err
 	}

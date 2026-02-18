@@ -39,14 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -194,9 +192,9 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.Infof("taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("taking backup %s", time.Now()))
 	dataPointReader := vtBackup(t, false, true, true)
-	log.Infof("done taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("done taking backup %s", time.Now()))
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -245,7 +243,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		// Use opentsdb for stats.
 		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), fmt.Sprintf("file://%s", statsPath),
+		utils.GetFlagVariantForTests("--opentsdb-uri"), "file://" + statsPath,
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -261,7 +259,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
 	}
 
-	log.Infof("starting backup tablet %s", time.Now())
+	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	if err != nil {
 		return nil, err
@@ -337,7 +335,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-	log.Infof("restoring tablet %s", time.Now())
+	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
 	// Start tablets
@@ -375,7 +373,7 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 func tearDown(t *testing.T, initMysql bool) {
 	// reset replication
 	for _, db := range []string{"_vt", "vt_insert_test"} {
-		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+		_, err := primary.VttabletProcess.QueryTablet("drop database if exists "+db, keyspaceName, true)
 		require.NoError(t, err)
 	}
 	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
@@ -436,7 +434,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -445,7 +443,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -478,7 +476,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)

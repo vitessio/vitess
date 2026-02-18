@@ -118,7 +118,6 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 
 // TestKillOnHungQuery test that any hung query should return.
 func TestKillOnHungQuery(t *testing.T) {
-
 	execFunc := func(conn *mysql.Conn) error {
 		utils.Exec(t, conn, "begin")
 		_, err := utils.ExecAllowError(t, conn, "insert into test(id, msg, extra) values (1, 'a', 'e')")
@@ -203,12 +202,12 @@ func testHugeData(t *testing.T, workload string, execFunc func(*mysql.Conn) erro
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+	utils.Exec(t, conn, "set workload = "+workload)
 
 	killConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
-	utils.Exec(t, killConn, fmt.Sprintf("set workload = %s", workload))
+	utils.Exec(t, killConn, "set workload = "+workload)
 
 	runQueryInGoRoutineAndCheckError(t, conn, killConn, execFunc, killFunc, errMsgs)
 }

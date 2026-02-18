@@ -55,7 +55,6 @@ func TestPanicRecoveryHandler(t *testing.T) {
 	}
 
 	for _, tcase := range cases {
-		tcase := tcase
 		t.Run(tcase.route, func(t *testing.T) {
 			rec := httptest.ResponseRecorder{
 				Body: bytes.NewBuffer(nil),

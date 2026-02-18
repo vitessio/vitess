@@ -33,6 +33,7 @@ var basicTable1 = &tabletmanagerdatapb.TableDefinition{
 	Schema: "table schema 1",
 	Type:   TableBaseTable,
 }
+
 var basicTable2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table2",
 	Schema: "table schema 2",
@@ -60,7 +61,7 @@ var view2 = &tabletmanagerdatapb.TableDefinition{
 }
 
 func TestToSQLStrings(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		input *tabletmanagerdatapb.SchemaDefinition
 		want  []string
 	}{
@@ -479,7 +480,7 @@ func TestTableFilter(t *testing.T) {
 }
 
 func TestFilterTables(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		desc          string
 		input         *tabletmanagerdatapb.SchemaDefinition
 		tables        []string

@@ -39,9 +39,7 @@ const (
 	ThrottledAppsTimeout = 60 * time.Second
 )
 
-var (
-	testsStartupTime time.Time
-)
+var testsStartupTime time.Time
 
 func init() {
 	testsStartupTime = time.Now()
@@ -51,7 +49,7 @@ func init() {
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -70,7 +68,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -93,7 +91,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -430,7 +428,6 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
 func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) bool {
-
 	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
 	defer cancel()
 

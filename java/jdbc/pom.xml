@@ -5,9 +5,10 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>23.0.0-SNAPSHOT</version>
+    <version>24.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-jdbc</artifactId>
+  <name>Vitess JDBC Driver</name>
 
   <dependencies>
     <dependency>
@@ -34,9 +35,9 @@
     </dependency>
 
     <dependency>
-      <groupId>commons-lang</groupId>
-      <artifactId>commons-lang</artifactId>
-      <version>2.6</version>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+      <version>3.20.0</version>
     </dependency>
 
     <dependency>
@@ -54,7 +55,7 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>3.12.4</version>
+      <version>5.21.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -64,7 +65,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.1</version>
+        <version>3.5.4</version>
         <configuration>
           <!-- <argLine>${surefireArgLine}</argLine> -->
 		  <useManifestOnlyJar>false</useManifestOnlyJar>
@@ -74,7 +75,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4.3</version>
+        <version>3.6.1</version>
         <executions>
           <execution>
             <phase>package</phase>

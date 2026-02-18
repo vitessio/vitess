@@ -17,8 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"os"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -36,7 +38,8 @@ func InitAuthServerClientCert(clientcertAuthMethod string, caValue string) {
 		return
 	}
 	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {
-		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 
 	ascc := newAuthServerClientCert(clientcertAuthMethod)
@@ -55,7 +58,8 @@ func newAuthServerClientCert(clientcertAuthMethod string) *AuthServerClientCert 
 	case MysqlDialog:
 		authMethod = NewMysqlDialogAuthMethod(ascc, ascc, "")
 	default:
-		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 
 	ascc.methods = []AuthMethod{authMethod}
@@ -84,7 +88,7 @@ func (asl *AuthServerClientCert) HandleUser(user string) bool {
 func (asl *AuthServerClientCert) UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error) {
 	userCerts := conn.GetTLSClientCerts()
 	if len(userCerts) == 0 {
-		return nil, fmt.Errorf("no client certs for connection")
+		return nil, errors.New("no client certs for connection")
 	}
 	commonName := userCerts[0].Subject.CommonName
 

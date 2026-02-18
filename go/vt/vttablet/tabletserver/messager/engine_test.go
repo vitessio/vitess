@@ -184,7 +184,7 @@ func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
 	// This reproduces the deadlock quite readily.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			engine.Close()
 			engine.Open()
 		}
@@ -192,7 +192,7 @@ func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			se.BroadcastForTesting(nil, nil, nil, true)
 		}
 	}()

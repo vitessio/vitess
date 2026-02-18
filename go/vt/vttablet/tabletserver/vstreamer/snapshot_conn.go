@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -78,8 +79,7 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 	if rotatedLog, err = conn.limitOpenBinlogSize(); err != nil {
 		// This is a best effort operation meant to lower overhead and improve performance.
 		// Thus it should not be required, nor cause the operation to fail.
-		log.Warningf("Failed in attempt to potentially flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v",
-			query, err)
+		log.Warn(fmt.Sprintf("Failed in attempt to potentially flush binary logs in order to lessen overhead and improve performance of a VStream using query %q: %v", query, err))
 	}
 
 	gtid, err = conn.startSnapshot(ctx, table)
@@ -102,7 +102,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	defer func() {
 		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
 		if err != nil {
-			log.Warning("Unlock tables (%s) failed: %v", table, err)
+			log.Warn(fmt.Sprintf("Unlock tables (%s) failed: %v", table, err))
 		}
 		lockConn.Close()
 	}()
@@ -110,7 +110,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	tableName := sqlparser.String(sqlparser.NewIdentifierCS(table))
 
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {
-		log.Warningf("Error locking table %s to read: %v", tableName, err)
+		log.Warn(fmt.Sprintf("Error locking table %s to read: %v", tableName, err))
 		return "", err
 	}
 	mpos, err := lockConn.PrimaryPosition()
@@ -152,7 +152,7 @@ func (conn *snapshotConn) limitOpenBinlogSize() (bool, error) {
 		return rotatedLog, err
 	}
 	if res == nil || len(res.Rows) == 0 {
-		return rotatedLog, fmt.Errorf("SHOW BINARY LOGS returned no rows")
+		return rotatedLog, errors.New("SHOW BINARY LOGS returned no rows")
 	}
 	// the current log will be the last one in the results
 	curLogIdx := len(res.Rows) - 1
@@ -198,12 +198,12 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 	defer func() {
 		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
 		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
+			log.Warn(fmt.Sprintf("Unlock tables failed: %v", err))
 		}
 		lockConn.Close()
 	}()
 
-	log.Infof("Locking all tables")
+	log.Info("Locking all tables")
 	if _, err := lockConn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 1, false); err != nil {
 		attemptExplicitTablesLocks := false
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERAccessDeniedError {
@@ -213,7 +213,7 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 			// efficient, and make a huge query, but still better than nothing.
 			attemptExplicitTablesLocks = true
 		}
-		log.Infof("Error locking all tables")
+		log.Info("Error locking all tables")
 		if !attemptExplicitTablesLocks {
 			return "", err
 		}
@@ -231,17 +231,17 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 				continue
 			}
 			tableName = sqlparser.String(sqlparser.NewIdentifierCS(tableName))
-			lockClause := fmt.Sprintf("%s read", tableName)
+			lockClause := tableName + " read"
 			lockClauses = append(lockClauses, lockClause)
 		}
 		if len(lockClauses) > 0 {
-			query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
+			query := "lock tables " + strings.Join(lockClauses, ",")
 			if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
-				log.Error(vterrors.Wrapf(err, "explicitly locking all %v tables", len(lockClauses)))
+				log.Error(fmt.Sprint(vterrors.Wrapf(err, "explicitly locking all %v tables", len(lockClauses))))
 				return "", err
 			}
 		} else {
-			log.Infof("explicit lock tables: no tables found")
+			log.Info("explicit lock tables: no tables found")
 		}
 	}
 	mpos, err := lockConn.PrimaryPosition()

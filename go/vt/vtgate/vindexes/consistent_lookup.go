@@ -358,7 +358,7 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(origErr).(*sqlerror.SQLError)
 
 	// If the error is NOT a duplicate entry error, return it immediately.
-	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry) {
+	if !isSQLErr || sqlErr == nil || sqlErr.Number() != sqlerror.ERDupEntry {
 		return origErr
 	}
 

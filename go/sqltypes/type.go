@@ -309,6 +309,20 @@ func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) b
 		(mysqlTypeFromBinlog == Int64 && mysqlTypeFromSchema == Uint64)
 }
 
+// AreTypesCompatible returns whether two types are in the same type group.
+func AreTypesCompatible(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
+	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
+		(IsQuoted(mysqlTypeFromBinlog) && IsQuoted(mysqlTypeFromSchema)) ||
+		(IsIntegral(mysqlTypeFromBinlog) && IsIntegral(mysqlTypeFromSchema)) ||
+		(IsText(mysqlTypeFromBinlog) && IsText(mysqlTypeFromSchema)) ||
+		(IsBinary(mysqlTypeFromBinlog) && IsBinary(mysqlTypeFromSchema)) ||
+		(IsFloat(mysqlTypeFromBinlog) && IsFloat(mysqlTypeFromSchema)) ||
+		(IsDate(mysqlTypeFromBinlog) && IsDate(mysqlTypeFromSchema)) ||
+		(IsDecimal(mysqlTypeFromBinlog) && IsDecimal(mysqlTypeFromSchema)) ||
+		(IsEnum(mysqlTypeFromBinlog) && IsEnum(mysqlTypeFromSchema)) ||
+		(IsSet(mysqlTypeFromBinlog) && IsSet(mysqlTypeFromSchema))
+}
+
 // typeToMySQL is the reverse of mysqlToType.
 var typeToMySQL = map[querypb.Type]struct {
 	typ   byte

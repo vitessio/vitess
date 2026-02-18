@@ -377,7 +377,7 @@
   {
     "comment": "Over clause isn't supported in sharded cases",
     "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM user",
-    "plan": "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
+    "plan": "VT03025: Incorrect arguments to w"
   },
   {
     "comment": "WITH ROLLUP not supported on sharded queries",
@@ -398,5 +398,50 @@
     "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
     "query": "select 1 from user where foo = ALL (select 1 from user_extra where foo = 1)",
     "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "Window function PARTITION BY non-unique vindex in multi-shard query",
+    "query": "SELECT id, textcol1, ROW_NUMBER() OVER (PARTITION BY textcol1 ORDER BY id) as rn FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window function PARTITION BY non-unique vindex with WHERE clause",
+    "query": "SELECT id, intcol, RANK() OVER (PARTITION BY intcol ORDER BY id) as rnk FROM user WHERE id IN (1,2) ",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "UNION ALL with window function where one branch has invalid partition",
+    "query": "SELECT id, textcol1, ROW_NUMBER() OVER (PARTITION BY id ORDER BY textcol1) as rn FROM user WHERE id = 1 UNION ALL SELECT id, textcol1, ROW_NUMBER() OVER (PARTITION BY textcol1 ORDER BY id) as rn FROM user WHERE textcol1 = 'test'",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function without partition by on sharded table - should fail",
+    "query": "SELECT Id, Name, ROW_NUMBER() OVER (ORDER BY Name) as row_num FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function partitioned by non-sharding column on sharded table",
+    "query": "SELECT Id, Name, intcol, ROW_NUMBER() OVER (PARTITION BY Name ORDER BY intcol) as row_num FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function on scatter query without unique vindex",
+    "query": "SELECT Id, Name, RANK() OVER (PARTITION BY textcol1 ORDER BY intcol) as rnk FROM user WHERE textcol1 = 'test'",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function with composite vindex missing required column",
+    "query": "SELECT cola, colb, column_c, RANK() OVER (PARTITION BY cola ORDER BY column_c) as rnk FROM multicol_tbl WHERE cola = 'A'",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function cross-shard without proper partitioning",
+    "query": "SELECT user_id, id, AVG(intcol) OVER (PARTITION BY id % 2 ORDER BY user_id) as avg_val FROM music",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "window function in derived table on scatter route",
+    "query": "select * from (select rank() over (partition by col) as r from user) as t",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   }
 ]

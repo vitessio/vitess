@@ -139,10 +139,10 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 
 // isFlag return true when the given string is a CLI flag of the given name
 func isFlag(s string, name string) bool {
-	if s == fmt.Sprintf("-%s", name) {
+	if s == "-"+name {
 		return true
 	}
-	if s == fmt.Sprintf("--%s", name) {
+	if s == "--"+name {
 		return true
 	}
 	return false

@@ -52,7 +52,6 @@ func TestGoldenWeights(t *testing.T) {
 
 					result := coll.WeightString(nil, input, 0)
 					assert.True(t, bytes.Equal(expected, result), "mismatch for collation=%s\noriginal: %s\ninput:    %#v\nexpected: %v\nactual:   %v", coll.Name(), string(goldenCase.Text), input, expected, result)
-
 				}
 			})
 		}

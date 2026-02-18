@@ -17,7 +17,6 @@ limitations under the License.
 package multiks
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -70,13 +69,14 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 
 		// Start sharded keyspace
+		cell := clusterInstance.Cell
 		sks := cluster.Keyspace{
 			Name:      shardedKs,
 			SchemaSQL: shardedSchema,
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(sks, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(sks, []string{"-80", "80-"}, 0, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 			VSchema:   unshardedVSchema,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(uks, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(uks, 0, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -116,7 +116,7 @@ func TestMain(m *testing.M) {
 
 // TestViewQueries validates that view tracking works as expected with qualified and unqualified views.
 func TestViewQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

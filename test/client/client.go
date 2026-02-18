@@ -36,9 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vitessdriver"
 )
 
-var (
-	server = pflag.String("server", "", "vtgate server to connect to")
-)
+var server = pflag.String("server", "", "vtgate server to connect to")
 
 func main() {
 	pflag.Parse()
@@ -53,7 +51,7 @@ func main() {
 
 	// Insert some messages on random pages.
 	fmt.Println("Inserting into primary...")
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tx, err := db.Begin()
 		if err != nil {
 			fmt.Printf("begin failed: %v\n", err)

@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -54,12 +55,12 @@ func commandStat(cmd *cobra.Command, args []string) error {
 		zkPath := zkfilepath.Clean(arg)
 		acls, stat, err := fs.Conn.GetACL(cmd.Context(), zkPath)
 		if stat == nil {
-			err = fmt.Errorf("no such node")
+			err = errors.New("no such node")
 		}
 		if err != nil {
 			hasError = true
 			if !statArgs.Force || err != zk.ErrNoNode {
-				log.Warningf("stat: cannot access %v: %v", zkPath, err)
+				log.Warn(fmt.Sprintf("stat: cannot access %v: %v", zkPath, err))
 			}
 			continue
 		}
@@ -76,7 +77,7 @@ func commandStat(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if hasError {
-		return fmt.Errorf("stat: some paths had errors")
+		return errors.New("stat: some paths had errors")
 	}
 	return nil
 }

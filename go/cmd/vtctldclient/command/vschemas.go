@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -64,11 +65,11 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	jsonMode := (applyVSchemaOptions.VSchema != "") != (applyVSchemaOptions.VSchemaFile != "")
 
 	if sqlMode && jsonMode {
-		return fmt.Errorf("only one of the sql, sql-file, vschema, or vschema-file flags may be specified when calling the ApplyVSchema command")
+		return errors.New("only one of the sql, sql-file, vschema, or vschema-file flags may be specified when calling the ApplyVSchema command")
 	}
 
 	if !sqlMode && !jsonMode {
-		return fmt.Errorf("one of the sql, sql-file, vschema, or vschema-file flags must be specified when calling the ApplyVSchema command")
+		return errors.New("one of the sql, sql-file, vschema, or vschema-file flags must be specified when calling the ApplyVSchema command")
 	}
 
 	req := &vtctldatapb.ApplyVSchemaRequest{

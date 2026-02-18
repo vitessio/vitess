@@ -80,14 +80,16 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
-			log.Fatal(err.Error())
+		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -97,7 +99,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTopoRestart(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -226,7 +228,7 @@ func TestNamedLocking(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	lockName := "TestNamedLocking"
 	action := "Testing"
 

@@ -18,8 +18,8 @@ package engine
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -208,7 +208,7 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 			}
 		case 4:
 			if ksid != nil {
-				row = append(row, sqltypes.NewVarBinary(fmt.Sprintf("%x", ksid)))
+				row = append(row, sqltypes.NewVarBinary(hex.EncodeToString(ksid)))
 			} else {
 				row = append(row, sqltypes.NULL)
 			}

@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -58,7 +59,7 @@ func TestSubqueryExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"1" true`,
+		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -108,7 +109,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`StreamExecute a: type:INT64 value:"1" true`,
+		fmt.Sprintf(`StreamExecute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -158,8 +159,8 @@ func TestSubqueryGetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`GetFields a: type:INT64 value:"1"`,
-		`Execute a: type:INT64 value:"1" true`,
+		fmt.Sprintf(`GetFields a: %v`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

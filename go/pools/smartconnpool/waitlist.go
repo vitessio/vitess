@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"vitess.io/vitess/go/list"
@@ -28,13 +29,8 @@ type waiter[C Connection] struct {
 	// setting is the connection Setting that we'd like, or nil if we'd like a
 	// a connection with no Setting applied
 	setting *Setting
-	// conn will be set by another client to hand over the connection to use
-	conn *Pooled[C]
-	// ctx is the context of the waiting client to check for expiration
-	ctx context.Context
-	// sema is a synchronization primitive that allows us to block until our request
-	// has been fulfilled
-	sema semaphore
+	// conn is a channel that will receive the connection when it's ready
+	conn chan *Pooled[C]
 	// age is the amount of cycles this client has been on the waitlist
 	age uint32
 }
@@ -50,61 +46,86 @@ type waitlist[C Connection] struct {
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
-	elem.Value = waiter[C]{setting: setting, conn: nil, ctx: ctx}
+	defer wl.nodes.Put(elem)
+
+	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
 	wl.mu.Lock()
 	// add ourselves as a waiter at the end of the waitlist
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
-	// block on our waiter's semaphore until somebody can hand over a connection to us
-	elem.Value.sema.wait()
+	select {
+	case <-closeChan:
+		// Pool was closed while we were waiting.
+		removed := false
 
-	// we're awake -- the conn in our waiter contains the connection that was handed
-	// over to us, or nothing if we've been waken up forcefully. save the conn before
-	// we return our waiter to the pool of waiters for reuse.
-	conn := elem.Value.conn
-	wl.nodes.Put(elem)
+		wl.mu.Lock()
+		// Try to find and remove ourselves from the list.
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
 
-	if conn != nil {
+		if removed {
+			return nil, ErrConnPoolClosed
+		}
+
+		// if we weren't able to remove ourselves from the waitlist, it means
+		// another goroutine is trying to hand us a connection
+		return <-elem.Value.conn, nil
+
+	case <-ctx.Done():
+		// Context expired. We need to try to remove ourselves from the waitlist to
+		// prevent another goroutine from trying to hand us a connection later on.
+		removed := false
+
+		wl.mu.Lock()
+		// Try to find and remove ourselves from the list.
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
+
+		if removed {
+			return nil, context.Cause(ctx)
+		}
+
+		// if we weren't able to remove ourselves from the waitlist, it means
+		// another goroutine is trying to hand us a connection
+		return <-elem.Value.conn, nil
+
+	case conn := <-elem.Value.conn:
 		return conn, nil
 	}
-	return nil, ctx.Err()
 }
 
-// expire removes and wakes any expired waiter in the waitlist.
-// if force is true, it'll wake and remove all the waiters.
-func (wl *waitlist[C]) expire(force bool) (maybeStarving int) {
+func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 	if wl.list.Len() == 0 {
 		return
 	}
 
-	var expired []*list.Element[waiter[C]]
-
 	wl.mu.Lock()
+	defer wl.mu.Unlock()
+
 	// iterate the waitlist looking for waiters with an expired Context,
 	// or remove everything if force is true
 	for e := wl.list.Front(); e != nil; e = e.Next() {
-		if force || e.Value.ctx.Err() != nil {
-			expired = append(expired, e)
-			continue
-		}
 		if e.Value.age == 0 {
 			maybeStarving++
 		}
 	}
-	// remove the expired waiters from the waitlist after traversing it
-	for _, e := range expired {
-		wl.list.Remove(e)
-	}
-	wl.mu.Unlock()
 
-	// once all the expired waiters have been removed from the waitlist, wake them up one by one
-	for _, e := range expired {
-		e.Value.sema.notify(false)
-	}
 	return
 }
 
@@ -154,16 +175,19 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	}
 
 	// if we have a target to return the connection to, simply write the connection
-	// into the waiter and signal their semaphore. they'll wake up to pick up the
-	// connection.
-	target.Value.conn = conn
-	target.Value.sema.notify(true)
+	// into the waiter's channel.
+	target.Value.conn <- conn
+	// Allow the goroutine waiting on the channel to start running _now_.
+	runtime.Gosched()
+
 	return true
 }
 
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
-		return &list.Element[waiter[C]]{}
+		return &list.Element[waiter[C]]{
+			Value: waiter[C]{conn: make(chan *Pooled[C])},
+		}
 	}
 	wl.list.Init()
 }

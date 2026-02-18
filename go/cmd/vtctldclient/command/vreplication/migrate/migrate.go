@@ -17,7 +17,7 @@ limitations under the License.
 package migrate
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -27,16 +27,14 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var (
-	// migrate is the base command for all actions related to the migrate command.
-	migrate = &cobra.Command{
-		Use:                   "Migrate --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
-		Short:                 "Migrate is used to import data from an external cluster into the current cluster.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"migrate"},
-		Args:                  cobra.ExactArgs(1),
-	}
-)
+// migrate is the base command for all actions related to the migrate command.
+var migrate = &cobra.Command{
+	Use:                   "Migrate --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
+	Short:                 "Migrate is used to import data from an external cluster into the current cluster.",
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"migrate"},
+	Args:                  cobra.ExactArgs(1),
+}
 
 var createOptions = struct {
 	MountName      string
@@ -59,7 +57,7 @@ var createCommand = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Either specific tables or the all tables flags are required.
 		if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
-			return fmt.Errorf("tables or all-tables are required to specify which tables to move")
+			return errors.New("tables or all-tables are required to specify which tables to move")
 		}
 		if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 			return err
@@ -111,7 +109,6 @@ func addCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
 	cmd.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	cmd.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
-
 }
 
 func registerCommands(root *cobra.Command) {

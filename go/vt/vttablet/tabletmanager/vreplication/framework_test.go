@@ -105,7 +105,7 @@ func setFlag(flagName, flagValue string) {
 
 	if err := pflag.Set(flagName, flagValue); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, flagName, flagValue, err)
+		log.Error(fmt.Sprintf(msg, flagName, flagValue, err))
 	}
 }
 
@@ -147,7 +147,7 @@ func setup(ctx context.Context) (func(), int) {
 	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	streamerEngine.Open()
 
-	if err := env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("create database %s", vrepldb)); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "create database "+vrepldb); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
@@ -231,7 +231,7 @@ func primaryPosition(t *testing.T) string {
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		log.Errorf("Error executing query: %s", err.Error())
+		log.Error("Error executing query: " + err.Error())
 		t.Error(err)
 	}
 }
@@ -580,7 +580,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 			}
 
 			if !match {
-				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("no logs received, expecting %s", log)
@@ -750,7 +750,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 	if len(strings.Split(table, ".")) == 1 {
 		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
 	} else {
-		query = fmt.Sprintf("select * from %s", table)
+		query = "select * from " + table
 	}
 
 	// without the sleep and retry there is a flakiness where rows inserted by vreplication are not immediately visible
@@ -770,15 +770,15 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
-			log.Errorf("data mismatch: %v, retrying", err)
+			log.Error(fmt.Sprintf("data mismatch: %v, retrying", err))
 			time.Sleep(tick)
 		}
 	}
 }
 
 func compareQueryResults(t *testing.T, query string, values [][]string,
-	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
-
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error),
+) error {
 	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {

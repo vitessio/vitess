@@ -240,7 +240,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		defaultCell := tc.vc.Cells[defaultCellName]
 		require.NotNil(tc.t, defaultCell)
 		tc.vtgate = defaultCell.Vtgates[0]
-
 	}
 }
 
@@ -277,7 +276,7 @@ func (wf *workflow) create() {
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	default:
-		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
+		panic("unknown workflow type: " + wf.typ)
 	}
 	require.NoError(t, err)
 	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -289,7 +288,6 @@ func (wf *workflow) create() {
 		i += 100
 	}
 	doVtctldclientVDiff(t, wf.toKeyspace, wf.name, cell, nil)
-
 }
 
 func (wf *workflow) switchTraffic() {
@@ -397,7 +395,8 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false"}...)
+		utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
@@ -484,14 +483,14 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		// Confirm shard targeting works before we switch any traffic.
 		// Everything should be routed to the source keyspace (customer).
 
-		log.Infof("Testing reverse route (target->source) for shard being switched")
+		log.Info("Testing reverse route (target->source) for shard being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 		require.NoError(t, err)
 		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
 
-		log.Infof("Testing reverse route (target->source) for shard NOT being switched")
+		log.Info("Testing reverse route (target->source) for shard NOT being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 		require.NoError(t, err)
 		_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
@@ -580,24 +579,24 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	currentCustomerCount = getCustomerCount(t, "")
 	t.Run("Switch sequence traffic forward and reverse and validate workflows still exist and sequence routing works", func(t *testing.T) {
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("SwitchTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 
 		wfSeq.reverseTraffic()
-		log.Infof("ReverseTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("ReverseTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("SwitchTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 
 		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.toKeyspace, "show", "--workflow", wfSeq.name)
 		require.NoError(t, err)
 
-		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", fmt.Sprintf("%s_reverse", wfSeq.name))
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", wfSeq.name+"_reverse")
 		require.NoError(t, err)
 
 		wfSeq.complete()
@@ -634,10 +633,12 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	})
 }
 
-var customerCount int64
-var currentCustomerCount int64
-var newCustomerCount = int64(201)
-var lastCustomerId int64
+var (
+	customerCount        int64
+	currentCustomerCount int64
+	newCustomerCount     = int64(201)
+	lastCustomerId       int64
+)
 
 func getCustomerCount(t *testing.T, msg string) int64 {
 	vtgateConn, closeConn := getVTGateConn()

@@ -19,9 +19,12 @@ package vstreamer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -50,16 +53,23 @@ import (
 )
 
 const (
-	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
-	replicaLagQuery    = `show replica status`
-	legacyLagQuery     = `show slave status`
-	hostQuery          = `select @@hostname as hostname, @@port as port`
+	trxHistoryLenQuery        = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
+	replicaLagQuery           = `show replica status`
+	legacyLagQuery            = `show slave status`
+	hostQuery                 = `select @@hostname as hostname, @@port as port`
+	fullyThrottledMetricLabel = "FullyThrottledTimeout"
 )
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
+
+// How long we can be fully throttled before returning an error.
+// If we hit this then we can surface a metric for operators and we can run the tablet picker again
+// to try and pick another tablet which is perhaps less burdened. Running the tablet picker also gives
+// us a natural backoff period.
+var fullyThrottledTimeout = 10 * time.Minute
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -125,8 +135,8 @@ type streamerPlan struct {
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
-	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
-
+	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions,
+) *vstreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -182,7 +192,7 @@ func (vs *vstreamer) Stream() error {
 		vs.vse.vstreamerCount.Add(-1)
 	}()
 	vs.vse.vstreamersCreated.Add(1)
-	log.Infof("Starting Stream() with startPos %s", vs.startPos)
+	log.Info("Starting Stream() with startPos " + vs.startPos)
 	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
@@ -327,9 +337,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
 	wfNameLog := ""
 	if vs.filter != nil && vs.filter.WorkflowName != "" {
-		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
+		wfNameLog = " in workflow " + vs.filter.WorkflowName
 	}
+	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
+	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		throttledTime := atomic.Int64{}
 		for {
 			// Check throttler.
 			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
@@ -340,9 +353,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
+				curtime := time.Now().Unix()
+				if !throttledTime.CompareAndSwap(0, curtime) {
+					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
+						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+						return
+					}
+				}
 				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
 				continue
 			}
+			throttledTime.Store(0) // We are no longer fully throttled
 			select {
 			case ev, ok := <-events:
 				if ok {
@@ -413,6 +434,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case err := <-errs:
 			return err
+		case throttlerErr := <-throttlerErrs:
+			vs.vse.errorCounts.Add(fullyThrottledMetricLabel, 1)
+			return throttlerErr
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
@@ -619,7 +643,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				return nil, nil
 			}
 			vs.plans[id] = nil
-			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
+			log.Info(fmt.Sprintf("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name))
 		}
 
 		// The database connector `vs.cp` points to the keyspace's database.
@@ -764,13 +788,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		if vs.options == nil {
 			return nil, nil
 		}
-		found := false
-		for _, table := range vs.options.InternalTables {
-			if table == tableName {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(vs.options.InternalTables, tableName)
 		if !found {
 			return nil, nil
 		}
@@ -823,7 +841,8 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 				Keyspace:        vs.vse.keyspace,
 				Shard:           vs.vse.shard,
 				IsInternalTable: plan.IsInternal,
-			}})
+			},
+		})
 	}
 	return vevents, nil
 }
@@ -902,7 +921,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	st, err := vs.se.GetTableForPos(vs.ctx, sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Infof("No schema found for table %s", tm.Name)
+			log.Info("No schema found for table " + tm.Name)
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
 		return fields, nil
@@ -910,15 +929,17 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Infof("Cannot determine columns for table %s", tm.Name)
+			log.Info("Cannot determine columns for table " + tm.Name)
 			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Fields)
 		}
 		return fields, nil
 	}
 
-	// Check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine is compatible with the row.
+	// If not then we rely on the TableMap event alone. This will prevent us from
+	// being able to handle filters with colum names (in planbuilder.findColumn()).
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+		if !sqltypes.AreTypesCompatible(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
 	}
@@ -1157,7 +1178,8 @@ func (vs *vstreamer) rebuildPlans() error {
 }
 
 func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
-	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap) ([]sqltypes.Value, []collations.ID, bool, error) {
+	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap,
+) ([]sqltypes.Value, []collations.ID, bool, error) {
 	if len(data) == 0 {
 		return nil, nil, false, nil
 	}
@@ -1170,7 +1192,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
 			if vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
-				return nil, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+				return nil, nil, false, errors.New("partial row image encountered: ensure binlog_row_image is set to 'full'")
 			} else {
 				partial = true
 			}
@@ -1190,8 +1212,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 		}
 		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
 		if err != nil {
-			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
-				err, plan.Table.Name, colNum, plan.Table.Fields, values)
+			log.Error(fmt.Sprintf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v", err, plan.Table.Name, colNum, plan.Table.Fields, values))
 			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
 				plan.Table.Fields[colNum].Name)
 		}
@@ -1339,10 +1360,10 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
-		log.Error(err)
+		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
+		log.Error(fmt.Sprint(err))
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Info(fmt.Sprintf("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos))
 	return nil
 }

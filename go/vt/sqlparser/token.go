@@ -330,7 +330,7 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 
 	for {
 		ch := tkn.cur()
-		if !isLetter(ch) && !isDigit(ch) && !(isVariable && isCarat(ch)) {
+		if !isLetter(ch) && !isDigit(ch) && (!isVariable || !isCarat(ch)) {
 			break
 		}
 		tkn.skip(1)

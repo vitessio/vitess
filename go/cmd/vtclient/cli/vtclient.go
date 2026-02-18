@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -79,9 +80,7 @@ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1,
 	}
 )
 
-var (
-	seqChan = make(chan int, 10)
-)
+var seqChan = make(chan int, 10)
 
 func InitializeFlags() {
 	servenv.MoveFlagsToCobraCommand(Main)
@@ -196,7 +195,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 		return nil, fmt.Errorf("client error: %w", err)
 	}
 
-	log.Infof("Sending the query...")
+	log.Info("Sending the query...")
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
@@ -222,11 +221,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 	start := time.Now()
 	for i := 0; i < parallel; i++ {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			var ticker *time.Ticker
 			if isThrottled {
 				tickDuration := time.Second / time.Duration(qps)
@@ -258,7 +253,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 					<-ticker.C
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if all != nil {
@@ -396,11 +391,24 @@ func (r *results) print(w io.Writer) {
 		return
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(r.Fields)
-	table.SetAutoFormatHeaders(false)
-	table.AppendBulk(r.Rows)
-	table.Render()
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
+	headerAny := make([]any, len(r.Fields))
+	for i, field := range r.Fields {
+		headerAny[i] = field
+	}
+	table.Header(headerAny...)
+	if err := table.Bulk(r.Rows); err != nil {
+		fmt.Fprintf(w, "Error displaying table: %v\n", err)
+		return
+	}
+	if err := table.Render(); err != nil {
+		fmt.Fprintf(w, "Error rendering table: %v\n", err)
+		return
+	}
 	fmt.Fprintf(w, "%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
 	if r.lastInsertID != 0 {
 		fmt.Fprintf(w, "Last insert ID: %v\n", r.lastInsertID)

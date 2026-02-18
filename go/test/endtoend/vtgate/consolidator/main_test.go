@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 			[]string{"-"},
 			1, /*creates 1 replica tablet in addition to primary*/
 			false,
+			clusterInstance.Cell,
 		); err != nil {
 			return 1
 		}
@@ -197,13 +198,13 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			// Create a connection.
 			conn1, err := mysql.Connect(context.Background(), &vtParams)
 			require.NoError(t, err)
-			utils.Exec(t, conn1, fmt.Sprintf("use %s", testCase.tabletType))
+			utils.Exec(t, conn1, "use "+testCase.tabletType)
 			defer conn1.Close()
 
 			// Create another connection.
 			conn2, err := mysql.Connect(context.Background(), &vtParams)
 			require.NoError(t, err)
-			utils.Exec(t, conn2, fmt.Sprintf("use %s", testCase.tabletType))
+			utils.Exec(t, conn2, "use "+testCase.tabletType)
 			defer conn2.Close()
 
 			// Create a channel for query results.

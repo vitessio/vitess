@@ -57,7 +57,7 @@ const renderHelper = (history?: MemoryHistory) => {
 
 describe('Tablet view', () => {
     afterEach(() => {
-        import.meta.env = ORIGINAL_PROCESS_ENV;
+        Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
         vi.clearAllMocks();
     });
 

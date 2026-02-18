@@ -683,5 +683,105 @@
         "main.function_default"
       ]
     }
+  },
+  {
+    "comment": "create table with foreign key reference without keyspace qualifier",
+    "query": "create table t1(id bigint, t2_id bigint, primary key(id), foreign key (t2_id) references t2(id))",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create table t1(id bigint, t2_id bigint, primary key(id), foreign key (t2_id) references t2(id))",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create table t1 (\n\tid bigint,\n\tt2_id bigint,\n\tprimary key (id),\n\tforeign key (t2_id) references t2 (id)\n)"
+      },
+      "TablesUsed": [
+        "main.t1"
+      ]
+    }
+  },
+  {
+    "comment": "create table with foreign key reference with keyspace qualifier",
+    "query": "create table user.t1(id bigint, t2_id bigint, primary key(id), foreign key (t2_id) references user.t2(id))",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create table user.t1(id bigint, t2_id bigint, primary key(id), foreign key (t2_id) references user.t2(id))",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create table t1 (\n\tid bigint,\n\tt2_id bigint,\n\tprimary key (id),\n\tforeign key (t2_id) references t2 (id)\n)"
+      },
+      "TablesUsed": [
+        "user.t1"
+      ]
+    }
+  },
+  {
+    "comment": "create table with multiple foreign keys with keyspace qualifiers",
+    "query": "create table user.orders(order_id bigint, customer_id bigint, product_id bigint, primary key(order_id), foreign key (customer_id) references user.customers(id), foreign key (product_id) references user.products(id))",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create table user.orders(order_id bigint, customer_id bigint, product_id bigint, primary key(order_id), foreign key (customer_id) references user.customers(id), foreign key (product_id) references user.products(id))",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create table orders (\n\torder_id bigint,\n\tcustomer_id bigint,\n\tproduct_id bigint,\n\tprimary key (order_id),\n\tforeign key (customer_id) references customers (id),\n\tforeign key (product_id) references products (id)\n)"
+      },
+      "TablesUsed": [
+        "user.orders"
+      ]
+    }
+  },
+  {
+    "comment": "alter table add foreign key with keyspace qualifier",
+    "query": "alter table user.t1 add foreign key (t2_id) references user.t2(id)",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "alter table user.t1 add foreign key (t2_id) references user.t2(id)",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "alter table t1 add foreign key (t2_id) references t2 (id)"
+      },
+      "TablesUsed": [
+        "user.t1"
+      ]
+    }
+  },
+  {
+    "comment": "create table with foreign key with ON DELETE and ON UPDATE clauses and keyspace qualifier",
+    "query": "create table user.employees(emp_id bigint, dept_id bigint, primary key(emp_id), foreign key (dept_id) references user.departments(dept_id) on delete set null on update cascade)",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create table user.employees(emp_id bigint, dept_id bigint, primary key(emp_id), foreign key (dept_id) references user.departments(dept_id) on delete set null on update cascade)",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create table employees (\n\temp_id bigint,\n\tdept_id bigint,\n\tprimary key (emp_id),\n\tforeign key (dept_id) references departments (dept_id) on delete set null on update cascade\n)"
+      },
+      "TablesUsed": [
+        "user.employees"
+      ]
+    }
   }
 ]

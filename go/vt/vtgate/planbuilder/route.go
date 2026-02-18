@@ -34,7 +34,7 @@ func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sql
 	eroute.FieldQuery = node.ParsedQuery().Query
 
 	// if we have a planable vindex lookup, let's extract it into its own primitive
-	planableVindex, ok := eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)
+	planableVindex, ok := eroute.Vindex.(vindexes.LookupPlanable)
 	if !ok {
 		return eroute, nil
 	}
@@ -61,9 +61,9 @@ func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sql
 		Lookup:    lookupPrimitive.primitive,
 	}
 
-	eroute.RoutingParameters.Opcode = engine.ByDestination
-	eroute.RoutingParameters.Values = nil
-	eroute.RoutingParameters.Vindex = nil
+	eroute.Opcode = engine.ByDestination
+	eroute.Values = nil
+	eroute.Vindex = nil
 
 	return vdxLookup, nil
 }

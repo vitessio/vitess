@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -258,6 +259,7 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	}
 	return ts.logger
 }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
@@ -394,12 +396,10 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
-		for table, vtab := range ks.Tables {
-			vschema.Tables[table] = vtab
-		}
+		maps.Copy(vschema.Tables, ks.Tables)
 	} else {
 		if vschema.Sharded {
-			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
 		}
 		for _, table := range ts.tables {
 			vschema.Tables[table] = &vschemapb.Table{}
@@ -456,7 +456,7 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 		return nil
 	}
 	ts.Logger().Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
-	reason := fmt.Sprintf("Deleting rules for %s", ts.SourceKeyspaceName())
+	reason := "Deleting rules for " + ts.SourceKeyspaceName()
 	return topotools.UpdateKeyspaceRoutingRules(ctx, ts.TopoServer(), reason,
 		func(ctx context.Context, rules *map[string]string) error {
 			for _, suffix := range tabletTypeSuffixes {
@@ -480,7 +480,7 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -504,7 +504,7 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -577,7 +577,6 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 				}
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})
@@ -727,7 +726,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		ts.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
@@ -1101,7 +1099,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1124,7 +1122,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1290,7 +1288,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 				}
 				ts.Logger().Infof("%s: Removed table %s.%s\n",
 					topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
-
 			}
 			return nil
 		})
@@ -1359,7 +1356,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 					}
 					ts.Logger().Infof("%s: Removed view %s.%s\n",
 						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
-
 				} else {
 					query = fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 					ts.Logger().Infof("%s: Dropping table %s.%s\n",
@@ -1389,7 +1385,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 
 			return nil
 		})
-
 		if err != nil {
 			return err
 		}
@@ -1477,7 +1472,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 	sb := strings.Builder{}
 	sb.WriteString("LOCK TABLES ")
 	for _, tableName := range ts.Tables() {
-		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+		sb.WriteString(sqlescape.EscapeID(tableName) + " READ,")
 	}
 	// trim extra trailing comma
 	lockStmt := sb.String()[:sb.Len()-1]
@@ -1571,7 +1566,10 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 			if percent == 0 {
 				// When percent is 0, remove mirror rule if it exists.
 				if _, ok := mrs[fromTable][toTable]; ok {
-					delete(mrs, fromTable)
+					delete(mrs[fromTable], toTable)
+					if len(mrs[fromTable]) == 0 {
+						delete(mrs, fromTable)
+					}
 				}
 			} else {
 				mrs[fromTable][toTable] = percent

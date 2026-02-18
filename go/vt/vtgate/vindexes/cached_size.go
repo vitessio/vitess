@@ -42,6 +42,7 @@ func (cached *Binary) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -61,6 +62,7 @@ func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CFC) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -75,6 +77,7 @@ func (cached *CFC) CachedSize(alloc bool) int64 {
 	size += cached.prefixCFC.CachedSize(true)
 	return size
 }
+
 func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -100,6 +103,7 @@ func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ConsistentLookup) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -119,6 +123,7 @@ func (cached *ConsistentLookup) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -138,6 +143,7 @@ func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Hash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -157,6 +163,7 @@ func (cached *Hash) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Keyspace) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -169,6 +176,7 @@ func (cached *Keyspace) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+
 func (cached *LookupCost) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -181,6 +189,7 @@ func (cached *LookupCost) CachedSize(alloc bool) int64 {
 	size += cached.LookupNonUnique.CachedSize(true)
 	return size
 }
+
 func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -202,6 +211,7 @@ func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -223,6 +233,7 @@ func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -244,6 +255,7 @@ func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -265,6 +277,7 @@ func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -286,6 +299,7 @@ func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -334,6 +348,7 @@ func (cached *MultiCol) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Null) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -353,6 +368,7 @@ func (cached *Null) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Numeric) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -372,6 +388,7 @@ func (cached *Numeric) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NumericLookupTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -412,6 +429,7 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -459,6 +477,7 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegionMap) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -470,6 +489,7 @@ func (cached *RegionMap) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeMapSize(*cached)
 	return size
 }
+
 func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -489,6 +509,7 @@ func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -508,6 +529,7 @@ func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UnicodeLooseXXHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -527,6 +549,7 @@ func (cached *UnicodeLooseXXHash) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *XXHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -546,6 +569,7 @@ func (cached *XXHash) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *cfcCommon) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -569,6 +593,7 @@ func (cached *cfcCommon) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *clCommon) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -602,6 +627,7 @@ func (cached *clCommon) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.updateLookupQuery)))
 	return size
 }
+
 func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -633,6 +659,7 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.del)))
 	return size
 }
+
 func (cached *prefixCFC) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

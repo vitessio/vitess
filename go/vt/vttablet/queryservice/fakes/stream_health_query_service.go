@@ -56,12 +56,12 @@ func NewStreamHealthQueryService(target *querypb.Target) *StreamHealthQueryServi
 }
 
 // Begin implemented as a no op
-func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+func (q *StreamHealthQueryService) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	return queryservice.TransactionState{}, nil
 }
 
 // Execute implemented as a no op
-func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (q *StreamHealthQueryService) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
@@ -70,7 +70,7 @@ func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.
 // the healthcheck module.
 func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	for shr := range q.healthResponses {
-		callback(shr) // nolint:errcheck
+		callback(shr) //nolint:errcheck
 	}
 	return nil
 }

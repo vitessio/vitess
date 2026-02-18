@@ -18,6 +18,7 @@ package datetime
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -307,7 +308,7 @@ func TestParseDateTimeInt64(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("%d", test.input), func(t *testing.T) {
+		t.Run(strconv.FormatInt(test.input, 10), func(t *testing.T) {
 			got, ok := ParseDateTimeInt64(test.input)
 			if test.err {
 				if !got.IsZero() {

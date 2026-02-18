@@ -47,7 +47,7 @@ func TestDST(t *testing.T) {
 		},
 		{
 			time: Time{hour: 130 | negMask, minute: 34, second: 58},
-			year: 2023, month: 11, day: 03,
+			year: 2023, month: 11, day: 0o3,
 			tz:       "Europe/Madrid",
 			expected: "2023-10-28T13:25:02+02:00",
 		},
@@ -106,7 +106,6 @@ func TestParseTimeZone(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
 		zone, err := ParseTimeZone(tc.tz)
 		if err != nil {
 			assert.Equal(t, tc.want, err.Error())

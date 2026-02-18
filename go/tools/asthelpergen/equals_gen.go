@@ -17,7 +17,6 @@ limitations under the License.
 package asthelpergen
 
 import (
-	"fmt"
 	"go/types"
 	"strings"
 
@@ -58,7 +57,7 @@ func newEqualsGen(pkgname string, options *EqualsOptions) *equalsGen {
 }
 
 func (e *equalsGen) addFunc(name string, code *jen.Statement) {
-	e.file.Add(jen.Comment(fmt.Sprintf("%s does deep equals between the two objects.", name)))
+	e.file.Add(jen.Comment(name + " does deep equals between the two objects."))
 	e.file.Add(code)
 }
 
@@ -169,8 +168,7 @@ func (e *equalsGen) structMethod(t types.Type, strct *types.Struct, spi generato
 func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 	var basicsPred []*jen.Statement
 	var others []*jen.Statement
-	for i := 0; i < strct.NumFields(); i++ {
-		field := strct.Field(i)
+	for field := range strct.Fields() {
 		if field.Type().Underlying().String() == anyTypeName || strings.HasPrefix(field.Name(), "_") {
 			// we can safely ignore this, we do not want ast to contain `any` types.
 			continue
@@ -296,7 +294,8 @@ func (e *equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 		}
 	*/
 
-	stmts := []jen.Code{jen.If(jen.Id("len(a) != len(b)")).Block(jen.Return(jen.False())),
+	stmts := []jen.Code{
+		jen.If(jen.Id("len(a) != len(b)")).Block(jen.Return(jen.False())),
 		jen.For(jen.Id("i := 0; i < len(a); i++")).Block(
 			jen.If(compareValueType(slice.Elem(), jen.Id("a[i]"), jen.Id("b[i]"), false, spi)).Block(jen.Return(jen.False()))),
 		jen.Return(jen.True()),

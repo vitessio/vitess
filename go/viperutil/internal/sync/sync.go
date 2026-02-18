@@ -18,7 +18,6 @@ package sync
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -330,7 +329,7 @@ func AdaptGetter[T any](key string, getter func(v *viper.Viper) func(key string)
 	}
 
 	if _, ok := v.keys[key]; ok {
-		panic(fmt.Sprintf("already adapted a getter for key %s", key))
+		panic("already adapted a getter for key " + key)
 	}
 
 	var m sync.RWMutex

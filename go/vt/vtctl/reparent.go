@@ -18,7 +18,7 @@ package vtctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/spf13/pflag"
 
@@ -69,14 +69,14 @@ func init() {
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
+		return errors.New("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ReparentTablet requires <tablet alias>")
+		return errors.New("action ReparentTablet requires <tablet alias>")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -87,7 +87,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
+		return errors.New("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
@@ -96,7 +96,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action InitShardPrimary requires <keyspace/shard> <tablet alias>")
+		return errors.New("action InitShardPrimary requires <keyspace/shard> <tablet alias>")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -111,7 +111,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
+		return errors.New("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
@@ -127,12 +127,12 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *keyspaceShard != "" || *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flags --keyspace_shard and --new_primary for action PlannedReparentShard at the same time")
+			return errors.New("cannot use legacy syntax and flags --keyspace_shard and --new_primary for action PlannedReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action PlannedReparentShard requires --keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>]")
+		return errors.New("action PlannedReparentShard requires --keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>]")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
@@ -164,7 +164,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
+		return errors.New("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
@@ -180,12 +180,12 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flag --new_primary for action EmergencyReparentShard at the same time")
+			return errors.New("cannot use legacy syntax and flag --new_primary for action EmergencyReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action EmergencyReparentShard requires --keyspace_shard=<keyspace/shard>")
+		return errors.New("action EmergencyReparentShard requires --keyspace_shard=<keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
@@ -214,7 +214,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action TabletExternallyReparented requires <tablet alias>")
+		return errors.New("action TabletExternallyReparented requires <tablet alias>")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))

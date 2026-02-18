@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -94,7 +95,6 @@ func TestComInitDB(t *testing.T) {
 	}
 	db := sConn.parseComInitDB(data)
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
-
 }
 
 func TestComSetOption(t *testing.T) {
@@ -116,7 +116,6 @@ func TestComSetOption(t *testing.T) {
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
 	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
-
 }
 
 func TestComStmtPrepare(t *testing.T) {
@@ -152,7 +151,6 @@ func TestComStmtPrepare(t *testing.T) {
 	resp, err := cConn.ReadPacket()
 	require.NoError(t, err, "cConn.ReadPacket failed: %v", err)
 	require.Equal(t, prepare.StatementID, uint32(resp[1]), "Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
-
 }
 
 func TestComStmtPrepareUpdStmt(t *testing.T) {
@@ -192,7 +190,7 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	require.NoError(t, err, "cConn.ReadPacket failed")
 	require.EqualValues(t, prepare.StatementID, resp[1], "Received incorrect Statement ID")
 
-	for i := uint16(0); i < paramsCount; i++ {
+	for range paramsCount {
 		resp, err := cConn.ReadPacket()
 		require.NoError(t, err, "cConn.ReadPacket failed")
 		require.EqualValues(t, 0xfd, resp[17], "Received incorrect Statement ID")
@@ -226,7 +224,6 @@ func TestComStmtSendLongData(t *testing.T) {
 	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
 	require.Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
-
 }
 
 func TestComStmtExecute(t *testing.T) {
@@ -247,7 +244,6 @@ func TestComStmtExecute(t *testing.T) {
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
 	require.NoError(t, err, "parseComStmtExeute failed: %v", err)
 	require.Equal(t, uint32(18), stmtID, "Parsed incorrect values")
-
 }
 
 func TestComStmtExecuteUpdStmt(t *testing.T) {
@@ -264,7 +260,8 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 			ParamsCount: 29,
 			ParamsType:  make([]int32, 29),
 			BindVars:    map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	// This is simulated packets for update query
 	data := []byte{
@@ -286,7 +283,8 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 		0x34, 0x35, 0x36, 0x37, 0x38, 0x08, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9,
 		0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5, 0x9e, 0x08, 0x31, 0x32, 0x33, 0x34,
 		0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9, 0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5,
-		0x9e, 0x03, 0x66, 0x6f, 0x6f, 0x07, 0x66, 0x6f, 0x6f, 0x2c, 0x62, 0x61, 0x72}
+		0x9e, 0x03, 0x66, 0x6f, 0x6f, 0x07, 0x66, 0x6f, 0x6f, 0x2c, 0x62, 0x61, 0x72,
+	}
 
 	stmtID, _, err := sConn.parseComStmtExecute(prepareDataMap, data[4:]) // first 4 are header
 	require.NoError(t, err)
@@ -347,7 +345,6 @@ func TestComStmtClose(t *testing.T) {
 	stmtID, ok := sConn.parseComStmtClose(data)
 	require.True(t, ok, "parseComStmtClose failed")
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
-
 }
 
 // This test has been added to verify that IO errors in a connection lead to SQL Server lost errors
@@ -623,7 +620,6 @@ func checkQuery(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes
 }
 
 func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes.Result, wantfields, allRows, warnings bool) {
-
 	if sConn.Capabilities&CapabilityClientDeprecateEOF > 0 {
 		query += " NOEOF"
 	} else {
@@ -651,10 +647,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	var fatalError string
 	// Use a go routine to run ExecuteFetch.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		maxrows := 10000
 		if !allRows {
 			// Asking for just one row max. The results that have more will fail.
@@ -741,7 +734,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			}
 			t.Errorf("\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
 		}
-	}()
+	})
 
 	// The other side gets the request, and sends the result.
 	// Twice, once for ExecuteFetch, once for ExecuteStreamFetch.
@@ -760,19 +753,19 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	for i := 0; i < count; i++ {
 		kontinue := sConn.handleNextCommand(&handler)
 		require.True(t, kontinue, "error handling command: %d", i)
-
 	}
 
 	wg.Wait()
 	require.Equal(t, "", fatalError, fatalError)
-
 }
 
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
+	var resultSb767 strings.Builder
 	for _, val := range row {
-		result += fmt.Sprintf(" %v", val)
+		resultSb767.WriteString(fmt.Sprintf(" %v", val))
 	}
+	result += resultSb767.String()
 	return result
 }

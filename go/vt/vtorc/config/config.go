@@ -49,6 +49,15 @@ const (
 )
 
 var (
+	cell = viperutil.Configure(
+		"cell",
+		viperutil.Options[string]{
+			FlagName: "cell",
+			Default:  "",
+			Dynamic:  true,
+		},
+	)
+
 	instancePollTime = viperutil.Configure(
 		"instance-poll-time",
 		viperutil.Options[time.Duration]{
@@ -275,6 +284,7 @@ func init() {
 // registerFlags registers the flags required by VTOrc
 func registerFlags(fs *pflag.FlagSet) {
 	fs.Int("discovery-workers", discoveryWorkers.Default(), "Number of workers used for tablet discovery")
+	fs.String("cell", cell.Default(), "cell to use (required in v25+)")
 	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
@@ -300,6 +310,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Int64("wait-for-relaylogs-tablet-count", waitForRelayLogsTabletCount.Default(), "Specifies the exact number of tablets to wait for relaylogs during EmergencyReparentShard actions. This setting must be > 0 when --wait-for-relaylogs-mode=COUNT is set")
 
 	viperutil.BindFlags(fs,
+		cell,
 		instancePollTime,
 		preventCrossCellFailover,
 		discoveryWorkers,
@@ -331,6 +342,11 @@ func Validate() error {
 		return fmt.Errorf("--wait-for-relaylogs-tablet-count must be > 0 when --wait-for-relaylogs-mode is COUNT")
 	}
 	return nil
+}
+
+// GetCell is a getter function.
+func GetCell() string {
+	return cell.Get()
 }
 
 // GetInstancePollTime is a getter function.

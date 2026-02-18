@@ -33,7 +33,7 @@ func AggregateTabletMetricResults(
 	metricName MetricName,
 	tabletResultsMap TabletResultMap,
 	ignoreHostsCount int,
-	IgnoreDialTCPErrors bool,
+	ignoreTabletRPCErrors bool,
 	ignoreHostsThreshold float64,
 ) (worstMetric MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
@@ -49,7 +49,7 @@ func AggregateTabletMetricResults(
 		}
 		value, err := tabletMetricResult.Get()
 		if err != nil {
-			if IgnoreDialTCPErrors && IsDialTCPError(err) {
+			if ignoreTabletRPCErrors && IsTabletRPCError(err) {
 				continue
 			}
 			if ignoreHostsCount > 0 {

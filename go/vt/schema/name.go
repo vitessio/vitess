@@ -48,10 +48,8 @@ func (h InternalTableHint) String() string {
 	return string(h)
 }
 
-var (
-	// internalTableNameRegexp parses new internal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
-	internalTableNameRegexp = regexp.MustCompile(InternalTableNameExpression)
-)
+// internalTableNameRegexp parses new internal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
+var internalTableNameRegexp = regexp.MustCompile(InternalTableNameExpression)
 
 // CreateUUIDWithDelimiter creates a globally unique ID, with a given delimiter
 // example results:

@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sourceSchema,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(*sKs, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*sKs, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: targetSchema,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(*tKs, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*tKs, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -118,9 +118,9 @@ func TestMain(m *testing.M) {
 // where tables actually reside, preventing cross-keyspace relationships.
 func TestForeignKeyRoutingRules(t *testing.T) {
 	// Wait for schema tracking to complete
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, targetKs, func(t *testing.T, keyspace map[string]interface{}) bool {
-		tables := keyspace["tables"].(map[string]interface{})
-		tbl := tables["t1"].(map[string]interface{})
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, targetKs, func(t *testing.T, keyspace map[string]any) bool {
+		tables := keyspace["tables"].(map[string]any)
+		tbl := tables["t1"].(map[string]any)
 		return tbl["child_foreign_keys"] != nil
 	}, "tks.t1 should have child foreign key")
 
@@ -148,27 +148,27 @@ func TestForeignKeyRoutingRules(t *testing.T) {
 }
 
 // getVSchemaFromVtgate fetches the vschema from vtgate using the same pattern as other tests
-func getVSchemaFromVtgate(t *testing.T) map[string]interface{} {
+func getVSchemaFromVtgate(t *testing.T) map[string]any {
 	vs, err := clusterInstance.VtgateProcess.ReadVSchema()
 	require.NoError(t, err, "failed to read vschema from vtgate")
 	return convertToMap(*vs)
 }
 
 // convertToMap converts interface{} to map[string]interface{} (from utils)
-func convertToMap(input interface{}) map[string]interface{} {
-	output, ok := input.(map[string]interface{})
+func convertToMap(input any) map[string]any {
+	output, ok := input.(map[string]any)
 	if !ok {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 	return output
 }
 
 // assertFKRelationship validates that a specific FK relationship exists between tables
-func assertFKRelationship(t *testing.T, keyspace map[string]interface{}, tableName, expectedRefTable, expectedKeyspace, fkType string) {
+func assertFKRelationship(t *testing.T, keyspace map[string]any, tableName, expectedRefTable, expectedKeyspace, fkType string) {
 	tables := convertToMap(keyspace["tables"])
 	table := convertToMap(tables[tableName])
 
-	var fks interface{}
+	var fks any
 	var tableKey string
 	if fkType == "child" {
 		fks = table["child_foreign_keys"]
@@ -179,7 +179,7 @@ func assertFKRelationship(t *testing.T, keyspace map[string]interface{}, tableNa
 	}
 
 	require.NotNil(t, fks, "%s.%s should have %s foreign keys", expectedKeyspace, tableName, fkType)
-	fkSlice, ok := fks.([]interface{})
+	fkSlice, ok := fks.([]any)
 	require.True(t, ok, "FK should be a slice")
 	require.NotEmpty(t, fkSlice, "%s.%s should have at least one %s FK", expectedKeyspace, tableName, fkType)
 
@@ -195,7 +195,7 @@ func assertFKRelationship(t *testing.T, keyspace map[string]interface{}, tableNa
 }
 
 // assertNoForeignKeys checks that a table has no foreign key relationships
-func assertNoForeignKeys(t *testing.T, keyspace map[string]interface{}, tableName, message string) {
+func assertNoForeignKeys(t *testing.T, keyspace map[string]any, tableName, message string) {
 	tables := convertToMap(keyspace["tables"])
 	table := convertToMap(tables[tableName])
 
@@ -204,13 +204,13 @@ func assertNoForeignKeys(t *testing.T, keyspace map[string]interface{}, tableNam
 
 	// Check if FKs are nil or empty
 	if childFKs != nil {
-		childSlice, ok := childFKs.([]interface{})
+		childSlice, ok := childFKs.([]any)
 		if ok {
 			assert.Empty(t, childSlice, message+" (child FKs)")
 		}
 	}
 	if parentFKs != nil {
-		parentSlice, ok := parentFKs.([]interface{})
+		parentSlice, ok := parentFKs.([]any)
 		if ok {
 			assert.Empty(t, parentSlice, message+" (parent FKs)")
 		}

@@ -103,7 +103,8 @@ type VStreamReader interface {
 
 // VStream streams binlog events.
 func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (VStreamReader, error) {
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
@@ -172,6 +173,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	return fields, paramsCount, err
 }
 
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
+}
+
 //
 // The rest of this file is for the protocol implementations.
 //
@@ -223,7 +229,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	defer dialersM.Unlock()
 
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists, overwriting it", name)
+		log.Warn(fmt.Sprintf("Dialer %s already exists, overwriting it", name))
 	}
 	dialers[name] = dialer
 }
@@ -261,4 +267,15 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 // the *VTGateConn.
 func Dial(ctx context.Context, address string) (*VTGateConn, error) {
 	return DialProtocol(ctx, vtgateProtocol, address)
+}
+
+// DialCustom creates a new VTGateConn with the given DialerFunc.
+func DialCustom(ctx context.Context, dialer DialerFunc, address string) (*VTGateConn, error) {
+	impl, err := dialer(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &VTGateConn{
+		impl: impl,
+	}, nil
 }

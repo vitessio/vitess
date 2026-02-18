@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -55,7 +56,7 @@ var (
 // Restart restarts vttablet and mysql.
 func (tablet *Vttablet) Restart() error {
 	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
-		return fmt.Errorf("no mysql process is running")
+		return errors.New("no mysql process is running")
 	}
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
@@ -94,7 +95,7 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
 func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
@@ -104,7 +105,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 
 // FullStatus gets the full status from the given tablet.
 func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	status, err := tmClient.FullStatus(ctx, vtablet)
 	require.NoError(t, err)
@@ -187,6 +188,7 @@ func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
+	var resultSb191 strings.Builder
 	for i, line := range lines {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
@@ -196,12 +198,13 @@ func filterResultForWarning(input string) string {
 			continue
 		}
 
-		result += line
+		resultSb191.WriteString(line)
 
 		if i < len(lines)-1 {
-			result += "\n"
+			resultSb191.WriteString("\n")
 		}
 	}
+	result += resultSb191.String()
 
 	return result
 }
@@ -306,7 +309,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	}
 
 	return cp
-
 }
 
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the
@@ -320,7 +322,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
         "vt_filtered": ["VtFilteredPass"]
 	}`)
 	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
-	os.WriteFile(dbCredentialFile, data, 0666)
+	os.WriteFile(dbCredentialFile, data, 0o666)
 	return dbCredentialFile
 }
 
@@ -488,7 +490,7 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 		directories = directories[1:]
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Errorf("Couldn't read directory - %v", dir)
+			log.Error(fmt.Sprintf("Couldn't read directory - %v", dir))
 			continue
 		}
 		for _, entry := range entries {
@@ -514,8 +516,8 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 			// Read and print the file.
 			res, err := os.ReadFile(name)
 			require.NoError(t, err)
-			log.Errorf("READING FILE - %v", name)
-			log.Errorf("%v", string(res))
+			log.Error(fmt.Sprintf("READING FILE - %v", name))
+			log.Error(string(res))
 		}
 	}
 }

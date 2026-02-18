@@ -17,24 +17,20 @@ limitations under the License.
 package servenv
 
 func getCpuUsage() float64 {
-	value, err := getCgroupCpu()
-	if err == nil {
+	if value, err := getCgroupCpu(); err == nil {
 		return value
 	}
-	value, err = getHostCpuUsage()
-	if err == nil {
+	if value, err := getHostCpuUsage(); err == nil {
 		return value
 	}
 	return -1
 }
 
 func getMemoryUsage() float64 {
-	value, err := getCgroupMemory()
-	if err == nil {
+	if value, err := getCgroupMemory(); err == nil {
 		return value
 	}
-	value, err = getHostMemoryUsage()
-	if err == nil {
+	if value, err := getHostMemoryUsage(); err == nil {
 		return value
 	}
 	return -1

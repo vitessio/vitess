@@ -32,14 +32,18 @@ func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables [
 	return numTablets, tables
 }
 
-var sidecarDBTables []string
-var numSidecarDBTables int
-var ddls1, ddls2 []string
+var (
+	sidecarDBTables    []string
+	numSidecarDBTables int
+	ddls1, ddls2       []string
+)
 
 func init() {
-	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
+	sidecarDBTables = []string{
+		"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
 		"redo_state", "redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "semisync_heartbeat",
-		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
+		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log",
+	}
 	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
 		"drop table _vt.vreplication_log",
@@ -65,9 +69,9 @@ func TestSidecarDB(t *testing.T) {
 	shard := "0"
 
 	cell1 := vc.Cells[defaultCellName]
-	tablet100 := fmt.Sprintf("%s-100", defaultCellName)
-	tablet101 := fmt.Sprintf("%s-101", defaultCellName)
-	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	tablet100 := defaultCellName + "-100"
+	tablet101 := defaultCellName + "-101"
+	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
 	tablet100Port := shard0.Tablets[tablet100].Vttablet.Port
 	tablet101Port := shard0.Tablets[tablet101].Vttablet.Port
@@ -102,7 +106,6 @@ func TestSidecarDB(t *testing.T) {
 		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
 		expectedChanges100 += numChanges
 		prs(t, keyspace, shard)
-		// nolint
 		currentPrimary = tablet100
 
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
@@ -111,6 +114,7 @@ func TestSidecarDB(t *testing.T) {
 		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
 	})
 }
+
 func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 	_, tables2 := getSidecarDBTables(t, tabletID)
 	require.EqualValues(t, tables, tables2)

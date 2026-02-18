@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -267,10 +266,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
 	}, {
 		in:  "set @@transaction_timeout = 50",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: ptr.Of(int64(50))}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: new(int64(50))}},
 	}, {
 		in:  "set @@transaction_timeout = 50, transaction_timeout = 75",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: ptr.Of(int64(75))}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: new(int64(75))}},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -397,7 +396,6 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-
 	t.Run("Session 1", func(t *testing.T) {
 		executor, _, _, _, ctx := createExecutorEnv(t)
 		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
@@ -570,7 +568,8 @@ func TestSetVarShowVariables(t *testing.T) {
 			"|only_full_group_by"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE")})
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
+	})
 
 	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -615,14 +614,15 @@ func TestExecutorSetAndSelect(t *testing.T) {
 				sbc.SetResults([]*sqltypes.Result{
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // one for set prequeries
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // second for check query
-					sqltypes.MakeTestResult(nil)}) // third one for new set query
+					sqltypes.MakeTestResult(nil),
+				}) // third one for new set query
 
 				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
 				_, err := executorExecSession(ctx, e, session, setQ, nil)
 				require.NoError(t, err)
 			}
 
-			selectQ := fmt.Sprintf("select @@%s", tcase.sysVar)
+			selectQ := "select @@" + tcase.sysVar
 			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
 			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
 

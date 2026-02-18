@@ -176,7 +176,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				query, err := ev.Query(format)
 				require.NoError(t, err)
 				eventStrs = append(eventStrs, query.SQL)
-			case ev.IsWriteRows():
+			case ev.IsWriteRows() || ev.IsUpdateRows() || ev.IsDeleteRows():
 				rows, err := ev.Rows(format, tableMap)
 				require.NoError(t, err)
 				for i := range rows.Rows {
@@ -219,7 +219,6 @@ func TestMysql56ParsePosition(t *testing.T) {
 	got, err := replication.ParsePosition(replication.Mysql56FlavorID, input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestMysql56SemiSyncAck(t *testing.T) {

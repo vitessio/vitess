@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -64,15 +65,13 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
 		"--topo-global-root":           vtbackup.TopoGlobalRoot,
-		"--log_dir":                    vtbackup.LogDir,
-
-		//initDBfile is required to run vtbackup
-		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
+		// initDBfile is required to run vtbackup
+		"--mysql-port":       strconv.Itoa(vtbackup.MysqlPort),
 		"--init-db-sql-file": vtbackup.initDBfile,
 		"--init-keyspace":    vtbackup.Keyspace,
 		"--init-shard":       vtbackup.Shard,
 
-		//Backup Arguments are not optional
+		// Backup Arguments are not optional
 		utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer): vtbackup.BackupStorageImplementation,
 		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
 	}
@@ -80,7 +79,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
-	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
+	utils.SetFlagVariantsForTests(flags, "--mysql-port", strconv.Itoa(vtbackup.MysqlPort))
 	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
 	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
@@ -103,7 +102,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
 	vtbackup.proc.Env = append(vtbackup.proc.Env, DefaultVttestEnv)
-	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " ")))
 
 	err = vtbackup.proc.Run()
 	if err != nil {
@@ -147,7 +146,8 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 // configured with the given Config.
 // The process must be manually started by calling Setup()
 func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string, keyspace string, shard string,
-	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool) *VtbackupProcess {
+	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool,
+) *VtbackupProcess {
 	base := VtProcessInstance("vtbackup", "vtbackup", topoPort, hostname)
 	vtbackup := &VtbackupProcess{
 		VtProcess:                   base,

@@ -75,7 +75,7 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 
 	// We iterate in a loop and try to get a connection with the same settings as before
 	// but only 1 at a time. So we expect the same connection to be reused everytime.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
 		require.NoError(t, err)
 		require.True(t, connectionIDRes.Equal(res))
@@ -104,7 +104,7 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 
 	// We iterate in a loop and try to get a connection with the same settings as before
 	// but only 1 at a time. We're only going to see connection 2 here because the pool is LIFO
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
 		require.NoError(t, err)
 		require.Truef(t, connectionIDRes2.Equal(res), "connection pool was not LIFO")
@@ -119,7 +119,7 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 func resetTxConnPool(t *testing.T) {
 	txPoolSize := framework.Server.Config().TxPool.Size
 	clients := make([]*framework.QueryClient, txPoolSize)
-	for i := 0; i < txPoolSize; i++ {
+	for i := range txPoolSize {
 		client := framework.NewClient()
 		_, err := client.BeginExecute("select 1", nil, nil)
 		require.NoError(t, err)
@@ -320,14 +320,14 @@ func TestInfiniteSessions(t *testing.T) {
 	numOfSessions := int(maxConn * 2)
 
 	// read session
-	for i := 0; i < numOfSessions; i++ {
+	for range numOfSessions {
 		client := framework.NewClient()
 		_, err := client.ReserveExecute("select 1", []string{"set sql_mode = ''"}, nil)
 		require.NoError(t, err)
 	}
 
 	// write session
-	for i := 0; i < numOfSessions; i++ {
+	for range numOfSessions {
 		client := framework.NewClient()
 		_, err := client.ReserveBeginExecute("select 1", []string{"set sql_mode = ''"}, nil, nil)
 		require.NoError(t, err)

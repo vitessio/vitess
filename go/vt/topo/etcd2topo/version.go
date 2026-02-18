@@ -16,9 +16,7 @@ limitations under the License.
 
 package etcd2topo
 
-import (
-	"fmt"
-)
+import "strconv"
 
 // EtcdVersion is etcd's idea of a version.
 // It implements topo.Version.
@@ -27,5 +25,5 @@ type EtcdVersion int64
 
 // String is part of the topo.Version interface.
 func (v EtcdVersion) String() string {
-	return fmt.Sprintf("%v", int64(v))
+	return strconv.FormatInt(int64(v), 10)
 }

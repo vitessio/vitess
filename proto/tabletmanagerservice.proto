@@ -129,6 +129,9 @@ service TabletManager {
   // StartReplication starts the mysql replication
   rpc StartReplication(tabletmanagerdata.StartReplicationRequest) returns (tabletmanagerdata.StartReplicationResponse) {};
 
+  // RestartReplication stops and then starts the mysql replication
+  rpc RestartReplication(tabletmanagerdata.RestartReplicationRequest) returns (tabletmanagerdata.RestartReplicationResponse) {};
+
   // StartReplicationUnitAfter starts the mysql replication until and including
   // the provided position
   rpc StartReplicationUntilAfter(tabletmanagerdata.StartReplicationUntilAfterRequest) returns (tabletmanagerdata.StartReplicationUntilAfterResponse) {};

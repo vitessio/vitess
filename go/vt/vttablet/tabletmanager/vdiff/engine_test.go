@@ -256,7 +256,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				id := row[0].ToString()
 				if tt.expectRetry {
 					vdiffenv.dbClient.ExpectRequestRE("update _vt.vdiff as vd left join _vt.vdiff_table as vdt on \\(vd.id = vdt.vdiff_id\\) set vd.state = 'pending'.*", singleRowAffected, nil)
-					vdiffenv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %s", id), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = "+id, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						vdiffTestCols,
 						vdiffTestColTypes,
 					),
@@ -270,7 +270,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 					), nil)
 
 					// At this point we know that we kicked off the expected retry so we can short circuit the vdiff.
-					shortCircuitTestAfterQuery(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = %s", id), vdiffenv.dbClient)
+					shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = "+id, vdiffenv.dbClient)
 
 					expectedControllerCnt++
 				}
@@ -282,5 +282,4 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			vdiffenv.dbClient.Wait()
 		})
 	}
-
 }

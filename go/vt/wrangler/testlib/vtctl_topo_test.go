@@ -52,8 +52,7 @@ func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want strin
 // TestVtctlTopoCommands tests all vtctl commands from the
 // "Topo" group.
 func TestVtctlTopoCommands(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {

@@ -262,7 +262,6 @@ func commandDeleteShards(cmd *cobra.Command, args []string) error {
 		Recursive:     deleteShardsOptions.Recursive,
 		Force:         deleteShardsOptions.Force,
 	})
-
 	if err != nil {
 		return fmt.Errorf("%w: while deleting %d shards; please inspect the topo", err, len(shards))
 	}
@@ -325,7 +324,6 @@ func commandGetShardReplication(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-
 }
 
 var removeShardCellOptions = struct {
@@ -350,7 +348,6 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 		Force:     removeShardCellOptions.Force,
 		Recursive: removeShardCellOptions.Recursive,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -505,7 +502,7 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 		case nil:
 			line = cli.MarshalTabletAWK(rt.Tablet) + "<err> <err> <err>"
 		default:
-			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Status.Position, rt.Status.ReplicationLagSeconds)
+			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Position, rt.ReplicationLagSeconds)
 		}
 
 		fmt.Println(line)
@@ -548,7 +545,7 @@ func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	sks, sshard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(2))
@@ -602,7 +599,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	cli.FinishedParsing(cmd)

@@ -92,11 +92,13 @@ describe('WorkflowActions', () => {
     };
 
     beforeEach(() => {
-        const ResizeObserverMock = vi.fn(() => ({
-            observe: vi.fn(),
-            unobserve: vi.fn(),
-            disconnect: vi.fn(),
-        }));
+        // Mock ResizeObserver as a class (not arrow function) because it's called with 'new'
+        // This is required for Vitest 4.x which requires constructors to use class/function keywords
+        const ResizeObserverMock = vi.fn(function (this: any) {
+            this.observe = vi.fn();
+            this.unobserve = vi.fn();
+            this.disconnect = vi.fn();
+        });
 
         vi.stubGlobal('ResizeObserver', ResizeObserverMock);
         vi.restoreAllMocks();

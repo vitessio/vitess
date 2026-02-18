@@ -18,7 +18,6 @@ This tests select/insert using the unshared keyspace added in main_test
 package clustertest
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,16 +26,15 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestVtgateProcess(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

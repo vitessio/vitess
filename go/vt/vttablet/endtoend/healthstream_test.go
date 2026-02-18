@@ -48,8 +48,8 @@ func TestSchemaChange(t *testing.T) {
 			false,
 		}, {
 			"create internal table",
-			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			"create table _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410(id bigint primary key)",
+			"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"create table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id bigint primary key)",
 			true,
 		}, {
 			"add column 1",

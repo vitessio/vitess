@@ -569,6 +569,7 @@ func TestTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 
 	_, err = s.Exec(int64(0))
 	if err != nil {
@@ -594,10 +595,12 @@ func TestTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Query(int64(0))
+	defer s.Close()
+	r, err := s.Query(int64(0))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	err = tx.Rollback()
 	if err != nil {
 		t.Fatal(err)
@@ -648,6 +651,7 @@ func TestSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 
 	_, err = s.Exec(int64(0))
 	if err != nil {
@@ -674,6 +678,7 @@ func TestSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer newS.Close()
 
 	_, err = newS.Exec(int64(1))
 	if err != nil {
@@ -785,7 +790,7 @@ func TestConnSeparateSessions(t *testing.T) {
 	// No connections are returned to the pool during this test and therefore
 	// the connection state should not be shared.
 	var conns []*sql.Conn
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		sconn, err := db.Conn(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -837,7 +842,7 @@ func TestConnReuseSessions(t *testing.T) {
 	require.NoError(t, sconn.Close())
 
 	var targets []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		sconn, err := db.Conn(ctx)
 		if err != nil {
 			t.Fatal(err)

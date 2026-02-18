@@ -155,7 +155,6 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	config.MaxReplicationLagSec = maxReplicationLag
 
 	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
-
 }
 
 func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount int, maxRateModuleMaxRate int64, maxReplicationLagModuleConfig MaxReplicationLagModuleConfig, nowFunc func() time.Time) (Throttler, error) {
@@ -187,7 +186,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 
 	runningThreads := make(map[int]bool, threadCount)
 	threadThrottlers := make([]*threadThrottler, threadCount)
-	for i := 0; i < threadCount; i++ {
+	for i := range threadCount {
 		threadThrottlers[i] = newThreadThrottler(i, actualRateHistory)
 		runningThreads[i] = true
 	}
@@ -302,7 +301,7 @@ func (t *ThrottlerImpl) updateMaxRate() {
 	}
 
 	if maxRate != ZeroRateNoProgess && maxRate < int64(threadsRunning) {
-		log.Warningf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning)
+		log.Warn(fmt.Sprintf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning))
 		maxRate = int64(threadsRunning)
 	}
 	maxRatePerThread := maxRate / int64(threadsRunning)

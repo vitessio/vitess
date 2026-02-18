@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -382,9 +383,16 @@ func applyEvents(blp *BinlogPlayer) func() error {
 }
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" key_range:{end:"\\x80"}', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		KeyRange: &topodatapb.KeyRange{
+			End: []byte{0x80},
+		},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -401,9 +409,14 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b"', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		Tables:   []string{"a", "b"},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",

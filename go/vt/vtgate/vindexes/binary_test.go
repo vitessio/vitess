@@ -117,7 +117,7 @@ func TestBinaryMap(t *testing.T) {
 func TestBinaryVerify(t *testing.T) {
 	hexValStr := "8a1e"
 	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
-	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexNumStrSQL := "0x" + hexValStr
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{[]byte("1"), []byte("1"), hexBytes, hexBytes}
@@ -150,7 +150,6 @@ func TestBinaryReverseMap(t *testing.T) {
 // TestBinaryRangeMap takes start and env values,
 // and checks against a destination keyrange.
 func TestBinaryRangeMap(t *testing.T) {
-
 	startInterval := "0x01"
 	endInterval := "0x10"
 
@@ -159,5 +158,4 @@ func TestBinaryRangeMap(t *testing.T) {
 	require.NoError(t, err)
 	want := "DestinationKeyRange(01-10)"
 	assert.Equal(t, want, got[0].String())
-
 }

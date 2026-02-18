@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -37,7 +38,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-type VDiffAction string // nolint
+type VDiffAction string
 
 const (
 	CreateAction  VDiffAction = "create"
@@ -126,7 +127,6 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 		return nil, err
 	}
 	return sqltypes.ResultToProto3(qr), nil
-
 }
 
 // Validate vdiff options. Also setup defaults where applicable.
@@ -166,7 +166,7 @@ func (vde *Engine) getDefaultCell() (string, error) {
 	}
 	if len(cells) == 0 {
 		// Unreachable
-		return "", fmt.Errorf("there are no cells in the topo")
+		return "", errors.New("there are no cells in the topo")
 	}
 	sort.Strings(cells) // Ensure that the resulting value is deterministic
 	return strings.Join(cells, ","), nil

@@ -75,6 +75,8 @@ type TabletManagerClient interface {
 	StopReplicationMinimum(ctx context.Context, in *tabletmanagerdata.StopReplicationMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationMinimumResponse, error)
 	// StartReplication starts the mysql replication
 	StartReplication(ctx context.Context, in *tabletmanagerdata.StartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationResponse, error)
+	// RestartReplication stops and then starts the mysql replication
+	RestartReplication(ctx context.Context, in *tabletmanagerdata.RestartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RestartReplicationResponse, error)
 	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
 	StartReplicationUntilAfter(ctx context.Context, in *tabletmanagerdata.StartReplicationUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
@@ -452,6 +454,15 @@ func (c *tabletManagerClient) StopReplicationMinimum(ctx context.Context, in *ta
 func (c *tabletManagerClient) StartReplication(ctx context.Context, in *tabletmanagerdata.StartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationResponse, error) {
 	out := new(tabletmanagerdata.StartReplicationResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartReplication", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) RestartReplication(ctx context.Context, in *tabletmanagerdata.RestartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RestartReplicationResponse, error) {
+	out := new(tabletmanagerdata.RestartReplicationResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RestartReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -866,6 +877,8 @@ type TabletManagerServer interface {
 	StopReplicationMinimum(context.Context, *tabletmanagerdata.StopReplicationMinimumRequest) (*tabletmanagerdata.StopReplicationMinimumResponse, error)
 	// StartReplication starts the mysql replication
 	StartReplication(context.Context, *tabletmanagerdata.StartReplicationRequest) (*tabletmanagerdata.StartReplicationResponse, error)
+	// RestartReplication stops and then starts the mysql replication
+	RestartReplication(context.Context, *tabletmanagerdata.RestartReplicationRequest) (*tabletmanagerdata.RestartReplicationResponse, error)
 	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
 	StartReplicationUntilAfter(context.Context, *tabletmanagerdata.StartReplicationUntilAfterRequest) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
@@ -1035,6 +1048,9 @@ func (UnimplementedTabletManagerServer) StopReplicationMinimum(context.Context, 
 }
 func (UnimplementedTabletManagerServer) StartReplication(context.Context, *tabletmanagerdata.StartReplicationRequest) (*tabletmanagerdata.StartReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
+}
+func (UnimplementedTabletManagerServer) RestartReplication(context.Context, *tabletmanagerdata.RestartReplicationRequest) (*tabletmanagerdata.RestartReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RestartReplication not implemented")
 }
 func (UnimplementedTabletManagerServer) StartReplicationUntilAfter(context.Context, *tabletmanagerdata.StartReplicationUntilAfterRequest) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartReplicationUntilAfter not implemented")
@@ -1777,6 +1793,24 @@ func _TabletManager_StartReplication_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).StartReplication(ctx, req.(*tabletmanagerdata.StartReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_RestartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.RestartReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).RestartReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/RestartReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).RestartReplication(ctx, req.(*tabletmanagerdata.RestartReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2545,6 +2579,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartReplication",
 			Handler:    _TabletManager_StartReplication_Handler,
+		},
+		{
+			MethodName: "RestartReplication",
+			Handler:    _TabletManager_RestartReplication_Handler,
 		},
 		{
 			MethodName: "StartReplicationUntilAfter",

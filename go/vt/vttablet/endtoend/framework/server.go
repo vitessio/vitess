@@ -84,16 +84,16 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	if err != nil {
 		return vterrors.Wrap(err, "could not start listener")
 	}
-	ServerAddress = fmt.Sprintf("http://%s", ln.Addr().String())
+	ServerAddress = "http://" + ln.Addr().String()
 	go func() {
 		err := servenv.HTTPServe(ln)
 		if err != nil {
-			log.Errorf("HTTPServe failed: %v", err)
+			log.Error(fmt.Sprintf("HTTPServe failed: %v", err))
 		}
 	}()
 	for {
 		time.Sleep(10 * time.Millisecond)
-		response, err := http.Get(fmt.Sprintf("%s/debug/vars", ServerAddress))
+		response, err := http.Get(ServerAddress + "/debug/vars")
 		if err == nil {
 			response.Body.Close()
 			break
@@ -120,7 +120,7 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.QueryCacheDoorkeeper = false
 	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Config:\n%s", gotBytes)
+	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
 }
 

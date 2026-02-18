@@ -199,7 +199,6 @@ func TestFilterByPlan(t *testing.T) {
 		if got != want {
 			t.Errorf("qrs1:\n%s, want\n%s", got, want)
 		}
-
 	}
 	{
 		// test multiple tables:
@@ -587,7 +586,7 @@ func TestAction(t *testing.T) {
 }
 
 func TestImport(t *testing.T) {
-	var qrs = New()
+	qrs := New()
 	jsondata := `[{
 		"Description": "desc1",
 		"Name": "name1",

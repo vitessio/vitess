@@ -26,7 +26,6 @@ import (
 )
 
 func TestDurationFromProto(t *testing.T) {
-
 	tests := []struct {
 		name      string
 		in        *vttime.Duration
@@ -82,7 +81,6 @@ func TestDurationFromProto(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			actual, ok, err := DurationFromProto(tt.in)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -98,7 +96,6 @@ func TestDurationFromProto(t *testing.T) {
 }
 
 func TestDurationToProto(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		in       time.Duration
@@ -123,7 +120,6 @@ func TestDurationToProto(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			actual := DurationToProto(tt.in)
 			assert.Equal(t, tt.expected, actual)
 		})

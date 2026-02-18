@@ -17,7 +17,6 @@ limitations under the License.
 package srvtopo
 
 import (
-	"context"
 	"sort"
 	"testing"
 	"time"
@@ -50,8 +49,7 @@ func (a TargetArray) Less(i, j int) bool {
 }
 
 func TestFindAllTargetsAndKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 
 	srvTopoCacheRefresh = 0
@@ -59,7 +57,6 @@ func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	defer func() {
 		srvTopoCacheRefresh = 1 * time.Second
 		srvTopoCacheTTL = 1 * time.Second
-
 	}()
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	rs := NewResilientServer(ctx, ts, counts)

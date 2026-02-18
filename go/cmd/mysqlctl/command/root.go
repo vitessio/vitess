@@ -17,7 +17,7 @@ limitations under the License.
 package command
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -49,7 +49,7 @@ var (
 			}
 
 			if vtcmd.IsRunningAsRoot() {
-				return fmt.Errorf("mysqlctl cannot be run as root. Please run as a different user")
+				return errors.New("mysqlctl cannot be run as root. Please run as a different user")
 			}
 
 			return nil

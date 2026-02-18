@@ -63,7 +63,7 @@ func TestIdentifierCache(t *testing.T) {
 				newcache, created := NewIdentifierCache(loadFunc) // should work fine
 				require.False(t, created)
 				if newcache != cache {
-					return fmt.Errorf("cache should be singleton")
+					return errors.New("cache should be singleton")
 				}
 				return nil
 			},
@@ -136,7 +136,7 @@ func TestIdentifierCache(t *testing.T) {
 				newcache, created := NewIdentifierCache(loadFunc)
 				require.True(t, created)
 				if newcache == cache {
-					return fmt.Errorf("cache should have been destroyed")
+					return errors.New("cache should have been destroyed")
 				}
 				cache = newcache
 				return nil

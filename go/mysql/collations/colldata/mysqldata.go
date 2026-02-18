@@ -2835,6 +2835,7 @@ func (contractor_utf16_czech_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) (
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf16_czech_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -2864,6 +2865,7 @@ func (contractor_utf16_danish_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) 
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf16_danish_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -2893,6 +2895,7 @@ func (contractor_utf16_lithuanian_ci) Find(cs charset.Charset, cp0 rune, b0 []by
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf16_lithuanian_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -2936,6 +2939,7 @@ func (contractor_utf16_spanish2_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf16_spanish2_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3011,6 +3015,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf16_croatian_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3064,6 +3069,7 @@ func (contractor_utf8mb4_cs_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_cs_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3097,6 +3103,7 @@ func (contractor_utf8mb4_da_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_da_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3122,6 +3129,7 @@ func (contractor_utf8mb4_lt_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_lt_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3165,6 +3173,7 @@ func (contractor_utf8mb4_es_trad_0900_ai_ci) Find(cs charset.Charset, cp0 rune, 
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_es_trad_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3500,6 +3509,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_hu_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3557,6 +3567,7 @@ func (contractor_utf8mb4_hr_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_hr_0900_ai_ci) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3590,6 +3601,7 @@ func (contractor_utf8mb4_da_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_da_0900_as_cs) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }
@@ -3708,6 +3720,7 @@ func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 	}
 	return nil, nil, 0
 }
+
 func (contractor_utf8mb4_zh_0900_as_cs) FindContextual(cp1, cp0 rune) []uint16 {
 	return nil
 }

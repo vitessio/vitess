@@ -427,6 +427,13 @@ func (s *server) StartReplication(ctx context.Context, request *tabletmanagerdat
 	return response, s.tm.StartReplication(ctx, request.GetSemiSync())
 }
 
+func (s *server) RestartReplication(ctx context.Context, request *tabletmanagerdatapb.RestartReplicationRequest) (response *tabletmanagerdatapb.RestartReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "RestartReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.RestartReplicationResponse{}
+	return response, s.tm.RestartReplication(ctx, request.GetSemiSync())
+}
+
 func (s *server) StartReplicationUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartReplicationUntilAfterRequest) (response *tabletmanagerdatapb.StartReplicationUntilAfterResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -600,7 +607,7 @@ func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb
 	defer s.tm.HandleRPCPanic(ctx, "DemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
-	status, err := s.tm.DemotePrimary(ctx)
+	status, err := s.tm.DemotePrimary(ctx, request.Force)
 	if err == nil {
 		response.PrimaryStatus = status
 	}

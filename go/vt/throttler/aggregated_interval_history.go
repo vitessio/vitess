@@ -29,7 +29,7 @@ type aggregatedIntervalHistory struct {
 
 func newAggregatedIntervalHistory(capacity int64, interval time.Duration, threadCount int) *aggregatedIntervalHistory {
 	historyPerThread := make([]*intervalHistory, threadCount)
-	for i := 0; i < threadCount; i++ {
+	for i := range threadCount {
 		historyPerThread[i] = newIntervalHistory(capacity, interval)
 	}
 	return &aggregatedIntervalHistory{

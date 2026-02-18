@@ -19,7 +19,7 @@ package vindexes
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -99,10 +99,10 @@ func (vind *Binary) Hash(id sqltypes.Value) ([]byte, error) {
 
 // ReverseMap returns the associated ids for the ksids.
 func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
-	var reverseIds = make([]sqltypes.Value, len(ksids))
+	reverseIds := make([]sqltypes.Value, len(ksids))
 	for rownum, keyspaceID := range ksids {
 		if keyspaceID == nil {
-			return nil, fmt.Errorf("Binary.ReverseMap: keyspaceId is nil")
+			return nil, errors.New("Binary.ReverseMap: keyspaceId is nil")
 		}
 		reverseIds[rownum] = sqltypes.MakeTrusted(sqltypes.VarBinary, keyspaceID)
 	}

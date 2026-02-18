@@ -135,12 +135,14 @@ func (c *mysqlConnector) Close(ctx context.Context) error {
 }
 
 func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, throttlerapp.ExternalConnectorName, send, options)
 }
 
 func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult,
-	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	var row []sqltypes.Value
 	if lastpk != nil {
 		r := sqltypes.Proto3ToResult(lastpk)
@@ -153,7 +155,8 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 }
 
 func (c *mysqlConnector) VStreamTables(ctx context.Context,
-	send func(response *binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(response *binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	return c.vstreamer.StreamTables(ctx, send, options)
 }
 
@@ -187,19 +190,22 @@ func (tc *tabletConnector) Close(ctx context.Context) error {
 }
 
 func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	req := &binlogdatapb.VStreamRequest{Target: tc.target, Position: startPos, TableLastPKs: tablePKs, Filter: filter, Options: options}
 	return tc.qs.VStream(ctx, req, send)
 }
 
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult,
-	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	req := &binlogdatapb.VStreamRowsRequest{Target: tc.target, Query: query, Lastpk: lastpk, Options: options}
 	return tc.qs.VStreamRows(ctx, req, send)
 }
 
 func (tc *tabletConnector) VStreamTables(ctx context.Context,
-	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	req := &binlogdatapb.VStreamTablesRequest{Target: tc.target, Options: options}
 	return tc.qs.VStreamTables(ctx, req, send)
 }

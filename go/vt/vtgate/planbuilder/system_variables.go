@@ -55,7 +55,7 @@ func (pc *sysvarPlanCache) initForSettings(systemVariables []sysvars.SystemVaria
 }
 
 func (pc *sysvarPlanCache) parseAndBuildDefaultValue(sysvar sysvars.SystemVariable) evalengine.Expr {
-	stmt, err := pc.env.Parser().Parse(fmt.Sprintf("select %s", sysvar.Default))
+	stmt, err := pc.env.Parser().Parse("select " + sysvar.Default)
 	if err != nil {
 		panic(fmt.Sprintf("bug in set plan init - default value for %s not parsable: %s", sysvar.Name, sysvar.Default))
 	}

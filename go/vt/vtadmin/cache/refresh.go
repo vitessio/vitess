@@ -42,7 +42,7 @@ var (
 func SetCacheRefreshKey(k string) {
 	l := strings.ToLower(k)
 	l = strings.ReplaceAll(l, " ", "-")
-	cacheRefreshHeader, cacheRefreshGRPCMetadataKey = fmt.Sprintf("x-%s", l), l
+	cacheRefreshHeader, cacheRefreshGRPCMetadataKey = "x-"+l, l
 }
 
 // NewIncomingRefreshContext returns an incoming gRPC context with metadata
@@ -71,7 +71,7 @@ func ShouldRefreshFromIncomingContext(ctx context.Context) bool {
 
 	shouldRefresh, err := strconv.ParseBool(vals[0])
 	if err != nil {
-		log.Warningf("failed to parse %s metadata key as bool: %s", cacheRefreshGRPCMetadataKey, err)
+		log.Warn(fmt.Sprintf("failed to parse %s metadata key as bool: %s", cacheRefreshGRPCMetadataKey, err))
 		return false
 	}
 
@@ -92,7 +92,7 @@ func ShouldRefreshFromRequest(r *http.Request) bool {
 
 	shouldRefresh, err := strconv.ParseBool(h)
 	if err != nil {
-		log.Warningf("failed to parse %s header as bool: %s", cacheRefreshHeader, err)
+		log.Warn(fmt.Sprintf("failed to parse %s header as bool: %s", cacheRefreshHeader, err))
 		return false
 	}
 

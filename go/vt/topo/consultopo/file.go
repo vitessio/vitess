@@ -17,9 +17,8 @@ limitations under the License.
 package consultopo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	"github.com/hashicorp/consul/api"
 

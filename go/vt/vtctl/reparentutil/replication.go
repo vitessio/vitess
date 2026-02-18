@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -211,7 +212,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -280,7 +281,7 @@ func stopReplicationAndBuildStatusMaps(
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 				var primaryStatus *replicationdatapb.PrimaryStatus
 
-				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
+				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
 					msg := "replica %v thinks it's primary but we failed to demote it: %v"
 					err = vterrors.Wrapf(err, msg, alias, err)

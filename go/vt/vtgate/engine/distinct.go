@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -209,7 +210,7 @@ func (cc CheckCol) String() string {
 
 	var column string
 	if cc.WsCol == nil {
-		column = fmt.Sprintf("%d", cc.Col)
+		column = strconv.Itoa(cc.Col)
 	} else {
 		column = fmt.Sprintf("(%d:%d)", cc.Col, *cc.WsCol)
 	}

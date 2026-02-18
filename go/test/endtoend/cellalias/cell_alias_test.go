@@ -42,6 +42,7 @@ var (
 	localCluster *cluster.LocalProcessCluster
 	cell1        = "zone1"
 	cell2        = "zone2"
+	vtorcCell    = cell1
 	hostname     = "localhost"
 	keyspaceName = "ks"
 	tableName    = "test_table"
@@ -208,7 +209,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+		if err := localCluster.StartVTOrc(vtorcCell, keyspaceName); err != nil {
 			return 1, err
 		}
 
@@ -232,7 +233,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestAlias(t *testing.T) {
-
 	insertInitialValues(t)
 	defer deleteInitialValues(t)
 
@@ -291,11 +291,9 @@ func TestAlias(t *testing.T) {
 	testQueriesOnTabletType(t, "primary", vtgateInstance.GrpcPort, false)
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
-
 }
 
 func TestAddAliasWhileVtgateUp(t *testing.T) {
-
 	insertInitialValues(t)
 	defer deleteInitialValues(t)
 
@@ -335,7 +333,6 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	// TODO(deepthi) change the following to shouldFail:false when fixing https://github.com/vitessio/vitess/issues/5911
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
-
 }
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
@@ -350,7 +347,7 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 	qr, err := localCluster.ExecOnVTGate(context.Background(),
 		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
 		"@"+tabletType,
-		fmt.Sprintf(`select * from %s`, tableName), nil, nil,
+		"select * from "+tableName, nil, nil,
 	)
 	if shouldFail {
 		require.Error(t, err)

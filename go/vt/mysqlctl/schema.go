@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -87,7 +88,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	backtickDBName := sqlescape.EscapeID(dbName)
 
 	// get the database creation command
-	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS %s", backtickDBName))
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, "SHOW CREATE DATABASE IF NOT EXISTS "+backtickDBName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
@@ -113,7 +114,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	tableNames := make([]string, 0, len(tds))
 	for _, td := range tds {
 		tableNames = append(tableNames, td.Name)
-		td := td
 
 		eg.Go(func() error {
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
@@ -436,19 +436,23 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	// We're not smart enough to create the tables in a foreign-key-compatible way,
 	// so we temporarily disable foreign key checks while adding the existing tables.
 	initialCopySQL += "SET foreign_key_checks = 0;\n"
+	var initialCopySQLSb439 strings.Builder
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			initialCopySQL += td.Schema + ";\n"
+			initialCopySQLSb439.WriteString(td.Schema + ";\n")
 		}
 	}
+	initialCopySQL += initialCopySQLSb439.String()
+	var initialCopySQLSb444 strings.Builder
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
 			s := strings.ReplaceAll(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`")
-			initialCopySQL += s + ";\n"
+			initialCopySQLSb444.WriteString(s + ";\n")
 		}
 	}
+	initialCopySQL += initialCopySQLSb444.String()
 	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
 		return nil, err
 	}
@@ -500,7 +504,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("BeforeSchema differs: %v", msg)
+				log.Warn(fmt.Sprintf("BeforeSchema differs: %v", msg))
 			}
 
 			// let's see if the schema was already applied
@@ -512,14 +516,15 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 					// schema, we already applied it
 					return &tabletmanagerdatapb.SchemaChangeResult{
 						BeforeSchema: beforeSchema,
-						AfterSchema:  beforeSchema}, nil
+						AfterSchema:  beforeSchema,
+					}, nil
 				}
 			}
 
 			if change.Force {
-				log.Warningf("BeforeSchema differs, applying anyway")
+				log.Warn("BeforeSchema differs, applying anyway")
 			} else {
-				return nil, fmt.Errorf("BeforeSchema differs")
+				return nil, errors.New("BeforeSchema differs")
 			}
 		}
 	}
@@ -560,12 +565,12 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("AfterSchema differs: %v", msg)
+				log.Warn(fmt.Sprintf("AfterSchema differs: %v", msg))
 			}
 			if change.Force {
-				log.Warningf("AfterSchema differs, not reporting error")
+				log.Warn("AfterSchema differs, not reporting error")
 			} else {
-				return nil, fmt.Errorf("AfterSchema differs")
+				return nil, errors.New("AfterSchema differs")
 			}
 		}
 	}

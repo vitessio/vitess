@@ -31,7 +31,7 @@ import (
 )
 
 func TestLocalEncodings(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		input     []byte
 	}{
@@ -66,7 +66,7 @@ func TestCJKStress(t *testing.T) {
 		}
 	}
 
-	var charsets = []charset.Charset{
+	charsets := []charset.Charset{
 		charset.Charset_latin1{},
 		// charset.Charset_gb18030{},
 		charset.Charset_gb2312{},
@@ -114,7 +114,6 @@ func TestCJKStress(t *testing.T) {
 						input := string(cp)
 						ours, theirs := convert([]byte(input))
 						require.True(t, bytes.Equal(ours, theirs), "%s: bad conversion for %q (U+%04X). ours: %#v, theirs: %#v", local.Name(), input, cp, ours, theirs)
-
 					}
 					panic("???")
 				}
@@ -127,7 +126,6 @@ func TestCJKStress(t *testing.T) {
 
 						ours2, theirs2 := unconvert(ours)
 						require.True(t, bytes.Equal(ours2, theirs2), "%s: bad return conversion for %q (U+%04X) %#v. ours: %#v, theirs: %#v", local.Name(), input, cp, ours, ours2, theirs2)
-
 					}
 					panic("???")
 				}

@@ -65,7 +65,7 @@ func NewDBConnection(ctx context.Context, info dbconfigs.Connector) (*DBConnecti
 // Reconnect replaces the existing underlying connection with a new one,
 // if possible. Recycle should still be called afterwards.
 func (dbc *DBConnection) Reconnect(ctx context.Context) error {
-	dbc.Conn.Close()
+	dbc.Close()
 	newConn, err := dbc.info.Connect(ctx)
 	if err != nil {
 		return err
@@ -86,7 +86,6 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
-
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
 		dbc.handleError(err)

@@ -201,7 +201,6 @@ func TestAsBytes(t *testing.T) {
 
 	r = row.AsBytes("invalidField", []byte("default"))
 	assert.Equal(t, []byte("default"), r)
-
 }
 
 func TestAsFloat64(t *testing.T) {
@@ -218,5 +217,4 @@ func TestAsFloat64(t *testing.T) {
 
 	r = row.AsFloat64("invalidField", 23.12)
 	assert.Equal(t, 23.12, r)
-
 }

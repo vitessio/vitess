@@ -41,8 +41,7 @@ func (f *fakeOp) Inputs() []Operator {
 }
 
 func (f *fakeOp) SetInputs(operators []Operator) {
-	// TODO implement me
-	panic("implement me")
+	f.inputs = operators
 }
 
 func (f *fakeOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

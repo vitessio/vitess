@@ -19,6 +19,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -66,7 +67,7 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	keyspaces := t.keyspaces
 	shardCounts := t.shards
 	if len(keyspaces) != len(shardCounts) {
-		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
+		return nil, errors.New("--keyspaces must be same length as --shards")
 	}
 
 	for i := range keyspaces {
@@ -224,6 +225,8 @@ func New() (cmd *cobra.Command) {
 
 	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateTabletRefreshInterval, "tablet-refresh-interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
 
+	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateGatewayInitialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 
 	utils.SetFlagBoolVar(cmd.Flags(), &config.NoScatter, "no-scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
@@ -319,8 +322,8 @@ func runCluster() (cluster vttest.LocalCluster, err error) {
 		return
 	}
 
-	log.Infof("Starting local cluster...")
-	log.Infof("config: %#v", config)
+	log.Info("Starting local cluster...")
+	log.Info(fmt.Sprintf("config: %#v", config))
 	cluster = vttest.LocalCluster{
 		Config: config,
 		Env:    env,

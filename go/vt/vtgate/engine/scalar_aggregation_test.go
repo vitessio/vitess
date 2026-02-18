@@ -117,7 +117,8 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 				"1|null",
 			), sqltypes.MakeTestResult(fields,
 				"3|null",
-			)},
+			),
+		},
 	}
 
 	oa := &ScalarAggregate{
@@ -154,7 +155,8 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(fields,
 				"1|null", "3|null",
-			)},
+			),
+		},
 	}
 
 	oa := &ScalarAggregate{
@@ -188,7 +190,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 		"text",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result
@@ -354,7 +356,7 @@ func TestScalarGroupConcat(t *testing.T) {
 		"blob",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result

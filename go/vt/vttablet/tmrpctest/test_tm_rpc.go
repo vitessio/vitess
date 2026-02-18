@@ -18,6 +18,7 @@ package tmrpctest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -154,9 +155,9 @@ func NewFakeRPCTM(t testing.TB) tabletmanager.RPCTM {
 // for each possible method of the interface.
 // This makes the implementations all in the same spot.
 
-var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
+var protoMessage = reflect.TypeFor[proto.Message]()
 
-func compare(t testing.TB, name string, got, want interface{}) {
+func compare(t testing.TB, name string, got, want any) {
 	t.Helper()
 	typ := reflect.TypeOf(got)
 	if reflect.TypeOf(got) != reflect.TypeOf(want) {
@@ -194,7 +195,7 @@ func compareBool(t testing.TB, name string, got bool) {
 	}
 }
 
-func compareError(t *testing.T, name string, err error, got, want interface{}) {
+func compareError(t *testing.T, name string, err error, got, want any) {
 	t.Helper()
 	if err != nil {
 		t.Errorf("%v failed: %v", name, err)
@@ -206,14 +207,14 @@ func compareError(t *testing.T, name string, err error, got, want interface{}) {
 var testLogString = "test log"
 
 func logStuff(logger logutil.Logger, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		logger.Infof(testLogString)
 	}
 }
 
 func compareLoggedStuff(t *testing.T, name string, stream logutil.EventStream, count int) error {
 	t.Helper()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		le, err := stream.Recv()
 		if err != nil {
 			t.Errorf("No logged value for %v/%v", name, i)
@@ -247,7 +248,7 @@ func expectHandleRPCPanic(t *testing.T, name string, verbose bool, err error) {
 
 func (fra *fakeRPCTM) Ping(ctx context.Context, args string) string {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	fra.mu.Lock()
 	slow := fra.slow
@@ -314,41 +315,43 @@ func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.Tabl
 		if err := shortCtx.Err(); err != context.DeadlineExceeded {
 			t.Errorf("tmRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
 		}
-	default:
-		t.Errorf("tmRPCTestRPCTimeout: context.Done() not closed")
+	case <-time.After(time.Second):
+		t.Errorf("tmRPCTestRPCTimeout: context.Done() not closed within timeout")
 	}
 }
 
-var testGetSchemaTables = []string{"table1", "table2"}
-var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
-var testGetSchemaReq = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
-var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
-	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-		{
-			Name:              "table_name",
-			Schema:            "create table_name",
-			Columns:           []string{"col1", "col2"},
-			PrimaryKeyColumns: []string{"col1"},
-			Type:              tmutils.TableView,
-			DataLength:        12,
-			RowCount:          6,
+var (
+	testGetSchemaTables        = []string{"table1", "table2"}
+	testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
+	testGetSchemaReq           = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
+	testGetSchemaReply         = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "table_name",
+				Schema:            "create table_name",
+				Columns:           []string{"col1", "col2"},
+				PrimaryKeyColumns: []string{"col1"},
+				Type:              tmutils.TableView,
+				DataLength:        12,
+				RowCount:          6,
+			},
+			{
+				Name:              "table_name2",
+				Schema:            "create table_name2",
+				Columns:           []string{"col1"},
+				PrimaryKeyColumns: []string{"col1"},
+				Type:              tmutils.TableBaseTable,
+				DataLength:        12,
+				RowCount:          6,
+			},
 		},
-		{
-			Name:              "table_name2",
-			Schema:            "create table_name2",
-			Columns:           []string{"col1"},
-			PrimaryKeyColumns: []string{"col1"},
-			Type:              tmutils.TableBaseTable,
-			DataLength:        12,
-			RowCount:          6,
-		},
-	},
-}
+	}
+)
 
 func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "GetSchema tables", request.Tables, testGetSchemaTables)
 	compare(fra.t, "GetSchema excludeTables", request.ExcludeTables, testGetSchemaExcludeTables)
@@ -393,7 +396,7 @@ var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
 
 func (fra *fakeRPCTM) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testGetPermissionsReply, nil
 }
@@ -415,7 +418,7 @@ var testGetGlobalStatusVarsReply = map[string]string{
 
 func (fra *fakeRPCTM) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testGetGlobalStatusVarsReply, nil
 }
@@ -468,7 +471,7 @@ var testSetReadOnlyExpectedValue bool
 
 func (fra *fakeRPCTM) SetReadOnly(ctx context.Context, rdonly bool) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if rdonly != testSetReadOnlyExpectedValue {
 		fra.t.Errorf("Wrong SetReadOnly value: got %v expected %v", rdonly, testSetReadOnlyExpectedValue)
@@ -502,7 +505,7 @@ var testChangeTagsValue = map[string]string{
 
 func (fra *fakeRPCTM) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ChangeTags tabletType", tabletTags, testChangeTagsValue)
 	return tabletTags, nil
@@ -524,7 +527,7 @@ var testChangeTypeValue = topodatapb.TabletType_REPLICA
 
 func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ChangeType tabletType", tabletType, testChangeTypeValue)
 	return nil
@@ -546,7 +549,7 @@ var testSleepDuration = time.Minute
 
 func (fra *fakeRPCTM) Sleep(ctx context.Context, duration time.Duration) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "Sleep duration", duration, testSleepDuration)
 }
@@ -571,6 +574,7 @@ var testExecuteHookHook = &hook.Hook{
 		"sea":  "red",
 	},
 }
+
 var testExecuteHookHookResult = &hook.HookResult{
 	ExitStatus: hook.HOOK_STAT_FAILED,
 	Stdout:     "out",
@@ -579,7 +583,7 @@ var testExecuteHookHookResult = &hook.HookResult{
 
 func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteHook hook", hk, testExecuteHookHook)
 	return testExecuteHookHookResult
@@ -599,7 +603,7 @@ var testRefreshStateCalled = false
 
 func (fra *fakeRPCTM) RefreshState(ctx context.Context) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if testRefreshStateCalled {
 		fra.t.Errorf("RefreshState called multiple times?")
@@ -625,7 +629,7 @@ func tmRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmclie
 
 func (fra *fakeRPCTM) RunHealthCheck(ctx context.Context) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 }
 
@@ -645,7 +649,7 @@ var testReloadSchemaCalled = false
 
 func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, waitPosition string) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if testReloadSchemaCalled {
 		fra.t.Errorf("ReloadSchema called multiple times?")
@@ -669,17 +673,19 @@ func tmRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclie
 	expectHandleRPCPanic(t, "ReloadSchema", false /*verbose*/, err)
 }
 
-var testPreflightSchema = []string{"change table add table cloth"}
-var testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
-	{
-		BeforeSchema: testGetSchemaReply,
-		AfterSchema:  testGetSchemaReply,
-	},
-}
+var (
+	testPreflightSchema    = []string{"change table add table cloth"}
+	testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
+		{
+			BeforeSchema: testGetSchemaReply,
+			AfterSchema:  testGetSchemaReply,
+		},
+	}
+)
 
 func (fra *fakeRPCTM) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "PreflightSchema result", changes, testPreflightSchema)
 	return testSchemaChangeResult, nil
@@ -705,7 +711,7 @@ var testSchemaChange = &tmutils.SchemaChange{
 
 func (fra *fakeRPCTM) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if !change.Equal(testSchemaChange) {
 		fra.t.Errorf("Unexpected ApplySchema change:\ngot  %#v\nwant %#v", change, testSchemaChange)
@@ -727,44 +733,46 @@ var testExecuteQueryQuery = []byte("drop table t")
 
 func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteQuery query", req.Query, testExecuteQueryQuery)
 
 	return testExecuteFetchResult, nil
 }
 
-var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
-var testExecuteFetchMaxRows = uint64(100)
-var testExecuteFetchResult = &querypb.QueryResult{
-	Fields: []*querypb.Field{
-		{
-			Name: "column1",
-			Type: sqltypes.Blob,
-		},
-		{
-			Name: "column2",
-			Type: sqltypes.Datetime,
-		},
-	},
-	RowsAffected: 10,
-	InsertId:     32,
-	Rows: []*querypb.Row{
-		{
-			Lengths: []int64{
-				3,
-				-1,
+var (
+	testExecuteFetchQuery   = []byte("fetch this invalid utf8 character \x80")
+	testExecuteFetchMaxRows = uint64(100)
+	testExecuteFetchResult  = &querypb.QueryResult{
+		Fields: []*querypb.Field{
+			{
+				Name: "column1",
+				Type: sqltypes.Blob,
 			},
-			Values: []byte{
-				'A', 'B', 'C',
+			{
+				Name: "column2",
+				Type: sqltypes.Datetime,
 			},
 		},
-	},
-}
+		RowsAffected: 10,
+		InsertId:     32,
+		Rows: []*querypb.Row{
+			{
+				Lengths: []int64{
+					3,
+					-1,
+				},
+				Values: []byte{
+					'A', 'B', 'C',
+				},
+			},
+		},
+	}
+)
 
 func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsDba query", req.Query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
@@ -776,7 +784,7 @@ func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerd
 
 func (fra *fakeRPCTM) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteMultiFetchAsDba query", req.Sql, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteMultiFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
@@ -788,7 +796,7 @@ func (fra *fakeRPCTM) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletman
 
 func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsAllPrivs query", req.Query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", req.MaxRows, testExecuteFetchMaxRows)
@@ -799,7 +807,7 @@ func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletman
 
 func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsApp query", req.Query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsApp maxrows", req.MaxRows, testExecuteFetchMaxRows)
@@ -808,28 +816,28 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerd
 
 func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return nil, nil
 }
 
 func (fra *fakeRPCTM) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return nil, nil
 }
 
 func (fra *fakeRPCTM) GetTransactionInfo(ctx context.Context, req *tabletmanagerdatapb.GetTransactionInfoRequest) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return nil, nil
 }
 
 func (fra *fakeRPCTM) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return nil
 }
@@ -868,7 +876,6 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 		ReloadSchema: true,
 	})
 	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
-
 }
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -926,14 +933,14 @@ var testPrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MariaDB/1-34
 
 func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testPrimaryStatus, nil
 }
 
 func (fra *fakeRPCTM) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testReplicationStatus, nil
 }
@@ -950,7 +957,7 @@ func tmRPCTestReplicationStatusPanic(ctx context.Context, t *testing.T, client t
 
 func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testFullStatus, nil
 }
@@ -969,7 +976,7 @@ var testReplicationPosition = "MariaDB/5-456-890"
 
 func (fra *fakeRPCTM) PrimaryPosition(ctx context.Context) (string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testReplicationPosition, nil
 }
@@ -992,7 +999,7 @@ var testStopReplicationCalled = false
 
 func (fra *fakeRPCTM) StopReplication(ctx context.Context) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testStopReplicationCalled = true
 	return nil
@@ -1012,7 +1019,7 @@ var testStopReplicationMinimumWaitTime = time.Hour
 
 func (fra *fakeRPCTM) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "StopReplicationMinimum position", position, testReplicationPosition)
 	compare(fra.t, "StopReplicationMinimum waitTime", waitTime, testStopReplicationMinimumWaitTime)
@@ -1033,10 +1040,30 @@ var testStartReplicationCalled = false
 
 func (fra *fakeRPCTM) StartReplication(ctx context.Context, semiSync bool) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testStartReplicationCalled = true
 	return nil
+}
+
+var testRestartReplicationCalled = false
+
+func (fra *fakeRPCTM) RestartReplication(ctx context.Context, semiSync bool) error {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	testRestartReplicationCalled = true
+	return nil
+}
+
+func tmRPCTestRestartReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.RestartReplication(ctx, tablet, false)
+	compareError(t, "RestartReplication", err, true, testRestartReplicationCalled)
+}
+
+func tmRPCTestRestartReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.RestartReplication(ctx, tablet, false)
+	expectHandleRPCPanic(t, "RestartReplication", true /*verbose*/, err)
 }
 
 func tmRPCTestStartReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1053,7 +1080,7 @@ var testStartReplicationUntilAfterCalledWith = ""
 
 func (fra *fakeRPCTM) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testStartReplicationUntilAfterCalledWith = position
 	return nil
@@ -1068,7 +1095,7 @@ var testGetReplicasResult = []string{"replica1", "replica22"}
 
 func (fra *fakeRPCTM) GetReplicas(ctx context.Context) ([]string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testGetReplicasResult, nil
 }
@@ -1087,7 +1114,7 @@ var testVRQuery = "query"
 
 func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "VReplicationExec query", query, testVRQuery)
 	return testExecuteFetchResult, nil
@@ -1110,7 +1137,7 @@ var (
 
 func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "VReplicationWaitForPos id", id, wfpid)
 	compare(fra.t, "VReplicationWaitForPos pos", pos, wfppos)
@@ -1135,7 +1162,7 @@ var testResetReplicationCalled = false
 
 func (fra *fakeRPCTM) ResetReplication(ctx context.Context) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testResetReplicationCalled = true
 	return nil
@@ -1153,7 +1180,7 @@ func tmRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tm
 
 func (fra *fakeRPCTM) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testReplicationPosition, nil
 }
@@ -1168,18 +1195,20 @@ func tmRPCTestInitPrimaryPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitPrimary", true /*verbose*/, err)
 }
 
-var testPopulateReparentJournalCalled = false
-var testTimeCreatedNS int64 = 4569900
-var testWaitPosition = "test wait position"
-var testActionName = "TestActionName"
-var testPrimaryAlias = &topodatapb.TabletAlias{
-	Cell: "ce",
-	Uid:  372,
-}
+var (
+	testPopulateReparentJournalCalled       = false
+	testTimeCreatedNS                 int64 = 4569900
+	testWaitPosition                        = "test wait position"
+	testActionName                          = "TestActionName"
+	testPrimaryAlias                        = &topodatapb.TabletAlias{
+		Cell: "ce",
+		Uid:  372,
+	}
+)
 
 func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, position string) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "PopulateReparentJournal timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	compare(fra.t, "PopulateReparentJournal actionName", actionName, testActionName)
@@ -1193,7 +1222,7 @@ var testReparentJournalLen int32 = 10
 
 func (fra *fakeRPCTM) ReadReparentJournalInfo(context.Context) (int32, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testReparentJournalLen, nil
 }
@@ -1227,7 +1256,7 @@ var testInitReplicaCalled = false
 
 func (fra *fakeRPCTM) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "InitReplica parent", parent, testPrimaryAlias)
 	compare(fra.t, "InitReplica pos", position, testReplicationPosition)
@@ -1246,20 +1275,20 @@ func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
+func (fra *fakeRPCTM) DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testPrimaryStatus, nil
 }
 
 func tmRPCTestDemotePrimary(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	PrimaryStatus, err := client.DemotePrimary(ctx, tablet)
+	PrimaryStatus, err := client.DemotePrimary(ctx, tablet, false)
 	compareError(t, "DemotePrimary", err, PrimaryStatus.Position, testPrimaryStatus.Position)
 }
 
 func tmRPCTestDemotePrimaryPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.DemotePrimary(ctx, tablet)
+	_, err := client.DemotePrimary(ctx, tablet, false)
 	expectHandleRPCPanic(t, "DemotePrimary", true /*verbose*/, err)
 }
 
@@ -1267,7 +1296,7 @@ var testUndoDemotePrimaryCalled = false
 
 func (fra *fakeRPCTM) UndoDemotePrimary(ctx context.Context, semiSync bool) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return nil
 }
@@ -1289,7 +1318,7 @@ var testReplicaWasPromotedCalled = false
 
 func (fra *fakeRPCTM) ReplicaWasPromoted(ctx context.Context) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testReplicaWasPromotedCalled = true
 	return nil
@@ -1309,7 +1338,7 @@ var testResetReplicationParametersCalled = false
 
 func (fra *fakeRPCTM) ResetReplicationParameters(ctx context.Context) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	testResetReplicationParametersCalled = true
 	return nil
@@ -1325,13 +1354,15 @@ func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T,
 	expectHandleRPCPanic(t, "ResetReplicationParameters", true /*verbose*/, err)
 }
 
-var testSetReplicationSourceCalled = false
-var testForceStartReplica = true
-var testHeartbeatInterval float64 = 4.2
+var (
+	testSetReplicationSourceCalled         = false
+	testForceStartReplica                  = true
+	testHeartbeatInterval          float64 = 4.2
+)
 
 func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "SetReplicationSource parent", parent, testPrimaryAlias)
 	compare(fra.t, "SetReplicationSource timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
@@ -1354,7 +1385,7 @@ func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, clien
 
 func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return tabletmanager.StopReplicationAndGetStatusResponse{
 		Status: &replicationdatapb.StopReplicationStatus{
@@ -1372,7 +1403,7 @@ var testReplicaWasRestartedCalled = false
 
 func (fra *fakeRPCTM) ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "ReplicaWasRestarted parent", parent, testReplicaWasRestartedParent)
 	testReplicaWasRestartedCalled = true
@@ -1403,7 +1434,7 @@ func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T
 
 func (fra *fakeRPCTM) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	return testReplicationPosition, nil
 }
@@ -1422,14 +1453,16 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 // Backup / restore related methods
 //
 
-var testBackupConcurrency = int32(24)
-var testBackupAllowPrimary = false
-var testBackupCalled = false
-var testRestoreFromBackupCalled = false
+var (
+	testBackupConcurrency       = int32(24)
+	testBackupAllowPrimary      = false
+	testBackupCalled            = false
+	testRestoreFromBackupCalled = false
+)
 
 func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	compare(fra.t, "Backup args", request.Concurrency, testBackupConcurrency)
 	compare(fra.t, "Backup args", request.AllowPrimary, testBackupAllowPrimary)
@@ -1467,7 +1500,7 @@ func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.Tab
 
 func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	logStuff(logger, 10)
 	testRestoreFromBackupCalled = true
@@ -1476,7 +1509,7 @@ func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logg
 
 func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 
 	// TODO implement me
@@ -1485,7 +1518,7 @@ func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdata
 
 func (fra *fakeRPCTM) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 
 	// TODO implement me
@@ -1523,7 +1556,7 @@ func tmRPCTestCheckThrottler(ctx context.Context, t *testing.T, client tmclient.
 //
 
 // HandleRPCPanic is part of the RPCTM interface
-func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error) {
 	if x := recover(); x != nil {
 		// Use the panic case to make sure 'name' and 'verbose' are right.
 		*err = fmt.Errorf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
@@ -1580,6 +1613,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
 	tmRPCTestStartReplication(ctx, t, client, tablet)
+	tmRPCTestRestartReplication(ctx, t, client, tablet)
 	tmRPCTestStartReplicationUntilAfter(ctx, t, client, tablet)
 	tmRPCTestGetReplicas(ctx, t, client, tablet)
 
@@ -1643,6 +1677,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimumPanic(ctx, t, client, tablet)
 	tmRPCTestStartReplicationPanic(ctx, t, client, tablet)
+	tmRPCTestRestartReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestGetReplicasPanic(ctx, t, client, tablet)
 	// VReplication methods
 	tmRPCTestVReplicationExecPanic(ctx, t, client, tablet)

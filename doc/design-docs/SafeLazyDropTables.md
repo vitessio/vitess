@@ -21,10 +21,10 @@ We wish to manage `DROP` requests. Most managed `DROP` requests will _wait_ befo
 
 This is done by first issuing a `RENAME TABLE my_table TO something_else`. To the app, it seems like the table is gone; but the user may easily restore it by running the revert query: `RENAME TABLE something_else TO my_table`.
 
-That `something_else` name can be e.g. `_vt_HOLD_2201058f_f266_11ea_bab4_0242c0a8b007_20200910113042`.
+That `something_else` name can be e.g. `_vt_hld_2201058f_f266_11ea_bab4_0242c0a8b007_20200910113042_`.
 
 At some point we decide that we can destroy the data. The "hold" period can either be determined by vitess or explicitly by the user. e.g. On a successful schema migration completion, Vitess can choose to purge the "old" table right away.
-At that stage we rename the table to e.g. `_vt_PURGE_63b5db0c_f25c_11ea_bab4_0242c0a8b007_20200911070228`.
+At that stage we rename the table to e.g. `_vt_prg_63b5db0c_f25c_11ea_bab4_0242c0a8b007_20200911070228_`.
 A table by that name is eligible to have its data purged.
 
 By experience (see `gh-ost` issue above), a safe method to purge data is to slowly remove rows, until the table is empty. Note:
@@ -35,9 +35,9 @@ By experience (see `gh-ost` issue above), a safe method to purge data is to slow
 
 It's important to note that the `DELETE` statement actually causes table pages to _load into the buffer pool_, which works against our objective.
 
-Once all rows are purged from a table, we rename it again to e.g. `_vt_DROP_8a797518_f25c_11ea_bab4_0242c0a8b007_20210211234156`. At this time we point out that `20200911234156` is actually a readable timestamp, and stands for `2021-02-11 23:41:56`. That timestamp can tell us when the table was last renamed. 
+Once all rows are purged from a table, we rename it again to e.g. `_vt_drp_8a797518_f25c_11ea_bab4_0242c0a8b007_20210211234156_`. At this time we point out that `20200911234156` is actually a readable timestamp, and stands for `2021-02-11 23:41:56`. That timestamp can tell us when the table was last renamed. 
 
-Vitess can then run an actual `DROP TABLE` for `_vt_DROP_...` tables whose timestamp is older than, say, 2 days. As mentioned above, purging the table actually caused the table to load onto the buffer pool, and we need to wait for it to naturally get evicted, before dropping it.
+Vitess can then run an actual `DROP TABLE` for `_vt_drp_...` tables whose timestamp is older than, say, 2 days. As mentioned above, purging the table actually caused the table to load onto the buffer pool, and we need to wait for it to naturally get evicted, before dropping it.
 
 ## Suggested implementation: table lifecycle aka table garbage collection
 
@@ -69,11 +69,11 @@ The way to support the above is by introducing user-defined states. The general 
 Vitess will transition the table through these states, _in order_. But it will also support skipping some states. Let's first explain the meaning of the states:
 
 - Real table (alive): Table is in use in production.
-- `HOLD`: Table is renamed to something like `_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410`. Vitess will not make changes to the table, will not drop data. The table is put away for safe keeping for X hours/days. If it turns out the app still needs the table, the user can `RENAME` is back to its original name, taking it out of this game.
-- `PURGE`: Table renamed to e.g `_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200916080539`. Vitess purges (or will purge, based on workload and prior engagements) rows from `PURGE` tables. Data is lost and the user may not resurrect the table anymore.
+- `HOLD`: Table is renamed to something like `_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_`. Vitess will not make changes to the table, will not drop data. The table is put away for safe keeping for X hours/days. If it turns out the app still needs the table, the user can `RENAME` is back to its original name, taking it out of this game.
+- `PURGE`: Table renamed to e.g `_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200916080539_`. Vitess purges (or will purge, based on workload and prior engagements) rows from `PURGE` tables. Data is lost and the user may not resurrect the table anymore.
 Most likely we will settle for a `SQL_LOG_BIN=0`, ie purging will not go through replication. The replicas are not so badly affected by `DROP` statements as a `primary`.
-- `EVAC`: Table renamed to e.g. `_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200918192031`. The table sits still for Y houtrs/days. I'm thinking this period will be pre-defined by vitess. The purpose of this state is to wait a _reasonable_ amount of time so that tabe's pages are evacuated from the innodb buffer pool by the natural succession of production IO/memory activity.
-- `DROP`: Table renamed to e.g. `_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200921193202`. Vitess will `DROP TABLE` this table _imminently_.  
+- `EVAC`: Table renamed to e.g. `_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200918192031_`. The table sits still for Y houtrs/days. I'm thinking this period will be pre-defined by vitess. The purpose of this state is to wait a _reasonable_ amount of time so that tabe's pages are evacuated from the innodb buffer pool by the natural succession of production IO/memory activity.
+- `DROP`: Table renamed to e.g. `_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200921193202_`. Vitess will `DROP TABLE` this table _imminently_.  
 - gone: end of lifecycle
 
 ## Transitioning and skipping of states

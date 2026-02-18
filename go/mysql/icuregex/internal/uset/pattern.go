@@ -52,7 +52,6 @@ func (u *UnicodeSet) ToPattern(w *strings.Builder, escapeUnprintable bool) {
 	// MIN_VALUE and MAX_VALUE, then the inverse representation will
 	// be more economical.
 	if count > 1 && u.RangeStart(0) == MinValue && u.RangeEnd(count-1) == MaxValue {
-
 		// Emit the inverse
 		w.WriteByte('^')
 

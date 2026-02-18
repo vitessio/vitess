@@ -23,6 +23,8 @@ package dbconfigs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 
@@ -49,6 +51,7 @@ const (
 	Filtered     = "filtered"
 	Repl         = "repl"
 	ExternalRepl = "erepl"
+	Clone        = "clone"
 )
 
 var (
@@ -56,7 +59,7 @@ var (
 	GlobalDBConfigs DBConfigs
 
 	// All can be used to register all flags: RegisterFlags(All...)
-	All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl}
+	All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl, Clone}
 )
 
 // DBConfigs stores all the data needed to build various connection
@@ -91,12 +94,13 @@ type DBConfigs struct {
 	DBName                     string        `json:"dbName,omitempty"`
 	EnableQueryInfo            bool          `json:"enableQueryInfo,omitempty"`
 
-	App          UserConfig `json:"app,omitempty"`
-	Dba          UserConfig `json:"dba,omitempty"`
-	Filtered     UserConfig `json:"filtered,omitempty"`
-	Repl         UserConfig `json:"repl,omitempty"`
-	Appdebug     UserConfig `json:"appdebug,omitempty"`
-	Allprivs     UserConfig `json:"allprivs,omitempty"`
+	App          UserConfig `json:"app"`
+	Dba          UserConfig `json:"dba"`
+	Filtered     UserConfig `json:"filtered"`
+	Repl         UserConfig `json:"repl"`
+	Appdebug     UserConfig `json:"appdebug"`
+	Allprivs     UserConfig `json:"allprivs"`
+	CloneUser    UserConfig `json:"clone"`
 	externalRepl UserConfig
 
 	appParams          mysql.ConnParams
@@ -105,6 +109,7 @@ type DBConfigs struct {
 	replParams         mysql.ConnParams
 	appdebugParams     mysql.ConnParams
 	allprivsParams     mysql.ConnParams
+	cloneParams        mysql.ConnParams
 	externalReplParams mysql.ConnParams
 }
 
@@ -131,7 +136,6 @@ func RegisterFlags(userKeys ...string) {
 }
 
 func registerBaseFlags(fs *pflag.FlagSet) {
-
 	utils.SetFlagStringVar(fs, &GlobalDBConfigs.Socket, "db-socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	utils.SetFlagStringVar(fs, &GlobalDBConfigs.Host, "db-host", "", "The host name for the tcp connection.")
 	utils.SetFlagIntVar(fs, &GlobalDBConfigs.Port, "db-port", 0, "tcp port")
@@ -262,6 +266,11 @@ func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 	return params
 }
 
+// CloneConnector returns connection parameters for clone with no dbname set.
+func (dbcfgs *DBConfigs) CloneConnector() Connector {
+	return dbcfgs.makeParams(&dbcfgs.cloneParams, false)
+}
+
 // AppWithDB returns connection parameters for app with dbname set.
 func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector {
 	result := *cp
@@ -307,6 +316,7 @@ func (dbcfgs *DBConfigs) Redacted() *DBConfigs {
 	dbcfgs.Repl.Password = "****"
 	dbcfgs.Appdebug.Password = "****"
 	dbcfgs.Allprivs.Password = "****"
+	dbcfgs.CloneUser.Password = "****"
 	return dbcfgs
 }
 
@@ -346,7 +356,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
 			ch, err := collationEnv.ParseConnectionCharset(dbcfgs.Charset)
 			if err != nil {
-				log.Warningf("Error parsing charset %s: %v", dbcfgs.Charset, err)
+				log.Warn(fmt.Sprintf("Error parsing charset %s: %v", dbcfgs.Charset, err))
 				ch = collationEnv.DefaultConnectionCharset()
 			}
 			cp.Charset = ch
@@ -374,7 +384,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		}
 	}
 
-	log.Infof("DBConfigs: %v\n", dbcfgs.String())
+	log.Info(fmt.Sprintf("DBConfigs: %v\n", dbcfgs.String()))
 }
 
 func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnParams) {
@@ -402,8 +412,12 @@ func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnPara
 	case ExternalRepl:
 		uc = &dbcfgs.externalRepl
 		cp = &dbcfgs.externalReplParams
+	case Clone:
+		uc = &dbcfgs.CloneUser
+		cp = &dbcfgs.cloneParams
 	default:
-		log.Exitf("Invalid db user key requested: %s", userKey)
+		log.Error("Invalid db user key requested: " + userKey)
+		os.Exit(1)
 	}
 	return uc, cp
 }
@@ -424,6 +438,7 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		dbaParams:          genParams,
 		filteredParams:     genParams,
 		replParams:         genParams,
+		cloneParams:        genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
 		Charset:            "",

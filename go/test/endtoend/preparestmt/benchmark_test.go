@@ -17,7 +17,6 @@ limitations under the License.
 package preparestmt
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"testing"
@@ -142,7 +141,6 @@ WHERE
 			}
 		}
 	})
-
 }
 
 /*
@@ -177,8 +175,7 @@ WHERE
     AND parent.id = %d
     AND manager.id = %d`
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 
 	b.Run("Insert", func(b *testing.B) {
 		b.ResetTimer()
@@ -235,5 +232,4 @@ WHERE
 			}
 		}
 	})
-
 }

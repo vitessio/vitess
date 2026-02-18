@@ -77,7 +77,7 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 			return err
 		}
 	}
-	log.Infof("[%v] Tables locked", conn.ConnectionID)
+	log.Info(fmt.Sprintf("[%v] Tables locked", conn.ConnectionID))
 
 	tm._lockTablesConnection = conn
 	tm._lockTablesTimer = time.AfterFunc(lockTablesTimeout, func() {
@@ -88,10 +88,10 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 
 		// We need the mutex locked before we check this field
 		if tm._lockTablesConnection == conn {
-			log.Errorf("table lock timed out and released the lock - something went wrong")
+			log.Error("table lock timed out and released the lock - something went wrong")
 			err = tm.unlockTablesHoldingMutex()
 			if err != nil {
-				log.Errorf("failed to unlock tables: %v", err)
+				log.Error(fmt.Sprintf("failed to unlock tables: %v", err))
 			}
 		}
 	})
@@ -100,7 +100,7 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 }
 
 func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
-	log.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
+	log.Warn("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized. Open() is idempotent, so this
@@ -116,7 +116,7 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 		if name == "dual" {
 			continue
 		}
-		tableNames = append(tableNames, fmt.Sprintf("%s READ", sqlescape.EscapeID(name)))
+		tableNames = append(tableNames, sqlescape.EscapeID(name)+" READ")
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
 	_, err := conn.ExecuteFetch("USE "+sqlescape.EscapeID(tm.DBConfigs.DBName), 0, false)
@@ -138,7 +138,7 @@ func (tm *TabletManager) UnlockTables(ctx context.Context) error {
 	defer tm.mutex.Unlock()
 
 	if tm._lockTablesConnection == nil {
-		return fmt.Errorf("tables were not locked")
+		return errors.New("tables were not locked")
 	}
 
 	return tm.unlockTablesHoldingMutex()
@@ -151,7 +151,7 @@ func (tm *TabletManager) unlockTablesHoldingMutex() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("[%v] Tables unlocked", tm._lockTablesConnection.ConnectionID)
+	log.Info(fmt.Sprintf("[%v] Tables unlocked", tm._lockTablesConnection.ConnectionID))
 	tm._lockTablesConnection.Close()
 	tm._lockTablesConnection = nil
 	tm._lockTablesTimer = nil

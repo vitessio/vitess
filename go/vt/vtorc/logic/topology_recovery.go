@@ -53,7 +53,41 @@ const (
 	FixPrimaryRecoveryName                           string = "FixPrimary"
 	FixReplicaRecoveryName                           string = "FixReplica"
 	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
+
+	// DemoteStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
+	// in the topology but a newer primary has been elected.
+	DemoteStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
 )
+
+// RecoverySkipCode represents the reason for a skipped recovery.
+type RecoverySkipCode int
+
+const (
+	RecoverySkipNone RecoverySkipCode = iota
+	RecoverySkipNoRecoveryAction
+	RecoverySkipGlobalDisabled
+	RecoverySkipERSDisabled
+	RecoverySkipStaleAnalysis
+	RecoverySkipPrimaryRecovery
+)
+
+// String represents a RecoverySkip as a string.
+func (rsc RecoverySkipCode) String() string {
+	switch rsc {
+	case RecoverySkipNoRecoveryAction:
+		return "NoRecoveryAction"
+	case RecoverySkipGlobalDisabled:
+		return "GlobalRecoveriesDisabled"
+	case RecoverySkipERSDisabled:
+		return "EmergencyReparentShardDisabled"
+	case RecoverySkipStaleAnalysis:
+		return "StaleAnalysis"
+	case RecoverySkipPrimaryRecovery:
+		return "PrimaryRecovery"
+	default:
+		return "None"
+	}
+}
 
 var (
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
@@ -90,7 +124,7 @@ var (
 	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesSkippedCounter counts the number of skipped recoveries that VTOrc has performed
-	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", recoveriesCounterLabels)
+	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", append(recoveriesCounterLabels, "Reason"))
 
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
@@ -115,6 +149,10 @@ const (
 	fixPrimaryFunc
 	fixReplicaFunc
 	recoverErrantGTIDDetectedFunc
+
+	// demoteStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
+	// PRIMARY in the topology and should be demoted.
+	demoteStaleTopoPrimaryFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -217,7 +255,7 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 
 // AuditTopologyRecovery audits a single step in a topology recovery process.
 func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) error {
-	log.Infof("topology_recovery: %s", message)
+	log.Info("topology_recovery: " + message)
 	if topologyRecovery == nil {
 		return nil
 	}
@@ -239,11 +277,11 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will fix incorrect primaryship on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, will fix incorrect primaryship on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
@@ -253,7 +291,7 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
 	}
 
@@ -268,18 +306,18 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
 	}
 
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %v.", analysisEntry.AnalyzedInstanceAlias, recoveryName)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias))
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
@@ -293,11 +331,11 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
-			logger.Warningf("ERS - %s", value)
+			logger.Warn("ERS - " + value)
 		case logutilpb.Level_ERROR:
-			logger.Errorf("ERS - %s", value)
+			logger.Error("ERS - " + value)
 		default:
-			logger.Infof("ERS - %s", value)
+			logger.Info("ERS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(ctx,
@@ -313,7 +351,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		},
 	)
 	if err != nil {
-		logger.Errorf("Error running ERS - %v", err)
+		logger.Error(fmt.Sprintf("Error running ERS - %v", err))
 	}
 
 	if ev != nil && ev.NewPrimary != nil {
@@ -345,13 +383,13 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.D
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	logger.Warning("No actions in checkAndRecoverLockedSemiSyncPrimary")
+	logger.Warn("No actions in checkAndRecoverLockedSemiSyncPrimary")
 	return false, nil, nil
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
-	logger.Warning("No actions in checkAndRecoverGenericProblem")
+	logger.Warn("No actions in checkAndRecoverGenericProblem")
 	return false, nil, nil
 }
 
@@ -368,11 +406,11 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	topologyRecovery, err := AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another restartDirectReplicas.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
@@ -382,21 +420,21 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	// Get durability policy for the keyspace to determine semi-sync settings
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
 	if err != nil {
-		logger.Errorf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err)
+		logger.Error(fmt.Sprintf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err))
 		return false, topologyRecovery, err
 	}
 
 	// Get all tablets in the shard
 	tablets, err := ts.GetTabletsByShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		logger.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
+		logger.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
 	}
 
 	// Find the primary tablet for semi-sync policy determination
 	var primaryTablet *topodatapb.Tablet
 	for _, tabletInfo := range tablets {
-		tabletAlias := topoproto.TabletAliasString(tabletInfo.Tablet.Alias)
+		tabletAlias := topoproto.TabletAliasString(tabletInfo.Alias)
 		if tabletAlias == analysisEntry.AnalyzedInstanceAlias {
 			primaryTablet = tabletInfo.Tablet
 			break
@@ -404,7 +442,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	if primaryTablet == nil {
-		logger.Errorf("Could not find primary tablet %s", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error("Could not find primary tablet " + analysisEntry.AnalyzedInstanceAlias)
 		return false, topologyRecovery, fmt.Errorf("could not find primary tablet %s", analysisEntry.AnalyzedInstanceAlias)
 	}
 
@@ -435,7 +473,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 		// Read the instance to check replication source
 		instance, found, err := inst.ReadInstance(tabletAlias)
 		if err != nil || !found {
-			logger.Warningf("Could not read instance information for %s: %v", tabletAlias, err)
+			logger.Warn(fmt.Sprintf("Could not read instance information for %s: %v", tabletAlias, err))
 			continue
 		}
 		if instance.ReplicationDepth != 1 {
@@ -445,11 +483,11 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 
 		restartExpected++
 		eg.Go(func() error {
-			logger.Infof("Restarting replication on direct replica %s", tabletAlias)
-			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Restarting replication on direct replica %s", tabletAlias))
+			logger.Info("Restarting replication on direct replica " + tabletAlias)
+			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAlias)
 
 			if err := tmc.StopReplication(ctx, tablet); err != nil {
-				logger.Errorf("Failed to stop replication on %s: %v", tabletAlias, err)
+				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAlias, err))
 				return err
 			}
 
@@ -457,17 +495,17 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
 			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
-				logger.Errorf("Failed to start replication on %s: %v", tabletAlias, err)
+				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAlias, err))
 				return err
 			}
-			logger.Infof("Successfully restarted replication on %s", tabletAlias)
+			logger.Info("Successfully restarted replication on " + tabletAlias)
 			restartPerformed.Add(1)
 			return nil
 		})
 	}
 	err = eg.Wait()
 	message := fmt.Sprintf("Completed restart of %d/%d direct replicas for unreachable primary %+v. err=%+v", restartPerformed.Load(), restartExpected, analysisEntry.AnalyzedInstanceAlias, err)
-	logger.Infof(message)
+	logger.Info(message)
 	_ = AuditTopologyRecovery(topologyRecovery, message)
 
 	if err != nil {
@@ -481,19 +519,19 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 func isERSEnabled(analysisEntry *inst.DetectionAnalysis) bool {
 	// If ERS is disabled globally we have no way of repairing the cluster.
 	if !config.ERSEnabled() {
-		log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis))
 		return false
 	}
 
 	// Return false if ERS is disabled on the keyspace.
 	if analysisEntry.AnalyzedKeyspaceEmergencyReparentDisabled {
-		log.Infof("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis))
 		return false
 	}
 
 	// Return false if ERS is disabled on the shard.
 	if analysisEntry.AnalyzedShardEmergencyReparentDisabled {
-		log.Infof("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis))
 		return false
 	}
 
@@ -501,7 +539,7 @@ func isERSEnabled(analysisEntry *inst.DetectionAnalysis) bool {
 }
 
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (recoveryFunc recoveryFunction, skipRecovery bool) {
+func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (recoveryFunc recoveryFunction, recoverySkipCode RecoverySkipCode) {
 	recoveryFunc = noRecoveryFunc
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
@@ -509,21 +547,21 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
-			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
+			recoverySkipCode = RecoverySkipNoRecoveryAction
 		}
 		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
@@ -534,6 +572,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
+	case inst.StaleTopoPrimary:
+		recoveryFunc = demoteStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
@@ -552,14 +592,14 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		recoveryFunc = recoverGenericProblemFunc
 	default:
-		skipRecovery = true
+		recoverySkipCode = RecoverySkipNoRecoveryAction
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
 	//   recoveryFunc = recoverGenericProblemFunc
 
-	return recoveryFunc, skipRecovery
+	return recoveryFunc, recoverySkipCode
 }
 
 // hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
@@ -588,6 +628,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 	case fixReplicaFunc:
 		return true
 	case recoverErrantGTIDDetectedFunc:
+		return true
+	case demoteStaleTopoPrimaryFunc:
 		return true
 	default:
 		return false
@@ -623,6 +665,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixReplica
 	case recoverErrantGTIDDetectedFunc:
 		return recoverErrantGTIDDetected
+	case demoteStaleTopoPrimaryFunc:
+		return demoteStaleTopoPrimary
 	default:
 		return nil
 	}
@@ -656,6 +700,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixReplicaRecoveryName
 	case recoverErrantGTIDDetectedFunc:
 		return RecoverErrantGTIDDetectedName
+	case demoteStaleTopoPrimaryFunc:
+		return DemoteStaleTopoPrimaryRecoveryName
 	default:
 		return ""
 	}
@@ -687,20 +733,21 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	logger := log.NewPrefixedLogger(fmt.Sprintf("Recovery for %s on %s/%s", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	logger.Info("Starting checkAndRecover")
 
-	checkAndRecoverFunctionCode, skipRecovery := getCheckAndRecoverFunctionCode(analysisEntry)
+	checkAndRecoverFunctionCode, recoverySkipCode := getCheckAndRecoverFunctionCode(analysisEntry)
 	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
 	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
-	if skipRecovery {
-		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, aborting recovery", analysisEntry.Analysis, recoveryName)
-		recoveriesSkippedCounter.Add(recoveryLabels, 1)
+	if recoverySkipCode != RecoverySkipNone {
+		skipReason := recoverySkipCode.String()
+		logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName))
+		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
-				logger.Warningf("executeCheckAndRecoverFunction: ignoring analysisEntry that has no action plan: tablet: %+v",
-					analysisEntry.AnalyzedInstanceAlias)
+				logger.Warn(fmt.Sprintf("executeCheckAndRecoverFunction: ignoring analysisEntry that has no action plan: tablet: %+v",
+					analysisEntry.AnalyzedInstanceAlias))
 			}
 		}
 
@@ -708,24 +755,25 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	}
 	// we have a recovery function; its execution still depends on filters if not disabled.
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: detection", analysisEntry.AnalyzedInstanceAlias) {
-		logger.Infof("executeCheckAndRecoverFunction: proceeding with %+v detection on %+v; isActionable?: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias, isActionableRecovery)
+		logger.Info(fmt.Sprintf("executeCheckAndRecoverFunction: proceeding with %+v detection on %+v; isActionable?: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias, isActionableRecovery))
 	}
 
 	// At this point we have validated there's a failure scenario for which we have a recovery path.
 	// Record the failure detected in the logs.
 	err = InsertRecoveryDetection(analysisEntry)
 	if err != nil {
-		logger.Errorf("executeCheckAndRecoverFunction: error inserting recovery detection record, aborting recovery: %+v", err)
+		logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: error inserting recovery detection record, aborting recovery: %+v", err))
 		return err
 	}
 
 	// Check for recovery being disabled globally
 	if recoveryDisabledGlobally, err := IsRecoveryDisabled(); err != nil {
 		// Unexpected. Shouldn't get this
-		logger.Errorf("Unable to determine if recovery is disabled globally, still attempting to recover: %v", err)
+		logger.Error(fmt.Sprintf("Unable to determine if recovery is disabled globally, still attempting to recover: %v", err))
 	} else if recoveryDisabledGlobally {
-		logger.Infof("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
-			analysisEntry.AnalyzedInstanceAlias)
+		logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
+			analysisEntry.AnalyzedInstanceAlias))
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipGlobalDisabled.String()), 1)
 
 		return err
 	}
@@ -739,7 +787,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// is not dead, then we will proceed with the fix for the replica. Essentially, we are trading off speed in replica recoveries (by doing an additional primary tablet reload)
 	// for speed in shard-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
 	if !isShardWideRecovery(checkAndRecoverFunctionCode) {
-		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
+		if err = recheckPrimaryHealth(analysisEntry, recoveryLabels, DiscoverInstance); err != nil {
 			return err
 		}
 	}
@@ -749,7 +797,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
 	)
 	if err != nil {
-		logger.Errorf("Failed to lock shard, aborting recovery: %v", err)
+		logger.Error(fmt.Sprintf("Failed to lock shard, aborting recovery: %v", err))
 		return err
 	}
 	defer unlock(&err)
@@ -759,7 +807,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
-		logger.Infof("executeCheckAndRecoverFunction: Proceeding with %v recovery on %v validation after acquiring shard lock.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+		logger.Info(fmt.Sprintf("executeCheckAndRecoverFunction: Proceeding with %v recovery on %v validation after acquiring shard lock.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 		// The first step we have to do is refresh the keyspace and shard information
 		// This is required to know if the durability policies have changed or not
 		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore.
@@ -767,7 +815,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// a change in the recovery we run.
 		err = RefreshKeyspaceAndShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
-			logger.Errorf("Failed to refresh keyspace and shard, aborting recovery: %v", err)
+			logger.Error(fmt.Sprintf("Failed to refresh keyspace and shard, aborting recovery: %v", err))
 			return err
 		}
 		// If we are about to run a shard-wide recovery, it is imperative to first refresh all the tablets
@@ -796,8 +844,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			logger.Info("Getting shard primary")
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 			if err != nil {
-				logger.Errorf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",
-					analysisEntry.AnalyzedInstanceAlias, err)
+				logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",
+					analysisEntry.AnalyzedInstanceAlias, err))
 				return err
 			}
 			primaryTabletAlias := topoproto.TabletAliasString(primaryTablet.Alias)
@@ -810,28 +858,29 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		}
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
-			logger.Errorf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
-				analysisEntry.AnalyzedInstanceAlias, err)
+			logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
+				analysisEntry.AnalyzedInstanceAlias, err))
 			return err
 		}
 		if alreadyFixed {
-			logger.Infof("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
 		}
 	}
 
 	// Actually attempt recovery:
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceAlias) {
-		logger.Infof("executeCheckAndRecoverFunction: proceeding with recovery on %+v; isRecoverable?: %+v", analysisEntry.AnalyzedInstanceAlias, isActionableRecovery)
+		logger.Info(fmt.Sprintf("executeCheckAndRecoverFunction: proceeding with recovery on %+v; isRecoverable?: %+v", analysisEntry.AnalyzedInstanceAlias, isActionableRecovery))
 	}
 	recoveryAttempted, topologyRecovery, err := getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, logger)
 	if !recoveryAttempted {
-		logger.Errorf("Recovery not attempted: %+v", err)
+		logger.Error(fmt.Sprintf("Recovery not attempted: %+v", err))
 		return err
 	}
 	recoveriesCounter.Add(recoveryLabels, 1)
 	if err != nil {
-		logger.Errorf("Failed to recover: %+v", err)
+		logger.Error(fmt.Sprintf("Failed to recover: %+v", err))
 		recoveriesFailureCounter.Add(recoveryLabels, 1)
 	} else {
 		logger.Info("Recovery succeeded")
@@ -842,9 +891,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		return err
 	}
 	if b, err := json.Marshal(topologyRecovery); err == nil {
-		logger.Infof("Topology recovery: %+v", string(b))
+		logger.Info(fmt.Sprintf("Topology recovery: %+v", string(b)))
 	} else {
-		logger.Infof("Topology recovery: %+v", topologyRecovery)
+		logger.Info(fmt.Sprintf("Topology recovery: %+v", topologyRecovery))
 	}
 	// If we ran a shard-wide recovery and actually attempted it, then we know that the replication state for all the tablets in this cluster
 	// would have changed. So we can go ahead and pre-emptively refresh them.
@@ -857,7 +906,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// For all other recoveries, we would have changed the replication status of the analyzed tablet
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
 		// that we just completed because we would be using stale data.
-		logger.Info("Force discovering problem instance %s post recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Info(fmt.Sprintf("Force discovering problem instance %s post recovery", analysisEntry.AnalyzedInstanceAlias))
 		DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 	}
 	return err
@@ -866,7 +915,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 // recheckPrimaryHealth check the health of the primary node.
 // It then checks whether, given the re-discovered primary health, the original recovery is still valid.
 // If not valid then it will abort the current analysis.
-func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, discoveryFunc func(string, bool)) error {
+func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels []string, discoveryFunc func(string, bool)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
 	primaryTabletAlias := analysisEntry.AnalyzedInstancePrimaryAlias
 
@@ -877,7 +926,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, discoveryFunc f
 	// checking if the original analysis is valid even after the primary refresh.
 	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
-		log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
+		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
 	}
 
@@ -885,7 +934,8 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, discoveryFunc f
 	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
-		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+		log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
 		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}
@@ -917,7 +967,7 @@ func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
 	detectionAnalysis, err := inst.GetDetectionAnalysis("", "", &inst.DetectionAnalysisHints{AuditAnalysis: true})
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return
 	}
 
@@ -953,7 +1003,7 @@ func CheckAndRecover() {
 
 		go func() {
 			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-				log.Error(err)
+				log.Error(fmt.Sprint(err))
 			}
 		}()
 	}
@@ -973,11 +1023,11 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	logger.Info(fmt.Sprintf("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
@@ -988,7 +1038,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, topologyRecovery, err
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
@@ -999,9 +1049,9 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
-			logger.Warningf("PRS - %s", value)
+			logger.Warn("PRS - " + value)
 		case logutilpb.Level_ERROR:
-			logger.Errorf("PRS - %s", value)
+			logger.Error("PRS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(ctx,
@@ -1025,11 +1075,11 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimary.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will fix primary to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, will fix primary to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
@@ -1038,13 +1088,13 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, topologyRecovery, err
 	}
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
 	}
 
@@ -1059,11 +1109,11 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
@@ -1072,29 +1122,90 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, topologyRecovery, err
 	}
 
 	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
-		logger.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Info(fmt.Sprintf("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
 	}
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
 	}
 
 	err = setReadOnly(ctx, analyzedTablet)
 	if err != nil {
-		logger.Info("Could not set the tablet %v to readonly - %v", analysisEntry.AnalyzedInstanceAlias, err)
+		logger.Info(fmt.Sprintf("Could not set the tablet %v to readonly - %v", analysisEntry.AnalyzedInstanceAlias, err))
 		return true, topologyRecovery, err
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	return true, topologyRecovery, err
+}
+
+// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
+// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
+// to the current primary.
+func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
+	if topologyRecovery == nil {
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		logger.Warn(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, nil, err
+	}
+
+	logger.Info(fmt.Sprintf("Analysis: %v, will demote stale topo primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		_ = resolveRecovery(topologyRecovery, nil)
+	}()
+
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to read instance %q, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
+		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
+	}
+
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	if err != nil {
+		logger.Info(fmt.Sprintf("Could not compute primary for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard))
+		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	if err != nil {
+		logger.Info(fmt.Sprintf("Could not read the durability policy for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard))
+		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
+	}
+
+	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
+	_, err = tmc.DemotePrimary(ctx, analyzedTablet, true)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
+	}
+	logger.Info("Successfully demoted the stale primary " + analysisEntry.AnalyzedInstanceAlias)
+
+	// Set tablet to REPLICA in topology.
+	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
+	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
+	}
+
+	// Set the instance's replication source to the current primary.
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
+	}
+
 	return true, topologyRecovery, err
 }
 
@@ -1103,11 +1214,11 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
+		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will fix tablet %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info(fmt.Sprintf("Analysis: %v, will fix tablet %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
@@ -1121,13 +1232,13 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 
 	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
-		logger.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Info(fmt.Sprintf("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
 	}
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
 	}
 

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -66,7 +67,6 @@ func TestJsonConfigParser(t *testing.T) {
 	}`
 	err = ParseConfig([]byte(jsonConfig), &config)
 	require.Error(t, err, "Invalid config should have errored, but didn't")
-
 }
 
 func TestValidateHashGetter(t *testing.T) {
@@ -106,7 +106,6 @@ func TestHostMatcher(t *testing.T) {
 	socket := &net.UnixAddr{Name: "unixSocket", Net: "1"}
 	match = MatchSourceHost(net.Addr(socket), "localhost")
 	require.True(t, match, "Should match socket when target is localhost")
-
 }
 
 func TestStaticConfigHUP(t *testing.T) {
@@ -117,7 +116,7 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	oldStr := "str5"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -147,7 +146,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -171,30 +170,30 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 	require.Equal(t, oldStr, aStatic.getEntries()[oldStr][0].Password, "%s's Password should still be '%s'", oldStr, oldStr)
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	time.Sleep(100 * time.Millisecond)
-	// wait for signal handler
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 
+	// wait for signal handler
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
+		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
-	time.Sleep(20 * time.Millisecond)
-	// wait for signal handler
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
-
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
+		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 
 func TestStaticMysqlNativePasswords(t *testing.T) {

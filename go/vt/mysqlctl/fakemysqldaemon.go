@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -73,7 +74,7 @@ type FakeMysqlDaemon struct {
 	// Replicating is updated when calling StartReplication /
 	// StopReplication (it is not used at all when calling
 	// ReplicationStatus, it is the test owner responsibility
-	//to have these two match)
+	// to have these two match)
 	Replicating bool
 
 	// IOThreadRunning is always true except in one testcase where
@@ -83,6 +84,9 @@ type FakeMysqlDaemon struct {
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
+
+	// PrimaryPositionError is used by PrimaryPosition.
+	PrimaryPositionError error
 
 	// CurrentRelayLogPosition is returned by ReplicationStatus.
 	CurrentRelayLogPosition replication.Position
@@ -183,6 +187,10 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
+	// FetchSuperQueryCallback is an optional callback for dynamic query handling.
+	// If set, it takes precedence over FetchSuperQueryMap.
+	FetchSuperQueryCallback func(query string) (*sqltypes.Result, error)
+
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_source_enabled.
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
@@ -225,7 +233,7 @@ func (fmd *FakeMysqlDaemon) DB() *fakesqldb.DB {
 // Start is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
-		return fmt.Errorf("fake mysql daemon already running")
+		return errors.New("fake mysql daemon already running")
 	}
 
 	if fmd.StartupTime > 0 {
@@ -243,7 +251,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // Shutdown is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error {
 	if !fmd.Running {
-		return fmt.Errorf("fake mysql daemon not running")
+		return errors.New("fake mysql daemon not running")
 	}
 
 	if fmd.ShutdownTime > 0 {
@@ -295,7 +303,7 @@ func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.
 // GetMysqlPort is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
 	if fmd.MysqlPort.Load() == -1 {
-		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
+		return 0, errors.New("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
 	return fmd.MysqlPort.Load(), nil
 }
@@ -328,8 +336,8 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false.
-		IOState:    replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
-		SQLState:   replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
+		IOState:    replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
+		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
 	}, nil
@@ -410,6 +418,9 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 
 // PrimaryPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	if fmd.PrimaryPositionError != nil {
+		return replication.Position{}, fmd.PrimaryPositionError
+	}
 	return fmd.GetPrimaryPositionLocked(), nil
 }
 
@@ -616,6 +627,11 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 
 // FetchSuperQuery returns the results from the map, if any.
 func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	// If a callback is set, use it for dynamic handling
+	if fmd.FetchSuperQueryCallback != nil {
+		return fmd.FetchSuperQueryCallback(query)
+	}
+
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
@@ -653,7 +669,7 @@ func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, reques
 		return fmd.SchemaFunc()
 	}
 	if fmd.Schema == nil {
-		return nil, fmt.Errorf("no schema defined")
+		return nil, errors.New("no schema defined")
 	}
 	return tmutils.FilterTables(fmd.Schema, request.Tables, request.ExcludeTables, request.IncludeViews)
 }
@@ -676,7 +692,7 @@ func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, 
 // PreflightSchemaChange is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
-		return nil, fmt.Errorf("no preflight result defined")
+		return nil, errors.New("no preflight result defined")
 	}
 	return fmd.PreflightSchemaChangeResult, nil
 }
@@ -703,7 +719,8 @@ func (fmd *FakeMysqlDaemon) ApplySchemaChange(ctx context.Context, dbName string
 
 	return &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: beforeSchema,
-		AfterSchema:  afterSchema}, nil
+		AfterSchema:  afterSchema,
+	}, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface.
@@ -766,6 +783,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncSettings(ctx context.Context) (timeout uint6
 func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
 	// The fake assumes the status worked.
 	return fmd.SemiSyncReplicaEnabled, nil
+}
+
+// IsSemiSyncBlocked is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
 // GetVersionString is part of the MysqlDaemon interface.

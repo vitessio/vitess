@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -82,12 +83,12 @@ func TestJoinExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" true`,
+		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a" true`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
+		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`Execute %v false`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("b")})),
+		fmt.Sprintf(`Execute %v false`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("c")})),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -109,12 +110,12 @@ func TestJoinExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" true`,
+		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a" true`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
+		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`Execute %v false`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("b")})),
+		fmt.Sprintf(`Execute %v false`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10), "bv": sqltypes.StringBindVariable("c")})),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -385,9 +386,9 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
 		`Execute bv:  true`,
-		`StreamExecute bv: type:VARCHAR value:"a" false`,
-		`StreamExecute bv: type:VARCHAR value:"b" false`,
-		`StreamExecute bv: type:VARCHAR value:"c" false`,
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -414,9 +415,9 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
 		`Execute bv:  true`,
-		`StreamExecute bv: type:VARCHAR value:"a" false`,
-		`StreamExecute bv: type:VARCHAR value:"b" false`,
-		`StreamExecute bv: type:VARCHAR value:"c" false`,
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
+		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

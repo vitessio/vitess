@@ -18,7 +18,7 @@ package concurrency
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -123,12 +123,12 @@ func TestErrorGroup(t *testing.T) {
 }
 
 func spawnGoRoutines(errCh chan Error, shouldError bool, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			var err Error
 			if shouldError {
-				err.Err = fmt.Errorf("a general error")
+				err.Err = errors.New("a general error")
 			}
 			errCh <- err
 		}()
@@ -136,12 +136,12 @@ func spawnGoRoutines(errCh chan Error, shouldError bool, count int) {
 }
 
 func spawnDelayedGoRoutine(groupContext context.Context, errCh chan Error, mustWaitFor bool, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			select {
 			case <-groupContext.Done():
 				err := Error{
-					Err: fmt.Errorf("context cancelled"),
+					Err: errors.New("context cancelled"),
 				}
 				errCh <- err
 			case <-time.After(300 * time.Millisecond):

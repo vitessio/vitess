@@ -48,9 +48,9 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 
 		if err := toTS.CreateKeyspace(ctx, keyspace, ki.Keyspace); err != nil {
 			if topo.IsErrType(err, topo.NodeExists) {
-				log.Warningf("keyspace %v already exists", keyspace)
+				log.Warn(fmt.Sprintf("keyspace %v already exists", keyspace))
 			} else {
-				log.Errorf("CreateKeyspace(%v): %v", keyspace, err)
+				log.Error(fmt.Sprintf("CreateKeyspace(%v): %v", keyspace, err))
 			}
 		}
 
@@ -59,16 +59,16 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 		case err == nil:
 			_, err = vindexes.BuildKeyspace(ksvs.Keyspace, parser)
 			if err != nil {
-				log.Errorf("BuildKeyspace(%v): %v", keyspace, err)
+				log.Error(fmt.Sprintf("BuildKeyspace(%v): %v", keyspace, err))
 				break
 			}
 			if err := toTS.SaveVSchema(ctx, ksvs); err != nil {
-				log.Errorf("SaveVSchema(%v): %v", keyspace, err)
+				log.Error(fmt.Sprintf("SaveVSchema(%v): %v", keyspace, err))
 			}
 		case topo.IsErrType(err, topo.NoNode):
 			// Nothing to do.
 		default:
-			log.Errorf("GetVSchema(%v): %v", keyspace, err)
+			log.Error(fmt.Sprintf("GetVSchema(%v): %v", keyspace, err))
 		}
 	}
 
@@ -89,7 +89,6 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 		}
 
 		for _, shard := range shards {
-
 			si, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				return fmt.Errorf("GetShard(%v, %v): %w", keyspace, shard, err)
@@ -97,13 +96,13 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 
 			if err := toTS.CreateShard(ctx, keyspace, shard); err != nil {
 				if topo.IsErrType(err, topo.NodeExists) {
-					log.Warningf("shard %v/%v already exists", keyspace, shard)
+					log.Warn(fmt.Sprintf("shard %v/%v already exists", keyspace, shard))
 				} else {
 					return fmt.Errorf("CreateShard(%v, %v): %w", keyspace, shard, err)
 				}
 			}
 			if _, err := toTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
-				toSI.Shard = si.Shard.CloneVT()
+				toSI.Shard = si.CloneVT()
 				return nil
 			}); err != nil {
 				return fmt.Errorf("UpdateShardFields(%v, %v): %w", keyspace, shard, err)
@@ -127,7 +126,6 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 			return fmt.Errorf("GetTabletsByCell(%v): %w", cell, err)
 		} else {
 			for _, tabletAlias := range tabletAliases {
-
 				// read the source tablet
 				ti, err := fromTS.GetTablet(ctx, tabletAlias)
 				if err != nil {
@@ -138,7 +136,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 				err = toTS.CreateTablet(ctx, ti.Tablet)
 				if topo.IsErrType(err, topo.NodeExists) {
 					// update the destination tablet
-					log.Warningf("tablet %v already exists, updating it", tabletAlias)
+					log.Warn(fmt.Sprintf("tablet %v already exists, updating it", tabletAlias))
 					_, err = toTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {
 						proto.Merge(t, ti.Tablet)
 						return nil
@@ -195,7 +193,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error
 						nodes = append(nodes, oldNode)
 					}
 
-					nodes = append(nodes, sri.ShardReplication.Nodes...)
+					nodes = append(nodes, sri.Nodes...)
 					// Even though ShardReplication currently only has the .Nodes field,
 					// keeping the proto.Merge call here prevents this copy from
 					// unintentionally breaking if we add new fields.
@@ -203,7 +201,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error
 					oldSR.Nodes = nodes
 					return nil
 				}); err != nil {
-					log.Warningf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err)
+					log.Warn(fmt.Sprintf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err))
 				}
 			}
 		}
@@ -219,7 +217,7 @@ func CopyRoutingRules(ctx context.Context, fromTS, toTS *topo.Server) error {
 		return fmt.Errorf("GetRoutingRules: %w", err)
 	}
 	if err := toTS.SaveRoutingRules(ctx, rr); err != nil {
-		log.Errorf("SaveRoutingRules(%v): %v", rr, err)
+		log.Error(fmt.Sprintf("SaveRoutingRules(%v): %v", rr, err))
 	}
 
 	return nil

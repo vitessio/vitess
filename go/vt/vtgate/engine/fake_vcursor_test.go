@@ -153,7 +153,7 @@ func (t *noopVCursor) ShowExec(ctx context.Context, command sqlparser.ShowComman
 }
 
 // SetContextWithValue implements VCursor interface.
-func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
+func (t *noopVCursor) SetContextWithValue(key, value any) func() {
 	return func() {}
 }
 
@@ -575,7 +575,7 @@ func (f *loggingVCursor) Session() SessionActions {
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {
-	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	f.log = append(f.log, "Target set to "+target)
 	return nil
 }
 

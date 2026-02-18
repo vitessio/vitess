@@ -34,8 +34,10 @@ type (
 	}
 )
 
-var _ IR = (*TupleBindVariable)(nil)
-var _ Expr = (*TupleBindVariable)(nil)
+var (
+	_ IR   = (*TupleBindVariable)(nil)
+	_ Expr = (*TupleBindVariable)(nil)
+)
 
 func (bv *TupleBindVariable) IR() IR {
 	return bv
@@ -76,7 +78,6 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 				return
 			}
 			tuple = append(tuple, e)
-
 		})
 		if err = errors.Join(loopErr, evalErr); err != nil {
 			return nil, err

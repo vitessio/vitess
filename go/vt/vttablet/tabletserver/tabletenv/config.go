@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -291,7 +292,8 @@ func Init() {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
+		log.Error(fmt.Sprintf("Invalid querylog-format value %v: must be either text or json", logFormat))
+		os.Exit(1)
 	}
 
 	if queryLogHandler != "" {
@@ -313,20 +315,20 @@ type TabletConfig struct {
 
 	Unmanaged bool `json:"unmanaged,omitempty"`
 
-	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
-	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
-	TxPool       ConnPoolConfig `json:"txPool,omitempty"`
+	OltpReadPool ConnPoolConfig `json:"oltpReadPool"`
+	OlapReadPool ConnPoolConfig `json:"olapReadPool"`
+	TxPool       ConnPoolConfig `json:"txPool"`
 
-	Olap             OlapConfig             `json:"olap,omitempty"`
-	Oltp             OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	Olap             OlapConfig             `json:"olap"`
+	Oltp             OltpConfig             `json:"oltp"`
+	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection"`
 
-	Healthcheck  HealthcheckConfig  `json:"healthcheck,omitempty"`
-	GracePeriods GracePeriodsConfig `json:"gracePeriods,omitempty"`
+	Healthcheck  HealthcheckConfig  `json:"healthcheck"`
+	GracePeriods GracePeriodsConfig `json:"gracePeriods"`
 
-	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor,omitempty"`
+	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor"`
 
-	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
+	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
 	Consolidator                string        `json:"consolidator,omitempty"`
@@ -371,7 +373,7 @@ type TabletConfig struct {
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
 
-	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
+	RowStreamer RowStreamerConfig `json:"rowStreamer"`
 
 	EnableViews bool `json:"-"`
 
@@ -959,6 +961,11 @@ func (c *TabletConfig) checkConnectionForExternalMysql() error {
 		Uname:      c.DB.App.User,
 		Pass:       c.DB.App.Password,
 		UnixSocket: c.DB.Socket,
+		SslMode:    c.DB.SslMode,
+		SslCa:      c.DB.SslCa,
+		SslCaPath:  c.DB.SslCaPath,
+		SslCert:    c.DB.SslCert,
+		SslKey:     c.DB.SslKey,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &params)
@@ -996,7 +1003,7 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 		return fmt.Errorf("--transaction-limit-per-user should be a fraction within range (0, 1) (specified value: %v)", v)
 	}
 	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
-		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase --transaction-limit-per-user")
+		return errors.New("effective transaction limit per user is 0 due to rounding, increase --transaction-limit-per-user")
 	}
 	return nil
 }

@@ -19,6 +19,7 @@ package grpcvtctldserver
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -301,42 +302,44 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				t.Skip("tt.EmergencyReparentShardRequest = nil implies test not ready to run")
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			ts := memorytopo.NewServer(ctx, "zone1")
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				ts := memorytopo.NewServer(ctx, "zone1")
 
-			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
-				AlsoSetShardPrimary:  true,
-				ForceSetShardPrimary: true,
-				SkipShardCreation:    false,
-			}, tt.tablets...)
+				testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+					AlsoSetShardPrimary:  true,
+					ForceSetShardPrimary: true,
+					SkipShardCreation:    false,
+				}, tt.tablets...)
 
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(vtenv.NewTestEnv(), ts)
-			})
-			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
+				vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return NewVtctldServer(vtenv.NewTestEnv(), ts)
+				})
+				resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
 
-			// We defer this because we want to check in both error and non-
-			// error cases, but after the main set of assertions for those
-			// cases.
-			defer func() {
-				if !tt.expectEventsToOccur {
-					testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+				// We defer this because we want to check in both error and non-
+				// error cases, but after the main set of assertions for those
+				// cases.
+				defer func() {
+					if !tt.expectEventsToOccur {
+						testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+
+						return
+					}
+
+					testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
+				}()
+
+				if tt.shouldErr {
+					assert.Error(t, err)
 
 					return
 				}
 
-				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
-			}()
-
-			if tt.shouldErr {
-				assert.Error(t, err)
-
-				return
-			}
-
-			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
+				assert.NoError(t, err)
+				testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
+			})
 		})
 	}
 }
@@ -607,61 +610,50 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-			ts := memorytopo.NewServer(ctx, "zone1")
-			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
-				AlsoSetShardPrimary:  true,
-				ForceSetShardPrimary: true,
-				SkipShardCreation:    false,
-			}, tt.tablets...)
+				ts := memorytopo.NewServer(ctx, "zone1")
+				testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+					AlsoSetShardPrimary:  true,
+					ForceSetShardPrimary: true,
+					SkipShardCreation:    false,
+				}, tt.tablets...)
 
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(vtenv.NewTestEnv(), ts)
-			})
-			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
+				vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return NewVtctldServer(vtenv.NewTestEnv(), ts)
+				})
+				resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
-			// We defer this because we want to check in both error and non-
-			// error cases, but after the main set of assertions for those
-			// cases.
-			defer func() {
-				if !tt.expectEventsToOccur {
-					testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+				// We defer this because we want to check in both error and non-
+				// error cases, but after the main set of assertions for those
+				// cases.
+				defer func() {
+					if !tt.expectEventsToOccur {
+						testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+
+						return
+					}
+
+					testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
+				}()
+
+				if tt.shouldErr {
+					assert.Error(t, err)
 
 					return
 				}
 
-				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
-			}()
-
-			if tt.shouldErr {
-				assert.Error(t, err)
-
-				return
-			}
-
-			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+				assert.NoError(t, err)
+				testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+			})
 		})
 	}
 }
 
 func TestSleepTablet(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ts := memorytopo.NewServer(ctx, "zone1")
-	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone1",
-			Uid:  100,
-		},
-		Keyspace: "testkeyspace",
-		Shard:    "-",
-	}, nil)
 
 	tests := []struct {
 		name      string
@@ -687,7 +679,7 @@ func TestSleepTablet(t *testing.T) {
 			expected: &vtctldatapb.SleepTabletResponse{},
 		},
 		{
-			name: "default sleep duration", // this is the slowest test case, and takes 30 seconds. comment this out to go faster.
+			name: "default sleep duration",
 			tmc: testutil.TabletManagerClient{
 				SleepResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -747,23 +739,38 @@ func TestSleepTablet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				ts := memorytopo.NewServer(ctx, "zone1")
+				testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				}, nil)
+
+				vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return NewVtctldServer(vtenv.NewTestEnv(), ts)
+				})
+
+				start := time.Now()
+				resp, err := vtctld.SleepTablet(ctx, tt.req)
+				sleepDur := time.Since(start)
+				if tt.shouldErr {
+					assert.Error(t, err)
+					assert.Nil(t, resp)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, resp)
+				dur := expectedDur(t, tt.req.Duration, topo.RemoteOperationTimeout)
+				assert.LessOrEqual(t, dur, sleepDur, "sleep should have taken at least %v; took %v", dur, sleepDur)
 			})
-
-			start := time.Now()
-			resp, err := vtctld.SleepTablet(ctx, tt.req)
-			sleepDur := time.Since(start)
-			if tt.shouldErr {
-				assert.Error(t, err)
-				assert.Nil(t, resp)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
-			dur := expectedDur(t, tt.req.Duration, topo.RemoteOperationTimeout)
-			assert.LessOrEqual(t, dur, sleepDur, "sleep should have taken at least %v; took %v", dur, sleepDur)
 		})
 	}
 }

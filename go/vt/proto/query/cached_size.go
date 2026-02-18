@@ -44,6 +44,7 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Field) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -70,6 +71,7 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -86,6 +88,7 @@ func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Target) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -106,6 +109,7 @@ func (cached *Target) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Value) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -145,7 +145,7 @@ func updateGeneric(state *[16]uint64, msg []byte) {
 			state[v1+1] += res2
 		}
 
-		//inlined: zipperMerge(state[v0+2], state[v0+3], &state[v1+2], &state[v1+3])
+		// inlined: zipperMerge(state[v0+2], state[v0+3], &state[v1+2], &state[v1+3])
 		{
 			val0 := state[v0+2]
 			val1 := state[v0+3]

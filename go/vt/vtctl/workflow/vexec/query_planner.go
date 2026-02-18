@@ -19,6 +19,7 @@ package vexec
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -39,11 +40,10 @@ var ( // Query planning errors.
 	ErrUnsupportedQueryConstruct = errors.New("unsupported query construct")
 )
 
-var ( // Query execution errors.
-	// ErrUnpreparedQuery is returned when attempting to execute an unprepared
-	// QueryPlan.
-	ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
-)
+// Query execution errors.
+// ErrUnpreparedQuery is returned when attempting to execute an unprepared
+// QueryPlan.
+var ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
 
 // QueryPlanner defines the interface that VExec uses to build QueryPlans for
 // various vexec workflows. A given vexec table, which is to say a table in the
@@ -332,12 +332,12 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 				Left: &sqlparser.ColName{
 					Name: sqlparser.NewIdentifierCI("vrepl_id"),
 				},
-				Right: sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamIDs[0])),
+				Right: sqlparser.NewIntLiteral(strconv.FormatInt(streamIDs[0], 10)),
 			}
 		default: // WHERE vreplication_log.vrepl_id IN (?)
 			vals := []sqlparser.Expr{}
 			for _, streamID := range streamIDs {
-				vals = append(vals, sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamID)))
+				vals = append(vals, sqlparser.NewIntLiteral(strconv.FormatInt(streamID, 10)))
 			}
 
 			var tuple sqlparser.ValTuple = vals

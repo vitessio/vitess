@@ -18,6 +18,8 @@ package tmclient
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -191,6 +193,9 @@ type TabletManagerClient interface {
 	// StartReplication starts the mysql replication
 	StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
+	// RestartReplication stops and then starts the mysql replication
+	RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
+
 	// StartReplicationUntilAfter starts replication until after the position specified
 	StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
 
@@ -251,7 +256,7 @@ type TabletManagerClient interface {
 
 	// DemotePrimary tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
-	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error)
 
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	// To be used if we are unable to promote the chosen new primary
@@ -311,7 +316,8 @@ var tabletManagerClientFactories = make(map[string]TabletManagerClientFactory)
 // TabletManagerClient implementations. Should be called on init().
 func RegisterTabletManagerClientFactory(name string, factory TabletManagerClientFactory) {
 	if _, ok := tabletManagerClientFactories[name]; ok {
-		log.Fatalf("RegisterTabletManagerClient %s already exists", name)
+		log.Error(fmt.Sprintf("RegisterTabletManagerClient %s already exists", name))
+		os.Exit(1)
 	}
 	tabletManagerClientFactories[name] = factory
 }
@@ -321,7 +327,8 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
+		log.Error("No TabletManagerProtocol registered with name " + tabletManagerProtocol)
+		os.Exit(1)
 	}
 
 	return f()

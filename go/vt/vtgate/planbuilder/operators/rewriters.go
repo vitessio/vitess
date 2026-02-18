@@ -64,7 +64,7 @@ func Rewrote(message string) *ApplyResult {
 	return &ApplyResult{Transformations: []Rewrite{{Message: message}}}
 }
 
-func debugNoRewrite(reason string, args ...interface{}) {
+func debugNoRewrite(reason string, args ...any) {
 	if DebugOperatorTree {
 		fmt.Printf("NoRewrite: "+reason+"\n", args...)
 	}
@@ -340,6 +340,13 @@ func topDown(
 
 	if !shouldVisit(root) {
 		return newOp, anythingChanged
+	}
+
+	// If the rewriter replaced the operator with a different one, we need to re-visit
+	// the new operator to give it a chance to be processed
+	if anythingChanged.Changed() && newOp != root {
+		revisitedOp, revisitChanged := topDown(newOp, rootID, resolveID, rewriter, shouldVisit, isRoot)
+		return revisitedOp, anythingChanged.Merge(revisitChanged)
 	}
 
 	if anythingChanged.Changed() {

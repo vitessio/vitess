@@ -133,7 +133,6 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
 	default:
 		return utf8.RuneError, 1
 	}
-
 }
 
 func (Charset_euckr) MaxWidth() int {

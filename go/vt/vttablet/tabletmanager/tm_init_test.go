@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -76,10 +77,16 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
 		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
+		TabletStartTime:      &vttime.Time{},
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+
+	// Verify TabletStartTime was set and is reasonable
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
@@ -98,6 +105,10 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	}
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
 	assert.Equal(t, wantTablet.KeyRange, gotTablet.KeyRange)
@@ -158,10 +169,15 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
 		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
+		TabletStartTime:      &vttime.Time{},
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 	assert.Equal(t, wantTablet, gotTablet)
 }
 
@@ -169,8 +185,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	statsTabletTypeCount.ResetAll()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -254,8 +269,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -395,8 +409,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 }
 
 func TestStartCheckMysql(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
@@ -426,8 +439,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	defer func(saved time.Duration) { mysqlPortRetryInterval = saved }(mysqlPortRetryInterval)
 	mysqlPortRetryInterval = 50 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
@@ -456,7 +468,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		fmd.MysqlPort.Store(3306)
 	}()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
 		if ti.MysqlPort == 3306 {
@@ -469,8 +481,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 
 // Init tablet fixes replication data when safe
 func TestStartFixesReplicationData(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell, "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -503,8 +514,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 // to be created due to a NodeExists error. During this particular error we were not doing
 // the sanity checks that the provided tablet was the same in the topo.
 func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	tm.Stop()
@@ -527,8 +537,7 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -650,8 +659,7 @@ func TestGetBuildTags(t *testing.T) {
 }
 
 func TestStartExportStats(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	_ = newTestTM(t, ts, 1, "ks", "0", map[string]string{
@@ -684,9 +692,7 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	return mysqld
 }
 
-var (
-	exporter = servenv.NewExporter("TestTabletManager", "")
-)
+var exporter = servenv.NewExporter("TestTabletManager", "")
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
 	// reset stats
@@ -757,7 +763,7 @@ func newTestTablet(t *testing.T, uid int, keyspace, shard string, tags map[strin
 func ensureSrvKeyspace(t *testing.T, ctx context.Context, ts *topo.Server, cell, keyspace string) {
 	t.Helper()
 	found := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 		if err == nil {
 			found = true
@@ -824,7 +830,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Failure due to timeout",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
@@ -845,7 +852,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Success for externally managed tablet",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -868,7 +876,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Empty timeout",
 			waitTime:  0,
 			errWanted: "",
@@ -878,7 +887,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 				return tc, func() {}
 			},
-		}, {
+		},
+		{
 			name:      "Empty config",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -960,4 +970,281 @@ func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUse
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
 	conn.Close()
+}
+
+func TestInitTabletTypeLookup_PreservesTabletTypes(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	tests := []struct {
+		name          string
+		preservedType topodatapb.TabletType
+	}{
+		{
+			name:          "RDONLY",
+			preservedType: topodatapb.TabletType_RDONLY,
+		},
+		{
+			name:          "DRAINED",
+			preservedType: topodatapb.TabletType_DRAINED,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			cell := "cell1"
+			ts := memorytopo.NewServer(ctx, cell)
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  1,
+			}
+
+			// 1. Initialize tablet as REPLICA (normal startup) with flag disabled
+			initTabletTypeLookup = false
+			tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+			tablet := tm.Tablet()
+			ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+			ti, err := ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			tm.Stop()
+
+			// 2. Simulate operator changing tablet type in topology
+			_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+				t.Type = tt.preservedType
+				return nil
+			})
+			require.NoError(t, err)
+
+			// 3. Restart with flag enabled - should preserve the tablet type
+			initTabletTypeLookup = true
+			err = tm.Start(tablet, nil)
+			require.NoError(t, err)
+			defer tm.Stop()
+			ti, err = ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, tt.preservedType, ti.Type)
+		})
+	}
+}
+
+func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	ctx := t.Context()
+	cell := "cell1"
+	ts := memorytopo.NewServer(ctx, cell)
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+
+	// 1. Initialize tablet as REPLICA with flag disabled
+	initTabletTypeLookup = false
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+	tablet := tm.Tablet()
+	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	tm.Stop()
+
+	// 2. Simulate promotion to PRIMARY with a specific term start time
+	now := time.Now()
+	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+		t.Type = topodatapb.TabletType_PRIMARY
+		t.PrimaryTermStartTime = protoutil.TimeToProto(now)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 3. Update shard's PrimaryAlias to point to this tablet so checkPrimaryShip will promote it
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = protoutil.TimeToProto(now)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 4. Restart with flag enabled - should set to REPLICA initially, then checkPrimaryShip promotes to PRIMARY
+	initTabletTypeLookup = true
+	err = tm.Start(tablet, nil)
+	require.NoError(t, err)
+	defer tm.Stop()
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// Should be promoted to PRIMARY by checkPrimaryShip and preserve the term start time
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.Equal(t, now.Unix(), ti.GetPrimaryTermStartTime().Unix())
+}
+
+func TestInitTabletTypeLookup_FallbackWhenNoTopoRecord(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	ctx := t.Context()
+	cell := "cell1"
+	ts := memorytopo.NewServer(ctx, cell)
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+
+	// Start new tablet with flag enabled but no existing topo record
+	initTabletTypeLookup = true
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+	defer tm.Stop()
+	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// Should use initTabletType (REPLICA)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+}
+
+func TestInitTabletTypeLookup_DisabledUsesInitType(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	ctx := t.Context()
+	cell := "cell1"
+	ts := memorytopo.NewServer(ctx, cell)
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+
+	// 1. Initialize tablet as REPLICA with flag disabled
+	initTabletTypeLookup = false
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+	tablet := tm.Tablet()
+	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	tm.Stop()
+
+	// 2. Simulate operator changing tablet to RDONLY in topology
+	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+		t.Type = topodatapb.TabletType_RDONLY
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 3. Restart with flag still disabled - should use initTabletType (REPLICA)
+	initTabletTypeLookup = false
+	err = tm.Start(tablet, nil)
+	require.NoError(t, err)
+	defer tm.Stop()
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// Topo record should be overwritten with REPLICA
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+}
+
+func TestInitTabletTypeLookup_SkipsTransientTypes(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	tests := []struct {
+		name          string
+		transientType topodatapb.TabletType
+	}{
+		{
+			name:          "BACKUP",
+			transientType: topodatapb.TabletType_BACKUP,
+		},
+		{
+			name:          "RESTORE",
+			transientType: topodatapb.TabletType_RESTORE,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			cell := "cell1"
+			ts := memorytopo.NewServer(ctx, cell)
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  1,
+			}
+
+			// 1. Initialize tablet as REPLICA with flag disabled
+			initTabletTypeLookup = false
+			tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+			tablet := tm.Tablet()
+			ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+			ti, err := ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			tm.Stop()
+
+			// 2. Simulate crash during backup/restore (tablet type is transient in topo)
+			_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+				t.Type = tt.transientType
+				return nil
+			})
+			require.NoError(t, err)
+
+			// 3. Restart with flag enabled - should skip transient type and use initTabletType
+			initTabletTypeLookup = true
+			err = tm.Start(tablet, nil)
+			require.NoError(t, err)
+			defer tm.Stop()
+			ti, err = ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			// Should use initTabletType (REPLICA), not preserve transient type
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+		})
+	}
+}
+
+func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
+	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	ctx := t.Context()
+	cell := "cell1"
+	ts := memorytopo.NewServer(ctx, cell)
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  1,
+	}
+
+	// 1. Initialize tablet as REPLICA with flag disabled
+	initTabletTypeLookup = false
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+	tablet := tm.Tablet()
+	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	tm.Stop()
+
+	// 2. Set shard's PrimaryAlias to this tablet
+	now := time.Now()
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = protoutil.TimeToProto(now)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 3. Restart with flag enabled - checkPrimaryShip should still promote to PRIMARY
+	initTabletTypeLookup = true
+	err = tm.Start(tablet, nil)
+	require.NoError(t, err)
+	defer tm.Stop()
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// Should be PRIMARY due to checkPrimaryShip logic
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 }

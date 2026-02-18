@@ -19,9 +19,10 @@ package tmutils
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -60,8 +61,30 @@ func testPermissionsDiff(t *testing.T, left, right *tabletmanagerdatapb.Permissi
 	}
 }
 
-func TestPermissionsDiff(t *testing.T) {
+func TestNewUserPermission(t *testing.T) {
+	up := NewUserPermission(mapToSQLResults(map[string]string{
+		"Host":        "%",
+		"User":        "vt",
+		"Password":    "correct horse battery staple",
+		"Select_priv": "Y",
+		"Insert_priv": "N",
+		// Test the next field is skipped (to avoid date drifts).
+		"password_last_changed": "2016-11-08 02:56:23",
+		// Test the next field is filtered.
+		"authentication_string": "this should be filtered out",
+	}))
+	require.EqualValues(t, &tabletmanagerdatapb.UserPermission{
+		Host:             "%",
+		User:             "vt",
+		PasswordChecksum: 17759204488013904955,
+		Privileges: map[string]string{
+			"Insert_priv": "N",
+			"Select_priv": "Y",
+		},
+	}, up)
+}
 
+func TestPermissionsDiff(t *testing.T) {
 	p1 := &tabletmanagerdatapb.Permissions{}
 	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{
 		"Host":        "%",

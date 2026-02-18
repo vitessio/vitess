@@ -32,8 +32,7 @@ var (
 
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
 
-type LoadAvgSelfMetric struct {
-}
+type LoadAvgSelfMetric struct{}
 
 func (m *LoadAvgSelfMetric) Name() MetricName {
 	return LoadAvgMetricName

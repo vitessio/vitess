@@ -86,5 +86,4 @@ func TestFindTablet(t *testing.T) {
 	if err != nil || !topoproto.TabletAliasEqual(primary, oldPrimary.Tablet.Alias) {
 		t.Fatalf("FindTabletByHostAndPort(primary) failed: %v %v", err, primary)
 	}
-
 }

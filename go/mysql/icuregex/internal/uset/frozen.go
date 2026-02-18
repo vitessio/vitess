@@ -168,7 +168,7 @@ func (f *frozen) set32x64bits(table *[64]uint32, start, limit int32) {
 			if limitLead < 0x20 {
 				bits &= (uint32(1) << limitLead) - 1
 			}
-			for trail = 0; trail < 64; trail++ {
+			for trail = range int32(64) {
 				table[trail] |= bits
 			}
 		}
@@ -181,7 +181,7 @@ func (f *frozen) set32x64bits(table *[64]uint32, start, limit int32) {
 			bits = uint32(1) << limitLead
 		}
 
-		for trail = 0; trail < limitTrail; trail++ {
+		for trail = range limitTrail {
 			table[trail] |= bits
 		}
 	}
@@ -267,12 +267,7 @@ func (f *frozen) initBits(list []rune) {
 
 	// Set table7FF[].
 	for start < 0x800 {
-		var end rune
-		if limit <= 0x800 {
-			end = limit
-		} else {
-			end = 0x800
-		}
+		end := min(limit, 0x800)
 		f.set32x64bits(&f.table7FF, start, end)
 		if limit > 0x800 {
 			start = 0x800

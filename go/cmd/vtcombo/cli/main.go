@@ -187,7 +187,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Fatalf("unable to initialize env: %v", err)
+		log.Error(fmt.Sprintf("unable to initialize env: %v", err))
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(cmd.Context())
@@ -232,7 +233,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(ctx, false)
-
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
@@ -322,7 +322,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		if len(tabletTypes) == 0 {
-			log.Exitf("tablet-types-to-wait should contain at least one serving tablet type")
+			log.Error("tablet-types-to-wait should contain at least one serving tablet type")
+			os.Exit(1)
 		}
 	} else {
 		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)

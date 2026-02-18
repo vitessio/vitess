@@ -120,7 +120,6 @@ func TestRatesConsistency(t *testing.T) {
 	if sum != float64(counts["a"]) {
 		t.Errorf("rate inconsistent with count: sum of %v != %v", rate, count)
 	}
-
 }
 
 func TestRatesHook(t *testing.T) {

@@ -17,7 +17,8 @@ limitations under the License.
 package schema
 
 import (
-	"fmt"
+	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -40,91 +41,92 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 		delay                        time.Duration
 		init, initFail, updateFail   bool
 	}
-	tests := []testCase{{
-		inputs: []input{{
-			shard:         "-80",
-			tablesUpdates: []string{"a"},
+	tests := []testCase{
+		{
+			inputs: []input{{
+				shard:         "-80",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "80-",
+				tablesUpdates: []string{"a"},
+			}},
+			updateTables:   []string{"a"},
+			signalExpected: 1,
 		}, {
-			shard:         "80-",
-			tablesUpdates: []string{"a"},
-		}},
-		updateTables:   []string{"a"},
-		signalExpected: 1,
-	}, {
-		inputs: []input{{
-			shard:         "0",
-			tablesUpdates: []string{"a"},
+			inputs: []input{{
+				shard:         "0",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "0",
+				tablesUpdates: []string{"b"},
+			}},
+			updateTables:   []string{"a", "b"},
+			signalExpected: 1,
 		}, {
-			shard:         "0",
-			tablesUpdates: []string{"b"},
-		}},
-		updateTables:   []string{"a", "b"},
-		signalExpected: 1,
-	}, {
-		inputs: []input{{
-			shard:         "0",
-			tablesUpdates: []string{"a"},
+			inputs: []input{{
+				shard:         "0",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "0",
+				tablesUpdates: []string{"A"},
+			}},
+			updateTables:   []string{"a", "A"},
+			signalExpected: 1,
 		}, {
-			shard:         "0",
-			tablesUpdates: []string{"A"},
-		}},
-		updateTables:   []string{"a", "A"},
-		signalExpected: 1,
-	}, {
-		inputs: []input{{
-			shard:         "0",
-			tablesUpdates: []string{"a"},
+			inputs: []input{{
+				shard:         "0",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "0",
+				tablesUpdates: []string{"b"},
+			}},
+			updateTables:   []string{"b"},
+			signalExpected: 2,
+			delay:          10 * time.Millisecond,
 		}, {
-			shard:         "0",
-			tablesUpdates: []string{"b"},
-		}},
-		updateTables:   []string{"b"},
-		signalExpected: 2,
-		delay:          10 * time.Millisecond,
-	}, {
-		inputs: []input{{
-			shard: "0",
+			inputs: []input{{
+				shard: "0",
+			}, {
+				shard: "0",
+			}},
 		}, {
-			shard: "0",
-		}},
-	}, {
-		inputs: []input{{
-			shard:         "-80",
-			tablesUpdates: []string{"a"},
+			inputs: []input{{
+				shard:         "-80",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "80-",
+				tablesUpdates: []string{"a"},
+			}},
+			signalExpected: 1,
+			initExpected:   1,
+			init:           true,
 		}, {
-			shard:         "80-",
-			tablesUpdates: []string{"a"},
-		}},
-		signalExpected: 1,
-		initExpected:   1,
-		init:           true,
-	}, {
-		inputs: []input{{
-			shard:         "-80",
-			tablesUpdates: []string{"a"},
+			inputs: []input{{
+				shard:         "-80",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "80-",
+				tablesUpdates: []string{"a"},
+			}},
+			signalExpected: 0,
+			initExpected:   1,
+			init:           true,
+			initFail:       true,
 		}, {
-			shard:         "80-",
-			tablesUpdates: []string{"a"},
-		}},
-		signalExpected: 0,
-		initExpected:   1,
-		init:           true,
-		initFail:       true,
-	}, {
-		inputs: []input{{
-			shard:         "-80",
-			tablesUpdates: []string{"a"},
-		}, {
-			shard:         "80-",
-			tablesUpdates: []string{"b"},
-		}},
-		updateTables:   []string{"a", "b"},
-		signalExpected: 0,
-		updateFail:     true,
-	},
+			inputs: []input{{
+				shard:         "-80",
+				tablesUpdates: []string{"a"},
+			}, {
+				shard:         "80-",
+				tablesUpdates: []string{"b"},
+			}},
+			updateTables:   []string{"a", "b"},
+			signalExpected: 0,
+			updateFail:     true,
+		},
 	}
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 			var signalNb, initNb int
 			var updatedTables []string
 			update := func(th *discovery.TabletHealth) bool {
@@ -142,7 +144,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 					initNb++
 					var err error
 					if test.initFail {
-						err = fmt.Errorf("error")
+						err = errors.New("error")
 					}
 					return err
 				},
@@ -205,53 +207,54 @@ func TestViewsUpdates(t *testing.T) {
 		delay                        time.Duration // this causes a delay between inputs
 		init, initFail, updateFail   bool
 	}
-	tests := []testCase{{
-		desc:           "received same view updates from shards",
-		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
-		updateViews:    []string{"a"},
-		signalExpected: 1,
-	}, {
-		desc:           "received different view updates from shards",
-		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
-		updateViews:    []string{"a", "b"},
-		signalExpected: 1,
-	}, {
-		desc:           "received different view updates from shards - case sensitive names",
-		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"A"}}},
-		updateViews:    []string{"a", "A"},
-		signalExpected: 1,
-	}, {
-		desc:           "delay between inputs - different signals from each input",
-		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
-		updateViews:    []string{"b"},
-		signalExpected: 2,
-		delay:          10 * time.Millisecond,
-	}, {
-		desc:   "no change - no signal",
-		inputs: []input{{shard: "0"}, {shard: "0"}},
-	}, {
-		desc:           "initialization did not happen - full views load over only updated views",
-		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
-		signalExpected: 1,
-		initExpected:   1,
-		init:           true,
-	}, {
-		desc:           "initialization did not happen - full view load failed - no signal",
-		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
-		signalExpected: 0,
-		initExpected:   1,
-		init:           true,
-		initFail:       true,
-	}, {
-		desc:           "updated views failed - no signal",
-		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"b"}}},
-		updateViews:    []string{"a", "b"},
-		signalExpected: 0,
-		updateFail:     true,
-	},
+	tests := []testCase{
+		{
+			desc:           "received same view updates from shards",
+			inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
+			updateViews:    []string{"a"},
+			signalExpected: 1,
+		}, {
+			desc:           "received different view updates from shards",
+			inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
+			updateViews:    []string{"a", "b"},
+			signalExpected: 1,
+		}, {
+			desc:           "received different view updates from shards - case sensitive names",
+			inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"A"}}},
+			updateViews:    []string{"a", "A"},
+			signalExpected: 1,
+		}, {
+			desc:           "delay between inputs - different signals from each input",
+			inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
+			updateViews:    []string{"b"},
+			signalExpected: 2,
+			delay:          10 * time.Millisecond,
+		}, {
+			desc:   "no change - no signal",
+			inputs: []input{{shard: "0"}, {shard: "0"}},
+		}, {
+			desc:           "initialization did not happen - full views load over only updated views",
+			inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
+			signalExpected: 1,
+			initExpected:   1,
+			init:           true,
+		}, {
+			desc:           "initialization did not happen - full view load failed - no signal",
+			inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
+			signalExpected: 0,
+			initExpected:   1,
+			init:           true,
+			initFail:       true,
+		}, {
+			desc:           "updated views failed - no signal",
+			inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"b"}}},
+			updateViews:    []string{"a", "b"},
+			signalExpected: 0,
+			updateFail:     true,
+		},
 	}
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 			var signalNb, initNb int
 			var updatedViews []string
 			update := func(th *discovery.TabletHealth) bool {
@@ -269,7 +272,7 @@ func TestViewsUpdates(t *testing.T) {
 					initNb++
 					var err error
 					if test.initFail {
-						err = fmt.Errorf("error")
+						err = errors.New("error")
 					}
 					return err
 				},

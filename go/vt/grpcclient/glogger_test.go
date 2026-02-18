@@ -17,71 +17,56 @@ limitations under the License.
 package grpcclient
 
 import (
-	"io"
-	"os"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 )
-
-func captureOutput(t *testing.T, f func()) string {
-	oldVal := os.Stderr
-	t.Cleanup(func() {
-		// Ensure reset even if deferred function panics
-		os.Stderr = oldVal
-	})
-
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	os.Stderr = w
-
-	f()
-
-	err = w.Close()
-	require.NoError(t, err)
-
-	got, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	return string(got)
-}
 
 func TestGlogger(t *testing.T) {
 	gl := glogger{}
 
-	output := captureOutput(t, func() {
-		gl.Warning("warning")
-	})
-	require.Contains(t, output, "warning")
+	origWarnDepth := log.WarnDepth
+	t.Cleanup(func() { log.WarnDepth = origWarnDepth })
 
-	output = captureOutput(t, func() {
-		gl.Warningln("warningln")
-	})
-	require.Contains(t, output, "warningln\n")
+	var logMessage string
+	log.WarnDepth = func(_ int, msg string, _ ...slog.Attr) {
+		logMessage = msg
+	}
 
-	output = captureOutput(t, func() {
-		gl.Warningf("formatted %s", "warning")
-	})
-	require.Contains(t, output, "formatted warning")
+	gl.Warning("warning")
+	require.Contains(t, logMessage, "warning")
 
+	logMessage = ""
+	gl.Warningln("warningln")
+	require.Contains(t, logMessage, "warningln\n")
+
+	logMessage = ""
+	gl.Warningf("formatted %s", "warning")
+	require.Contains(t, logMessage, "formatted warning")
 }
 
 func TestGloggerError(t *testing.T) {
 	gl := glogger{}
 
-	output := captureOutput(t, func() {
-		gl.Error("error message")
-	})
-	require.Contains(t, output, "error message")
+	origErrorDepth := log.ErrorDepth
+	t.Cleanup(func() { log.ErrorDepth = origErrorDepth })
 
-	output = captureOutput(t, func() {
-		gl.Errorln("error message line")
-	})
-	require.Contains(t, output, "error message line\n")
+	var logMessage string
+	log.ErrorDepth = func(_ int, msg string, _ ...slog.Attr) {
+		logMessage = msg
+	}
 
-	output = captureOutput(t, func() {
-		gl.Errorf("this is a %s error message", "formatted")
-	})
-	require.Contains(t, output, "this is a formatted error message")
+	gl.Error("error message")
+	require.Contains(t, logMessage, "error message")
+
+	logMessage = ""
+	gl.Errorln("error message line")
+	require.Contains(t, logMessage, "error message line\n")
+
+	logMessage = ""
+	gl.Errorf("this is a %s error message", "formatted")
+	require.Contains(t, logMessage, "this is a formatted error message")
 }

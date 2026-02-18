@@ -381,17 +381,18 @@ func (txc *TxConn) errActionAndLogWarn(
 		commitUnresolved.Add(1)
 	}
 	if rollbackErr != nil {
-		log.Warningf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr)
+		log.Warn(fmt.Sprintf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr))
 		commitUnresolved.Add(1)
 	}
 
 	session.RecordWarning(&querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERInAtomicRecovery),
-		Message: createWarningMessage(dtid, txPhase)})
+		Message: createWarningMessage(dtid, txPhase),
+	})
 }
 
 func createWarningMessage(dtid string, txPhase commitPhase) string {
-	warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
+	warningMsg := dtid + " distributed transaction ID failed during"
 	switch txPhase {
 	case Commit2pcCreateTransaction:
 		warningMsg += " transaction record creation; rollback attempted; conclude on recovery"
@@ -530,11 +531,11 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 
 	failedResolution := 0
 	for _, txRecord := range transactions {
-		log.Infof("Resolving transaction ID: %s", txRecord.Dtid)
+		log.Info("Resolving transaction ID: " + txRecord.Dtid)
 		err = txc.resolveTx(ctx, target, txRecord)
 		if err != nil {
 			failedResolution++
-			log.Errorf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err)
+			log.Error(fmt.Sprintf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err))
 		}
 	}
 	if failedResolution == 0 {
@@ -589,7 +590,6 @@ func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatep
 		return err
 	}
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
-
 }
 
 func (txc *TxConn) rollbackMM(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession) error {

@@ -753,7 +753,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
-        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo"
+        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where u.id = ue.user_id and rr.bar = sr.bar and sr.foo = ue.foo"
       },
       "TablesUsed": [
         "user.ref",
@@ -891,6 +891,28 @@
         "main.rerouted_ref",
         "main.source_of_ref",
         "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Derived table pushdown optimization",
+    "query": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from (select col from ref where 1 != 1) as sub where 1 != 1",
+        "Query": "select col from (select distinct col from ref where col = 1 limit 10) as sub"
+      },
+      "TablesUsed": [
+        "user.ref"
       ]
     }
   }

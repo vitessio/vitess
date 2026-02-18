@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -32,8 +31,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 )
 
-var ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
-var ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
+var (
+	ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
+	ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
+)
 
 func (ast *astCompiler) translateComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr) (IR, error) {
 	l, err := ast.translateExpr(left)
@@ -359,7 +360,7 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 	} else {
 		defaultCollation := ast.cfg.Environment.CollationEnv().DefaultCollationForCharset(introduced.CharacterSet[1:])
 		if defaultCollation == collations.Unknown {
-			panic(fmt.Sprintf("unknown character set: %s", introduced.CharacterSet))
+			panic("unknown character set: " + introduced.CharacterSet)
 		}
 		collation = defaultCollation
 	}
@@ -561,8 +562,10 @@ type astCompiler struct {
 	untyped []typedIR
 }
 
-type ColumnResolver func(name *sqlparser.ColName) (int, error)
-type TypeResolver func(expr sqlparser.Expr) (Type, bool)
+type (
+	ColumnResolver func(name *sqlparser.ColName) (int, error)
+	TypeResolver   func(expr sqlparser.Expr) (Type, bool)
+)
 
 type Config struct {
 	ResolveColumn ColumnResolver

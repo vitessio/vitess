@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -261,9 +262,11 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
 	return nil
 }
+
 func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
 	return nil
 }
+
 func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return nil
 }
@@ -300,7 +303,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0, 0, false)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	fmt.Printf("host: %s, port: %d\n", host, port)
@@ -570,7 +573,6 @@ func TestConnAttrs(t *testing.T) {
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
-
 }
 
 func TestConnCounts(t *testing.T) {
@@ -1013,7 +1015,6 @@ func TestTLSServer(t *testing.T) {
 
 	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
 	conn.Close()
-
 }
 
 // TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
@@ -1403,8 +1404,8 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		return output, false
 	}
 	return output, true
-
 }
+
 func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := venv.VtMysqlRoot()
 	require.NoError(t, err)
@@ -1429,7 +1430,7 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, 
 		} else {
 			args = append(args,
 				"-h", params.Host,
-				"-P", fmt.Sprintf("%v", params.Port))
+				"-P", strconv.Itoa(params.Port))
 		}
 		if params.Uname != "" {
 			args = append(args, "-u", params.Uname)
@@ -1542,13 +1543,15 @@ func TestParseConnAttrs(t *testing.T) {
 		"_client_name":    "libmysql",
 	}
 
-	data := []byte{0x70, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x05, 0x32, 0x32, 0x38, 0x35, 0x30, 0x09, 0x5f, 0x70, 0x6c,
+	data := []byte{
+		0x70, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x05, 0x32, 0x32, 0x38, 0x35, 0x30, 0x09, 0x5f, 0x70, 0x6c,
 		0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36, 0x5f, 0x36, 0x34, 0x03, 0x5f, 0x6f,
 		0x73, 0x0f, 0x6c, 0x69, 0x6e, 0x75, 0x78, 0x2d, 0x67, 0x6c, 0x69, 0x62, 0x63, 0x32, 0x2e, 0x31,
 		0x32, 0x0c, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c,
 		0x69, 0x62, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x0f, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f,
 		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x38, 0x2e, 0x30, 0x2e, 0x31, 0x31, 0x0c, 0x70,
-		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c}
+		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c,
+	}
 
 	attrs, pos, err := parseConnAttrs(data, 0)
 	require.NoError(t, err)

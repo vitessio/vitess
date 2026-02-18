@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -95,7 +96,7 @@ func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http
 
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-	for i := 0; i < limit; i++ {
+	for range limit {
 		select {
 		case stats := <-ch:
 			select {
@@ -117,7 +118,7 @@ func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http
 				Parser     *sqlparser.Parser
 			}{stats, level, parser}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
-				log.Errorf("querylogz: couldn't execute template: %v", err)
+				log.Error(fmt.Sprintf("querylogz: couldn't execute template: %v", err))
 			}
 		case <-tmr.C:
 			return

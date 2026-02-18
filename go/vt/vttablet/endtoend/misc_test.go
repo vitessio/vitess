@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"strings"
@@ -187,7 +188,7 @@ func TestSchemaReload(t *testing.T) {
 	framework.Server.ReloadSchema(context.Background())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(waitTime)
 		waitTime += 50 * time.Millisecond
 		_, err = client.Execute("select * from vitess_temp", nil)
@@ -214,7 +215,7 @@ func TestSidecarTables(t *testing.T) {
 		"dt_state",
 		"dt_participant",
 	} {
-		_, err = conn.ExecuteFetch(fmt.Sprintf("describe _vt.%s", table), 10, false)
+		_, err = conn.ExecuteFetch("describe _vt."+table, 10, false)
 		require.NoError(t, err)
 	}
 }
@@ -339,7 +340,7 @@ func TestBindInSelect(t *testing.T) {
 }
 
 func TestHealth(t *testing.T) {
-	response, err := http.Get(fmt.Sprintf("%s/debug/health", framework.ServerAddress))
+	response, err := http.Get(framework.ServerAddress + "/debug/health")
 	require.NoError(t, err)
 	defer response.Body.Close()
 	result, err := io.ReadAll(response.Body)
@@ -525,36 +526,34 @@ func TestDBAStatements(t *testing.T) {
 }
 
 type testLogger struct {
-	logs        []string
-	savedInfof  func(format string, args ...any)
-	savedErrorf func(format string, args ...any)
+	logs       []string
+	savedInfo  func(msg string, attrs ...slog.Attr)
+	savedError func(msg string, attrs ...slog.Attr)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedErrorf: log.Errorf,
+		savedInfo:  log.Info,
+		savedError: log.Error,
 	}
-	log.Infof = tl.recordInfof
-	log.Errorf = tl.recordErrorf
+	log.Info = tl.recordInfo
+	log.Error = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Errorf = tl.savedErrorf
+	log.Info = tl.savedInfo
+	log.Error = tl.savedError
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
+	tl.savedInfo(msg, attrs...)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
 	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
+	tl.savedError(msg, attrs...)
 }
 
 func (tl *testLogger) getLog(i int) string {
@@ -710,7 +709,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 
 	for _, tc := range tcs {
 		qr, err := client.Execute(
-			fmt.Sprintf("select :%s", tc.Variable),
+			"select :"+tc.Variable,
 			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
 		)
 		require.NoError(t, err)
@@ -1155,7 +1154,7 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	// Analyze tables to make sure stats are updated prior to reload
 	tables := []string{"vitess_a", "vitess_part", "vitess_autoinc_seq"}
 	for _, table := range tables {
-		_, err = client.Execute(fmt.Sprintf("analyze table %s", table), nil)
+		_, err = client.Execute("analyze table "+table, nil)
 		require.NoError(t, err)
 	}
 

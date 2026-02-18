@@ -74,21 +74,21 @@ func (rts rTablets) Less(i, j int) bool {
 	// the type proto has PRIMARY first, so sort by that. Will show
 	// the PRIMARY first, then each replica type sorted by
 	// replication position.
-	if l.Tablet.Type < r.Tablet.Type {
+	if l.Type < r.Type {
 		return true
 	}
 
-	if l.Tablet.Type > r.Tablet.Type {
+	if l.Type > r.Type {
 		return false
 	}
 
 	// then compare replication positions
-	lpos, err := replication.DecodePosition(l.Status.Position)
+	lpos, err := replication.DecodePosition(l.Position)
 	if err != nil {
 		return true
 	}
 
-	rpos, err := replication.DecodePosition(r.Status.Position)
+	rpos, err := replication.DecodePosition(r.Position)
 	if err != nil {
 		return false
 	}

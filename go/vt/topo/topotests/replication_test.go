@@ -17,7 +17,6 @@ limitations under the License.
 package topotests
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -37,8 +36,7 @@ func TestFixShardReplication(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "shard1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 

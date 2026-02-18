@@ -44,8 +44,10 @@ type (
 	}
 )
 
-var _ IR = (*Column)(nil)
-var _ Expr = (*Column)(nil)
+var (
+	_ IR   = (*Column)(nil)
+	_ Expr = (*Column)(nil)
+)
 
 func (c *Column) IR() IR {
 	return c

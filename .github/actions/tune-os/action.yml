@@ -1,0 +1,22 @@
+name: "Tune OS"
+description: "Tune the OS for better performance during CI runs"
+runs:
+  using: "composite"
+  steps:
+    - name: Tune the OS
+      shell: bash
+      run: |
+        # Install eatmydata and ensure it's used for every operation
+        sudo apt-get update && sudo apt-get install -y eatmydata
+        echo "/usr/\${LIB}/libeatmydata.so" | sudo tee -a /etc/ld.so.preload
+
+        # Increase the range of ephemeral ports.
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+
+        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
+        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p /etc/sysctl.conf
+
+        # Don't waste a bunch of time processing man-db triggers
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db

@@ -18,6 +18,8 @@ package prometheusbackend
 
 import (
 	"expvar"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,9 +35,7 @@ type PromBackend struct {
 	namespace string
 }
 
-var (
-	be PromBackend
-)
+var be PromBackend
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
@@ -87,11 +87,12 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newHistogramCollector(st, be.buildPromName(name))
 	case *stats.StringMapFuncWithMultiLabels:
 		newStringMapFuncWithMultiLabelsCollector(st, be.buildPromName(name))
-	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates, *stats.RatesFunc:
+	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates, *stats.RatesFunc, *stats.GaugesFunc:
 		// Silently ignore these types since they don't make sense to
 		// export to Prometheus' data model.
 	default:
-		log.Fatalf("prometheus: Metric type %T (seen for variable: %s) is not covered by type switch. Add it there and to all other plugins which register a NewVarHook.", st, name)
+		log.Error(fmt.Sprintf("prometheus: Metric type %T (seen for variable: %s) is not covered by type switch. Add it there and to all other plugins which register a NewVarHook.", st, name))
+		os.Exit(1)
 	}
 }
 

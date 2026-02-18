@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG DEBIAN_VER=stable-slim
+ARG DEBIAN_VER=stable-slim@sha256:ed542b2d269ff08139fc5ab8c762efe8c8986b564a423d5241a5ce9fb09b6c08
 
 FROM debian:${DEBIAN_VER}
 

@@ -29,9 +29,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	KeyRangePattern = regexp.MustCompile(`^(0|([0-9a-fA-F]{2})*-([0-9a-fA-F]{2})*)$`)
-)
+var KeyRangePattern = regexp.MustCompile(`^(0|([0-9a-fA-F]{2})*-([0-9a-fA-F]{2})*)$`)
 
 //
 // Uint64Key definitions
@@ -422,7 +420,7 @@ func GenerateShardRanges(shards int, hexWidth int) ([]string, error) {
 	}
 
 	boundaries := make([]int, 0, shards+1)
-	for i := 0; i < shards; i++ {
+	for i := range shards {
 		boundaries = append(boundaries, int(float64(i)*maxShards/float64(shards)))
 	}
 

@@ -25,6 +25,7 @@ source ./dev.env
 
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
+BUILD_PROTOC=${BUILD_PROTOC:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -41,44 +42,43 @@ VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RE
 # the $dist/.installed_version file. If the version has not changed, bootstrap
 # will skip future installations.
 install_dep() {
-  if [[ $# != 4 ]]; then
-    fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
-  fi
-  local name="$1"
-  local version="$2"
-  local dist="$3"
-  local install_func="$4"
+	if [[ $# != 4 ]]; then
+		fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
+	fi
+	local name="$1"
+	local version="$2"
+	local dist="$3"
+	local install_func="$4"
 
-  version_file="$dist/.installed_version"
-  if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
-    echo "skipping $name install. remove $dist to force re-install."
-    return
-  fi
+	version_file="$dist/.installed_version"
+	if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
+		echo "skipping $name install. remove $dist to force re-install."
+		return
+	fi
 
-  echo "<<< Installing $name $version >>>"
+	echo "<<< Installing $name $version >>>"
 
-  # shellcheck disable=SC2064
-  trap "fail '$name build failed'; exit 1" ERR
+	# shellcheck disable=SC2064
+	trap "fail '$name build failed'; exit 1" ERR
 
-  # Cleanup any existing data and re-create the directory.
-  rm -rf "$dist"
-  mkdir -p "$dist"
+	# Cleanup any existing data and re-create the directory.
+	rm -rf "$dist"
+	mkdir -p "$dist"
 
-  # Change $CWD to $dist before calling "install_func".
-  pushd "$dist" >/dev/null
-  # -E (same as "set -o errtrace") makes sure that "install_func" inherits the
-  # trap. If here's an error, the trap will be called which will exit this
-  # script.
-  set -E
-  $install_func "$version" "$dist"
-  set +E
-  popd >/dev/null
+	# Change $CWD to $dist before calling "install_func".
+	pushd "$dist" >/dev/null
+	# -E (same as "set -o errtrace") makes sure that "install_func" inherits the
+	# trap. If here's an error, the trap will be called which will exit this
+	# script.
+	set -E
+	$install_func "$version" "$dist"
+	set +E
+	popd >/dev/null
 
-  trap - ERR
+	trap - ERR
 
-  echo "$version" > "$version_file"
+	echo "$version" >"$version_file"
 }
-
 
 #
 # 1. Installation of dependencies.
@@ -88,164 +88,246 @@ install_dep() {
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
 get_arch() {
-  uname -m
+	uname -m
+}
+
+# verify_sha256 verifies the SHA256 checksum of a file.
+#
+# Usage: verify_sha256 <file> <expected_sha256>
+verify_sha256() {
+	local file="$1"
+	local expected="$2"
+
+	if command -v sha256sum &>/dev/null; then
+		echo "$expected  $file" | sha256sum -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
+	elif command -v shasum &>/dev/null; then
+		echo "$expected  $file" | shasum -a 256 -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
+	else
+		fail "Neither sha256sum nor shasum found. Cannot verify checksum."
+	fi
+	echo "OK: SHA256 checksum verified for $file"
+}
+
+# verify_sha512 verifies the SHA512 checksum of a file.
+#
+# Usage: verify_sha512 <file> <expected_sha512>
+verify_sha512() {
+	local file="$1"
+	local expected="$2"
+
+	if command -v sha512sum &>/dev/null; then
+		echo "$expected  $file" | sha512sum -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
+	elif command -v shasum &>/dev/null; then
+		echo "$expected  $file" | shasum -a 512 -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
+	else
+		fail "Neither sha512sum nor shasum found. Cannot verify checksum."
+	fi
+	echo "OK: SHA512 checksum verified for $file"
 }
 
 # Install protoc.
 install_protoc() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=osx;;
-    *) echo "ERROR: unsupported platform for protoc"; exit 1;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=osx ;;
+	*)
+		echo "ERROR: unsupported platform for protoc"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=aarch_64;;
-      x86_64)  local target=x86_64;;
-      arm64) case "$platform" in
-          osx) local target=aarch_64;;
-          *) echo "ERROR: unsupported architecture for protoc"; exit 1;;
-      esac;;
-      *)   echo "ERROR: unsupported architecture for protoc"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=aarch_64 ;;
+	x86_64) local target=x86_64 ;;
+	arm64) case "$platform" in
+		osx) local target=aarch_64 ;;
+		*)
+			echo "ERROR: unsupported architecture for protoc"
+			exit 1
+			;;
+		esac ;;
+	*)
+		echo "ERROR: unsupported architecture for protoc"
+		exit 1
+		;;
+	esac
 
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
-  unzip "protoc-$version-$platform-${target}.zip"
+	# SHA256 checksums for protoc v21.3 from official releases.
+	local sha256
+	case "${platform}-${target}" in
+	linux-x86_64) sha256="214b670884972d09a1ccf7b7b4c65a12bdd73d55ebea6b5207b5eb2333ae32ec" ;;
+	linux-aarch_64) sha256="e22ad6908e197ac326a02ddabc49046846b64d051f3bef16f5d3afd50ffdec18" ;;
+	osx-x86_64) sha256="b988e06fed5279865445978efd97ec92990ca24b0fe16c04aafe85d6cee71eeb" ;;
+	osx-aarch_64) sha256="3f1b2a59ba111e3227adf47e5513b3ea9133d9621dc5df70cd1ffed6dc756877" ;;
+	*)
+		echo "ERROR: no checksum for protoc $platform-$target"
+		exit 1
+		;;
+	esac
 
-  ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
+	local file="protoc-${version}-${platform}-${target}.zip"
+
+	# This is how we'd download directly from source:
+	"${VTROOT}/tools/wget-retry" -q "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
+	unzip "$file"
+
+	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
-
 
 # Install Zookeeper.
 install_zookeeper() {
-  local version="$1"
-  local dist="$2"
-  zk="zookeeper-$version"
-  # This is how we'd download directly from source:
-  # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
-  "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
-  tar -xzf "$dist/apache-$zk.tar.gz"
-  mvn -q -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
-  mkdir -p $dist/lib
-  cp "$dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/lib/$zk-fatjar.jar"
-  rm -rf "$dist/apache-$zk"
-}
+	local version="$1"
+	local dist="$2"
+	local zk="zookeeper-$version"
+	local file="apache-${zk}-bin.tar.gz"
 
+	# SHA512 checksum for Zookeeper 3.9.4 from Apache archives.
+	local sha512="36bffae6440ed0d71ed83a621b8c52c583860b414812197373237f0c148bd16e6b599977c90e5eb81c0fce6b82ef44aa782621535417cffc4c2a0a51a56f2cdf"
+
+	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+	verify_sha512 "$dist/$file" "$sha512"
+	tar -xzf "$dist/$file"
+	mkdir -p "$dist"/lib
+	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
+	rm -rf "$dist/apache-$zk-bin"
+}
 
 # Download and install etcd, link etcd binary into our root.
 install_etcd() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux; local ext=tar.gz;;
-    Darwin) local platform=darwin; local ext=zip;;
-    *)   echo "ERROR: unsupported platform for etcd"; exit 1;;
-  esac
+	case $(uname) in
+	Linux)
+		local platform=linux
+		local ext=tar.gz
+		;;
+	Darwin)
+		local platform=darwin
+		local ext=zip
+		;;
+	*)
+		echo "ERROR: unsupported platform for etcd"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      arm64)  local target=arm64;;
-      *)   echo "ERROR: unsupported architecture for etcd"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	arm64) local target=arm64 ;;
+	*)
+		echo "ERROR: unsupported architecture for etcd"
+		exit 1
+		;;
+	esac
 
-  file="etcd-${version}-${platform}-${target}.${ext}"
+	# SHA256 checksums for etcd v3.6.7 from official releases.
+	local sha256
+	case "${platform}-${target}" in
+	linux-amd64) sha256="cf8af880c5a01ee5363cefa14a3e0cb7e5308dcf4ed17a6973099c9a7aee5a9a" ;;
+	linux-arm64) sha256="ef5fc443cf7cc5b82738f3c28363704896551900af90a6d622cae740b5644270" ;;
+	darwin-amd64) sha256="a9fe546f109b99733d1c797ff2598946b7ad155899e8458215da458f1d822ad5" ;;
+	darwin-arm64) sha256="7a2d708e4f8aab9ba800676d2cfd4455367f5b67f9a012fad167f4b2b94524d7" ;;
+	*)
+		echo "ERROR: no checksum for etcd $platform-$target"
+		exit 1
+		;;
+	esac
 
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-  if [ "$ext" = "tar.gz" ]; then
-    tar xzf "$file"
-  else
-    unzip "$file"
-  fi
-  rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
+	local file="etcd-${version}-${platform}-${target}.${ext}"
+
+	# This is how we'd download directly from source:
+	"${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
+	if [ "$ext" = "tar.gz" ]; then
+		tar xzf "$file"
+	else
+		unzip "$file"
+	fi
+	rm "$file"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 
 # Download and install consul, link consul binary into our root.
 install_consul() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=darwin;;
-    *)   echo "ERROR: unsupported platform for consul"; exit 1;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=darwin ;;
+	*)
+		echo "ERROR: unsupported platform for consul"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-    aarch64)  local target=arm64;;
-    x86_64)  local target=amd64;;
-    arm64)  local target=arm64;;
-    *)   echo "ERROR: unsupported architecture for consul"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	arm64) local target=arm64 ;;
+	*)
+		echo "ERROR: unsupported architecture for consul"
+		exit 1
+		;;
+	esac
 
-  # This is how we'd download directly from source:
-  # download_url=https://releases.hashicorp.com/consul
-  # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
-  unzip "consul_${version}_${platform}_${target}.zip"
-  ln -snf "$dist/consul" "$VTROOT/bin/consul"
-}
+	# SHA256 checksums for consul 1.11.4 from Vitess resources mirror.
+	# Note: darwin checksums differ from official HashiCorp releases.
+	local sha256
+	case "${platform}_${target}" in
+	linux_amd64) sha256="5155f6a3b7ff14d3671b0516f6b7310530b509a2b882b95b4fdf25f4219342c8" ;;
+	linux_arm64) sha256="97dbf36500dcefbe463f070471602992d148cb2fe91db7e37319e1b9c809f1f0" ;;
+	darwin_amd64) sha256="f00f81897ec0c608019a37dec243837ce0fd471b67401ea05be9a8b105d247ce" ;;
+	darwin_arm64) sha256="22a87e88c9fd36f773ebd62b18f41dad5512e753769f5a385a7842a0b9364e0a" ;;
+	*)
+		echo "ERROR: no checksum for consul ${platform}_${target}"
+		exit 1
+		;;
+	esac
 
+	local file="consul_${version}_${platform}_${target}.zip"
 
-# Download and install toxiproxy, link toxiproxy binary into our root.
-install_toxiproxy() {
-  local version="$1"
-  local dist="$2"
-
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=darwin;;
-    *)   echo "WARNING: unsupported platform. Some tests that rely on toxiproxy will not function."; return;;
-  esac
-
-  case $(get_arch) in
-    aarch64)  local target=arm64;;
-    x86_64)  local target=amd64;;
-    arm64)  local target=arm64;;
-    *)   echo "WARNING: unsupported architecture. Some tests that rely on toxiproxy will not function."; return;;
-  esac
-
-  # This is how we'd download directly from source:
-  file="toxiproxy-server-${platform}-${target}"
-  "${VTROOT}/tools/wget-retry" -q "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
-  chmod +x "$dist/$file"
-  ln -snf "$dist/$file" "$VTROOT/bin/toxiproxy-server"
+	# This is how we'd download directly from source:
+	# download_url=https://releases.hashicorp.com/consul
+	# wget "${download_url}/${version}/${file}"
+	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
+	unzip "$file"
+	ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
 install_all() {
-  echo "##local system details..."
-  echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
-  # protoc
-  install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
+	echo "##local system details..."
+	echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
+	# protoc
+	if [ "$BUILD_PROTOC" == 1 ]; then
+		install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
+	fi
 
-  # zk
-  if [ "$BUILD_JAVA" == 1 ] ; then
-    install_dep "Zookeeper" "$ZK_VER" "$VTROOT/dist/vt-zookeeper-$ZK_VER" install_zookeeper
-  fi
+	# zk
+	if [ "$BUILD_JAVA" == 1 ]; then
+		install_dep "Zookeeper" "$ZK_VER" "$VTROOT/dist/vt-zookeeper-$ZK_VER" install_zookeeper
+	fi
 
-  # etcd
-  install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
+	# etcd
+	install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
 
-  # consul
-  if [ "$BUILD_CONSUL" == 1 ] ; then
-    install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
-  fi
+	# consul
+	if [ "$BUILD_CONSUL" == 1 ]; then
+		install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
+	fi
 
-  # toxiproxy
-  install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
-
-  echo
-  echo "bootstrap finished - run 'make build' to compile"
+	echo
+	echo "bootstrap finished - run 'make build' to compile"
 }
 
 install_all

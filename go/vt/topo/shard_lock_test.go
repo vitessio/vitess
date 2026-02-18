@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,8 +27,7 @@ import (
 
 // TestTopoShardLock tests shard lock operations.
 func TestTopoShardLock(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

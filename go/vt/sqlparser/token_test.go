@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -92,7 +92,7 @@ func tokenName(id int) string {
 	case LEX_ERROR:
 		return "LEX_ERROR"
 	}
-	return fmt.Sprintf("%d", id)
+	return strconv.Itoa(id)
 }
 
 func TestString(t *testing.T) {

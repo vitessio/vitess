@@ -19,6 +19,7 @@ package binlog
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -45,11 +46,11 @@ var (
 
 	// ErrClientEOF is returned by Streamer if the stream ended because the
 	// consumer of the stream indicated it doesn't want any more events.
-	ErrClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
+	ErrClientEOF = errors.New("binlog stream consumer ended the reply stream")
 	// ErrServerEOF is returned by Streamer if the stream ended because the
 	// connection to the mysqld server was lost, or the stream was terminated by
 	// mysqld.
-	ErrServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
+	ErrServerEOF = errors.New("binlog stream connection was closed by mysqld")
 
 	// statementPrefixes are normal sql statement prefixes.
 	statementPrefixes = map[string]binlogdatapb.BinlogTransaction_Statement_Category{
@@ -180,9 +181,9 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil && err != ErrBinlogUnavailable {
-			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+			err = fmt.Errorf("stream error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		}
-		log.Infof("stream ended @ %v, err = %v", stopPos, err)
+		log.Info(fmt.Sprintf("stream ended @ %v, err = %v", stopPos, err))
 	}()
 
 	if bls.conn, err = NewBinlogConnection(bls.cp); err != nil {
@@ -202,7 +203,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}
-		log.Infof("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs)
+		log.Info(fmt.Sprintf("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs))
 		if !proto.Equal(cs, bls.clientCharset) {
 			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", bls.clientCharset, cs)
 		}
@@ -263,7 +264,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	begin := func() {
 		if statements != nil {
 			// If this happened, it would be a legitimate error.
-			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
+			log.Error(fmt.Sprintf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements))
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
 		statements = make([]FullBinlogStatement, 0, 10)
@@ -298,13 +299,13 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case ev, ok = <-events:
 			if !ok {
 				// events channel has been closed, which means the connection died.
-				log.Infof("reached end of binlog event stream")
+				log.Info("reached end of binlog event stream")
 				return pos, ErrServerEOF
 			}
 		case err = <-errs:
 			return pos, err
 		case <-ctx.Done():
-			log.Infof("stopping early due to binlog Streamer service shutdown or client disconnect")
+			log.Info("stopping early due to binlog Streamer service shutdown or client disconnect")
 			return pos, ctx.Err()
 		}
 
@@ -380,7 +381,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			statements = append(statements, FullBinlogStatement{
 				Statement: &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET %s=%d", mysql.IntVarNames[typ], value)),
+					Sql:      fmt.Appendf(nil, "SET %s=%d", mysql.IntVarNames[typ], value),
 				},
 			})
 		case ev.IsRand(): // RAND_EVENT
@@ -391,7 +392,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			statements = append(statements, FullBinlogStatement{
 				Statement: &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+					Sql:      fmt.Appendf(nil, "SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2),
 				},
 			})
 		case ev.IsQuery(): // QUERY_EVENT
@@ -421,7 +422,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 				setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+					Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 				}
 				statement := &binlogdatapb.BinlogTransaction_Statement{
 					Category: cat,
@@ -525,7 +526,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,
@@ -555,7 +556,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,
@@ -585,7 +586,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,
@@ -614,7 +615,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			log.Warn(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -624,7 +625,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 
@@ -650,14 +651,14 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			log.Warn(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
 		sql.WriteString(" WHERE ")
 
 		if _, _, err := writeIdentifiersAsSQL(sql, tce, rows, i, false); err != nil {
-			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			log.Warn(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -667,7 +668,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 
@@ -693,7 +694,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			log.Warn(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -703,7 +704,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 

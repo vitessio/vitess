@@ -21,9 +21,11 @@ import (
 	"unsafe"
 )
 
-const MaxCodepoint = 0x10FFFF + 1
-const CodepointsPerPage = 256
-const MaxCollationElementsPerCodepoint = 8
+const (
+	MaxCodepoint                     = 0x10FFFF + 1
+	CodepointsPerPage                = 256
+	MaxCollationElementsPerCodepoint = 8
+)
 
 func PageOffset(cp rune) (int, int) {
 	return int(cp) >> 8, int(cp) & 0xFF
@@ -152,7 +154,7 @@ func (Layout_uca900) allocPage(original *[]uint16, patches []Patch) []uint16 {
 }
 
 func (Layout_uca900) applyPatches(page []uint16, offset int, weights []uint16) {
-	var weightcount = len(weights) / 3
+	weightcount := len(weights) / 3
 	var ce int
 	for ce < weightcount {
 		page[(ce*3+1)*CodepointsPerPage+offset] = weights[ce*3+0]
@@ -290,8 +292,10 @@ type tableWithPatch struct {
 	patchptr unsafe.Pointer
 }
 
-var cachedTables = make(map[tableWithPatch]Weights)
-var cachedTablesMu sync.Mutex
+var (
+	cachedTables   = make(map[tableWithPatch]Weights)
+	cachedTablesMu sync.Mutex
+)
 
 func lookupCachedTable(table Weights, patch []Patch) (Weights, bool) {
 	data1 := unsafe.Pointer(unsafe.SliceData(table))

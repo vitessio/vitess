@@ -35,6 +35,7 @@ func (cached *Permission) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	return size
 }
+
 func (cached *Plan) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

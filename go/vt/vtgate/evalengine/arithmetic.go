@@ -574,7 +574,6 @@ func mathIntDiv_iu0(v1 int64, v2 uint64) (uint64, error) {
 			return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
 		}
 		return uint64(result), nil
-
 	}
 	return uint64(v1) / v2, nil
 }
@@ -708,10 +707,7 @@ func mathMod_dd(v1, v2 *evalDecimal) (eval, error) {
 }
 
 func mathMod_dd0(v1, v2 *evalDecimal) (decimal.Decimal, int32) {
-	length := v1.length
-	if v2.length > length {
-		length = v2.length
-	}
+	length := max(v2.length, v1.length)
 	_, rem := v1.dec.QuoRem(v2.dec, 0)
 	return rem, length
 }

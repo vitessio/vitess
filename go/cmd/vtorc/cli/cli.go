@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -31,11 +32,10 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
-var (
-	Main = &cobra.Command{
-		Use:   "vtorc",
-		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
-		Example: `vtorc \
+var Main = &cobra.Command{
+	Use:   "vtorc",
+	Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
+	Example: `vtorc \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
@@ -44,30 +44,32 @@ var (
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr`,
-		Args:    cobra.NoArgs,
-		Version: servenv.AppVersion.String(),
-		PreRunE: servenv.CobraPreRunE,
-		Run:     run,
-	}
-)
+	Args:    cobra.NoArgs,
+	Version: servenv.AppVersion.String(),
+	PreRunE: servenv.CobraPreRunE,
+	Run:     run,
+}
 
 func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	inst.RegisterStats()
 
-	log.Info("starting vtorc")
+	log.Info("Starting vtorc")
 	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
 	}
 	config.MarkConfigurationLoaded()
 	if err := config.Validate(); err != nil {
-		log.Errorf("Failed to validate config: %+v", err)
+		log.Error(fmt.Sprintf("Failed to validate config: %+v", err))
 		os.Exit(1)
 	}
 
 	// Log final config values to debug if something goes wrong.
-	log.Infof("Running with Configuration - %v", debug.AllSettings())
-	server.StartVTOrcDiscovery()
+	log.Info(fmt.Sprintf("Running with Configuration - %v", debug.AllSettings()))
+	if err := server.StartVTOrcDiscovery(); err != nil {
+		log.Error(fmt.Sprintf("Failed to start vtorc: %+v", err))
+		os.Exit(1)
+	}
 
 	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {

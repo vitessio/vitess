@@ -21,6 +21,7 @@ package vtctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -168,7 +169,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 
 	output, err := wr.VDiff2(ctx, keyspace, workflowName, action, actionArg, vdiffUUID.String(), options)
 	if err != nil {
-		log.Errorf("vdiff2 returning with error: %v", err)
+		log.Error(fmt.Sprintf("vdiff2 returning with error: %v", err))
 		return err
 	}
 
@@ -201,7 +202,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	case vdiff.ShowAction:
 		if output == nil {
 			// should not happen
-			return fmt.Errorf("invalid (empty) response from show command")
+			return errors.New("invalid (empty) response from show command")
 		}
 		if err := displayVDiff2ShowResponse(wr, format, keyspace, workflowName, actionArg, output, *verbose); err != nil {
 			return err
@@ -219,7 +220,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	return nil
 }
 
-//region ****show response
+// region ****show response
 
 // summary aggregates/selects the current state of the vdiff from all shards
 
@@ -436,6 +437,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 	wr.Logger().Printf(str + "\n")
 	return state, nil
 }
+
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput, verbose bool) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
 		Workflow:     workflow,
@@ -525,7 +527,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 							TableName: table,
 							State:     vdiff.UnknownState,
 						}
-
 					}
 					ts := tableSummaryMap[table]
 					// This is the shard level VDiff table state
@@ -619,8 +620,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	return summary, nil
 }
 
-//endregion
-
+// endregion
 func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format, uuid string, typ vdiff.VDiffAction) {
 	if format == "json" {
 		type ScheduledResponse struct {

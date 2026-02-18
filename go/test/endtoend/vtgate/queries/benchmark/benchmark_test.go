@@ -71,7 +71,7 @@ func generateInserts(userSize int, userExtraSize int) (string, string) {
 
 func (tq *testQuery) getInsertQuery(rows int) string {
 	var allRows []string
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		var row []string
 		for _, isInt := range tq.intTyp {
 			if isInt {
@@ -115,7 +115,7 @@ func (tq *testQuery) getDeleteQuery(rows int) string {
 func getRandomString(size int) string {
 	var str strings.Builder
 
-	for i := 0; i < size; i++ {
+	for range size {
 		str.WriteByte(byte(rand.IntN(27) + 97))
 	}
 	return str.String()
@@ -228,7 +228,7 @@ func BenchmarkMirror(b *testing.B) {
 	mirrorInitOnce.Do(func() {
 		b.Logf("seeding database for benchmark...")
 
-		for i := 0; i < numRows; i++ {
+		for i := range numRows {
 			_, err := conn.ExecuteFetch(
 				fmt.Sprintf("INSERT INTO %s.mirror_tbl1(id) VALUES(%d)", sKs1, i), -1, false)
 			require.NoError(b, err)

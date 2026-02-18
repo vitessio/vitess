@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -31,8 +30,7 @@ import (
 
 // TestTopoKeyspaceLock tests keyspace lock operations.
 func TestTopoKeyspaceLock(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -87,8 +85,7 @@ func TestTopoKeyspaceLock(t *testing.T) {
 
 // TestTopoKeyspaceLockWithTTL tests keyspace lock with a custom TTL.
 func TestTopoKeyspaceLockWithTTL(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, tsf := memorytopo.NewServerAndFactory(ctx, "zone1")
 	defer ts.Close()
 

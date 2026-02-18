@@ -23,6 +23,7 @@ import (
 	"math/rand/v2"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -253,6 +254,21 @@ func TestCanGetKeyspaces(t *testing.T) {
 	assertGetKeyspaces(ctx, t, clusterInstance)
 }
 
+func TestGatewayInitialTabletTimeout(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	// Start cluster with custom gateway tablet timeout and verify it starts successfully
+	cluster, err := startCluster("--gateway-initial-tablet-timeout=1s")
+	require.NoError(t, err)
+	defer cluster.TearDown()
+
+	// Verify the cluster is functional by getting keyspaces
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	assertGetKeyspaces(ctx, t, cluster)
+}
+
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
@@ -262,16 +278,16 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 	}()
 
 	cluster, err := startCluster("--external-topo-implementation=consul",
-		fmt.Sprintf("--external-topo-global-server-address=%s", serverAddr), "--external-topo-global-root=consul_test/global")
+		"--external-topo-global-server-address="+serverAddr, "--external-topo-global-root=consul_test/global")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -351,7 +367,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-key", clientKey),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-cert", clientCert),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-ca", caCert),
-		fmt.Sprintf("--grpc-auth-mtls-allowed-substrings=%s", "CN=ClientApp"))
+		"--grpc-auth-mtls-allowed-substrings="+"CN=ClientApp")
 	defer cluster.TearDown()
 
 	require.Error(t, err)
@@ -363,7 +379,7 @@ func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, e
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
 		fmt.Sprintf("--port=%d", randomPort()),
-		fmt.Sprintf("--data-dir=%s", dir),
+		"--data-dir=" + dir,
 	}...)
 	return startCluster(flags...)
 }
@@ -376,12 +392,11 @@ var clusterKeyspaces = []string{
 func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	args := []string{"vttestserver"}
 	schemaDirArg := "--schema-dir=data/schema"
-	tabletHostname := fmt.Sprintf("%s=localhost", "--tablet-hostname")
+	tabletHostname := "--tablet-hostname" + "=localhost"
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num-shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema-ddl-authorized-users=%"
-	alsoLogToStderr := "--alsologtostderr" // better debugging
-	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
+	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	args = append(args, flags...)
 
 	if err = New().ParseFlags(args); err != nil {
@@ -498,7 +513,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 	cmd := exec.Command("consul",
 		"agent",
 		"-dev",
-		"-http-port", fmt.Sprintf("%d", port))
+		"-http-port", strconv.Itoa(port))
 	err := cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start consul: %v", err)

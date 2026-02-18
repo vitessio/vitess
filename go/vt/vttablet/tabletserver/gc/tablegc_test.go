@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/stretchr/testify/assert"
@@ -38,39 +40,6 @@ func TestNextTableToPurge(t *testing.T) {
 			name:   "empty",
 			tables: []string{},
 			ok:     false,
-		},
-		{
-			name: "first",
-			tables: []string{
-				"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-				"_vt_PURGE_2ace8bcef73211ea87e9f875a4d24e90_20200915120411",
-				"_vt_PURGE_3ace8bcef73211ea87e9f875a4d24e90_20200915120412",
-				"_vt_PURGE_4ace8bcef73211ea87e9f875a4d24e90_20200915120413",
-			},
-			next: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			ok:   true,
-		},
-		{
-			name: "mid",
-			tables: []string{
-				"_vt_PURGE_2ace8bcef73211ea87e9f875a4d24e90_20200915120411",
-				"_vt_PURGE_3ace8bcef73211ea87e9f875a4d24e90_20200915120412",
-				"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-				"_vt_PURGE_4ace8bcef73211ea87e9f875a4d24e90_20200915120413",
-			},
-			next: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			ok:   true,
-		},
-		{
-			name: "none",
-			tables: []string{
-				"_vt_HOLD_2ace8bcef73211ea87e9f875a4d24e90_20200915120411",
-				"_vt_EVAC_3ace8bcef73211ea87e9f875a4d24e90_20200915120412",
-				"_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-				"_vt_DROP_4ace8bcef73211ea87e9f875a4d24e90_20200915120413",
-			},
-			next: "",
-			ok:   false,
 		},
 		{
 			name: "first, new format",
@@ -222,13 +191,6 @@ func TestShouldTransitionTable(t *testing.T) {
 	}{
 		{
 			name:             "purge, old timestamp",
-			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			state:            schema.PurgeTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: true,
-		},
-		{
-			name:             "purge, old timestamp, new format",
 			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 			state:            schema.PurgeTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -236,13 +198,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "no purge, future timestamp",
-			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.PurgeTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: false,
-		},
-		{
-			name:             "no purge, future timestamp, new format",
 			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.PurgeTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -250,14 +205,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "no purge, PURGE not handled state",
-			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.PurgeTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			handledStates:    "hold,evac", // no PURGE
-			shouldTransition: true,
-		},
-		{
-			name:             "no purge, PURGE not handled state, new format",
 			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.PurgeTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -266,13 +213,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "no drop, future timestamp",
-			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.DropTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: false,
-		},
-		{
-			name:             "no drop, future timestamp, new format",
 			table:            "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.DropTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -280,13 +220,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "drop, old timestamp",
-			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20090915120410",
-			state:            schema.DropTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: true,
-		},
-		{
-			name:             "drop, old timestamp, new format",
 			table:            "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20090915120410_",
 			state:            schema.DropTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -294,13 +227,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "no evac, future timestamp",
-			table:            "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.EvacTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: false,
-		},
-		{
-			name:             "no evac, future timestamp, new format",
 			table:            "_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.EvacTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -308,13 +234,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "no hold, HOLD not handled state",
-			table:            "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.HoldTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			shouldTransition: true,
-		},
-		{
-			name:             "no hold, HOLD not handled state, new format",
 			table:            "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.HoldTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -322,14 +241,6 @@ func TestShouldTransitionTable(t *testing.T) {
 		},
 		{
 			name:             "hold, future timestamp",
-			table:            "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
-			state:            schema.HoldTableGCState,
-			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
-			handledStates:    "hold,purge,evac,drop",
-			shouldTransition: false,
-		},
-		{
-			name:             "hold, future timestamp, new format",
 			table:            "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
 			state:            schema.HoldTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
@@ -395,7 +306,7 @@ func TestCheckTables(t *testing.T) {
 			isBaseTable: true,
 		},
 		{
-			tableName:   "_vt_HOLD_11111111111111111111111111111111_20990920093324", // 2099 is in the far future
+			tableName:   "_vt_hld_11111111111111111111111111111111_20990920093324_", // 2099 is in the far future
 			isBaseTable: true,
 		},
 		{
@@ -403,7 +314,7 @@ func TestCheckTables(t *testing.T) {
 			isBaseTable: true,
 		},
 		{
-			tableName:   "_vt_HOLD_22222222222222222222222222222222_20200920093324",
+			tableName:   "_vt_hld_22222222222222222222222222222222_20200920093324_",
 			isBaseTable: true,
 		},
 		{
@@ -411,7 +322,7 @@ func TestCheckTables(t *testing.T) {
 			isBaseTable: true,
 		},
 		{
-			tableName:   "_vt_DROP_33333333333333333333333333333333_20200919083451",
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
 			isBaseTable: true,
 		},
 		{
@@ -419,7 +330,7 @@ func TestCheckTables(t *testing.T) {
 			isBaseTable: true,
 		},
 		{
-			tableName:   "_vt_DROP_44444444444444444444444444444444_20200919083451",
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
 			isBaseTable: false,
 		},
 		{
@@ -439,7 +350,7 @@ func TestCheckTables(t *testing.T) {
 
 	expectDropTables := []*gcTable{
 		{
-			tableName:   "_vt_DROP_33333333333333333333333333333333_20200919083451",
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
 			isBaseTable: true,
 		},
 		{
@@ -447,7 +358,7 @@ func TestCheckTables(t *testing.T) {
 			isBaseTable: true,
 		},
 		{
-			tableName:   "_vt_DROP_44444444444444444444444444444444_20200919083451",
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
 			isBaseTable: false,
 		},
 		{
@@ -457,7 +368,7 @@ func TestCheckTables(t *testing.T) {
 	}
 	expectTransitionRequests := []*transitionRequest{
 		{
-			fromTableName: "_vt_HOLD_22222222222222222222222222222222_20200920093324",
+			fromTableName: "_vt_hld_22222222222222222222222222222222_20200920093324_",
 			isBaseTable:   true,
 			toGCState:     schema.PurgeTableGCState,
 			uuid:          "22222222222222222222222222222222",
@@ -482,7 +393,6 @@ func TestCheckTables(t *testing.T) {
 	var foundDropTables []*gcTable
 	var foundTransitionRequests []*transitionRequest
 	for responses != expectResponses {
-
 		select {
 		case <-ctx.Done():
 			assert.FailNow(t, "timeout")
@@ -497,4 +407,69 @@ func TestCheckTables(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectDropTables, foundDropTables)
 	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
+}
+
+type fakeGCConn struct {
+	query  string
+	result *sqltypes.Result
+	err    error
+}
+
+func (c *fakeGCConn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	c.query = query
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.result != nil {
+		return c.result, nil
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (c *fakeGCConn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return true, nil
+}
+
+func (c *fakeGCConn) Close() {}
+
+func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
+	type testCase struct {
+		name            string
+		ahiSetting      string
+		expectPurgeEvac bool
+	}
+	testCases := []testCase{
+		{
+			name:            "AHI OFF",
+			ahiSetting:      "OFF",
+			expectPurgeEvac: false,
+		},
+		{
+			name:            "AHI ON",
+			ahiSetting:      "ON",
+			expectPurgeEvac: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &TableGC{}
+			collector.lifecycleStates = map[schema.TableGCState]bool{
+				schema.HoldTableGCState:  true,
+				schema.PurgeTableGCState: true,
+				schema.EvacTableGCState:  true,
+				schema.DropTableGCState:  true,
+			}
+			conn := &fakeGCConn{
+				result: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("variable_value", "varchar"),
+					tc.ahiSetting,
+				),
+			}
+			states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
+			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+			require.True(t, states[schema.DropTableGCState])
+		})
+	}
 }

@@ -183,7 +183,7 @@ func TestPascalCase(t *testing.T) {
 func TestValueIsSimulatedNull(t *testing.T) {
 	tt := []struct {
 		name   string
-		val    interface{}
+		val    any
 		isNull bool
 	}{
 		{

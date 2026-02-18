@@ -18,7 +18,7 @@ package reparentutil
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -894,7 +894,8 @@ func TestElectNewPrimary(t *testing.T) {
 				Uid:  101,
 			},
 			errContains: nil,
-		}, {
+		},
+		{
 			name: "avoid primary alias and shard primary are nil",
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -1693,7 +1694,7 @@ func TestWaitForCatchUp(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Position: "abc",
-						Error:    fmt.Errorf("found error in primary position"),
+						Error:    errors.New("found error in primary position"),
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1729,7 +1730,7 @@ func TestWaitForCatchUp(t *testing.T) {
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000101": {
-						"abc": fmt.Errorf("found error in waiting for position"),
+						"abc": errors.New("found error in waiting for position"),
 					},
 				},
 			},

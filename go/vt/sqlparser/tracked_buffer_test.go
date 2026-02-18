@@ -202,11 +202,11 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' RLIKE '.*' from dual",
-			"SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM `dual`",
+			"SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM dual",
 		},
 		{
 			"select not regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), not regexp_like('dog cat dog', 'dog'), not regexp_substr('abc def ghi', '[a-z]+', 1), not regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' not rlike '.*' from dual",
-			"SELECT NOT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), NOT REGEXP_LIKE('dog cat dog', 'dog'), NOT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), NOT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' NOT REGEXP '.*' FROM `dual`",
+			"SELECT NOT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), NOT REGEXP_LIKE('dog cat dog', 'dog'), NOT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), NOT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' NOT REGEXP '.*' FROM dual",
 		},
 		{
 			"revert /* vt+ foo */ vitess_migration '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
@@ -230,7 +230,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
-			"SELECT CHAR(77, 121, 83, 81, '76' USING utf8mb4) FROM `dual`",
+			"SELECT CHAR(77, 121, 83, 81, '76' USING utf8mb4) FROM dual",
 		},
 		{
 			"create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
@@ -238,11 +238,11 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"select convert('abc' using utf8mb4)",
-			"SELECT CONVERT('abc' USING utf8mb4) FROM `dual`",
+			"SELECT CONVERT('abc' USING utf8mb4) FROM dual",
 		},
 		{
 			"select point(4, 5)",
-			"SELECT POINT(4, 5) FROM `dual`",
+			"SELECT POINT(4, 5) FROM dual",
 		},
 		{
 			"create table x(location geometry default (point(7.0, 3.0)))",

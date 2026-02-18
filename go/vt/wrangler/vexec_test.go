@@ -17,8 +17,8 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -50,14 +50,13 @@ var (
 )
 
 func TestVExec(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, time.Now().Unix())
 	defer env.close()
-	var logger = logutil.NewMemoryLogger()
+	logger := logutil.NewMemoryLogger()
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
@@ -158,7 +157,6 @@ func TestVExec(t *testing.T) {
 				}
 			} else {
 				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
-
 			}
 		})
 	}
@@ -169,17 +167,17 @@ func TestVExec(t *testing.T) {
 	dryRunResults := []string{
 		"Query: delete from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
 		"will be run on the following streams in keyspace target for workflow wrWorkflow:\n\n",
-		`+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
-|                      |    | rules:{match:"t2"}}            |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
-|                      |    | rules:{match:"t2"}}            |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+`,
+		`+----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+|        TABLET        | ID |        BINLOGSOURCE         |  STATE  |  DBNAME   |               CURRENT GTID               |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+| -80/zone1-0000000200 | 1  | keyspace:"source" shard:"0" | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}  |         |           |                                          |
+|                      |    | rules:{match:"t2"}}         |         |           |                                          |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+| 80-/zone1-0000000210 | 1  | keyspace:"source" shard:"0" | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}  |         |           |                                          |
+|                      |    | rules:{match:"t2"}}         |         |           |                                          |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+`,
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
 	logger.Clear()
@@ -194,8 +192,7 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 }
 
 func TestWorkflowListStreams(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
@@ -212,7 +209,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	var testCases = []struct {
+	testCases := []struct {
 		shards []string
 		want   string
 	}{
@@ -264,17 +261,17 @@ func TestWorkflowListStreams(t *testing.T) {
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
-|                      |    | rules:{match:"t2"}}            |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
-|                      |    | rules:{match:"t2"}}            |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+|        TABLET        | ID |        BINLOGSOURCE         |  STATE  |  DBNAME   |               CURRENT GTID               |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+| -80/zone1-0000000200 | 1  | keyspace:"source" shard:"0" | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}  |         |           |                                          |
+|                      |    | rules:{match:"t2"}}         |         |           |                                          |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
+| 80-/zone1-0000000210 | 1  | keyspace:"source" shard:"0" | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}  |         |           |                                          |
+|                      |    | rules:{match:"t2"}}         |         |           |                                          |
++----------------------+----+-----------------------------+---------+-----------+------------------------------------------+
 
 
 
@@ -284,8 +281,7 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 }
 
 func TestWorkflowListAll(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	keyspace := "target"
 	workflow := "wrWorkflow"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
@@ -304,8 +300,7 @@ func TestWorkflowListAll(t *testing.T) {
 }
 
 func TestVExecValidations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
@@ -372,8 +367,9 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:          "other",
 			want:          "",
-			expectedError: fmt.Errorf("invalid action found: other"),
-		}}
+			expectedError: errors.New("invalid action found: other"),
+		},
+	}
 
 	for _, a := range actions {
 		t.Run(a.name, func(t *testing.T) {
@@ -391,8 +387,7 @@ func TestVExecValidations(t *testing.T) {
 // tabletmanager and the behavior is tested
 // there.
 func TestWorkflowUpdate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)

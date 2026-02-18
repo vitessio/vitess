@@ -56,8 +56,7 @@ func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) 
 func TestWatchShardNoNode(t *testing.T) {
 	keyspace := "ks1"
 	shard := "0"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 

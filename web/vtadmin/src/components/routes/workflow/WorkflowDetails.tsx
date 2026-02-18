@@ -46,7 +46,7 @@ interface Props {
     refetchInterval: number;
 }
 
-const SUMMARY_COLUMNS = ['Stream Status', 'Traffic Status', 'Max VReplication Lag', 'Reverse Workflow'];
+const SUMMARY_COLUMNS = ['Stream Status', 'Traffic Status', 'Max VReplication Transaction Lag', 'Reverse Workflow'];
 
 const LOG_COLUMNS = ['Type', 'State', 'Updated At', 'Message', 'Count'];
 
@@ -124,20 +124,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
     const renderSummaryRows = (rows: (typeof workflowSummary)[]) => {
         return rows.map((row) => {
             const reverseWorkflow = row.reverseWorkflow;
-            let maxVReplicationLag = '-';
-            if (row.workflowData && row.workflowData.workflow?.max_v_replication_lag) {
-                maxVReplicationLag = `${row.workflowData.workflow?.max_v_replication_lag}`;
-                if (maxVReplicationLag === '1') {
-                    maxVReplicationLag += ' second';
+            let maxVReplicationTransactionLag = '-';
+            if (row.workflowData && row.workflowData.workflow?.max_v_replication_transaction_lag) {
+                maxVReplicationTransactionLag = `${row.workflowData.workflow?.max_v_replication_transaction_lag}`;
+                if (maxVReplicationTransactionLag === '1') {
+                    maxVReplicationTransactionLag += ' second';
                 } else {
-                    maxVReplicationLag += ' seconds';
+                    maxVReplicationTransactionLag += ' seconds';
                 }
             }
             return (
                 <tr key={reverseWorkflow?.workflow?.name}>
                     <DataCell>{row.streamSummary ? row.streamSummary : '-'}</DataCell>
                     <DataCell>{row.workflowStatus ? row.workflowStatus.traffic_state : '-'}</DataCell>
-                    <DataCell>{maxVReplicationLag}</DataCell>
+                    <DataCell>{maxVReplicationTransactionLag}</DataCell>
                     <DataCell>
                         {reverseWorkflow ? (
                             <Link

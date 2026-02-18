@@ -18,7 +18,7 @@ package topo
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -50,8 +50,7 @@ type fakeConn struct {
 // ListDir is part of the Conn interface
 func (st *fakeConn) ListDir(ctx context.Context, dirPath string, full bool) (res []DirEntry, err error) {
 	if dirPath == "error" {
-		return res, fmt.Errorf("Dummy error")
-
+		return res, errors.New("Dummy error")
 	}
 	return res, err
 }
@@ -62,8 +61,7 @@ func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if filePath == "error" {
-		return ver, fmt.Errorf("Dummy error")
-
+		return ver, errors.New("Dummy error")
 	}
 	return ver, err
 }
@@ -74,8 +72,7 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if filePath == "error" {
-		return ver, fmt.Errorf("Dummy error")
-
+		return ver, errors.New("Dummy error")
 	}
 	return ver, err
 }
@@ -83,8 +80,7 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 // Get is part of the Conn interface
 func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver Version, err error) {
 	if filePath == "error" {
-		return bytes, ver, fmt.Errorf("Dummy error")
-
+		return bytes, ver, errors.New("Dummy error")
 	}
 	return bytes, ver, err
 }
@@ -92,8 +88,7 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 // GetVersion is part of the Conn interface
 func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version int64) (bytes []byte, err error) {
 	if filePath == "error" {
-		return bytes, fmt.Errorf("Dummy error")
-
+		return bytes, errors.New("Dummy error")
 	}
 	return bytes, err
 }
@@ -101,7 +96,7 @@ func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version int
 // List is part of the Conn interface
 func (st *fakeConn) List(ctx context.Context, filePathPrefix string) (bytes []KVInfo, err error) {
 	if filePathPrefix == "error" {
-		return bytes, fmt.Errorf("Dummy error")
+		return bytes, errors.New("Dummy error")
 	}
 	return bytes, err
 }
@@ -112,7 +107,7 @@ func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version
 		return vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if filePath == "error" {
-		return fmt.Errorf("dummy error")
+		return errors.New("dummy error")
 	}
 	return err
 }
@@ -123,7 +118,7 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if dirPath == "error" {
-		return lock, fmt.Errorf("dummy error")
+		return lock, errors.New("dummy error")
 	}
 	return lock, err
 }
@@ -134,7 +129,7 @@ func (st *fakeConn) LockWithTTL(ctx context.Context, dirPath, contents string, _
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if dirPath == "error" {
-		return lock, fmt.Errorf("dummy error")
+		return lock, errors.New("dummy error")
 	}
 	return lock, err
 }
@@ -145,7 +140,7 @@ func (st *fakeConn) LockName(ctx context.Context, dirPath, contents string) (loc
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if dirPath == "error" {
-		return lock, fmt.Errorf("dummy error")
+		return lock, errors.New("dummy error")
 	}
 	return lock, err
 }
@@ -157,7 +152,7 @@ func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
 	}
 	if dirPath == "error" {
-		return lock, fmt.Errorf("dummy error")
+		return lock, errors.New("dummy error")
 	}
 	return lock, err
 }
@@ -175,7 +170,7 @@ func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []
 // NewLeaderParticipation is part of the Conn interface
 func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
-		return mp, fmt.Errorf("dummy error")
+		return mp, errors.New("dummy error")
 	}
 	return mp, err
 }

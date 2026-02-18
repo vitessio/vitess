@@ -50,7 +50,7 @@ func init() {
 
 	buf := &bytes.Buffer{}
 	buf.WriteString("select a from t1 where v = 1")
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fmt.Fprintf(buf, " and v%d = '%d%s'", i, i, baseval.String())
 	}
 	benchQuery = buf.String()
@@ -60,7 +60,7 @@ func init() {
 func BenchmarkWithNormalizer(b *testing.B) {
 	vtgateInst, _, ctx := createVtgateEnv(b)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, err := vtgateInst.Execute(
 			ctx,
 			nil,
@@ -83,7 +83,7 @@ func BenchmarkWithoutNormalizer(b *testing.B) {
 
 	vtgateInst.executor.config.Normalize = false
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, err := vtgateInst.Execute(
 			ctx,
 			nil,

@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,16 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 var (
@@ -110,7 +110,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start Vtgate
@@ -151,7 +151,7 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	// We're running in the CI, so free up disk space for any
 	// subsequent tests.
 	if err := os.RemoveAll(usedRoot); err != nil {
-		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
+		log.Error(fmt.Sprintf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err))
 	}
 }
 
@@ -188,7 +188,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
@@ -207,7 +207,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -223,7 +223,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
 		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, "--durability-policy="+durability)
 		require.NoError(t, err, out)
 	}
 
@@ -283,7 +283,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--lock_tables_timeout", "5s",
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl" + "=false",
@@ -291,7 +291,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
 
-	log.Infof("Starting MySql for tablet %v", tablet.Alias)
+	log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 	proc, err := tablet.MysqlctlProcess.StartProcess()
 	require.NoError(t, err, "Error starting start mysql")
 	if err := proc.Wait(); err != nil {
@@ -368,7 +368,8 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string, extraArgs ...string) (string, error) {
 	args := []string{
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
+	}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}
@@ -445,7 +446,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
-	ctx := context.Background()
+	ctx := t.Context()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
@@ -643,9 +644,9 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
 	if doPrint {
-		log.Infof("Positions:")
+		log.Info("Positions:")
 		for _, pos := range strArray {
-			log.Infof("\t%s", pos)
+			log.Info("\t" + pos)
 		}
 	}
 	return strArray
@@ -739,7 +740,7 @@ func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("failed to catch up on replication position")
+	return errors.New("failed to catch up on replication position")
 }
 
 // positionAtLeast executes the command position at_least
@@ -842,6 +843,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
+// WaitForTabletToBeServing waits for a tablet to reach a serving state.
 func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
 	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
@@ -861,4 +863,23 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Fatal(err.Error())
 	}
+}
+
+// WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
+func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
+	require.Eventually(t, func() bool {
+		qr := RunSQL(ctx, t, "select Command, State, Info from information_schema.processlist", tablet)
+		for _, row := range qr.Rows {
+			if len(row) != 3 {
+				continue
+			}
+			if strings.EqualFold(row[0].ToString(), "Query") {
+				continue
+			}
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
+				return true
+			}
+		}
+		return false
+	}, timeout, time.Second, "query with state not in processlist")
 }

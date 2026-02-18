@@ -38,9 +38,9 @@ var (
 	// XbArgs are the arguments for specifying xtrabackup.
 	XbArgs = []string{
 		utils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
-		fmt.Sprintf("%s=xbstream", utils.GetFlagVariantForTests("--xtrabackup-stream-mode")),
-		fmt.Sprintf("%s=vt_dba", utils.GetFlagVariantForTests("--xtrabackup-user")),
-		utils.GetFlagVariantForTests("--xtrabackup-backup-flags"), fmt.Sprintf("--password=%s", dbPassword),
+		utils.GetFlagVariantForTests("--xtrabackup-stream-mode") + "=xbstream",
+		utils.GetFlagVariantForTests("--xtrabackup-user") + "=vt_dba",
+		utils.GetFlagVariantForTests("--xtrabackup-backup-flags"), "--password=" + dbPassword,
 	}
 )
 

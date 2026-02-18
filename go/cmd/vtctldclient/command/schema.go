@@ -150,7 +150,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 	var allSQL string
 	if applySchemaOptions.SQLFile != "" {
 		if len(applySchemaOptions.SQL) != 0 {
-			return errors.New("Exactly one of --sql and --sql-file must be specified, not both.") // nolint
+			return errors.New("Exactly one of --sql and --sql-file must be specified, not both.")
 		}
 
 		data, err := os.ReadFile(applySchemaOptions.SQLFile)
@@ -396,7 +396,6 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -426,7 +425,6 @@ func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
-
 	if err != nil {
 		return err
 	}

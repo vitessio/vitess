@@ -243,7 +243,6 @@ func TestCollationWithSpace(t *testing.T) {
 				localWeight := colldata.Lookup(local).WeightString(nil, []byte(ExampleString), size)
 				remoteWeight := remote.WeightString(nil, []byte(ExampleString), size)
 				require.True(t, bytes.Equal(localWeight, remoteWeight), "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v", size, []byte(ExampleString), remoteWeight, localWeight)
-
 			}
 		})
 	}

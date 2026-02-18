@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -70,7 +69,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	migrationContext := vcursor.Session().GetMigrationContext()
 	if migrationContext == "" {
 		// default to @@session_uuid
-		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
+		migrationContext = "vtgate:" + vcursor.Session().GetSessionUUID()
 	}
 	onlineDDLs, err := schema.NewOnlineDDLs(v.Keyspace.Name, v.SQL, v.DDL,
 		v.DDLStrategySetting, migrationContext, "", vcursor.Environment().Parser(),

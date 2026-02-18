@@ -18,7 +18,7 @@ package vtctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -71,7 +71,7 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <alias> argument is required for the AddCellsAlias command")
+		return errors.New("the <alias> argument is required for the AddCellsAlias command")
 	}
 
 	for i, cell := range *cells {
@@ -92,7 +92,7 @@ func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <alias> argument is required for the UpdateCellsAlias command")
+		return errors.New("the <alias> argument is required for the UpdateCellsAlias command")
 	}
 
 	for i, cell := range *cells {
@@ -114,7 +114,7 @@ func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <alias> argument is required for the DeleteCellsAlias command")
+		return errors.New("the <alias> argument is required for the DeleteCellsAlias command")
 	}
 	alias := subFlags.Arg(0)
 
@@ -129,7 +129,7 @@ func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 0 {
-		return fmt.Errorf("GetCellsAliases command takes no parameter")
+		return errors.New("GetCellsAliases command takes no parameter")
 	}
 	aliases, err := wr.TopoServer().GetCellsAliases(ctx, true /*strongRead*/)
 	if err != nil {

@@ -154,7 +154,6 @@ func TestMysql56GTIDSetString(t *testing.T) {
 	for want, input := range table {
 		got := strings.ToLower(input.String())
 		assert.Equal(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
-
 	}
 }
 
@@ -231,7 +230,6 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 
 	for _, other := range contained {
 		assert.True(t, set.Contains(other), "Contains(%#v) = false, want true", other)
-
 	}
 
 	// Test cases that should return Contains() = false.
@@ -313,7 +311,6 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 		assert.True(t, set.Equal(other), "%#v.Equal(%#v) = false, want true", set, other)
 		// Equality should be transitive.
 		assert.True(t, other.Equal(set), "%#v.Equal(%#v) = false, want true", other, set)
-
 	}
 
 	// Test cases that should return Equal() = false.
@@ -509,7 +506,6 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 		sid3: []interval{{1, 45}},
 	}
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
@@ -538,7 +534,6 @@ func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
 	assert.Equal(t, set1, got) // Because this is in-place
 	assert.Equal(t, want, got)
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
@@ -547,7 +542,7 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 	require.NoError(b, err)
 	pos := Position{GTIDSet: gtidSet}
 
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:6",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:13",
@@ -563,9 +558,8 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 		gtids[i] = gtid
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, gtid := range gtids {
 			pos.GTIDSet = pos.GTIDSet.AddGTID(gtid)
 		}
@@ -573,7 +567,7 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 }
 
 func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
@@ -591,9 +585,8 @@ func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
 	}
 	var pos Position
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, p := range positions {
 			pos.GTIDSet = p.GTIDSet.UnionInPlace(pos.GTIDSet)
 		}
@@ -601,7 +594,7 @@ func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
 }
 
 func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12-15:17-20",
@@ -615,11 +608,10 @@ func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
 		require.NoError(b, err)
 		positions[i] = Position{GTIDSet: gtid}
 	}
-	var pos = Position{GTIDSet: Mysql56GTIDSet{}}
+	pos := Position{GTIDSet: Mysql56GTIDSet{}}
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, p := range positions {
 			pos.GTIDSet = pos.GTIDSet.UnionInPlace(p.GTIDSet)
 		}
@@ -668,7 +660,6 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	got = set10.Difference(set11)
 	want = Mysql56GTIDSet{}
 	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
-
 }
 
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {
@@ -710,7 +701,6 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	set, err := NewMysql56GTIDSetFromSIDBlock(want)
 	require.NoError(t, err, "Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
 	assert.True(t, reflect.DeepEqual(set, input), "NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
-
 }
 
 func TestMySQL56GTIDSetLast(t *testing.T) {
@@ -747,7 +737,7 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 }
 
 func BenchmarkMySQL56GTIDParsing(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
@@ -759,9 +749,8 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, input := range Inputs {
 			_, _ = ParseMysql56GTIDSet(input)
 		}
@@ -871,7 +860,6 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, tt.errantGtidWanted, errantGTIDs)
 			}
-
 		})
 	}
 }

@@ -80,7 +80,7 @@ var schemaTestExpectSortedViewNames = []string{
 	"v6", // level 3
 }
 
-var schemaTestToSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
+var schemaTestToSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM dual;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM dual;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
 	schema, err := NewSchemaFromQueries(NewTestEnv(), schemaTestCreateQueries)
@@ -176,6 +176,52 @@ func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestNewSchemaFromQueriesViewWithCTEFail(t *testing.T) {
+	queries := []string{"create view v30 as with vcte as (select 1) select * from vcte2"}
+	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
+	assert.Error(t, err)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v30", MissingReferencedEntities: []string{"dual", "vcte2"}}).Error())
+}
+
+func TestNewSchemaFromQueriesViewWithCTE(t *testing.T) {
+	tcases := []struct {
+		name    string
+		queries []string
+	}{
+		{
+			"no table",
+			[]string{"create view v20 as with vcte as (select 1) select * from vcte"},
+		},
+		{
+			"with table",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v21 as with vcte as (select * from orders) select * from vcte",
+			},
+		},
+		{
+			"with table and column aliasing",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v22 as with vcte as (select id, info as val from orders) select * from vcte",
+			},
+		},
+		{
+			"with table and select all from cte",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v22 as with vcte as (select id, info as val from orders) select vcte.* from vcte",
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewSchemaFromQueries(NewTestEnv(), tc.queries)
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	// v7 and v8 depend on each other
 	queries := append(schemaTestCreateQueries,
@@ -213,6 +259,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 		name   string
 		view   string
 		tables []string
+		ctes   []string
 	}{
 		{
 			view:   "create view v6 as select * from v4",
@@ -242,6 +289,16 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			view:   "create view v9 as select 1",
 			tables: []string{"dual"},
 		},
+		{
+			view:   "create view v20 as with vcte as (select 1) select * from vcte",
+			tables: []string{"dual"},
+			ctes:   []string{"vcte"},
+		},
+		{
+			view:   "create view v21 as with vcte as (select * from orders) select * from vcte",
+			tables: []string{"orders"},
+			ctes:   []string{"vcte"},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.view, func(t *testing.T) {
@@ -250,8 +307,9 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			tables := getViewDependentTableNames(createView)
+			tables, ctes := getViewDependentTableNames(createView)
 			assert.Equal(t, ts.tables, tables)
+			assert.Equal(t, ts.ctes, ctes)
 		})
 	}
 }
@@ -399,7 +457,7 @@ func TestInvalidSchema(t *testing.T) {
 			//      t10
 			//       ^
 			//       |
-			//t12<->t11<-t13
+			// t12<->t11<-t13
 			schema: `
 				create table t10(id int primary key);
 				create table t11 (id int primary key, i int, i10 int, constraint f111205 foreign key (i) references t12 (id) on delete restrict, constraint f111005 foreign key (i10) references t10 (id) on delete restrict);
@@ -601,7 +659,6 @@ FROM users AS u JOIN earnings AS e ON e.user_id = u.id;
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
-
 			_, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
 			if ts.expectErr == nil {
 				assert.NoError(t, err)
@@ -673,7 +730,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 }
 
 func TestGetEntityColumnNames(t *testing.T) {
-	var queries = []string{
+	queries := []string{
 		"create table t1(id int, state int, some char(5))",
 		"create table t2(id int primary key, c char(5))",
 		"create view v1 as select id as id from t1",
@@ -991,8 +1048,8 @@ func TestMassiveSchema(t *testing.T) {
 				id                    int              NOT NULL AUTO_INCREMENT,
 				workflow              varbinary(1000)  DEFAULT NULL,
 				source                mediumblob       NOT NULL,
-				pos                   varbinary(10000) NOT NULL,
-				stop_pos              varbinary(10000) DEFAULT NULL,
+				pos                   longblob         NOT NULL,
+				stop_pos              longblob         DEFAULT NULL,
 				max_tps               bigint           NOT NULL,
 				max_replication_lag   bigint           NOT NULL,
 				cell                  varbinary(1000)  DEFAULT NULL,
@@ -1047,7 +1104,7 @@ func TestMassiveSchema(t *testing.T) {
 		}
 		queries0 := make([]string, 0, numTables) // to be loaded into schema0
 		queries1 := make([]string, 0, numTables) // to be loaded into schema1
-		for i := 0; i < numTables; i++ {
+		for i := range numTables {
 			tableName := fmt.Sprintf("tbl_%05d", i)
 			query := strings.ReplaceAll(tableBase, "placeholder", tableName)
 			queries0 = append(queries0, query)

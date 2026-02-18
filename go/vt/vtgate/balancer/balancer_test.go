@@ -167,7 +167,7 @@ func TestAllocateFlows(t *testing.T) {
 
 		// Run the balancer over each vtgate cell
 		for _, localCell := range vtGateCells {
-			b := NewTabletBalancer(localCell, vtGateCells).(*tabletBalancer)
+			b := newFlowBalancer(localCell, vtGateCells).(*flowBalancer)
 			a := b.allocateFlows(tablets)
 			b.allocations[discovery.KeyFromTarget(target)] = a
 
@@ -295,7 +295,7 @@ func TestBalancedPick(t *testing.T) {
 		// Run the algorithm a bunch of times to get a random enough sample
 		N := 1000000
 		for _, localCell := range vtGateCells {
-			b := NewTabletBalancer(localCell, vtGateCells).(*tabletBalancer)
+			b := newFlowBalancer(localCell, vtGateCells).(*flowBalancer)
 
 			for i := 0; i < N/len(vtGateCells); i++ {
 				th := b.Pick(target, tablets)
@@ -327,7 +327,7 @@ func TestTopologyChanged(t *testing.T) {
 	}
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 
-	b := NewTabletBalancer("b", []string{"a", "b"}).(*tabletBalancer)
+	b := newFlowBalancer("b", []string{"a", "b"}).(*flowBalancer)
 
 	N := 1
 
@@ -335,7 +335,7 @@ func TestTopologyChanged(t *testing.T) {
 	tablets := allTablets
 	tablets = tablets[0:2]
 
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, tablets)
 		allocation, totalAllocation := b.getAllocation(target, tablets)
 
@@ -345,7 +345,7 @@ func TestTopologyChanged(t *testing.T) {
 	}
 
 	// Run again with the full topology. Now traffic should go to cell b
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
@@ -358,7 +358,7 @@ func TestTopologyChanged(t *testing.T) {
 	// Run again with a node in the topology replaced.
 	newTablet := createTestTablet("b")
 	allTablets[2] = newTablet
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
@@ -367,5 +367,4 @@ func TestTopologyChanged(t *testing.T) {
 		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		assert.Equalf(t, "b", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
-
 }

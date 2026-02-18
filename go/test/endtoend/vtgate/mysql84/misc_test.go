@@ -29,7 +29,7 @@ import (
 )
 
 func TestFunctionInDefault(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -203,7 +203,7 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 	f(0)
 
 	benchmarkName := "Use SET_VAR"
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		b.Run(benchmarkName, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				f(i)
@@ -220,7 +220,7 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 }
 
 func TestJsonFunctions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
