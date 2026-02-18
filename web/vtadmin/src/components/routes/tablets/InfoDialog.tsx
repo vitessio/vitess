@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Transition } from '@headlessui/react';
 import Dialog from '../../dialog/Dialog';
 import { Icon, Icons } from '../../Icon';
-import { UseQueryResult } from 'react-query';
+import { UseQueryResult } from '@tanstack/react-query';
 
 export interface BaseInfoDialogProps {
     loadingTitle?: string;

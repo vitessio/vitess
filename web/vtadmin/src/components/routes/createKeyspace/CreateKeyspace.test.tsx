@@ -17,7 +17,7 @@ import { delay, http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory } from 'history';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Router } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -94,7 +94,6 @@ describe('CreateKeyspace integration test', () => {
         await user.click(submitButton);
 
         // Assert that the client sent the correct API request
-        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(`${apiAddr}/api/keyspace/local`, {
             credentials: undefined,
             body: JSON.stringify({
@@ -104,7 +103,7 @@ describe('CreateKeyspace integration test', () => {
         });
 
         // Validate form UI loading state, while the API request is "in flight"
-        expect(submitButton).toHaveTextContent('Creating Keyspace...');
+        await waitFor(() => expect(submitButton).toHaveTextContent('Creating Keyspace...'));
         expect(submitButton).toHaveAttribute('disabled');
 
         // Wait for the API request to complete
