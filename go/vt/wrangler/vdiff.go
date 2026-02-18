@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -34,7 +35,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -174,9 +174,9 @@ var _ engine.StreamExecutor = (*shardStreamer)(nil)
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
-	maxExtraRowsToCompare int) (map[string]*DiffReport, error) {
-	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
-		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
+	maxExtraRowsToCompare int,
+) (map[string]*DiffReport, error) {
+	log.Info(fmt.Sprintf("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s", targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String()))
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -263,7 +263,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	defer func() {
 		// We use a new context as we want to reset the state even
 		// when the parent context has timed out or been canceled.
-		log.Infof("Restarting the %q VReplication workflow on target tablets in keyspace %q", df.workflow, df.targetKeyspace)
+		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow on target tablets in keyspace %q", df.workflow, df.targetKeyspace))
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), DefaultActionTimeout)
 		defer restartCancel()
 		if err := df.restartTargets(restartCtx); err != nil {
@@ -416,12 +416,12 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 }
 
 func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
-	log.Infof("Starting vdiff for table %s", table)
+	log.Info("Starting vdiff for table " + table)
 
-	log.Infof("Locking target keyspace %s", df.targetKeyspace)
+	log.Info("Locking target keyspace " + df.targetKeyspace)
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, df.targetKeyspace, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %v", lockErr)
+		log.Error(fmt.Sprintf("LockKeyspace failed: %v", lockErr))
 		wr.Logger().Errorf("LockKeyspace %s failed: %v", df.targetKeyspace)
 		return lockErr
 	}
@@ -430,7 +430,7 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", df.targetKeyspace, lockErr)
+			log.Error(fmt.Sprintf("UnlockKeyspace %s failed: %v", df.targetKeyspace, lockErr))
 		}
 	}()
 
@@ -473,13 +473,7 @@ func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanager
 		}
 		include := true
 		if len(tablesToInclude) > 0 {
-			include = false
-			for _, t := range tablesToInclude {
-				if t == table.Name {
-					include = true
-					break
-				}
-			}
+			include = slices.Contains(tablesToInclude, table.Name)
 		}
 		if include {
 			df.differs[table.Name], err = df.buildTablePlan(table, query)
@@ -489,7 +483,7 @@ func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanager
 		}
 	}
 	if len(tablesToInclude) > 0 && len(tablesToInclude) != len(df.differs) {
-		log.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
+		log.Error(fmt.Sprintf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs))
 		return fmt.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
 	}
 	return nil
@@ -514,7 +508,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 			case *sqlparser.FuncExpr: // eg. weight_string()
 				// no-op
 			default:
-				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
+				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
@@ -597,7 +591,7 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 		if len(column.Type.EnumValues) == 0 {
 			continue
 		}
-		columnValues[column.Name.Lowered()] = ptr.Of(evalengine.EnumSetValues(column.Type.EnumValues))
+		columnValues[column.Name.Lowered()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
 	return columnCollations, columnValues, nil
 }
@@ -609,7 +603,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 	if df.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Infof("source time zone specified: %s", df.sourceTimeZone)
+	log.Info("source time zone specified: " + df.sourceTimeZone)
 	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
@@ -625,7 +619,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 						colAs,
 						sqlparser.NewStrLiteral(df.targetTimeZone),
 						sqlparser.NewStrLiteral(df.sourceTimeZone))
-					log.Infof("converting datetime column %s using convert_tz()", colName)
+					log.Info(fmt.Sprintf("converting datetime column %s using convert_tz()", colName))
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
 					modified = true
@@ -637,7 +631,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 		}
 	}
 	if modified { // at least one datetime was found
-		log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+		log.Info("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
 		return newSelectExprs
 	}
 	return targetSelectExprs
@@ -818,9 +812,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	var err1, err2 error
 
 	// Parallelize all discovery.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err1 = df.forAll(df.sources, func(shard string, source *shardStreamer) error {
 			sourceTopo := df.ts.TopoServer()
 			if ts.ExternalTopo() != nil {
@@ -839,11 +831,9 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			source.tablet = tablet
 			return nil
 		})
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		// For resharding, the target shards could be non-serving if traffic has already been switched once.
 		// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
 		// it is set to false for the shards we are switching from. We don't have a way to know if we have
@@ -865,7 +855,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			target.tablet = tablet
 			return nil
 		})
-	}()
+	})
 
 	wg.Wait()
 	if err1 != nil {
@@ -938,9 +928,9 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		if participant.position.IsZero() {
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.primary.Alias.String())
 		}
-		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), replication.EncodePosition(participant.position))
+		log.Info(fmt.Sprintf("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), replication.EncodePosition(participant.position)))
 		if err := df.ts.TabletManagerClient().WaitForPosition(waitCtx, participant.tablet, replication.EncodePosition(participant.position)); err != nil {
-			log.Errorf("WaitForPosition error: %s", err)
+			log.Error(fmt.Sprintf("WaitForPosition error: %s", err))
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
@@ -1023,7 +1013,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 			return err
 		}
 		if err := df.ts.TabletManagerClient().VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, uid, pos); err != nil {
-			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Tablet.Alias))
+			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Alias))
 		}
 		return nil
 	})
@@ -1051,7 +1041,7 @@ func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 			encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
-		log.Infof("Restarting the %q VReplication workflow on %q using %q", df.ts.WorkflowName(), target.primary.Alias, query)
+		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow on %q using %q", df.ts.WorkflowName(), target.primary.Alias, query))
 		var err error
 		// Let's retry a few times if we get a retryable error.
 		for i := 1; i <= 3; i++ {
@@ -1059,8 +1049,7 @@ func (df *vdiff) restartTargets(ctx context.Context) error {
 			if err == nil || !sqlerror.IsEphemeralError(err) {
 				break
 			}
-			log.Warningf("Encountered the following error while restarting the %q VReplication workflow on %q, will retry (attempt #%d): %v",
-				df.ts.WorkflowName(), target.primary.Alias, i, err)
+			log.Warn(fmt.Sprintf("Encountered the following error while restarting the %q VReplication workflow on %q, will retry (attempt #%d): %v", df.ts.WorkflowName(), target.primary.Alias, i, err))
 		}
 		return err
 	})
@@ -1191,11 +1180,11 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	advanceTarget := true
 	for {
 		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
-			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, humanInt(int64(dr.ProcessedRows)))
+			log.Info(fmt.Sprintf("VDiff progress:: table %s: %s rows", td.targetTable, humanInt(int64(dr.ProcessedRows))))
 		}
 		*rowsToCompare--
 		if *rowsToCompare < 0 {
-			log.Infof("Stopping vdiff, specified limit reached")
+			log.Info("Stopping vdiff, specified limit reached")
 			return dr, nil
 		}
 		if advanceSource {

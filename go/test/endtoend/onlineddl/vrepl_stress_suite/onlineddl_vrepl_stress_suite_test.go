@@ -417,7 +417,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -450,7 +450,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -518,11 +518,9 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 
 				ctx, cancel := context.WithCancel(context.Background())
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					runMultipleConnections(ctx, t, testcase.autoIncInsert)
-				}()
+				})
 				uuid := testOnlineDDLStatement(t, fullStatement, onlineDDLStrategy, "vtgate", hintText)
 				expectStatus := schema.OnlineDDLStatusComplete
 				if testcase.expectFailure {
@@ -675,7 +673,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
-	log.Infof("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -691,7 +689,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		}
 		switch rand.Int32N(3) {
@@ -732,28 +730,26 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
-	log.Infof("Running multiple connections")
+	log.Info("Running multiple connections")
 	var done int64
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, autoIncInsert, &done)
-		}()
+		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.Info("All connections cancelled")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -763,13 +759,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn, false)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 	{

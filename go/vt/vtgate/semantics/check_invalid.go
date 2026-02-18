@@ -52,10 +52,6 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if !a.singleUnshardedKeyspace && node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
-	case *sqlparser.OverClause:
-		if !a.singleUnshardedKeyspace {
-			return NotSingleShardError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
-		}
 	}
 
 	return nil
@@ -129,6 +125,7 @@ func (a *analyzer) checkJoin(j *sqlparser.JoinTableExpr) error {
 	}
 	return nil
 }
+
 func (a *analyzer) checkNextVal() error {
 	currScope := a.scoper.currentScope()
 	if currScope.parent != nil {

@@ -70,9 +70,11 @@ const (
 	BptClose
 )
 
-const classMask = 0x0000001f
-const jtMask = 0x000000e0
-const bptMask = 0x00000300
+const (
+	classMask = 0x0000001f
+	jtMask    = 0x000000e0
+	bptMask   = 0x00000300
+)
 
 /**
  * Joining Type constants.

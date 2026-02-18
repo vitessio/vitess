@@ -32,8 +32,7 @@ type testInterface2 interface {
 	TestFunc2()
 }
 
-type testEvent1 struct {
-}
+type testEvent1 struct{}
 
 type testEvent2 struct {
 	triggered bool

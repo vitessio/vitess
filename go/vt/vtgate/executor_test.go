@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 	"unsafe"
 
@@ -118,7 +119,8 @@ func TestPlanKey(t *testing.T) {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
-			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}}},
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
+		},
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
 	}}
 	cfg := econtext.VCursorConfig{
@@ -445,7 +447,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := session.Session.CloneVT()
+	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -486,7 +488,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = session.Session.CloneVT()
+	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -1578,17 +1580,19 @@ func TestExecutorUnrecognized(t *testing.T) {
 }
 
 func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+	synctest.Test(t, func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		sbc1.EphemeralShardErr = errors.New("enforce denied tables")
 
-	vschemaWaitTimeout = 500 * time.Millisecond
+		vschemaWaitTimeout = 500 * time.Millisecond
 
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	startExec := time.Now()
-	_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
-	require.NoError(t, err, "enforce denied tables not buffered")
-	endExec := time.Now()
-	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		startExec := time.Now()
+		_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
+		require.NoError(t, err, "enforce denied tables not buffered")
+		endExec := time.Now()
+		require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+	})
 }
 
 // TestVSchemaStats makes sure the building and displaying of the
@@ -1920,7 +1924,7 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_PRIMARY {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1944,7 +1948,7 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != "" || destTabletType != topodatapb.TabletType_PRIMARY {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1967,7 +1971,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("@replica")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("@replica")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_REPLICA {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -2543,7 +2547,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
 		{Sql: "release savepoint a", BindVariables: emptyBV},
-		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV}}
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV},
+	}
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
@@ -3087,7 +3092,8 @@ func TestExecutorShowShards(t *testing.T) {
 				Fields: buildVarCharFields("Shards"),
 				Rows:   nil,
 			},
-		}, {
+		},
+		{
 			name: "No filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{
@@ -3179,7 +3185,8 @@ func TestExecutorShowShards(t *testing.T) {
 					buildVarCharRow("ks1/80-"),
 				},
 			},
-		}, {
+		},
+		{
 			name: "Shard filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{
@@ -3354,6 +3361,47 @@ func TestExecutorShowShards(t *testing.T) {
 			filter:         nil,
 			destTabletType: topodatapb.TabletType_PRIMARY,
 			wantErr:        "testing error getting keyspace ks1",
+		},
+		{
+			// Test that deleted keyspaces (returning NoNode error) are skipped
+			// rather than causing the entire query to fail.
+			name: "Deleted keyspace (NoNode) should be skipped",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceError: map[string]map[string]error{
+					localCell: {
+						"ks1": topo.NewError(topo.NoNode, "ks1"),
+					},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks2/-40"),
+					buildVarCharRow("ks2/40-80"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
 		},
 	}
 	for _, tt := range tests {

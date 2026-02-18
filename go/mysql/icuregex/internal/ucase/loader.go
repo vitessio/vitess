@@ -30,11 +30,13 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var ucaseOnce sync.Once
-var ucase struct {
-	trie       *utrie.UTrie2
-	exceptions []uint16
-}
+var (
+	ucaseOnce sync.Once
+	ucase     struct {
+		trie       *utrie.UTrie2
+		exceptions []uint16
+	}
+)
 
 func trie() *utrie.UTrie2 {
 	loadUCase()

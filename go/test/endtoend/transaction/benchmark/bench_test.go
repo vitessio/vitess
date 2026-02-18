@@ -61,6 +61,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
@@ -68,7 +69,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName:    sidecarDBName,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 1, false, cell); err != nil {
 			return 1
 		}
 

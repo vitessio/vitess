@@ -39,8 +39,7 @@ type testcase struct {
 }
 
 func TestParseVersionString(t *testing.T) {
-	var testcases = []testcase{
-
+	testcases := []testcase{
 		{
 			versionString: "mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))",
 			version:       ServerVersion{5, 7, 27},

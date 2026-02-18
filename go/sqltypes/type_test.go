@@ -379,7 +379,7 @@ func TestTypeEquivalenceCheck(t *testing.T) {
 }
 
 func TestPrintTypeChecks(t *testing.T) {
-	var funcs = []struct {
+	funcs := []struct {
 		name string
 		f    func(p Type) bool
 	}{
@@ -394,7 +394,7 @@ func TestPrintTypeChecks(t *testing.T) {
 		{"IsDate", IsDate},
 		{"IsNull", IsNull},
 	}
-	var types = []Type{
+	types := []Type{
 		Null,
 		Int8,
 		Uint8,

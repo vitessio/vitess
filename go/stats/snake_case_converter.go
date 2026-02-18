@@ -33,19 +33,19 @@ func GetSnakeName(name string) string {
 // For systems (like Prometheus) that ask for snake-case names.
 // It converts CamelCase to camel_case, and CAMEL_CASE to camel_case.
 // For numbers, it converts 0.5 to v0_5.
-func toSnakeCase(name string) (hyphenated string) {
-	snakeMemoizer.Lock()
-	defer snakeMemoizer.Unlock()
-	if hyphenated = snakeMemoizer.memo[name]; hyphenated != "" {
-		return hyphenated
+func toSnakeCase(name string) string {
+	if cached, ok := snakeMemoizer.Load(name); ok {
+		return cached.(string)
 	}
-	hyphenated = name
+
+	result := name
 	for _, converter := range snakeConverters {
-		hyphenated = converter.re.ReplaceAllString(hyphenated, converter.repl)
+		result = converter.re.ReplaceAllString(result, converter.repl)
 	}
-	hyphenated = strings.ToLower(hyphenated)
-	snakeMemoizer.memo[name] = hyphenated
-	return
+	result = strings.ToLower(result)
+
+	actual, _ := snakeMemoizer.LoadOrStore(name, result)
+	return actual.(string)
 }
 
 var snakeConverters = []struct {
@@ -60,15 +60,4 @@ var snakeConverters = []struct {
 	{regexp.MustCompile("-"), "_"},
 }
 
-var memoizer = memoizerType{
-	memo: make(map[string]string),
-}
-
-type memoizerType struct {
-	sync.Mutex
-	memo map[string]string
-}
-
-var snakeMemoizer = memoizerType{
-	memo: make(map[string]string),
-}
+var snakeMemoizer sync.Map

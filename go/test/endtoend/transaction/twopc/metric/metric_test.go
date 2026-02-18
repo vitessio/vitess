@@ -117,8 +117,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	_, err = conn.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
@@ -216,8 +215,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	newCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("CP_80-_R", "", ""), nil)
 	execute(t, newCtx, conn, "begin")

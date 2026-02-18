@@ -18,7 +18,6 @@ R442
 package mysqlserver
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -41,7 +40,7 @@ import (
 
 // TestMultiStmt checks that multiStatements=True and multiStatements=False work properly.
 func TestMultiStatement(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// connect database with multiStatements=True
 	db := connectDB(t, vtParams, "multiStatements=True", "timeout=90s", "collation=utf8mb4_unicode_ci")
@@ -68,7 +67,7 @@ func TestMultiStatement(t *testing.T) {
 
 // TestLargeComment add large comment in insert stmt and validate the insert process.
 func TestLargeComment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -86,7 +85,7 @@ func TestLargeComment(t *testing.T) {
 
 // TestInsertLargerThenGrpcLimit insert blob larger then grpc limit and verify the error.
 func TestInsertLargerThenGrpcLimit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -104,7 +103,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 
 // TestTimeout executes sleep(5) with query_timeout of 1 second, and verifies the error.
 func TestTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -119,7 +118,7 @@ func TestTimeout(t *testing.T) {
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
 func TestInvalidField(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -134,7 +133,7 @@ func TestInvalidField(t *testing.T) {
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.
 func TestWarnings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -175,7 +174,7 @@ func TestWarnings(t *testing.T) {
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user
 // is not able to read from the table.
 func TestSelectWithUnauthorizedUser(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpVtParam := vtParams
 	tmpVtParam.Uname = "testuser2"

@@ -141,8 +141,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	analysisEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
@@ -196,8 +195,7 @@ func TestRecoveryRegistration(t *testing.T) {
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
 	tp, err := AttemptRecoveryRegistration(&replicaAnalysisEntry)

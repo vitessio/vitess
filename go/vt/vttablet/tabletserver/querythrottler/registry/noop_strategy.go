@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -50,4 +51,9 @@ func (s *NoOpStrategy) Start() {
 // Stop is a no-op for the NoOpStrategy since it has no resources to clean up.
 func (s *NoOpStrategy) Stop() {
 	// No-op: NoOpStrategy has no resources to clean up
+}
+
+// GetStrategyName returns the name of the strategy.
+func (s *NoOpStrategy) GetStrategyName() string {
+	return querythrottlerpb.ThrottlingStrategy_UNKNOWN.String()
 }

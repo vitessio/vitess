@@ -258,7 +258,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		}
 		args = append(args, NewLiteralInt(10))
 		args = append(args, NewLiteralInt(2))
-		var cexpr = CallExpr{Arguments: args, Method: "BIN"}
+		cexpr := CallExpr{Arguments: args, Method: "BIN"}
 		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
 	case "oct":
 		if len(args) != 1 {
@@ -266,7 +266,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		}
 		args = append(args, NewLiteralInt(10))
 		args = append(args, NewLiteralInt(8))
-		var cexpr = CallExpr{Arguments: args, Method: "OCT"}
+		cexpr := CallExpr{Arguments: args, Method: "OCT"}
 		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
 	case "left", "right":
 		if len(args) != 2 {
@@ -712,6 +712,18 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			},
 		}, nil
 
+	case *sqlparser.JSONRemoveExpr:
+		args, err := ast.translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...))
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJSONRemove{
+			CallExpr: CallExpr{
+				Arguments: args,
+				Method:    "JSON_REMOVE",
+			},
+		}, nil
+
 	case *sqlparser.JSONUnquoteExpr:
 		arg, err := ast.translateExpr(call.JSONValue)
 		if err != nil {
@@ -792,7 +804,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())
 		}
 
-		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
+		cexpr := CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
 		case "current_time", "curtime":
@@ -830,7 +842,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			args = append(args, trim)
 		}
 
-		var cexpr = CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
+		cexpr := CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
 		return &builtinTrim{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
@@ -857,7 +869,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			}
 			args = append(args, to)
 		}
-		var cexpr = CallExpr{Arguments: args, Method: "SUBSTRING"}
+		cexpr := CallExpr{Arguments: args, Method: "SUBSTRING"}
 		return &builtinSubstring{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
@@ -882,7 +894,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			}
 			args = append(args, to)
 		}
-		var cexpr = CallExpr{Arguments: args, Method: "LOCATE"}
+		cexpr := CallExpr{Arguments: args, Method: "LOCATE"}
 		return &builtinLocate{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
@@ -1093,7 +1105,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 
 		args := []IR{str, pos, len, newstr}
 
-		var cexpr = CallExpr{Arguments: args, Method: "INSERT"}
+		cexpr := CallExpr{Arguments: args, Method: "INSERT"}
 		return &builtinInsert{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
@@ -1108,7 +1120,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			args = append(args, arg)
 		}
 
-		var cexpr = CallExpr{Arguments: args, Method: "CHAR"}
+		cexpr := CallExpr{Arguments: args, Method: "CHAR"}
 		var coll collations.ID
 		if call.Charset == "" {
 			coll = collations.CollationBinaryID

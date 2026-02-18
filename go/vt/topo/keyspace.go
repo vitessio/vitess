@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"sort"
 	"sync"
@@ -168,7 +169,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
-	data, err := ki.Keyspace.MarshalVT()
+	data, err := ki.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -305,7 +306,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {
 			case IsErrType(err, NoNode):
-				log.Warningf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard)
+				log.Warn(fmt.Sprintf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard))
 				return nil
 			case err == nil:
 				mu.Lock()

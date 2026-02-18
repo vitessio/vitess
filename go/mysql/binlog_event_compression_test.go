@@ -49,7 +49,7 @@ func TestDecoderPool(t *testing.T) {
 			// least one of the times. Without doing this the test would be flaky.
 			poolingUsed := false
 
-			for i := 0; i < 20; i++ {
+			for range 20 {
 				decoder, err := statefulDecoderPool.Get(tt.reader)
 				validateDecoder(t, err, decoder)
 				statefulDecoderPool.Put(decoder)

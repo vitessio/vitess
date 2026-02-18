@@ -26,7 +26,7 @@ import (
 func TestHistogram(t *testing.T) {
 	clearStats()
 	h := NewHistogram("hist1", "help", []int64{1, 5})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		h.Add(int64(i))
 	}
 

@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER=latest
-ARG DEBIAN_VER=stable-slim
+ARG VT_BASE_VER=latest@sha256:06084c171907baf470d80729c6ef6dbefaad6356777689577e9f6aada1279128
+ARG DEBIAN_VER=stable-slim@sha256:ed542b2d269ff08139fc5ab8c762efe8c8986b564a423d5241a5ce9fb09b6c08
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 

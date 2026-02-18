@@ -80,7 +80,7 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
-	ti.Tablet.Hostname = "remotehost"
+	ti.Hostname = "remotehost"
 	if err := ts.UpdateTablet(ctx, ti); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
@@ -89,8 +89,8 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if want := "remotehost"; ti.Tablet.Hostname != want {
-		t.Errorf("nt.Hostname: want %v, got %v", want, ti.Tablet.Hostname)
+	if want := "remotehost"; ti.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
 	// test UpdateTabletFields works
@@ -108,7 +108,7 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if got, want := ti.Tablet.Hostname, "anotherhost"; got != want {
+	if got, want := ti.Hostname, "anotherhost"; got != want {
 		t.Errorf("nt.Hostname = %q, want %q", got, want)
 	}
 
@@ -122,8 +122,8 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 		t.Fatalf("GetTablet %v: %v %v", tablet.Alias, nti, nerr)
 	}
 
-	if want := "anotherhost"; ti.Tablet.Hostname != want {
-		t.Errorf("nt.Hostname: want %v, got %v", want, ti.Tablet.Hostname)
+	if want := "anotherhost"; ti.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
 	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {

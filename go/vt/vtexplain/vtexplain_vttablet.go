@@ -127,7 +127,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 
 	tablet.QueryService = queryservice.Wrap(
 		nil,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, opts queryservice.WrapOpts, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
 			return fmt.Errorf("explainTablet does not implement %s", name)
 		},
 	)
@@ -155,7 +155,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+func (t *explainTablet) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -165,7 +165,7 @@ func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, optio
 
 	t.mu.Unlock()
 
-	return t.tsv.Begin(ctx, target, options)
+	return t.tsv.Begin(ctx, session, target, options)
 }
 
 // Commit is part of the QueryService interface.
@@ -190,7 +190,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 
@@ -204,7 +204,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	return t.tsv.Execute(ctx, session, target, sql, bindVariables, transactionID, reservedID, options)
 }
 
 // Prepare is part of the QueryService interface.
@@ -264,7 +264,7 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -275,7 +275,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
+	return t.tsv.BeginExecute(ctx, session, target, preQueries, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.
@@ -408,7 +408,6 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
-
 			Fields: []*querypb.Field{{
 				Type:    sqltypes.Uint64,
 				Charset: collations.CollationBinaryID,
@@ -687,7 +686,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 		}
 	}
 
-	for j := 0; j < rowCount; j++ {
+	for j := range rowCount {
 		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
 			// Generate a fake value for the given column. For the column in the IN clause,
@@ -838,7 +837,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			for _, colTypeMap := range tableColumnMap {
 				if colTypeMap[col] != querypb.Type_NULL_TYPE {
 					if colType != querypb.Type_NULL_TYPE {
-						log.Errorf("vtexplain: ambiguous column %s", col)
+						log.Error("vtexplain: ambiguous column " + col)
 						return colNames, colTypes
 					}
 
@@ -847,7 +846,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			}
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
 			}
 
 			colNames = append(colNames, col)
@@ -859,7 +858,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colType := colTypeMap[col]
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
 			}
 
 			colNames = append(colNames, col)
@@ -893,7 +892,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		case sqlparser.DecimalVal:
 			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
-			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
+			log.Error("vtexplain: unsupported sql value " + sqlparser.String(node))
 		}
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, tableColumnMap, colNames, colTypes)
@@ -904,7 +903,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT64)
 	default:
-		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
+		log.Error(fmt.Sprintf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node)))
 	}
 
 	return colNames, colTypes

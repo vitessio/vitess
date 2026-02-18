@@ -19,7 +19,7 @@ package collations
 import (
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,10 +27,10 @@ import (
 )
 
 func TestAllCollationsByCharset(t *testing.T) {
-	var defaults1 = map[string][2]string{
+	defaults1 := map[string][2]string{
 		"utf8mb4": {"utf8mb4_general_ci", "utf8mb4_bin"},
 	}
-	var defaults2 = map[string][2]string{
+	defaults2 := map[string][2]string{
 		"utf8mb4": {"utf8mb4_0900_ai_ci", "utf8mb4_0900_bin"},
 	}
 
@@ -74,7 +74,7 @@ func TestAllCollationsByCharset(t *testing.T) {
 // XTestSupportTables should not run by default; it is used to generate a Markdown
 // table with Collation support information for the current build of Vitess.
 func XTestSupportTables(t *testing.T) {
-	var versions = []collver{
+	versions := []collver{
 		collverMySQL8,
 		collverMySQL57,
 		collverMySQL56,
@@ -93,11 +93,9 @@ func XTestSupportTables(t *testing.T) {
 	for id := range globalVersionInfo {
 		all = append(all, id)
 	}
-	sort.Slice(all, func(i, j int) bool {
-		return all[i] < all[j]
-	})
+	slices.Sort(all)
 
-	var out = os.Stdout
+	out := os.Stdout
 
 	fmt.Fprintf(out, "| Collation | Charset")
 	for _, env := range envs {

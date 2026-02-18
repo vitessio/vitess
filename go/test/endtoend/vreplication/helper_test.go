@@ -72,8 +72,8 @@ func setSidecarDBName(dbName string) {
 }
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
-	queries := strings.Split(lines, "\n")
-	for _, query := range queries {
+	queries := strings.SplitSeq(lines, "\n")
+	for query := range queries {
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
@@ -99,7 +99,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
 				query, timeout, qr))
 		case <-ticker.C:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+			log.Info(fmt.Sprintf("query %q failed with error %v, retrying in %ds", query, err, defaultTick))
 		}
 	}
 }
@@ -107,18 +107,19 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
 	if err != nil {
-		log.Errorf("Error executing query: %s: %v", query, err)
+		log.Error(fmt.Sprintf("Error executing query: %s: %v", query, err))
 	}
 	require.NoError(t, err)
 	return qr
 }
+
 func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
 		Host:  hostname,
 		Port:  port,
 		Uname: "vt_dba",
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		return nil
@@ -133,7 +134,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 		Uname:            "vt_dba",
 		ConnectTimeoutMs: 1000,
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
@@ -264,7 +265,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		got := row.AsInt64("c", 0)
 		require.LessOrEqual(t, got, want)
 		if got == want {
-			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
+			log.Info(fmt.Sprintf("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name))
 			return
 		}
 		select {
@@ -357,7 +358,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
-	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
+	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		require.NoError(t, err, output)
@@ -371,7 +372,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 				info := stream.Map()
 				state = info["state"].String()
 				if state == wantState {
-					for i := 0; i < len(fieldEqualityChecks); i++ {
+					for i := range fieldEqualityChecks {
 						if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
 							key := kvparts[0]
 							val := kvparts[1]
@@ -393,7 +394,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			return true
 		})
 		if done {
-			log.Infof("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState)
+			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
 			return
 		}
 		select {
@@ -643,7 +644,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var val []byte
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
-	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
+	log.Info(fmt.Sprintf("url: %s, varPath: %s", url, strings.Join(varPath, ":")))
 	body := getHTTPBody(t, url)
 	val, _, _, err = jsonparser.Get(body, varPath...)
 	require.NoError(t, err)
@@ -685,7 +686,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 // compact, and easy to compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
-	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
+	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)
 
@@ -701,7 +702,7 @@ func getShardRoutingRules(t *testing.T) string {
 		return shardI < shardJ
 	})
 	sb := strings.Builder{}
-	for i := 0; i < len(rules); i++ {
+	for i := range rules {
 		if i > 0 {
 			sb.WriteString(",")
 		}
@@ -762,7 +763,7 @@ func randHex(n int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+func getIntVal(t *testing.T, vars map[string]any, key string) int {
 	i, ok := vars[key].(float64)
 	require.True(t, ok)
 	return int(i)
@@ -772,8 +773,8 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 	vars := tab.GetVars()
 	insertKey := key + ".insert"
 	updateKey := key + ".insert"
-	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
-	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]any)
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]any)
 	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
 		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
 		return 0, 0, 0, 0
@@ -828,7 +829,7 @@ func (lg *loadGenerator) stop() {
 	// Wait for buffering to stop and additional records to be inserted by start
 	// after traffic is switched.
 	time.Sleep(loadTestBufferingWindowDuration * 2)
-	log.Infof("Canceling load")
+	log.Info("Canceling load")
 	lg.cancel()
 	lg.wg.Wait()
 }
@@ -839,22 +840,20 @@ func (lg *loadGenerator) start() {
 	var connectionCount atomic.Int64
 
 	var id int64
-	log.Infof("loadGenerator: starting")
+	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
 	lg.wg.Add(1)
 	defer func() {
 		defer lg.wg.Done()
-		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 	}()
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("loadGenerator: context cancelled")
-			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+			log.Info("loadGenerator: context cancelled")
+			log.Info(fmt.Sprintf("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
 			require.Equal(t, int64(0), reshardedErrors)
@@ -863,9 +862,7 @@ func (lg *loadGenerator) start() {
 		default:
 			if int(connectionCount.Load()) < lg.connections {
 				connectionCount.Add(1)
-				lg.wg.Add(1)
-				go func() {
-					defer lg.wg.Done()
+				lg.wg.Go(func() {
 					defer connectionCount.Add(-1)
 					conn := vc.GetVTGateConn(t)
 					defer conn.Close()
@@ -905,7 +902,7 @@ func (lg *loadGenerator) start() {
 						}
 						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
-				}()
+				})
 			}
 		}
 	}
@@ -938,14 +935,14 @@ func (lg *loadGenerator) waitForCount(want int64) {
 
 // appendToQueryLog is useful when debugging tests.
 func appendToQueryLog(msg string) {
-	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.Errorf("Error opening query log file: %v", err)
+		log.Error(fmt.Sprintf("Error opening query log file: %v", err))
 		return
 	}
 	defer file.Close()
 	if _, err := file.WriteString(msg + "\n"); err != nil {
-		log.Errorf("Error writing to query log file: %v", err)
+		log.Error(fmt.Sprintf("Error writing to query log file: %v", err))
 	}
 }
 
@@ -1058,9 +1055,11 @@ func mapToCSV(m map[string]string) string {
 	if len(m) == 0 {
 		return csv
 	}
+	var csvSb1062 strings.Builder
 	for k, v := range m {
-		csv += fmt.Sprintf("%s=%s,", k, v)
+		csvSb1062.WriteString(fmt.Sprintf("%s=%s,", k, v))
 	}
+	csv += csvSb1062.String()
 	if len(csv) == 0 {
 		return csv
 	}

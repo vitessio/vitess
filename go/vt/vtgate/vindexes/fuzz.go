@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 /*
 Copyright 2021 The Vitess Authors.
@@ -37,7 +36,8 @@ func onceInit() {
 }
 
 // All querypbTypes
-var querypbTypes = []querypb.Type{querypb.Type_NULL_TYPE,
+var querypbTypes = []querypb.Type{
+	querypb.Type_NULL_TYPE,
 	querypb.Type_INT8,
 	querypb.Type_UINT8,
 	querypb.Type_INT16,
@@ -68,10 +68,12 @@ var querypbTypes = []querypb.Type{querypb.Type_NULL_TYPE,
 	querypb.Type_GEOMETRY,
 	querypb.Type_JSON,
 	querypb.Type_VECTOR,
-	querypb.Type_EXPRESSION}
+	querypb.Type_EXPRESSION,
+}
 
 // All valid vindexes
-var availableVindexes = []string{"binary",
+var availableVindexes = []string{
+	"binary",
 	"unicode_loose_md5",
 	"binary_md5",
 	"lookup_hash",
@@ -91,7 +93,8 @@ var availableVindexes = []string{"binary",
 	"unicode_loose_xxhash",
 	"reverse_bits",
 	"region_json",
-	"null"}
+	"null",
+}
 
 // FuzzVindex implements the vindexes fuzzer
 func FuzzVindex(data []byte) int {
@@ -200,7 +203,6 @@ func writeRegionMapFile(f *fuzz.ConsumeFuzzer) (string, error) {
 		return "", err
 	}
 	return createdFile.Name(), nil
-
 }
 
 // Creates a slice of slices of sqltypes.Value

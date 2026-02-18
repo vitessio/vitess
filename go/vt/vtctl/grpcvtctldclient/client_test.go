@@ -17,7 +17,6 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,8 +36,7 @@ import (
 )
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -83,8 +81,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
@@ -112,8 +109,7 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()

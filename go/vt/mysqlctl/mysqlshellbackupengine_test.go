@@ -342,7 +342,7 @@ func TestCleanupMySQL(t *testing.T) {
 
 // this is a helper to write files in a temporary directory
 func generateTestFile(t *testing.T, name, contents string) {
-	f, err := os.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0700)
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o700)
 	require.NoError(t, err)
 	defer f.Close()
 	_, err = f.WriteString(contents)

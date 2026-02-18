@@ -374,6 +374,12 @@ message VStreamFlags {
   repeated string tables_to_copy = 9;
   // Exclude the keyspace from the table name that is sent to the vstream client
   bool exclude_keyspace_from_table_name = 10;
+  // Transaction chunk threshold in bytes. When a transaction exceeds this size,
+  // VTGate will acquire a lock to ensure contiguous, non-interleaved delivery
+  // (BEGIN...ROW...COMMIT sent sequentially without mixing events from other shards).
+  // Events are still chunked to prevent OOM. Transactions smaller than this are sent
+  // without locking for better parallelism.
+  int64 transaction_chunk_size = 11;
 }
 
 // VStreamRequest is the payload for VStream.

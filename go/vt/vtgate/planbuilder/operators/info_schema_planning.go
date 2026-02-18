@@ -212,9 +212,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
-		for k, expr := range isrB.SysTableTableName {
-			isrA.SysTableTableName[k] = expr
-		}
+		maps.Copy(isrA.SysTableTableName, isrB.SysTableTableName)
 		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// give up
@@ -309,7 +307,7 @@ func shouldRewrite(e sqlparser.Expr) bool {
 	switch node := e.(type) {
 	case *sqlparser.FuncExpr:
 		// we should not rewrite database() calls against information_schema
-		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
+		return !node.Name.EqualString("database") && !node.Name.EqualString("schema")
 	}
 	return true
 }

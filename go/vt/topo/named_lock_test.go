@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,8 +27,7 @@ import (
 
 // TestTopoNamedLock tests named lock operations.
 func TestTopoNamedLock(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, tsf := memorytopo.NewServerAndFactory(ctx, "zone1")
 	defer ts.Close()
 

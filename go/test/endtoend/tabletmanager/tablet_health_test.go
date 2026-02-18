@@ -41,7 +41,7 @@ import (
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
 func TestTabletReshuffle(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
-	ctx := context.Background()
+	ctx := t.Context()
 	clusterInstance.DisableVTOrcRecoveries(t)
 	defer clusterInstance.EnableVTOrcRecoveries(t)
 
@@ -199,7 +199,7 @@ func TestHealthCheck(t *testing.T) {
 // TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
 func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// Add one replica that starts not initialized
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := clusterInstance.GetVTParams(keyspaceName)
 	conn, err := mysql.Connect(ctx, &vtParams)

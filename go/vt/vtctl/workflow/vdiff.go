@@ -69,6 +69,22 @@ type Summary struct {
 	Progress *vdiff.ProgressReport `json:"Progress,omitempty"`
 }
 
+// SortedTableSummaries returns the table summaries sorted alphabetically by table name.
+// This is used by text templates to display tables in a consistent order.
+func (s *Summary) SortedTableSummaries() []TableSummary {
+	names := make([]string, 0, len(s.TableSummaryMap))
+	for name := range s.TableSummaryMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	result := make([]TableSummary, 0, len(names))
+	for _, name := range names {
+		result = append(result, s.TableSummaryMap[name])
+	}
+	return result
+}
+
 // BuildSummary generates a summary from a vdiff show response.
 func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (*Summary, error) {
 	summary := &Summary{

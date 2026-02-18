@@ -508,6 +508,9 @@ message VStreamOptions {
   // Copy only these tables, skip the rest in the filter.
   // If not provided, the default behaviour is to copy all tables.
   repeated string tables_to_copy = 3;
+  // Don't add any additional timeouts to the stream. For example the
+  // row streamer should not add a MAX_EXECUTION_TIME query hint.
+  bool no_timeouts = 4;
 }
 
 // VStreamRequest is the payload for VStreamer

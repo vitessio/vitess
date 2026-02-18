@@ -91,7 +91,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 		Name:      keyspaceUnshardedName,
 		SchemaSQL: sqlSchema,
 	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 		return nil, 1
 	}
 

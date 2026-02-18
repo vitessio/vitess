@@ -17,7 +17,6 @@ limitations under the License.
 package stress
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,7 +54,7 @@ func (s *Stresser) exec(conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func newClient(t *testing.T, params *mysql.ConnParams) *mysql.Conn {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, params)
 	require.NoError(t, err)
 	return conn

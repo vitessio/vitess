@@ -13,7 +13,6 @@ Flags:
       --action-timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed-tablet-types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
-      --alsologtostderr                                                  log to standard error as well as files
       --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
@@ -28,7 +27,7 @@ Flags:
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
-      --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
+      --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -36,6 +35,9 @@ Flags:
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
+      --clone-from-primary                                               Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
+      --clone-from-tablet string                                         Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.
+      --clone-restart-wait-timeout duration                              Timeout for waiting for MySQL to restart after CLONE REMOTE. (default 5m0s)
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -61,6 +63,9 @@ Flags:
       --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-clone-password string                                         db clone password
+      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
@@ -188,11 +193,10 @@ Flags:
       --lock-tables-timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
+      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
-      --log_dir string                                                   If non-empty, write log files in this directory
-      --logtostderr                                                      log to standard error instead of files
+      --log-structured                                                   enable structured JSON logging (default true)
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
@@ -220,6 +224,7 @@ Flags:
       --mycnf-tmp-dir string                                             mysql tmp directory
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
+      --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql-port int                                                   mysql port (default 3306)
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
@@ -319,6 +324,7 @@ Flags:
       --restore-from-backup-ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --restore-to-pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
       --restore-to-timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
+      --restore-with-clone                                               (init restore parameter) will restore from a clone, requires either --clone-from-primary or --clone-from-tablet, mutually exclusive with --restore-from-backup
       --retain-online-ddl-tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize-log-messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
@@ -343,7 +349,6 @@ Flags:
       --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --stream-health-buffer-size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-gc-lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
@@ -407,9 +412,7 @@ Flags:
       --tx-throttler-topo-refresh-interval duration                      The rate that the transaction throttler will refresh the topology to find cells. (default 5m0s)
       --unhealthy-threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
       --unmanaged                                                        Indicates an unmanaged tablet, i.e. using an external mysql-compatible database
-      --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
       --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)

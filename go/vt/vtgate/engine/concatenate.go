@@ -169,16 +169,14 @@ func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVar
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		vars := copyBindVars(bindVars)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			result, err := vcursor.ExecutePrimitive(ctx, currSource, vars, true)
 			if err != nil {
 				outerErr = err
 				cancel()
 			}
 			results[currIndex] = result
-		}()
+		})
 	}
 	wg.Wait()
 	return results, outerErr
@@ -303,7 +301,6 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 				}
 				return callback(resultChunk, currIndex)
 			})
-
 			// Error handling and context cleanup for this source.
 			if err != nil {
 				muFields.Lock()

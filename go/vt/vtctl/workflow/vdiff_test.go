@@ -34,6 +34,33 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func TestSortedTableSummaries(t *testing.T) {
+	summary := &Summary{
+		TableSummaryMap: map[string]TableSummary{
+			"zebra": {TableName: "zebra"},
+			"apple": {TableName: "apple"},
+			"mango": {TableName: "mango"},
+		},
+	}
+
+	sorted := summary.SortedTableSummaries()
+
+	require.Len(t, sorted, 3)
+	require.Equal(t, "apple", sorted[0].TableName)
+	require.Equal(t, "mango", sorted[1].TableName)
+	require.Equal(t, "zebra", sorted[2].TableName)
+}
+
+func TestSortedTableSummariesEmpty(t *testing.T) {
+	summary := &Summary{
+		TableSummaryMap: map[string]TableSummary{},
+	}
+
+	sorted := summary.SortedTableSummaries()
+
+	require.Len(t, sorted, 0)
+}
+
 func TestBuildProgressReport(t *testing.T) {
 	now := time.Now()
 	type args struct {

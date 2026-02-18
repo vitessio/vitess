@@ -28,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/unicode2"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -117,6 +118,17 @@ func (jp *Path) ContainsWildcards() bool {
 		jp = jp.next
 	}
 	return false
+}
+
+// IsRootPath returns true if the path is just the root path "$" with no further segments.
+func (jp *Path) IsRootPath() bool {
+	return jp != nil && jp.kind == jpDocumentRoot && jp.next == nil
+}
+
+// isArrayWrapping returns true if this path segment is [0] or [last],
+// which are the array access patterns that "wrap" non-array values.
+func (jp *Path) isArrayWrapping() bool {
+	return jp.kind == jpArrayLocation && (jp.offset0 == 0 || jp.offset0 == -1) && jp.offset1 == 0
 }
 
 func (jp *Path) arrayOffsets(ary []*Value) (int, int) {
@@ -230,7 +242,24 @@ func (jp *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 		jp.next.transform(v, t)
 	case jpMember:
 		if obj, ok := v.Object(); ok {
-			jp.next.transform(obj.Get(jp.name), t)
+			childVal := obj.Get(jp.name)
+			if childVal == nil {
+				return
+			}
+
+			// Check if the remaining path is purely wrapping array access on a non-array.
+			// In MySQL, [0] on a non-array returns the whole value, so $.a[0] points
+			// to the same thing as $.a for transformation purposes.
+			if _, isArray := childVal.Array(); !isArray {
+				for p := jp.next; p.isArrayWrapping(); p = p.next {
+					if p.next == nil {
+						t(jp, v)
+						return
+					}
+				}
+			}
+
+			jp.next.transform(childVal, t)
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
@@ -239,14 +268,30 @@ func (jp *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 				panic("range in transformation path expression")
 			}
 			if from >= 0 && from < len(ary) {
-				jp.next.transform(ary[from], t)
+				childVal := ary[from]
+				if childVal == nil {
+					return
+				}
+
+				// Check if the remaining path is purely wrapping array access on a non-array.
+				if _, isArray := childVal.Array(); !isArray {
+					for p := jp.next; p.isArrayWrapping(); p = p.next {
+						if p.next == nil {
+							t(jp, v)
+							return
+						}
+					}
+				}
+
+				jp.next.transform(childVal, t)
 			}
-		} else if jp.offset0 == 0 || jp.offset0 == -1 {
+		} else if jp.isArrayWrapping() {
 			/*
 				If the path is evaluated against a value that is not an array,
 				the result of the evaluation is the same as if the value had been
 				wrapped in a single-element array:
 			*/
+
 			jp.next.transform(v, t)
 		}
 	case jpMemberAny, jpArrayLocationAny, jpAny:
@@ -267,6 +312,13 @@ func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value
 	if t != Remove && len(paths) != len(values) {
 		panic("missing Values for transformation")
 	}
+
+	if t == Remove {
+		if slice.Any(paths, func(p *Path) bool { return p.IsRootPath() }) {
+			return errRootPathNotAllowed
+		}
+	}
+
 	for i, p := range paths {
 		transform := func(pp *Path, vv *Value) {
 			switch pp.kind {
@@ -362,7 +414,10 @@ type PathParser struct {
 	path *Path
 }
 
-var errInvalid = errors.New("Invalid JSON path expression")
+var (
+	errInvalid            = errors.New("Invalid JSON path expression")
+	errRootPathNotAllowed = errors.New("The path expression '$' is not allowed in this context.")
+)
 
 func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 	if in[0] == '$' {
@@ -373,7 +428,7 @@ func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 }
 
 func trim(in []byte) ([]byte, int) {
-	for n := 0; n < len(in); n++ {
+	for n := range in {
 		switch in[n] {
 		case ' ', '\t', '\n':
 		default:
@@ -596,7 +651,7 @@ func (p *PathParser) lexQuotedString(in []byte) (string, []byte, error) {
 	}
 
 	var buf strings.Builder
-	var n = 1
+	n := 1
 	for n < len(in) {
 		if in[n] == '"' {
 			return buf.String(), in[n+1:], nil
@@ -646,7 +701,7 @@ func (p *PathParser) ParseBytes(in []byte) (*Path, error) {
 	p.step = stepRoot
 
 	var err error
-	var ptr = in
+	ptr := in
 	for {
 		ptr, err = p.step(p, ptr)
 		if err != nil {

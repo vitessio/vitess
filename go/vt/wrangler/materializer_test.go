@@ -50,10 +50,12 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
-const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
-const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
-const mzCheckJournal = "/select val from _vt.resharding_journal where id="
+const (
+	mzUpdateQuery       = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
+	mzSelectIDQuery     = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
+	mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
+	mzCheckJournal      = "/select val from _vt.resharding_journal where id="
+)
 
 var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
@@ -182,7 +184,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 
 	var err error
 
-	var targetTables = func(ctx context.Context, env *testMaterializerEnv) []string {
+	targetTables := func(ctx context.Context, env *testMaterializerEnv) []string {
 		vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 		require.NoError(t, err)
 		var targetTables []string
@@ -1222,6 +1224,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
 	}
 }
+
 func TestCreateCustomizedVindex(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		SourceKeyspace: "ks",
@@ -1537,8 +1540,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	topoServ := memorytopo.NewServer(ctx, "cell")
 	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), topoServ, nil)
@@ -2527,8 +2529,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 	sources := []string{"0"}
 	targets := []string{"0"}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Copied from newTestMaterializerEnv
 	env := &testMaterializerEnv{
@@ -3249,9 +3250,11 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 
 				streamsInsert := ""
 				sourceShards := tcase.insertMap[targetShard]
+				var streamsInsertSb3255 strings.Builder
 				for _, sourceShard := range sourceShards {
-					streamsInsert += tcase.getStreamInsert(sourceShard, tcase.sourceColumn, tcase.targetVindex, targetShard)
+					streamsInsertSb3255.WriteString(tcase.getStreamInsert(sourceShard, tcase.sourceColumn, tcase.targetVindex, targetShard))
 				}
+				streamsInsert += streamsInsertSb3255.String()
 				env.tmc.expectVRQuery(
 					tabletID,
 					insertPrefix+streamsInsert,
@@ -3307,8 +3310,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	srcks := "source"
 	wr := &Wrangler{

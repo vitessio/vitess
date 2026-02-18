@@ -124,7 +124,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	primary, replica := tablets[0], tablets[1]
 
@@ -278,10 +278,10 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	runCommandWithSudo(t, "sh", "-c", fmt.Sprintf("echo 'block in proto tcp from any to any port %d' | sudo tee -a /etc/pf.conf > /dev/null", tablets[0].MySQLPort))
 
 	// This following command is only required if pfctl is not already enabled
-	//runCommandWithSudo(t, "pfctl", "-e")
+	// runCommandWithSudo(t, "pfctl", "-e")
 	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
 	rules := runCommandWithSudo(t, "pfctl", "-s", "rules")
-	log.Errorf("Rules enforced - %v", rules)
+	log.Error(fmt.Sprintf("Rules enforced - %v", rules))
 
 	// Start a write that will be blocked by the primary waiting for semi-sync ACKs
 	ch := make(chan any)
@@ -294,7 +294,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 
 	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
 	// on the replica's before the disruption has been introduced.
-	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
+	err := clusterInstance.StartVTOrc(clusterInstance.Cell, clusterInstance.Keyspaces[0].Name)
 	require.NoError(t, err)
 	go func() {
 		for {
@@ -304,7 +304,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 			case <-time.After(1 * time.Second):
 				str, isPresent := tablets[0].VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"]
 				if isPresent {
-					log.Errorf("SemiSyncMonitorWritesBlocked - %v", str)
+					log.Error(fmt.Sprintf("SemiSyncMonitorWritesBlocked - %v", str))
 				}
 			}
 		}
@@ -322,7 +322,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Errorf("Timed out waiting for semi-sync to be unblocked")
 	case <-ch:
-		log.Errorf("Woohoo, write finished!")
+		log.Error("Woohoo, write finished!")
 	}
 }
 

@@ -19,7 +19,7 @@ package vtgate
 import (
 	"net/http/httptest"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/require"
 
@@ -53,29 +53,31 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	synctest.Test(t, func(t *testing.T) {
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
-	_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
-	require.NoError(t, err)
+		_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
+		require.NoError(t, err)
 
-	_, err = executorExecSession(ctx, executor, session, "select * from user where Id = 15", nil)
-	require.NoError(t, err)
+		_, err = executorExecSession(ctx, executor, session, "select * from user where Id = 15", nil)
+		require.NoError(t, err)
 
-	_, err = executorExecSession(ctx, executor, session, "select * from user where Id > 15", nil)
-	require.NoError(t, err)
+		_, err = executorExecSession(ctx, executor, session, "select * from user where Id > 15", nil)
+		require.NoError(t, err)
 
-	query4 := "select * from user as u1 join  user as u2 on u1.Id = u2.Id"
-	_, err = executorExecSession(ctx, executor, session, query4, nil)
-	require.NoError(t, err)
+		query4 := "select * from user as u1 join  user as u2 on u1.Id = u2.Id"
+		_, err = executorExecSession(ctx, executor, session, query4, nil)
+		require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+		synctest.Wait()
 
-	recorder := httptest.NewRecorder()
-	executor.WriteScatterStats(recorder)
+		recorder := httptest.NewRecorder()
+		executor.WriteScatterStats(recorder)
 
-	// Here we are checking that the template was executed correctly.
-	// If it wasn't, instead of html, we'll get an error message
-	require.Contains(t, recorder.Body.String(), "select * from `user` as u1 join `user` as u2 on u1.Id = u2.Id")
-	require.NoError(t, err)
+		// Here we are checking that the template was executed correctly.
+		// If it wasn't, instead of html, we'll get an error message
+		require.Contains(t, recorder.Body.String(), "select * from `user` as u1 join `user` as u2 on u1.Id = u2.Id")
+		require.NoError(t, err)
+	})
 }

@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 		return m.Run(), nil
 	}()
 	if err != nil {
-		log.Errorf("top level error: %v\n", err)
+		log.Error(fmt.Sprintf("top level error: %v\n", err))
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDropAndRecreateWithSameShards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -133,14 +133,14 @@ func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSess
 func assertTabletsPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "GetTablets", "--cell", "test")
 
-	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
 	require.Nil(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		if !strings.HasPrefix(line, "test-") {
 			continue
 		}

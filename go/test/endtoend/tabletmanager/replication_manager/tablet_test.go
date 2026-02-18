@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -130,7 +130,7 @@ func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 // resurrectTablet is used to resurrect the given tablet
 func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
 	// initialize config again to regenerate the my.cnf file which has the port to use
-	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput("--log_dir", tab.MysqlctlProcess.LogDirectory,
+	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput(
 		utils.GetFlagVariantForTestsByVersion("--tablet-uid", tab.MysqlctlProcess.MajorVersion), strconv.Itoa(tab.MysqlctlProcess.TabletUID),
 		utils.GetFlagVariantForTests("--mysql-port"), strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
 		"init_config")
@@ -176,8 +176,9 @@ func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 	}
 	return int64(val.(float64)), nil
 }
+
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Check that initially replication is setup correctly on the replica tablet
 	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
 	require.NoError(t, err)

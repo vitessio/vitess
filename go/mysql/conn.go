@@ -275,7 +275,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	enabledKeepAlive := false
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		if err := setTcpConnProperties(tcpConn, listener.connKeepAlivePeriod); err != nil {
-			log.Errorf("error in setting tcp properties: %v", err)
+			log.Error(fmt.Sprintf("error in setting tcp properties: %v", err))
 		} else {
 			enabledKeepAlive = true
 		}
@@ -623,10 +623,7 @@ func (c *Conn) writePacket(data []byte) error {
 	var header [packetHeaderSize]byte
 	for {
 		// toBeSent is capped to MaxPacketSize.
-		toBeSent := dataLength
-		if toBeSent > MaxPacketSize {
-			toBeSent = MaxPacketSize
-		}
+		toBeSent := min(dataLength, MaxPacketSize)
 
 		// save the first 4 bytes of the payload, we will overwrite them with the
 		// header below
@@ -826,13 +823,13 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
+func (c *Conn) WriteErrorAndLog(format string, args ...any) bool {
 	return c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, format, args...)
 }
 
 func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
-		log.Errorf("Error writing error to %s: %v", c, err)
+		log.Error(fmt.Sprintf("Error writing error to %s: %v", c, err))
 		return false
 	}
 	return true
@@ -841,7 +838,7 @@ func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, f
 func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 	werr := c.writeErrorPacketFromError(err)
 	if werr != nil {
-		log.Errorf("Error writing error to %s: %v", c, werr)
+		log.Error(fmt.Sprintf("Error writing error to %s: %v", c, werr))
 		return false
 	}
 	return true
@@ -899,7 +896,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.
 		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Errorf("Error reading packet from %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error reading packet from %s: %v", c, err))
 		}
 		return false
 	}
@@ -958,7 +955,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComRegisterReplica:
 		return c.handleComRegisterReplica(handler, data)
 	default:
-		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
+		log.Error(fmt.Sprintf("Got unhandled packet (default) from %s, returning error: %v", c, data))
 		c.recycleReadPacket()
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
@@ -973,7 +970,7 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 
 	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
 	if err != nil {
-		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
+		log.Error(fmt.Sprintf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err))
 		return false
 	}
 	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
@@ -993,14 +990,14 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
 
 	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
-		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
 		return false
 	}
 	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
@@ -1017,14 +1014,14 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
 
 	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
-		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
 		return false
 	}
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
@@ -1050,7 +1047,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	stmtID, ok := c.parseComStmtReset(data)
 	c.recycleReadPacket()
 	if !ok {
-		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+		log.Error(fmt.Sprintf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data))
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
@@ -1058,7 +1055,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
-		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
+		log.Error(fmt.Sprintf("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data))
 		if !c.writeErrorAndLog(sqlerror.CRCommandsOutOfSync, sqlerror.SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
@@ -1071,7 +1068,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	}
 
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
+		log.Error(fmt.Sprintf("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err))
 		return false
 	}
 	return true
@@ -1111,7 +1108,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
@@ -1178,7 +1175,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		if err != nil {
 			// We can't send an error in the middle of a stream.
 			// All we can do is abort the send, which will cause a 2013.
-			log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
 			return false
 		}
 
@@ -1187,7 +1184,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		// was a read operation.
 		if !sendFinished {
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
+				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return false
 			}
 		}
@@ -1201,7 +1198,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
@@ -1212,11 +1209,11 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		queries, err := handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
-			log.Errorf("Conn %v: Error splitting query: %v", c, err)
+			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
-			log.Errorf("Conn %v: can not prepare multiple statements", c)
+			log.Error(fmt.Sprintf("Conn %v: can not prepare multiple statements", c))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		query = queries[0]
@@ -1239,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.PrepareData[c.StatementID] = prepare
 
 	if err := c.writePrepare(fld, prepare); err != nil {
-		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)
+		log.Error(fmt.Sprintf("Error writing prepare data to client %v: %v", c.ConnectionID, err))
 		return false
 	}
 	return true
@@ -1255,17 +1252,17 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		case 1:
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
-			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
+			log.Error(fmt.Sprintf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data))
 			if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
 		if err := c.writeEndResult(false, 0, 0, 0); err != nil {
-			log.Errorf("Error writeEndResult error %v ", err)
+			log.Error(fmt.Sprintf("Error writeEndResult error %v ", err))
 			return false
 		}
 	} else {
-		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
+		log.Error(fmt.Sprintf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data))
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
@@ -1282,7 +1279,7 @@ func (c *Conn) handleComPing() bool {
 		}
 	} else {
 		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-			log.Errorf("Error writing ComPing result to %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error writing ComPing result to %s: %v", c, err))
 			return false
 		}
 	}
@@ -1296,7 +1293,7 @@ func (c *Conn) handleComQueryMulti(handler Handler, data []byte) (kontinue bool)
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
@@ -1324,7 +1321,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	// so we initialize this value to false.
 	needsEndPacket := false
 	callbackCalled := false
-	var res = execSuccess
+	res := execSuccess
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		callbackCalled = true
@@ -1337,7 +1334,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && needsEndPacket {
 			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
+				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return err
 			}
 		}
@@ -1408,14 +1405,14 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	if err != nil {
 		// We can't send an error in the middle of a stream.
 		// All we can do is abort the send, which will cause a 2013.
-		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
 		return connErr
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
 	if needsEndPacket {
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 			return connErr
 		}
 	}
@@ -1429,7 +1426,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
 			kontinue = false
 		}
 	}()
@@ -1443,7 +1440,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
-			log.Errorf("Conn %v: Error splitting query: %v", c, err)
+			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
@@ -1528,7 +1525,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	if err != nil {
 		// We can't send an error in the middle of a stream.
 		// All we can do is abort the send, which will cause a 2013.
-		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
 		return connErr
 	}
 
@@ -1537,7 +1534,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	// was a read operation.
 	if !sendFinished {
 		if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 			return connErr
 		}
 	}

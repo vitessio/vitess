@@ -55,7 +55,6 @@ func (c *mysqlClientConn) connect(ctx context.Context, cp ConnParams) error {
 		Pass:       cp.Password,
 		UnixSocket: cp.UnixSocket,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -125,7 +124,7 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 	})
 
 	// parse the "db" into the keyspace/shard target
-	keyspace, tabletType, dest, err := topoproto.ParseDestination(cp.DB, topodatapb.TabletType_PRIMARY)
+	keyspace, tabletType, dest, _, err := topoproto.ParseDestination(cp.DB, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return err
 	}
@@ -162,5 +161,5 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 }
 
 func (c *grpcVttabletConn) execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return c.qs.Execute(ctx, &c.target, query, bindVars, 0, 0, nil)
+	return c.qs.Execute(ctx, nil, &c.target, query, bindVars, 0, 0, nil)
 }

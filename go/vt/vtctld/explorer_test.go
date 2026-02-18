@@ -17,7 +17,6 @@ limitations under the License.
 package vtctld
 
 import (
-	"context"
 	"path"
 	"reflect"
 	"testing"
@@ -34,8 +33,7 @@ func TestHandlePathRoot(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := []string{topo.GlobalCell, "cell1", "cell2", "cell3"}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 	ex := newBackendExplorer(ts)
@@ -54,8 +52,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
@@ -105,8 +102,7 @@ func TestHandlePathShard(t *testing.T) {
 	keyspace := &topodatapb.Keyspace{}
 	want := "is_primary_serving:true"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 
@@ -152,8 +148,7 @@ func TestHandlePathTablet(t *testing.T) {
 		PortMap:  map[string]int32{"vt": 4321},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 
@@ -179,8 +174,7 @@ func TestHandleBadPath(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := "Invalid cell: node doesn't exist: cells/foo/CellInfo"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 

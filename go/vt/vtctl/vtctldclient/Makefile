@@ -18,8 +18,8 @@ all: grpcvtctldclient localvtctldclient
 
 grpcvtctldclient:
 	go generate ../$@/...
-	gofmt -w ../$@/client_gen.go
+	go tool gofumpt -w ../$@/client_gen.go
 
 localvtctldclient:
 	go generate ../$@/...
-	gofmt -w ../$@/client_gen.go
+	go tool gofumpt -w ../$@/client_gen.go

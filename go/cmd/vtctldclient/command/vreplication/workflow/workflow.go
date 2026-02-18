@@ -24,17 +24,15 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-var (
-	// base is a parent command for Workflow commands.
-	base = &cobra.Command{
-		Use:                   "Workflow --keyspace <keyspace> [command] [command-flags]",
-		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"workflow"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandGetWorkflows,
-	}
-)
+// base is a parent command for Workflow commands.
+var base = &cobra.Command{
+	Use:                   "Workflow --keyspace <keyspace> [command] [command-flags]",
+	Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"workflow"},
+	Args:                  cobra.ExactArgs(1),
+	RunE:                  commandGetWorkflows,
+}
 
 var (
 	baseOptions = struct {

@@ -78,9 +78,9 @@ func limitString(s string, limit int) string {
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
+		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.Error(fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error())))
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
 		}
 	}
@@ -138,10 +138,10 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.Conn.ID()
-		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
+		log.Info(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
-			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
+			log.Warn(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
 		}
 		// Wait for the conn.ExecuteFetch() call to return.
 		<-done
@@ -268,38 +268,29 @@ const (
 	sourcePasswordEnd   = "',\n"
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
+	identifiedByStart   = " IDENTIFIED BY '"
+	identifiedByEnd     = "'"
 	passwordStart       = " PASSWORD = '"
 	passwordEnd         = "'"
 )
 
-func redactPassword(input string) string {
-	i := strings.Index(input, sourcePasswordStart)
-	// We have primary password in the query, try to redact it
-	if i != -1 {
-		j := strings.Index(input[i+len(sourcePasswordStart):], sourcePasswordEnd)
-		if j == -1 {
-			return input
-		}
-		input = input[:i+len(sourcePasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
-	}
-
-	i = strings.Index(input, masterPasswordStart)
-	// We have primary password in the query, try to redact it
-	if i != -1 {
-		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
-		if j == -1 {
-			return input
-		}
-		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
-	}
-	// We also check if we have any password keyword in the query
-	i = strings.Index(input, passwordStart)
+// redactBetween replaces content between start and end markers with asterisks.
+func redactBetween(input, start, end string) string {
+	i := strings.Index(input, start)
 	if i == -1 {
 		return input
 	}
-	j := strings.Index(input[i+len(passwordStart):], passwordEnd)
+	j := strings.Index(input[i+len(start):], end)
 	if j == -1 {
 		return input
 	}
-	return input[:i+len(passwordStart)] + strings.Repeat("*", 4) + input[i+len(passwordStart)+j:]
+	return input[:i+len(start)] + strings.Repeat("*", 4) + input[i+len(start)+j:]
+}
+
+func redactPassword(input string) string {
+	input = redactBetween(input, sourcePasswordStart, sourcePasswordEnd)
+	input = redactBetween(input, masterPasswordStart, masterPasswordEnd)
+	input = redactBetween(input, identifiedByStart, identifiedByEnd)
+	input = redactBetween(input, passwordStart, passwordEnd)
+	return input
 }

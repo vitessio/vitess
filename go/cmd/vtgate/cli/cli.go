@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -110,20 +111,14 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 	if cell == "" {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell flag must be set")
 	}
-	hasCell := false
-	for _, v := range cellsInTopo {
-		if v == cell {
-			hasCell = true
-			break
-		}
-	}
+	hasCell := slices.Contains(cellsInTopo, cell)
 	if !hasCell {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell:[%v] does not exist in topo", cell)
 	}
 
 	// cells_to_watch valid check
 	cells := make([]string, 0, 1)
-	for _, c := range strings.Split(cellsToWatch, ",") {
+	for c := range strings.SplitSeq(cellsToWatch, ",") {
 		if c == "" {
 			continue
 		}
@@ -209,7 +204,7 @@ func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	acl.RegisterFlags(Main.Flags())
-	Main.Flags().StringVar(&cell, "cell", cell, "cell to use")
+	Main.Flags().StringVar(&cell, "cell", cell, "cell to use (required)")
 	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 

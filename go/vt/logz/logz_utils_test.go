@@ -17,10 +17,9 @@ limitations under the License.
 package logz
 
 import (
-	"testing"
-
 	"net/http"
 	"net/http/httptest"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 )

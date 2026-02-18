@@ -1761,6 +1761,7 @@ func (s ASTStep) DebugString() string {
 	}
 	panic("unknown ASTStep")
 }
+
 func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	for len(path) >= 2 {
 		step := path.nextPathStep()

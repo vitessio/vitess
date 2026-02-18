@@ -54,7 +54,12 @@ type clusterAnalysis struct {
 	hasShardWideAction bool
 	totalTablets       int
 	primaryAlias       string
-	durability         policy.Durabler
+
+	// primaryTimestamp is the most recent primary term start time observed for the shard.
+	primaryTimestamp time.Time
+
+	// durability is the shard's current durability policy.
+	durability policy.Durabler
 }
 
 // GetDetectionAnalysis will check for detected problems (dead primary; unreachable primary; etc)
@@ -287,7 +292,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		tablet := &topodatapb.Tablet{}
 		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
-			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
+			log.Error(fmt.Sprintf("could not read tablet %v: %v", m.GetString("tablet_info"), err))
 			return nil
 		}
 
@@ -299,7 +304,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
-				log.Errorf("could not read tablet %v: %v", str, err)
+				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
 				return nil
 			}
 		}
@@ -313,7 +318,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
-			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
+			log.Error(fmt.Sprintf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace))
 			return nil
 		}
 
@@ -372,7 +377,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
-				log.Infof(analysisMessage)
+				log.Info(analysisMessage)
 			}
 		}
 		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
@@ -381,15 +386,16 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterPrimary = true
 				clusters[keyspaceShard].primaryAlias = a.AnalyzedInstanceAlias
+				clusters[keyspaceShard].primaryTimestamp = a.PrimaryTimeStamp
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
-				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
+				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
-				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
+				log.Error(fmt.Sprintf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace))
 				return nil
 			}
 			clusters[keyspaceShard].durability = durability
@@ -458,6 +464,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
+		case isStaleTopoPrimary(a, ca):
+			a.Analysis = StaleTopoPrimary
+			a.Description = "Primary tablet is stale, older than current primary"
 		case topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "":
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
@@ -605,10 +614,20 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
+}
+
+// isStaleTopoPrimary returns true when a tablet has type PRIMARY in the topology and has an older primary term
+// start time than the shard's current primary.
+func isStaleTopoPrimary(tablet *DetectionAnalysis, cluster *clusterAnalysis) bool {
+	if tablet.TabletType != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+
+	return tablet.PrimaryTimeStamp.Before(cluster.primaryTimestamp)
 }
 
 // postProcessAnalyses is used to update different analyses based on the information gleaned from looking at all the analyses together instead of individual data.
@@ -683,12 +702,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			string(analysisCode), tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		lastAnalysisChanged = rows > 0
@@ -712,12 +731,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		firstInsertion = rows > 0
@@ -743,7 +762,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)
 	} else {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }
@@ -758,7 +777,7 @@ func ExpireInstanceAnalysisChangelog() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }

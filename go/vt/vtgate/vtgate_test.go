@@ -51,7 +51,7 @@ var executeOptions = &querypb.ExecuteOptions{
 
 func TestVTGateExecute(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 
 	_, qr, err := vtg.Execute(
 		ctx,
@@ -76,7 +76,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := vtg.timings.Timings.Counts()
+	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
 	require.Contains(t, newCounts, "Execute.TestUnsharded.primary")
@@ -92,7 +92,7 @@ func TestVTGateExecute(t *testing.T) {
 func TestVTGateExecuteError(t *testing.T) {
 	vtg, _, ctx := createVtgateEnv(t)
 
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 
 	_, qr, err := vtg.Execute(
 		ctx,
@@ -123,7 +123,7 @@ func TestVTGateExecuteError(t *testing.T) {
 func TestVTGatePrepare(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 	_, qr, paramsCount, err := vtg.Prepare(
 		ctx,
 		&vtgatepb.Session{
@@ -142,7 +142,7 @@ func TestVTGatePrepare(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := vtg.timings.Timings.Counts()
+	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
 	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary")

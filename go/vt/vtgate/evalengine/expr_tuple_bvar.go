@@ -34,8 +34,10 @@ type (
 	}
 )
 
-var _ IR = (*TupleBindVariable)(nil)
-var _ Expr = (*TupleBindVariable)(nil)
+var (
+	_ IR   = (*TupleBindVariable)(nil)
+	_ Expr = (*TupleBindVariable)(nil)
+)
 
 func (bv *TupleBindVariable) IR() IR {
 	return bv

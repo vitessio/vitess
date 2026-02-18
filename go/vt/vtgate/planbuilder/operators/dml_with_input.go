@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -56,13 +57,15 @@ func (d *DMLWithInput) SetInputs(inputs []Operator) {
 
 func (d *DMLWithInput) ShortDescription() string {
 	colStrings := ""
+	var colStringsSb59 strings.Builder
 	for idx, columns := range d.cols {
 		var offsets []int
 		if len(d.Offsets) > idx {
 			offsets = d.Offsets[idx]
 		}
-		colStrings += fmt.Sprintf("[%s]", getShortDesc(columns, offsets))
+		colStringsSb59.WriteString(fmt.Sprintf("[%s]", getShortDesc(columns, offsets)))
 	}
+	colStrings += colStringsSb59.String()
 	return colStrings
 }
 
@@ -71,13 +74,15 @@ func getShortDesc(cols []*sqlparser.ColName, offsets []int) string {
 		return sqlparser.String(from)
 	})
 	out := ""
+	var outSb74 strings.Builder
 	for idx, colString := range colStrings {
-		out += colString
+		outSb74.WriteString(colString)
 		if len(offsets) > idx {
-			out += fmt.Sprintf(":%d", offsets[idx])
+			outSb74.WriteString(fmt.Sprintf(":%d", offsets[idx]))
 		}
-		out += " "
+		outSb74.WriteString(" ")
 	}
+	out += outSb74.String()
 	return out
 }
 

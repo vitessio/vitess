@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"errors"
+	"maps"
 	"sort"
 	"strings"
 
@@ -131,6 +132,21 @@ func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []
 		}
 	}
 	return names
+}
+
+func findForeignKeyDefinition(createTable *sqlparser.CreateTable, constraintName string) *sqlparser.ForeignKeyDefinition {
+	if createTable == nil || createTable.TableSpec == nil {
+		return nil
+	}
+	for _, cs := range createTable.TableSpec.Constraints {
+		if strings.EqualFold(cs.Name.String(), constraintName) {
+			if fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				return fk
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
@@ -387,7 +403,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		}
 
 		tableColumns := map[string]*sqlparser.ColumnDefinition{}
-		for _, col := range t.CreateTable.TableSpec.Columns {
+		for _, col := range t.TableSpec.Columns {
 			colName := col.Name.Lowered()
 			tableColumns[colName] = col
 		}
@@ -406,7 +422,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 
 			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
-			for _, col := range referencedTable.CreateTable.TableSpec.Columns {
+			for _, col := range referencedTable.TableSpec.Columns {
 				colName := col.Name.Lowered()
 				referencedColumns[colName] = col
 			}
@@ -422,7 +438,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				if !ok {
 					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
-				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.CreateTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
+				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
 					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
@@ -753,9 +769,7 @@ func (s *Schema) copy() *Schema {
 	dup.views = make([]*CreateViewEntity, len(s.views))
 	copy(dup.views, s.views)
 	dup.named = make(map[string]Entity, len(s.named))
-	for k, v := range s.named {
-		dup.named[k] = v
-	}
+	maps.Copy(dup.named, s.named)
 	dup.sorted = make([]Entity, len(s.sorted))
 	copy(dup.sorted, s.sorted)
 	return dup
@@ -1020,20 +1034,20 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 					}
 					return checkChildForeignKeyDefinition(fk, diff)
 				case *sqlparser.DropKey:
-					if node.Type != sqlparser.ForeignKeyType {
+					switch node.Type {
+					case sqlparser.ForeignKeyType, sqlparser.ConstraintType:
+						// Possibly dropping a foreign key; we need to check if this constraint references another table.
+						// The DropKey statement itself only _names_ the constraint, but does not have information
+						// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
+						fk := findForeignKeyDefinition(diff.from.CreateTable, node.Name.String())
+						if fk == nil {
+							return true, nil
+						}
+						parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+						checkDependencies(diff, []string{parentTableName})
+					default:
 						// Not interesting
 						return true, nil
-					}
-					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
-					// The DropKey statement itself only _names_ the constraint, but does not have information
-					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
-					for _, cs := range diff.from.CreateTable.TableSpec.Constraints {
-						if strings.EqualFold(cs.Name.String(), node.Name.String()) {
-							if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
-								parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
-								checkDependencies(diff, []string{parentTableName})
-							}
-						}
 					}
 				}
 
@@ -1088,7 +1102,7 @@ func (s *Schema) ValidateViewReferences() error {
 	schemaInformation.addTable("dual")
 
 	for _, view := range s.Views() {
-		sel := sqlparser.Clone(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
 		formalizeErr := func(err error) error {
 			if err == nil {

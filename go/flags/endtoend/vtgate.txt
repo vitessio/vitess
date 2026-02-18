@@ -27,7 +27,6 @@ vtgate \
 Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed-tablet-types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
-      --alsologtostderr                                                  log to standard error as well as files
       --balancer-keyspaces strings                                       Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.
       --balancer-vtgate-cells strings                                    Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
@@ -36,9 +35,9 @@ Flags:
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
-      --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
+      --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                      cell to use
+      --cell string                                                      cell to use (required)
       --cells-to-watch string                                            comma-separated list of cells for watching tablets
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -113,11 +112,10 @@ Flags:
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
+      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
-      --log_dir string                                                   If non-empty, write log files in this directory
-      --logtostderr                                                      log to standard error instead of files
+      --log-structured                                                   enable structured JSON logging (default true)
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -187,6 +185,7 @@ Flags:
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
+      --reuse-port                                                       Enable SO_REUSEPORT when binding sockets; available on Linux 3.9+ (default false)
       --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
@@ -202,7 +201,6 @@ Flags:
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd-address string                                            Address for statsd client
       --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
@@ -242,11 +240,9 @@ Flags:
       --track-udfs                                                       Track UDFs in vtgate.
       --transaction-mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
-      --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
-      --vtgate-balancer-mode string                                      Tablet balancer mode (options: cell, prefer-cell, random). Defaults to 'cell' which shuffles tablets in the local cell.
+      --vtgate-balancer-mode string                                      Tablet balancer mode (options: cell, prefer-cell, random, session). Defaults to 'cell' which shuffles tablets in the local cell.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
       --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm

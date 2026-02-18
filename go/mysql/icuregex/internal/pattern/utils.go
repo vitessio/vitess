@@ -82,7 +82,7 @@ func SkipWhitespace(str string) string {
 }
 
 func IsUnprintable(c rune) bool {
-	return !(c >= 0x20 && c <= 0x7E)
+	return c < 0x20 || c > 0x7E
 }
 
 // "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"

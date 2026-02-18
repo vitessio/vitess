@@ -73,7 +73,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		SchemaSQL: sqlSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// teardown vttablets
@@ -120,8 +120,8 @@ func TestNoInitialKeyspace(t *testing.T) {
 	err = clusterInstance.VtgateProcess.TearDown()
 	require.NoError(t, err)
 
-	// check info logs
-	all, err := os.ReadFile(path.Join(logDir, "vtgate.INFO"))
+	// check stderr logs
+	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "No keyspace to load")
 }

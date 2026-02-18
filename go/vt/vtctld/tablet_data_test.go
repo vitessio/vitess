@@ -109,8 +109,7 @@ func (s *streamHealthTabletServer) BroadcastHealth() {
 }
 
 func TestTabletData(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

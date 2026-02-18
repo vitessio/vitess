@@ -1,0 +1,58 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "maven"
+    directory: "/java"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/vtadmin"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/docker/binaries/*"
+      - "/docker/bootstrap"
+      - "/docker/lite"
+      - "/docker/mini"
+      - "/docker/vttestserver"
+      - "/examples/compose/external_db/mysql"
+      - "/go/mysql/collations/tools/colldump"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "mysql"
+        versions:
+          - ">= 8.5"
+    groups:
+      all:
+        patterns:
+          - "*"

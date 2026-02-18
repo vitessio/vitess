@@ -71,13 +71,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start with 2 replicas (3 total tablets including primary)
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
 		// Now manually add tablets to cell2 to simulate multi-cell setup
 		shard := clusterInstance.Keyspaces[0].Shards[0]
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := &cluster.Vttablet{
 				TabletUID: tabletUID,

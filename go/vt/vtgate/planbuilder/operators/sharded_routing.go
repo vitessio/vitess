@@ -630,10 +630,8 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 
 func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
-		for _, col := range v.ColVindex.Columns {
-			if column.Name.Equal(col) {
-				return true
-			}
+		if slices.ContainsFunc(v.ColVindex.Columns, column.Name.Equal) {
+			return true
 		}
 	}
 	return false

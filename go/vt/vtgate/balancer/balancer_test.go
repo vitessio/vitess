@@ -335,7 +335,7 @@ func TestTopologyChanged(t *testing.T) {
 	tablets := allTablets
 	tablets = tablets[0:2]
 
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, tablets)
 		allocation, totalAllocation := b.getAllocation(target, tablets)
 
@@ -345,7 +345,7 @@ func TestTopologyChanged(t *testing.T) {
 	}
 
 	// Run again with the full topology. Now traffic should go to cell b
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
@@ -358,7 +358,7 @@ func TestTopologyChanged(t *testing.T) {
 	// Run again with a node in the topology replaced.
 	newTablet := createTestTablet("b")
 	allTablets[2] = newTablet
-	for i := 0; i < N; i++ {
+	for range N {
 		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)

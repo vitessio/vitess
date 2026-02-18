@@ -163,7 +163,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	qr2 := utils.Exec(t, mcmp.VtConn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	connParams := vtParams
 	connParams.DbName = "information_schema"
 	conn2, err := mysql.Connect(ctx, &connParams)

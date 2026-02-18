@@ -23,9 +23,9 @@ import (
 
 const (
 	// PermFile is a FileMode for regular files without world permission bits.
-	PermFile fs.FileMode = 0660
+	PermFile fs.FileMode = 0o660
 	// PermDirectory is a FileMode for directories without world permission bits.
-	PermDirectory fs.FileMode = 0770
+	PermDirectory fs.FileMode = 0o770
 )
 
 // Create is identical to os.Create except uses 0660 permission

@@ -197,7 +197,7 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	defer f.tearDown()
 
 	// Test the explicit copy of zero values.
-	zeroValueConfig := defaultMaxReplicationLagModuleConfig.Configuration.CloneVT()
+	zeroValueConfig := defaultMaxReplicationLagModuleConfig.CloneVT()
 	zeroValueConfig.IgnoreNSlowestReplicas = 0
 	names, err := f.m.UpdateConfiguration("t2", zeroValueConfig, true /* copyZeroValues */)
 	require.NoError(t, err)

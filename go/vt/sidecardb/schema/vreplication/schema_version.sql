@@ -17,7 +17,7 @@ limitations under the License.
 CREATE TABLE IF NOT EXISTS schema_version
 (
     id           INT NOT NULL AUTO_INCREMENT,
-    pos          VARBINARY(10000) NOT NULL,
+    pos          LONGBLOB         NOT NULL,
     time_updated BIGINT(20)       NOT NULL,
     ddl          BLOB DEFAULT NULL,
     schemax      LONGBLOB         NOT NULL,

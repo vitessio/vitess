@@ -43,8 +43,7 @@ func TestCreateViewDDL(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() {
 		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
@@ -100,8 +99,7 @@ func TestAlterViewDDL(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() {
 		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged

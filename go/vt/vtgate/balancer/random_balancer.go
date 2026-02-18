@@ -73,7 +73,7 @@ type randomBalancer struct {
 
 // Pick returns a random tablet from the list with uniform probability (1/N).
 // If vtGateCells is configured, only tablets in those cells are considered.
-func (b *randomBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+func (b *randomBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ ...PickOption) *discovery.TabletHealth {
 	if len(tablets) == 0 {
 		return nil
 	}

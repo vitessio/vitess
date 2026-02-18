@@ -141,7 +141,7 @@ func TestRows(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeScanType(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -222,7 +222,7 @@ func TestColumnTypeScanType(t *testing.T) {
 		typeTime,
 	}
 
-	for i := 0; i < len(wantTypes); i++ {
+	for i := range wantTypes {
 		assert.Equal(t, ri.ColumnTypeScanType(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeScanType(i), wantTypes[i]))
 	}
 }
@@ -230,7 +230,7 @@ func TestColumnTypeScanType(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeDatabaseTypeName(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -311,7 +311,7 @@ func TestColumnTypeDatabaseTypeName(t *testing.T) {
 		"DATETIME",
 	}
 
-	for i := 0; i < len(wantTypes); i++ {
+	for i := range wantTypes {
 		assert.Equal(t, ri.ColumnTypeDatabaseTypeName(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeDatabaseTypeName(i), wantTypes[i]))
 	}
 }
@@ -319,7 +319,7 @@ func TestColumnTypeDatabaseTypeName(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeNullable(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:  "field1",
@@ -341,7 +341,7 @@ func TestColumnTypeNullable(t *testing.T) {
 		true,
 	}
 
-	for i := 0; i < len(nullable); i++ {
+	for i := range nullable {
 		null, _ := ri.ColumnTypeNullable(i)
 		assert.Equal(t, null, nullable[i], fmt.Sprintf("unexpected type %v, wanted %v", null, nullable[i]))
 	}

@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-max-result-size", "10000000",
 			vtutils.GetFlagVariantForTests("--grpc-max-message-size"), strconv.FormatInt(maxGrpcSize, 10))
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -141,7 +141,7 @@ func dropData(t *testing.T) {
 func getRandomString(size int) string {
 	var str strings.Builder
 
-	for i := 0; i < size; i++ {
+	for range size {
 		str.WriteByte(byte((rand.Int() % 26) + 97))
 	}
 

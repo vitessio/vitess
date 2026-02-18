@@ -53,8 +53,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const baseShowTablesWithSizesPattern = `SELECT t\.table_name.*SUM\(i\.file_size\).*`
-const baseInnoDBTableSizesPattern = `(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`
+const (
+	baseShowTablesWithSizesPattern = `SELECT t\.table_name.*SUM\(i\.file_size\).*`
+	baseInnoDBTableSizesPattern    = `(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`
+)
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
@@ -1580,8 +1582,7 @@ func TestEngineReload(t *testing.T) {
 //
 // Runs with 5.7 env
 func TestGetTableForPosLegacy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	fakedb := fakesqldb.NewWithEnv(t, vtenv.NewLegacyTestEnv())
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(fakedb)
@@ -1767,8 +1768,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 // disabled or otherwise unable to get a table schema for the given position. When it
 // CAN, that is tested indepenently in the historian tests.
 func TestGetTableForPos(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	fakedb := fakesqldb.New(t)
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(fakedb)

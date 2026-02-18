@@ -18,13 +18,11 @@ package io.vitess.client;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
@@ -81,8 +79,8 @@ public final class VTGateBlockingConnection implements Closeable {
    *
    * @param ctx Context on user and execution deadline if any.
    * @param queryList List of sql queries to be executed.
-   * @param bindVarsList <p>For each sql query it will provide a list of parameters to bind with. If
-   * provided, should match the number of sql queries.</p>
+   * @param bindVarsList for each SQL query, provides a list of parameters to bind with.
+   *     If provided, it should match the number of SQL queries.
    * @param vtSession Session to be used with the call.
    * @return List of Cursors
    * @throws SQLException If anything fails on query execution.

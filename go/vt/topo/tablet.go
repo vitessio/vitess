@@ -131,7 +131,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort)
+	return netutil.JoinHostPort(ti.MysqlHostname, ti.MysqlPort)
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
@@ -173,7 +173,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	conn, err := ts.ConnForCell(ctx, alias.Cell)
 	if err != nil {
-		log.Errorf("unable to get connection for cell %q: %v", alias.Cell, err)
+		log.Error(fmt.Sprintf("unable to get connection for cell %q: %v", alias.Cell, err))
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
-		log.Errorf("unable to connect to tablet %q: %v", alias, err)
+		log.Error(fmt.Sprintf("unable to connect to tablet %q: %v", alias, err))
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}
@@ -320,7 +320,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
-			log.Warningf("failed to load tablet %v", tabletAlias)
+			log.Warn(fmt.Sprintf("failed to load tablet %v", tabletAlias))
 		} else {
 			tablets = append(tablets, tabletInfo)
 		}
@@ -332,7 +332,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
 func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
-	conn, err := ts.ConnForCell(ctx, ti.Tablet.Alias.Cell)
+	conn, err := ts.ConnForCell(ctx, ti.Alias.Cell)
 	if err != nil {
 		return err
 	}
@@ -341,11 +341,11 @@ func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	span.Annotate("tablet", topoproto.TabletAliasString(ti.Alias))
 	defer span.Finish()
 
-	data, err := ti.Tablet.MarshalVT()
+	data, err := ti.MarshalVT()
 	if err != nil {
 		return err
 	}
-	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Tablet.Alias), TabletFile)
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Alias), TabletFile)
 	newVersion, err := conn.Update(ctx, tabletPath, data, ti.version)
 	if err != nil {
 		return err
@@ -462,8 +462,8 @@ func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Tabl
 		event.Dispatch(&events.TabletChange{
 			Tablet: &topodatapb.Tablet{
 				Alias:    tabletAlias,
-				Keyspace: ti.Tablet.Keyspace,
-				Shard:    ti.Tablet.Shard,
+				Keyspace: ti.Keyspace,
+				Shard:    ti.Shard,
 			},
 			Status: "deleted",
 		})
@@ -510,7 +510,7 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Warningf("%v: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("%v: %v", tabletAlias, err))
 				// There can be data races removing nodes - ignore them for now.
 				// We only need to set this on first error.
 				if returnErr == nil && !IsErrType(err, NoNode) {
@@ -560,7 +560,7 @@ func (ts *Server) GetTabletList(ctx context.Context, tabletAliases []*topodatapb
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Warningf("%v: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("%v: %v", tabletAlias, err))
 				// There can be data races removing nodes - ignore them for now.
 				// We only need to set this on first error.
 				if returnErr == nil && !IsErrType(err, NoNode) {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"slices"
 	"sort"
@@ -109,12 +110,16 @@ type TabletGateway struct {
 
 	// balancer used for routing to tablets
 	balancer balancer.TabletBalancer
+
+	// balancerMode is the current tablet balancer mode.
+	balancerMode balancer.Mode
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
 	filters, err := discovery.NewVTGateHealthCheckFilters()
 	if err != nil {
-		log.Exit(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, filters)
 }
@@ -128,7 +133,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 			var err error
 			topoServer, err = serv.GetTopoServer()
 			if err != nil {
-				log.Exitf("Unable to create new TabletGateway: %v", err)
+				log.Error(fmt.Sprintf("Unable to create new TabletGateway: %v", err))
+				os.Exit(1)
 			}
 		}
 		hc = createHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, topoServer, localCell, CellsToWatch)
@@ -178,42 +184,44 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 func (gw *TabletGateway) setupBalancer() {
 	// Check for conflicting flags
 	if balancerEnabled && balancerModeFlag != "" {
-		log.Exitf("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
+		log.Error("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
+		os.Exit(1)
 	}
 
 	// Determine the effective mode: new flag takes precedence, then deprecated flag, then default
-	var mode balancer.Mode
 	if balancerModeFlag != "" {
 		// Explicit new flag
-		mode = balancer.ParseMode(balancerModeFlag)
+		gw.balancerMode = balancer.ParseMode(balancerModeFlag)
 	} else if balancerEnabled {
 		// Deprecated flag for backwards compatibility
-		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
-		mode = balancer.ModePreferCell
+		log.Warn("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
+		gw.balancerMode = balancer.ModePreferCell
 	} else {
 		// Default: no flags set
-		mode = balancer.ModeCell
+		gw.balancerMode = balancer.ModeCell
 	}
 
 	// Cell mode uses the default shuffleTablets behavior, no balancer needed
-	if mode == balancer.ModeCell {
+	if gw.balancerMode == balancer.ModeCell {
 		log.Info("Tablet balancer using 'cell' mode (shuffle tablets in local cell)")
 		return
 	}
 
 	// Validate mode-specific requirements
-	if mode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
-		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
+	if gw.balancerMode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
+		log.Error("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
+		os.Exit(1)
 	}
 
 	// Create the balancer for prefer-cell or random modes
 	var err error
-	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
+	gw.balancer, err = balancer.NewTabletBalancer(gw.balancerMode, gw.localCell, balancerVtgateCells)
 	if err != nil {
-		log.Exitf("Failed to create tablet balancer: %v", err)
+		log.Error(fmt.Sprintf("Failed to create tablet balancer: %v", err))
+		os.Exit(1)
 	}
 
-	log.Infof("Tablet balancer enabled with mode: %s", mode)
+	log.Info(fmt.Sprintf("Tablet balancer enabled with mode: %s", gw.balancerMode))
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -238,7 +246,7 @@ func (gw *TabletGateway) RegisterStats() {
 
 // WaitForTablets is part of the Gateway interface.
 func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) (err error) {
-	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
+	log.Info(fmt.Sprintf("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait))
 	ctx, cancel := context.WithTimeout(ctx, initialTabletTimeout)
 	defer cancel()
 
@@ -246,12 +254,12 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 		switch err {
 		case nil:
 			// Log so we know everything is fine.
-			log.Infof("Waiting for tablets completed")
+			log.Info("Waiting for tablets completed")
 		case context.DeadlineExceeded:
 			// In this scenario, we were able to reach the
 			// topology service, but some tablets may not be
 			// ready. We just warn and keep going.
-			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			log.Warn(fmt.Sprintf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait))
 			err = nil
 		}
 	}()
@@ -322,9 +330,10 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, opts queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
+	if opts.InTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
@@ -333,11 +342,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 	if len(discovery.AllowedTabletTypes) > 0 {
 		var match bool
-		for _, allowed := range discovery.AllowedTabletTypes {
-			if allowed == target.TabletType {
-				match = true
-				break
-			}
+		if slices.Contains(discovery.AllowedTabletTypes, target.TabletType) {
+			match = true
 		}
 		if !match {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), discovery.AllowedTabletTypes)
@@ -350,7 +356,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if gw.buffer != nil && !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
+		if gw.buffer != nil && !bufferedOnce && !opts.InTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, gw.kev, err)
 
@@ -378,7 +384,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// replica queries, so it doesn't make any sense to check for resharding or reparenting in that case.
 			if kev := gw.kev; kev != nil && target.TabletType == topodatapb.TabletType_PRIMARY {
 				if kev.TargetIsBeingResharded(ctx, target) {
-					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
+					log.V(2).Info(fmt.Sprintf("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack()))
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}
@@ -401,36 +407,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		var th *discovery.TabletHealth
-
-		// Determine if we should use the balancer for this target
-		useBalancer := gw.balancer != nil
-		if useBalancer && len(balancerKeyspaces) > 0 {
-			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
-		}
-
-		if useBalancer {
-			// Filter out the tablets that we've tried before (if any)
-			if len(invalidTablets) > 0 {
-				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
-					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
-					return isInvalid
-				})
-			}
-
-			th = gw.balancer.Pick(target, tablets)
-		} else {
-			gw.shuffleTablets(gw.localCell, tablets)
-
-			// skip tablets we tried before
-			for _, t := range tablets {
-				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-					th = t
-					break
-				}
-			}
-		}
-
+		th := gw.getBalancerTablet(target, tablets, invalidTablets, opts)
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
@@ -462,9 +439,59 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	return NewShardError(err, target)
 }
 
+// getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
+// select a random tablet, with preference to the local cell.
+func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts queryservice.WrapOpts) *discovery.TabletHealth {
+	// Return early if no tablets are available
+	if len(tablets) == 0 {
+		return nil
+	}
+
+	// Filter out the tablets that we've tried before (if any)
+	if len(invalidTablets) > 0 {
+		tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+			_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
+			return isInvalid
+		})
+
+		// If all tablets are invalid, let's return early
+		if len(tablets) == 0 {
+			return nil
+		}
+	}
+
+	// Determine if we should use the balancer for this target
+	useBalancer := gw.balancer != nil
+	if useBalancer && len(balancerKeyspaces) > 0 {
+		useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
+	}
+
+	// Get the tablet from the balancer if enabled
+	if useBalancer {
+		var pickOpts []balancer.PickOption
+
+		// Add the session UUID to the options if the session balancer is enabled and a session is present.
+		if gw.balancerMode == balancer.ModeSession && opts.Session != nil {
+			pickOpts = append(pickOpts, balancer.WithSessionUUID(opts.Session.GetSessionUUID()))
+		}
+
+		tablet := gw.balancer.Pick(target, tablets, pickOpts...)
+		if tablet != nil {
+			return tablet
+		}
+	}
+
+	// If the balancer isn't enabled, or it didn't return a tablet, shuffle the tablets
+	// and return the first one. (This will always contain at least one tablet due to the
+	// check above).
+	gw.shuffleTablets(gw.localCell, tablets)
+	return tablets[0]
+}
+
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }

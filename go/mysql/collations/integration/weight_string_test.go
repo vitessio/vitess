@@ -50,7 +50,7 @@ func TestWeightStringsComprehensive(t *testing.T) {
 		locals  []colldata.Collation
 		remotes []*remote.Collation
 	}
-	var charsetMap = make(map[string]*collationsForCharset)
+	charsetMap := make(map[string]*collationsForCharset)
 
 	golden := &testutil.GoldenTest{}
 	if err := golden.DecodeFromFile("../testdata/wiki_416c626572742045696e737465696e.gob.gz"); err != nil {

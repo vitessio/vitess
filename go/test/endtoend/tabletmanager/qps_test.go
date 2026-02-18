@@ -16,7 +16,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -28,7 +27,7 @@ import (
 )
 
 func TestQPS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -54,7 +53,7 @@ func TestQPS(t *testing.T) {
 	//       after that we'll see 0.0 QPS rates again. If this becomes actually
 	//       flaky, we need to read continuously in a separate thread.
 
-	for n := 0; n < 15; n++ {
+	for range 15 {
 		// Run queries via vtGate so that they are counted.
 		utils.Exec(t, vtGateConn, "select * from t1")
 	}

@@ -631,15 +631,19 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
 	for _, row := range vtRes.Rows {
 		var grpKey string
+		var grpKeySb634 strings.Builder
 		for _, col := range grpCols {
-			grpKey += row[col].String()
+			grpKeySb634.WriteString(row[col].String())
 		}
+		grpKey += grpKeySb634.String()
 		var foundKey bool
 		for _, mRow := range mRes.Rows {
 			var mKey string
+			var mKeySb640 strings.Builder
 			for _, col := range grpCols {
-				mKey += mRow[col].String()
+				mKeySb640.WriteString(mRow[col].String())
 			}
+			mKey += mKeySb640.String()
 			if grpKey != mKey {
 				continue
 			}

@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -34,8 +33,7 @@ const testLockTimeout = 3 * time.Second
 
 // TestTopoLockTimeout tests that the lock times out after the specified duration.
 func TestTopoLockTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -61,8 +59,7 @@ func TestTopoLockTimeout(t *testing.T) {
 
 // TestTopoLockBasic tests basic lock operations.
 func TestTopoLockBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -86,8 +83,7 @@ func TestTopoLockBasic(t *testing.T) {
 
 // TestKeyspaceRoutingRulesLock tests that the lock is acquired and released correctly.
 func TestKeyspaceRoutingRulesLock(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

@@ -1,30 +1,21 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Custom Go unit test runner which runs all unit tests in parallel except for
-# known flaky unit tests.
-# Flaky unit tests are run sequentially in the second phase and retried up to
-# three times.
-
-# Why are there flaky unit tests?
-#
-# Some of the Go unit tests are inherently flaky e.g. because they use the
-# real timer implementation and might fail when things take longer as usual.
-# In particular, this happens when the system is under load and threads do not
-# get scheduled as fast as usual. Then, the expected timings do not match.
+# Custom Go unit test runner which runs all unit tests using gotestsum. Failed tests are
+# automatically retried up to 3 times to handle flaky tests.
 
 # Set VT_GO_PARALLEL variable in the same way as the Makefile does.
 # We repeat this here because this script is called directly by test.go
@@ -33,61 +24,49 @@
 source build.env
 
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
-  VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
+	VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
+fi
+
+# Enable race detector if RACE=1
+RACE_FLAG=""
+if [[ "$RACE" == "1" ]]; then
+	RACE_FLAG="-race"
 fi
 
 # Mac makes long temp directories for os.TempDir(). MySQL can't connect to
 # sockets in those directories. Tell Golang to use /tmp/vttest_XXXXXX instead.
 kernel="$(uname -s)"
 case "$kernel" in
-  darwin|Darwin)
-    TMPDIR=${TMPDIR:-}
-    if [ -z "$TMPDIR" ]; then
-      TMPDIR="$(mktemp -d /tmp/vttest_XXXXXX)"
-      export TMPDIR
-    fi
-    echo "Using temporary directory for tests: $TMPDIR"
-    ;;
+darwin | Darwin)
+	TMPDIR=${TMPDIR:-}
+	if [ -z "$TMPDIR" ]; then
+		TMPDIR="$(mktemp -d /tmp/vttest_XXXXXX)"
+		export TMPDIR
+	fi
+	echo "Using temporary directory for tests: $TMPDIR"
+	;;
 esac
 
-# All Go packages with test files.
-# Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
+# All Go packages with test files, excluding endtoend tests.
+packages_with_tests=$(go list ./go/... | grep -v endtoend)
 
 if [[ "$VTEVALENGINETEST" == "1" ]]; then
-  packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
+	packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
 fi
 
 if [[ "$VTEVALENGINETEST" == "0" ]]; then
-  packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
+	packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
 fi
 
-# Flaky tests have the suffix "_flaky_test.go".
-# Exclude endtoend tests
-all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
-flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
-
-go test $VT_GO_PARALLEL -v -count=1 $all_except_flaky_tests
-if [ $? -ne 0 ]; then
-  echo "ERROR: Go unit tests failed. See above for errors."
-  echo
-  echo "This should NOT happen. Did you introduce a flaky unit test?"
-  echo "If so, please rename it to the suffix _flaky_test.go."
-  exit 1
+# Build gotestsum args. Failed tests are retried up to 3 times, but if more than 10 tests fail
+# initially we skip retries to avoid wasting time on a real widespread failure.
+GOTESTSUM_ARGS="--format pkgname-and-test-fails --rerun-fails=3 --rerun-fails-max-failures=10 --rerun-fails-run-root-test --format-hide-empty-pkg --hide-summary=skipped"
+if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
+	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --junitfile $JUNIT_OUTPUT"
+fi
+if [[ -n "${JSON_OUTPUT:-}" ]]; then
+	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
 fi
 
-echo '# Flaky tests (3 attempts permitted)'
-
-# Run flaky tests sequentially. Retry when necessary.
-for pkg in $flaky_tests; do
-  max_attempts=3
-  attempt=1
-  # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 5m $VT_GO_PARALLEL $pkg -v -count=1; do
-    echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
-    if [ $((++attempt)) -gt $max_attempts ]; then
-      echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."
-      exit 1
-    fi
-  done
-done
+# shellcheck disable=SC2086
+go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1

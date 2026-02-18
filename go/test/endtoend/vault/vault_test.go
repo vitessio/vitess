@@ -19,7 +19,6 @@ package vault
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -64,7 +63,8 @@ var (
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+	}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
 		"--db-credentials-vault-timeout", "3s",
@@ -78,7 +78,8 @@ var (
 		// Contents of this file provided by our env VAULT_SECRETID
 		//"--db-credentials-vault-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"--db-credentials-vault-ttl", "21s"}
+		"--db-credentials-vault-ttl", "21s",
+	}
 	vaultVTGateArg = []string{
 		vtutils.GetFlagVariantForTests("--mysql-auth-server-impl"), "vault",
 		"--mysql-auth-vault-timeout", "3s",
@@ -92,11 +93,13 @@ var (
 		// Contents of this file provided by our env VAULT_SECRETID
 		//"--mysql-auth-vault-role-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"--mysql-auth-vault-ttl", "21s"}
+		"--mysql-auth-vault-ttl", "21s",
+	}
 	mysqlctlArg = []string{
-		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword}
-	vttabletLogFileName = "vttablet.INFO"
-	tokenRenewalString  = "Vault client status: token renewed"
+		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword,
+	}
+	vttabletLogFileNameSuffix = "-vttablet-stderr.txt"
+	tokenRenewalString        = "Vault client status: token renewed"
 )
 
 func TestVaultAuth(t *testing.T) {
@@ -109,7 +112,7 @@ func TestVaultAuth(t *testing.T) {
 	defer vs.stop()
 
 	// Wait for Vault server to come up
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		time.Sleep(250 * time.Millisecond)
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", hostname, vs.port1))
 		if err != nil {
@@ -146,7 +149,7 @@ func TestVaultAuth(t *testing.T) {
 	time.Sleep(30 * time.Second)
 	// Check the log for the Vault token renewal message
 	//   If we don't see it, that is a test failure
-	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
+	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, primary.VttabletProcess.TabletPath+vttabletLogFileNameSuffix))
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
@@ -180,17 +183,17 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 	setup.Stdout = logFile
 
 	setup.Env = append(setup.Env, os.Environ()...)
-	log.Infof("Running Vault setup command: %v", strings.Join(setup.Args, " "))
+	log.Info(fmt.Sprintf("Running Vault setup command: %v", strings.Join(setup.Args, " ")))
 	err := setup.Start()
 	if err != nil {
-		log.Errorf("Error during Vault setup: %v", err)
+		log.Error(fmt.Sprintf("Error during Vault setup: %v", err))
 	}
 
 	setup.Wait()
 	var secretID, roleID string
 	file, err := os.Open(logFilePath)
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	defer file.Close()
 
@@ -203,7 +206,7 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 
 	return roleID, secretID
@@ -253,7 +256,7 @@ func initializeClusterLate(t *testing.T) {
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
 	require.NoError(t, err, "expected to load init_db file")
 	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(newInitDBFile, []byte(sql), 0660)
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0o660)
 	require.NoError(t, err, "expected to load init_db file")
 
 	// Start MySQL
@@ -285,7 +288,7 @@ func initializeClusterLate(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc(keyspaceName)
+	err = clusterInstance.StartVTOrc(cell, keyspaceName)
 	require.NoError(t, err)
 
 	// Start vtgate
@@ -294,7 +297,7 @@ func initializeClusterLate(t *testing.T) {
 }
 
 func insertRow(t *testing.T, id int, productName string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:  clusterInstance.Hostname,
 		Port:  clusterInstance.VtgateMySQLPort,

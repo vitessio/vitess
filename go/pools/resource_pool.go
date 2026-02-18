@@ -117,7 +117,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	rp.idleTimeout.Store(idleTimeout.Nanoseconds())
 	rp.maxLifetime.Store(maxLifetime.Nanoseconds())
 
-	for i := 0; i < capacity; i++ {
+	for range capacity {
 		rp.resources <- resourceWrapper{}
 	}
 
@@ -153,7 +153,7 @@ func (rp *ResourcePool) closeIdleResources() {
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
 
-	for i := 0; i < available; i++ {
+	for range available {
 		var wrapper resourceWrapper
 		select {
 		case wrapper = <-rp.resources:
@@ -176,7 +176,7 @@ func (rp *ResourcePool) reopen() {
 	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
 	defer rp.reopenMutex.Unlock()
 	capacity := int(rp.capacity.Load())
-	log.Infof("Draining and reopening resource pool with capacity %d by request", capacity)
+	log.Info(fmt.Sprintf("Draining and reopening resource pool with capacity %d by request", capacity))
 	rp.Close()
 	_ = rp.SetCapacity(capacity)
 	if rp.idleTimer != nil {

@@ -67,12 +67,12 @@ func init() {
 		panic("could not parse MySQL version: " + err.Error())
 	}
 	MySQLVersion = fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
-	log.Infof("MySQL version: %s", MySQLVersion)
+	log.Info("MySQL version: " + MySQLVersion)
 	CollationEnv = collations.NewEnvironment(MySQLVersion)
 	// utf8mb4_general_ci is the default for MySQL 5.7 and
 	// utf8mb4_0900_ai_ci is the default for MySQL 8.0.
 	DefaultCollationID = CollationEnv.DefaultConnectionCharset()
-	log.Infof("Default collation ID: %d", DefaultCollationID)
+	log.Info(fmt.Sprintf("Default collation ID: %d", DefaultCollationID))
 }
 
 // Env contains all the env vars for a test against a mysql instance.
@@ -136,7 +136,7 @@ func Init(ctx context.Context) (*Env, error) {
 		Config: cfg,
 	}
 	if err := te.cluster.Setup(); err != nil {
-		os.RemoveAll(te.cluster.Config.SchemaDir)
+		os.RemoveAll(te.cluster.SchemaDir)
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
@@ -195,7 +195,7 @@ func (te *Env) Close() {
 	te.SchemaEngine.Close()
 	te.Mysqld.Close()
 	te.cluster.TearDown()
-	os.RemoveAll(te.cluster.Config.SchemaDir)
+	os.RemoveAll(te.cluster.SchemaDir)
 }
 
 // SetVSchema sets the vschema for the test keyspace.

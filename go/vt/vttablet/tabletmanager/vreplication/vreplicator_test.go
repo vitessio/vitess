@@ -593,8 +593,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		t.Skipf("Skipping test as it's not supported with %s", flavor)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 	filter := &binlogdatapb.Filter{
@@ -662,12 +661,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 	// The ALTER should block on the table lock.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := vr.execPostCopyActions(ctx, tableName)
 		assert.True(t, strings.EqualFold(err.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter))
-	}()
+	})
 
 	// Confirm that the expected ALTER query is being attempted.
 	query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
@@ -819,8 +816,7 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 }
 
 func TestThrottlerAppNames(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)

@@ -152,7 +152,7 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
 	sortOrder := c.sort
 
 	hasher.Write64(uint64(c.id))
-	var left = numCodepoints
+	left := numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
 	}
@@ -185,7 +185,7 @@ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 
 func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	var equals func(rune, rune) bool
-	var sortOrder = c.sort
+	sortOrder := c.sort
 
 	if sortOrder != nil {
 		equals = func(a, b rune) bool {

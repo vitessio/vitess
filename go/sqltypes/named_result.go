@@ -22,10 +22,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var (
-	// ErrNoSuchField indicates a search for a value by an unknown field/column name
-	ErrNoSuchField = errors.New("No such field in RowNamedValues")
-)
+// ErrNoSuchField indicates a search for a value by an unknown field/column name
+var ErrNoSuchField = errors.New("No such field in RowNamedValues")
 
 // RowNamedValues contains a row's values as a map based on Field (aka table column) name
 type RowNamedValues map[string]Value

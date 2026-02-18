@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 /*
 Copyright 2021 The Vitess Authors.
@@ -20,15 +19,15 @@ import (
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
 
-var (
-	collations = []string{"utf8mb4_bin", "utf8mb4_0900_ai_ci",
-		"utf8mb4_0900_as_ci", "utf8mb4_0900_as_cs",
-		"utf8mb4_0900_ai_ci", "utf8mb4_0900_as_ci",
-		"utf8mb4_0900_ai_ci", "utf8mb4_0900_ai_ci",
-		"utf8mb4_hu_0900_as_cs", "utf8mb4_ja_0900_as_cs",
-		"utf8mb4_ja_0900_as_cs_ks", "utf8mb4_zh_0900_as_cs",
-		"utf8mb4_zh_0900_as_cs"}
-)
+var collations = []string{
+	"utf8mb4_bin", "utf8mb4_0900_ai_ci",
+	"utf8mb4_0900_as_ci", "utf8mb4_0900_as_cs",
+	"utf8mb4_0900_ai_ci", "utf8mb4_0900_as_ci",
+	"utf8mb4_0900_ai_ci", "utf8mb4_0900_ai_ci",
+	"utf8mb4_hu_0900_as_cs", "utf8mb4_ja_0900_as_cs",
+	"utf8mb4_ja_0900_as_cs_ks", "utf8mb4_zh_0900_as_cs",
+	"utf8mb4_zh_0900_as_cs",
+}
 
 func FuzzCollations(data []byte) int {
 	testinit()

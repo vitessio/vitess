@@ -121,7 +121,7 @@ func TestWatchConfig(t *testing.T) {
 		return time.Duration(jitter(75, 125)) * time.Millisecond
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -145,7 +145,7 @@ func TestWatchConfig(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		require.NoError(t, writeRandomConfig(tmp))
 		time.Sleep(writeJitter())
 	}

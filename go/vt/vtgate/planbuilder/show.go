@@ -390,8 +390,10 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter) ([][]sqltypes.Value, 
 	return charsets(), nil
 }
 
-var once sync.Once
-var charsetRows [][]sqltypes.Value
+var (
+	once        sync.Once
+	charsetRows [][]sqltypes.Value
+)
 
 func charsets() [][]sqltypes.Value {
 	once.Do(func() {

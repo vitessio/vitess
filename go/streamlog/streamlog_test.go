@@ -87,7 +87,7 @@ func TestHTTP(t *testing.T) {
 	}
 
 	// Send some messages.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		msg := fmt.Sprint("msg", i)
 		logger.Send(&logMessage{msg})
 		val, err := body.ReadString('\n')
@@ -121,7 +121,7 @@ func TestHTTP(t *testing.T) {
 		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
 	}
 	logger.mu.Unlock()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		logger.Send(&logMessage{"val3"})
 		// Allow time for propagation (loopback interface - expected to be fast).
 		time.Sleep(1 * time.Millisecond)
@@ -148,7 +148,7 @@ func TestChannel(t *testing.T) {
 	}
 
 	// Send/receive some messages, one at a time.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		msg := fmt.Sprint("msg", i)
 		done := make(chan struct{})
 		go func() {
@@ -187,7 +187,7 @@ func TestChannel(t *testing.T) {
 	if len(got) != len(want) {
 		t.Errorf("Bad results length: got %d, want %d", len(got), len(want))
 	} else {
-		for i := 0; i < len(want); i++ {
+		for i := range want {
 			if want[i]+"\n" != got[i] {
 				t.Errorf("Unexpected result in log: got %q, want %q", got[i], want[i]+"\n")
 			}

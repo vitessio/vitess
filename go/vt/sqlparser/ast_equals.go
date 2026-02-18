@@ -7726,6 +7726,159 @@ func (cmp *Comparator) TableStatement(inA, inB TableStatement) bool {
 	}
 }
 
+// WindowFunc does deep equals between the two objects.
+func (cmp *Comparator) WindowFunc(inA, inB WindowFunc) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfArgumentLessWindowExpr(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAvg(a, b)
+	case *BitAnd:
+		b, ok := inB.(*BitAnd)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBitAnd(a, b)
+	case *BitOr:
+		b, ok := inB.(*BitOr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBitOr(a, b)
+	case *BitXor:
+		b, ok := inB.(*BitXor)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBitXor(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCountStar(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfFirstOrLastValueExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLagLeadExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMax(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMin(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfNTHValueExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfNtileExpr(a, b)
+	case *Std:
+		b, ok := inB.(*Std)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfStd(a, b)
+	case *StdDev:
+		b, ok := inB.(*StdDev)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfStdDev(a, b)
+	case *StdPop:
+		b, ok := inB.(*StdPop)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfStdPop(a, b)
+	case *StdSamp:
+		b, ok := inB.(*StdSamp)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfStdSamp(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSum(a, b)
+	case *VarPop:
+		b, ok := inB.(*VarPop)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfVarPop(a, b)
+	case *VarSamp:
+		b, ok := inB.(*VarSamp)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfVarSamp(a, b)
+	case *Variance:
+		b, ok := inB.(*Variance)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfVariance(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // SliceOfRefOfColumnDefinition does deep equals between the two objects.
 func (cmp *Comparator) SliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	if len(a) != len(b) {

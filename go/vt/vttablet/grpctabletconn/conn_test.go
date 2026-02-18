@@ -58,8 +58,7 @@ func TestGRPCTabletConn(t *testing.T) {
 	go server.Serve(listener)
 	defer server.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
@@ -114,8 +113,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
@@ -191,22 +189,22 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		cc: &grpc.ClientConn{},
 		c:  mqc,
 	}
-	_ = qc.StreamExecute(context.Background(), nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+	_ = qc.StreamExecute(context.Background(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())

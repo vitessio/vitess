@@ -99,6 +99,11 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_PASSWORD = 'AAA`)
 }
 
+func TestRedactIdentifiedByPassword(t *testing.T) {
+	testRedacted(t, "CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY 'secret' REQUIRE SSL",
+		"CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY '****' REQUIRE SSL")
+}
+
 func TestRedactPassword(t *testing.T) {
 	// regular case
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA'`,
@@ -746,8 +751,7 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
