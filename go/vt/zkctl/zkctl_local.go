@@ -18,11 +18,8 @@ package zkctl
 
 import (
 	"fmt"
-<<<<<<< HEAD
-=======
 	"log"
 	"time"
->>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 
 	"vitess.io/vitess/go/netutil"
 )
@@ -38,11 +35,6 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 	zkConfig := MakeZkConfigFromString(zkCfg, uint32(id))
 	zkd := NewZkd(zkConfig)
 
-<<<<<<< HEAD
-	// Init & start zk.
-	if err := zkd.Init(); err != nil {
-		log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
-=======
 	// Init & start ZK.
 	retryTimer := time.NewTimer(10 * time.Minute)
 	defer retryTimer.Stop()
@@ -57,6 +49,5 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 		default:
 			time.Sleep(1 * time.Second)
 		}
->>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 	}
 }

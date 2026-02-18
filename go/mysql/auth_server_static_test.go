@@ -180,16 +180,10 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 
 	// wait for signal handler
-<<<<<<< HEAD
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
-
-=======
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
 		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
->>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 }
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
@@ -198,18 +192,10 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
-<<<<<<< HEAD
-	time.Sleep(20 * time.Millisecond)
-	// wait for signal handler
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
-
-=======
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
 		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
->>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 }
 
 func TestStaticMysqlNativePasswords(t *testing.T) {
