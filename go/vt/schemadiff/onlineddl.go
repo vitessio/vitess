@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -631,7 +633,7 @@ func OnlineDDLMigrationTablesAnalysis(
 
 // ValidateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
 // - extra validation (no FKs for now...)
-// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+// - generate new and unique names for all constraints (CHECK, FK, and named UNIQUE/PRIMARY KEY constraints)
 func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID string, createTable *sqlparser.CreateTable, allowForeignKeys bool) (constraintMap map[string]string, err error) {
 	constraintMap = map[string]string{}
 	hashExists := map[string]bool{}
@@ -647,6 +649,40 @@ func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID stri
 			newName := newConstraintName(originalTableName, baseUUID, node, hashExists, sqlparser.CanonicalString(node.Details), oldName)
 			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
+		case *sqlparser.IndexDefinition:
+			// Handle named UNIQUE/PRIMARY KEY constraints stored in IndexInfo.ConstraintName
+			if node.Info.ConstraintName.String() != "" {
+				oldName := node.Info.ConstraintName.String()
+				// For UNIQUE/PRIMARY KEY constraints, we generate a new constraint name.
+				// We use the index definition as the seed and determine the constraint type indicator.
+				seed := sqlparser.CanonicalString(node)
+				var constraintIndicator string
+				if node.Info.Type == sqlparser.IndexTypePrimary {
+					constraintIndicator = "pk"
+				} else if node.Info.Type == sqlparser.IndexTypeUnique {
+					constraintIndicator = "uk"
+				} else {
+					constraintIndicator = "idx"
+				}
+				// Generate hash similar to newConstraintName
+				hash := textutil.UUIDv5Base36(baseUUID, originalTableName, seed)
+				for i := 1; hashExists[hash]; i++ {
+					hash = textutil.UUIDv5Base36(baseUUID, originalTableName, seed, strconv.Itoa(i))
+				}
+				hashExists[hash] = true
+				suffix := "_" + hash
+				maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+				newName := ExtractConstraintOriginalName(originalTableName, oldName)
+				if newName == "" {
+					newName = constraintIndicator
+				}
+				if len(newName) > maxAllowedNameLength {
+					newName = newName[0:maxAllowedNameLength]
+				}
+				newName = newName + suffix
+				node.Info.ConstraintName = sqlparser.NewIdentifierCI(newName)
+				constraintMap[oldName] = newName
+			}
 		}
 		return true, nil
 	}
@@ -669,13 +705,19 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType || node.Type == sqlparser.ConstraintType {
-				// drop a check or a foreign key constraint
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint - these must be in constraintMap
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
 					return false, fmt.Errorf("Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
 				node.Name = sqlparser.NewIdentifierCI(mappedName)
+			} else if node.Type == sqlparser.ConstraintType {
+				// DROP CONSTRAINT can refer to FK/CHECK (in constraintMap) or named UNIQUE/PRIMARY (in indexes, not in constraintMap)
+				// Only remap if found in constraintMap; otherwise leave unchanged (it's a named UNIQUE/PRIMARY constraint)
+				if mappedName, ok := constraintMap[node.Name.String()]; ok {
+					node.Name = sqlparser.NewIdentifierCI(mappedName)
+				}
 			}
 		case *sqlparser.AddConstraintDefinition:
 			oldName := node.ConstraintDefinition.Name.String()

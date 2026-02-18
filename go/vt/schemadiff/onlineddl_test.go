@@ -1222,6 +1222,10 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			},
 			expect: []string{"alter table t drop constraint ibfk_1_aaaaaaaaaaaaaa"},
 		},
+		{
+			alter:  "alter table t drop constraint uk_name",
+			expect: []string{"alter table t drop constraint uk_name"},
+		},
 	}
 
 	env := NewTestEnv()
