@@ -77,7 +77,8 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		// Starting Vtgate in default MULTI transaction mode
+		// Starting Vtgate in default MULTI transaction mode with TWOPC limit
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--transaction-mode-limit", "TWOPC")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}

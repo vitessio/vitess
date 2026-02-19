@@ -40,6 +40,9 @@ import (
 
 func TestExecutorSet(t *testing.T) {
 	executorEnv, _, _, _, ctx := createExecutorEnv(t)
+	executorEnv.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+		return vtgatepb.TransactionMode_TWOPC
+	}
 
 	testcases := []struct {
 		in  string
@@ -650,4 +653,108 @@ func TestExecutorTimeZone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
+}
+
+func TestExecutorSetTransactionModeLimit(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	testcases := []struct {
+		name         string
+		limit        vtgatepb.TransactionMode
+		setMode      string
+		expectErr    string
+		expectedMode vtgatepb.TransactionMode
+	}{
+		{
+			name:      "limit_single_rejects_multi",
+			limit:     vtgatepb.TransactionMode_SINGLE,
+			setMode:   "multi",
+			expectErr: "transaction_mode MULTI exceeds vtgate limit SINGLE",
+		},
+		{
+			name:      "limit_single_rejects_twopc",
+			limit:     vtgatepb.TransactionMode_SINGLE,
+			setMode:   "twopc",
+			expectErr: "transaction_mode TWOPC exceeds vtgate limit SINGLE",
+		},
+		{
+			name:         "limit_single_allows_single",
+			limit:        vtgatepb.TransactionMode_SINGLE,
+			setMode:      "single",
+			expectedMode: vtgatepb.TransactionMode_SINGLE,
+		},
+		{
+			name:         "limit_single_allows_unspecified",
+			limit:        vtgatepb.TransactionMode_SINGLE,
+			setMode:      "unspecified",
+			expectedMode: vtgatepb.TransactionMode_UNSPECIFIED,
+		},
+		{
+			name:         "limit_multi_allows_single",
+			limit:        vtgatepb.TransactionMode_MULTI,
+			setMode:      "single",
+			expectedMode: vtgatepb.TransactionMode_SINGLE,
+		},
+		{
+			name:         "limit_multi_allows_multi",
+			limit:        vtgatepb.TransactionMode_MULTI,
+			setMode:      "multi",
+			expectedMode: vtgatepb.TransactionMode_MULTI,
+		},
+		{
+			name:      "limit_multi_rejects_twopc",
+			limit:     vtgatepb.TransactionMode_MULTI,
+			setMode:   "twopc",
+			expectErr: "transaction_mode TWOPC exceeds vtgate limit MULTI",
+		},
+		{
+			name:         "limit_twopc_allows_single",
+			limit:        vtgatepb.TransactionMode_TWOPC,
+			setMode:      "single",
+			expectedMode: vtgatepb.TransactionMode_SINGLE,
+		},
+		{
+			name:         "limit_twopc_allows_multi",
+			limit:        vtgatepb.TransactionMode_TWOPC,
+			setMode:      "multi",
+			expectedMode: vtgatepb.TransactionMode_MULTI,
+		},
+		{
+			name:         "limit_twopc_allows_twopc",
+			limit:        vtgatepb.TransactionMode_TWOPC,
+			setMode:      "twopc",
+			expectedMode: vtgatepb.TransactionMode_TWOPC,
+		},
+		{
+			name:         "limit_twopc_allows_unspecified",
+			limit:        vtgatepb.TransactionMode_TWOPC,
+			setMode:      "unspecified",
+			expectedMode: vtgatepb.TransactionMode_UNSPECIFIED,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+				return tc.limit
+			}
+			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+tc.setMode+"'", nil)
+			if tc.expectErr != "" {
+				require.ErrorContains(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedMode, session.TransactionMode)
+			}
+		})
+	}
+
+	t.Run("no_limit_allows_all", func(t *testing.T) {
+		executor.vConfig.TransactionModeLimit = nil
+		for _, mode := range []string{"single", "multi", "twopc", "unspecified"} {
+			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+mode+"'", nil)
+			require.NoError(t, err)
+		}
+	})
 }

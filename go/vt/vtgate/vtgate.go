@@ -64,6 +64,21 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
+func parseTransactionModeString(txMode string) (vtgatepb.TransactionMode, error) {
+	switch strings.ToLower(txMode) {
+	case "unspecified":
+		return vtgatepb.TransactionMode_UNSPECIFIED, nil
+	case "single":
+		return vtgatepb.TransactionMode_SINGLE, nil
+	case "multi":
+		return vtgatepb.TransactionMode_MULTI, nil
+	case "twopc":
+		return vtgatepb.TransactionMode_TWOPC, nil
+	default:
+		return 0, fmt.Errorf("invalid transaction_mode: %q (valid values: UNSPECIFIED, SINGLE, MULTI, TWOPC)", txMode)
+	}
+}
+
 var (
 	normalizeQueries    = true
 	streamBufferSize    = 32 * 1024
@@ -128,19 +143,59 @@ var (
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
 				return func(key string) vtgatepb.TransactionMode {
-					txMode := v.GetString(key)
-					switch strings.ToLower(txMode) {
-					case "single":
-						return vtgatepb.TransactionMode_SINGLE
-					case "multi":
+					mode, err := parseTransactionModeString(v.GetString(key))
+					if err != nil {
+						log.Error(fmt.Sprintf("invalid --transaction-mode value, defaulting to MULTI: %v", err))
 						return vtgatepb.TransactionMode_MULTI
-					case "twopc":
-						return vtgatepb.TransactionMode_TWOPC
+					}
+					return mode
+				}
+			},
+		},
+	)
+
+	transactionModeDefault = viperutil.Configure(
+		"transaction_mode_default",
+		viperutil.Options[vtgatepb.TransactionMode]{
+			FlagName: "transaction-mode-default",
+			Default:  vtgatepb.TransactionMode_UNSPECIFIED,
+			Dynamic:  true,
+			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
+				return func(key string) vtgatepb.TransactionMode {
+					switch txMode := strings.ToLower(v.GetString(key)); txMode {
+					case "", "unspecified":
+						return transactionMode.Get()
 					default:
-						fmt.Printf("Invalid option: %v\n", txMode)
-						fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
-						os.Exit(1)
-						return -1
+						mode, err := parseTransactionModeString(txMode)
+						if err != nil {
+							log.Error(fmt.Sprintf("invalid --transaction-mode-default value, falling back to --transaction-mode: %v", err))
+							return transactionMode.Get()
+						}
+						return mode
+					}
+				}
+			},
+		},
+	)
+
+	transactionModeLimit = viperutil.Configure(
+		"transaction_mode_limit",
+		viperutil.Options[vtgatepb.TransactionMode]{
+			FlagName: "transaction-mode-limit",
+			Default:  vtgatepb.TransactionMode_UNSPECIFIED,
+			Dynamic:  true,
+			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
+				return func(key string) vtgatepb.TransactionMode {
+					switch txMode := strings.ToLower(v.GetString(key)); txMode {
+					case "", "unspecified":
+						return transactionMode.Get()
+					default:
+						mode, err := parseTransactionModeString(txMode)
+						if err != nil {
+							log.Error(fmt.Sprintf("invalid --transaction-mode-limit value, falling back to --transaction-mode: %v", err))
+							return transactionMode.Get()
+						}
+						return mode
 					}
 				}
 			},
@@ -171,7 +226,9 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Sets both default and limit unless overridden by --transaction-mode-default or --transaction-mode-limit")
+	fs.String("transaction-mode-default", "", "Default transaction mode for new sessions. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
+	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
 	utils.SetFlagBoolVar(fs, &normalizeQueries, "normalize-queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
@@ -210,6 +267,8 @@ func registerFlags(fs *pflag.FlagSet) {
 		enableOnlineDDL,
 		enableDirectDDL,
 		transactionMode,
+		transactionModeDefault,
+		transactionModeLimit,
 	)
 }
 
@@ -331,6 +390,11 @@ func Init(
 	}
 
 	dynamicConfig := NewDynamicViperConfig()
+
+	if txDefault, txLimit := transactionModeDefault.Get(), transactionModeLimit.Get(); txDefault > txLimit {
+		log.Error(fmt.Sprintf("transaction-mode-default %s exceeds transaction-mode-limit %s", txDefault.String(), txLimit.String()))
+		os.Exit(1)
+	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server

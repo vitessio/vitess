@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE"}
+		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE", "--transaction-mode-limit", "MULTI"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -269,6 +269,22 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
 		utils.Exec(t, conn, `commit`)
 	})
+}
+
+func TestTransactionModeLimitSingle(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
+
+	utils.Exec(t, conn, "set transaction_mode = 'multi'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("MULTI")]]`)
+
+	utils.AssertContainsError(t, conn, "set transaction_mode = 'twopc'", "exceeds vtgate limit")
+
+	utils.Exec(t, conn, "set transaction_mode = 'unspecified'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {

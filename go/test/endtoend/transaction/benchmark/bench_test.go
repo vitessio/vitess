@@ -74,6 +74,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start Vtgate
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--transaction-mode-limit", "TWOPC")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}

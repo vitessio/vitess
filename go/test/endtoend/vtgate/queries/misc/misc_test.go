@@ -492,6 +492,18 @@ func TestTransactionModeVar(t *testing.T) {
 	}
 }
 
+func TestTransactionModeLimitRejectsAboveLimit(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = single")
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = multi")
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = twopc")
+
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = unspecified")
+	utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", `[[VARCHAR("MULTI")]]`)
+}
+
 // TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
 func TestAliasesInOuterJoinQueries(t *testing.T) {
 	mcmp, closer := start(t)

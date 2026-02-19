@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views", "--transaction-mode-limit", "TWOPC")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 
 		// Start keyspace

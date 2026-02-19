@@ -1865,6 +1865,24 @@ func TestVindexes(t *testing.T) {
 	}
 }
 
+func TestTransactionModeLimitTWOPC(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set transaction_mode = 'twopc'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("TWOPC")]]`)
+
+	utils.Exec(t, conn, "set transaction_mode = 'multi'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("MULTI")]]`)
+
+	utils.Exec(t, conn, "set transaction_mode = 'single'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
+
+	utils.Exec(t, conn, "set transaction_mode = 'unspecified'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("TWOPC")]]`)
+}
+
 func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
