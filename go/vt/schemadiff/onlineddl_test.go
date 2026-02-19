@@ -1217,6 +1217,13 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			},
 			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa"},
 		},
+		{
+			alter: "alter table t drop constraint t_ibfk_1",
+			m: map[string]string{
+				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
+			},
+			expect: []string{"alter table t drop constraint ibfk_1_aaaaaaaaaaaaaa"},
+		},
 	}
 
 	env := NewTestEnv()
