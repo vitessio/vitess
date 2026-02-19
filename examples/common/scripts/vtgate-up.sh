@@ -29,7 +29,6 @@ echo "Starting vtgate..."
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtgate \
   $TOPOLOGY_FLAGS \
-  --log-structured=false \
   --log_dir $VTDATAROOT/tmp \
   --log-queries-to-file $VTDATAROOT/tmp/vtgate_querylog.txt \
   --port $web_port \

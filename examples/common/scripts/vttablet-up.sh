@@ -38,7 +38,6 @@ echo "Starting backup script for vttablet for $alias..."
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
- --log-structured=false \
  --log_dir $VTDATAROOT/tmp \
  --log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
  --tablet-path $alias \
