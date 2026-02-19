@@ -1,9 +1,11 @@
 package schemadiff
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -13,7 +15,13 @@ const (
 
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
-func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
+func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (eligible bool, err error) {
+	log.Info(fmt.Sprintf("Checking if ALTER %q is capable of INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+	defer func() {
+		if eligible {
+			log.Info(fmt.Sprintf("ALTER %q is eligible for INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+		}
+	}()
 	// A table with FULLTEXT index won't support adding/removing columns instantly.
 	tableHasFulltextIndex := false
 	for _, key := range createTable.TableSpec.Indexes {
@@ -93,7 +101,14 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		tableColDefinition := colStringStrippedDown(col, false)
 		newColDefinition := colStringStrippedDown(newCol, false)
 		if tableColDefinition == newColDefinition {
-			return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+			capable, err := capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support changing column default with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
 		// Check if:
 		// 1. this an ENUM/SET
@@ -103,6 +118,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		if len(col.Type.EnumValues) > 0 && len(newCol.Type.EnumValues) > 0 {
 			// both are enum or set
 			if !hasPrefix(newCol.Type.EnumValues, col.Type.EnumValues) {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the new ENUM/SET values do not have the old values as prefix. Old columns: %q, new columns: %q",
+					sqlparser.CanonicalString(alterOption), strings.Join(col.Type.EnumValues, ","), strings.Join(newCol.Type.EnumValues, ",")))
 				return false, nil
 			}
 			// we know the new column definition is identical to, or extends, the old definition.
@@ -110,12 +127,16 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			if strings.EqualFold(col.Type.Type, "enum") {
 				if len(col.Type.EnumValues) <= 255 && len(newCol.Type.EnumValues) > 255 {
 					// this increases the SET storage size (1 byte for up to 8 values, 2 bytes beyond)
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because we would be crossing the 255 enum value count, which increases the storage size from 1 to 2 bytes. Old columns: %q, new columns: %q",
+						sqlparser.CanonicalString(alterOption), strings.Join(col.Type.EnumValues, ","), strings.Join(newCol.Type.EnumValues, ",")))
 					return false, nil
 				}
 			}
 			if strings.EqualFold(col.Type.Type, "set") {
 				if (len(col.Type.EnumValues)+7)/8 != (len(newCol.Type.EnumValues)+7)/8 {
 					// this increases the SET storage size (1 byte for up to 8 values, 2 bytes for 8-15, etc.)
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because we would be crossing the 8 SET value count, which increases the storage size from 1 to 2 bytes. Old columns: %q, new columns: %q",
+						sqlparser.CanonicalString(alterOption), strings.Join(col.Type.EnumValues, ","), strings.Join(newCol.Type.EnumValues, ",")))
 					return false, nil
 				}
 			}
@@ -123,8 +144,16 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			tableColDefinition := colStringStrippedDown(col, true)
 			newColDefinition := colStringStrippedDown(newCol, true)
 			if tableColDefinition == newColDefinition {
-				return capableOf(capabilities.InstantExpandEnumCapability)
+				capable, err := capableOf(capabilities.InstantExpandEnumCapability)
+				if !capable {
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support INSTANT DDL for expanding ENUM/SET columns", sqlparser.CanonicalString(alterOption)))
+				}
+				if err != nil {
+					log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+				}
+				return capable, err
 			}
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the base column definition has been changed. Old column: %q, new column: %q", sqlparser.CanonicalString(alterOption), tableColDefinition, newColDefinition))
 		}
 		return false, nil
 	}
@@ -134,53 +163,76 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 	case *sqlparser.AddColumns:
 		if tableHasFulltextIndex {
 			// not supported if the table has a FULLTEXT index
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the table has a FULLTEXT index", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		// Not supported in COMPRESSED tables
 		if tableIsCompressed {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the table is compressed", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		for _, column := range opt.Columns {
 			if isGenerated, storage := IsGeneratedColumn(column); isGenerated {
 				if storage == sqlparser.StoredStorage {
 					// Adding a generated "STORED" column is unsupported
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column is a generated value", sqlparser.CanonicalString(alterOption)))
 					return false, nil
 				}
 			}
 			if column.Type.Options.Default != nil && !column.Type.Options.DefaultLiteral {
 				// Expression default values are not supported
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column has a DEFAULT function", sqlparser.CanonicalString(alterOption)))
 				return false, nil
 			}
 			if strings.EqualFold(column.Type.Type, "datetime") {
 				e := &ColumnDefinitionEntity{ColumnDefinition: column}
 				if !e.IsNullable() && !e.HasDefault() {
 					// DATETIME columns must have a default value
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the datetime column has no DEFAULT", sqlparser.CanonicalString(alterOption)))
 					return false, nil
 				}
 			}
 		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
-			return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
+			capable, err := capableOf(capabilities.InstantAddDropColumnFlavorCapability)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support adding FIRST columns with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
 		// Adding a *last* column is supported in 8.0
-		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
+		capable, err := capableOf(capabilities.InstantAddLastColumnFlavorCapability)
+		if !capable {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support adding last columns with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+		}
+		if err != nil {
+			log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+		}
+		return capable, err
 	case *sqlparser.DropColumn:
 		col := findColumn(opt.Name.Name.String())
 		if col == nil {
 			// column not found
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column %q was not found", sqlparser.CanonicalString(alterOption), opt.Name.Name.String()))
 			return false, nil
 		}
 		if tableHasFulltextIndex {
 			// not supported if the table has a FULLTEXT index
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the table has a FULLTEXT index", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		// Not supported in COMPRESSED tables
 		if tableIsCompressed {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the table is compressed", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		if findIndexCoveringColumn(opt.Name.Name.String()) != nil {
 			// not supported if the column is part of an index
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column is part of an index", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		if isGenerated, _ := IsGeneratedColumn(col); isGenerated {
@@ -188,11 +240,19 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			// Note: according to the docs dropping a STORED generated column is not INSTANT-able,
 			// but in practice this is supported. This is why we don't test for STORED here, like
 			// we did for `AddColumns`.
-			return capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
+			capable, err := capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support dropping virtual generated columns with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 	case *sqlparser.ChangeColumn:
 		if opt.First || opt.After != nil {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because CHANGE COLUMN does not support FIRST or AFTER clauses with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		// We do not support INSTANT for renaming a column (ALTER TABLE ...CHANGE) because:
@@ -201,26 +261,60 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// 3. The success of the operation depends on whether the column is referenced by a foreign key
 		//    in another table. Which is a bit too much to compute here.
 		if opt.OldColumn.Name.String() != opt.NewColDefinition.Name.String() {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL as the column name is being changed and that is not supported with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		if col := findColumn(opt.OldColumn.Name.String()); col != nil {
-			return changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+			capable, err := changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the type of the column is being changed in a way that is not supported with INSTANT DDL. Old column: %q, new column: %q",
+					sqlparser.CanonicalString(alterOption), sqlparser.CanonicalString(col), sqlparser.CanonicalString(opt.NewColDefinition)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking ALTER %q for INSTANT DDL capability: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
+		log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column %q was not found", sqlparser.CanonicalString(alterOption), opt.OldColumn.Name.String()))
 		return false, nil
 	case *sqlparser.ModifyColumn:
 		if opt.First || opt.After != nil {
+			log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL as the MODIFY COLUMN clause does not support FIRST or AFTER clauses with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
 			return false, nil
 		}
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
-			return changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+			capable, err := changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the type of the column is being changed in a way that is not supported with INSTANT DDL. Old column: %q, new column: %q",
+					sqlparser.CanonicalString(alterOption), sqlparser.CanonicalString(col), sqlparser.CanonicalString(opt.NewColDefinition)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking ALTER %q for INSTANT DDL capability: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
+		log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the column %q was not found", sqlparser.CanonicalString(alterOption), opt.NewColDefinition.Name.String()))
 		return false, nil
 	case *sqlparser.AlterColumn:
 		if opt.DropDefault || opt.DefaultLiteral || opt.DefaultVal != nil {
-			return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+			capable, err := capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support changing column default with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
 		if opt.Invisible != nil {
-			return capableOf(capabilities.InstantChangeColumnVisibilityCapability)
+			capable, err := capableOf(capabilities.InstantChangeColumnVisibilityCapability)
+			if !capable {
+				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support changing column visibility with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+			}
+			if err != nil {
+				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+			}
+			return capable, err
 		}
 		return false, nil
 	case sqlparser.AlgorithmValue:
@@ -243,10 +337,12 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		return false, err
 	}
 	if !capable {
+		log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support INSTANT DDL", sqlparser.CanonicalString(alterTable)))
 		return false, nil
 	}
 	if alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil {
 		// no INSTANT for partitions
+		log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the table is partitioned", sqlparser.CanonicalString(alterTable)))
 		return false, nil
 	}
 	// For the ALTER statement to qualify for ALGORITHM=INSTANT, all alter options must each qualify.
