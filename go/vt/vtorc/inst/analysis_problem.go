@@ -52,7 +52,7 @@ type DetectionAnalysisProblem struct {
 // RequiresOrderedExecution returns true if the problem must be executed
 // sequentially relative to other problems in the same shard.
 func (dap *DetectionAnalysisProblem) RequiresOrderedExecution() bool {
-	return dap.Meta.Priority == 0 || dap.Meta.HasShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0
+	return dap.Meta.Priority == detectionAnalysisPriorityCritical || dap.Meta.HasShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0
 }
 
 // GetPriority returns the priority of a problem as an int.
