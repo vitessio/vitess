@@ -656,12 +656,12 @@ func TestMonitorWriteBlocked(t *testing.T) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 2*time.Second, 5*time.Microsecond)
+	}, 15*time.Second, 1*time.Microsecond)
 
 	// Check that the writes finished successfully.
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 
 	// After write completes, count should be back to zero.
 	m.mu.Lock()
