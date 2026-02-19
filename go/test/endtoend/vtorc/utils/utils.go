@@ -796,6 +796,27 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 	}
 }
 
+// MakeAPICallRetryTimeout is used to make an API call and retry until timeout.
+// The function provided takes in the status and response and returns if we should continue to retry or not.
+func MakeAPICallRetryTimeout(t *testing.T, vtorc *cluster.VTOrcProcess, url string, timeout time.Duration, retry func(int, string) bool) (status int, response string) {
+	t.Helper()
+	timer := time.After(timeout)
+	for {
+		select {
+		case <-timer:
+			require.FailNow(t, "timed out waiting for api to work", "Last response - %s", response)
+			return
+		default:
+			status, response, _ = MakeAPICall(t, vtorc, url)
+			if retry(status, response) {
+				time.Sleep(time.Second)
+				continue
+			}
+			return
+		}
+	}
+}
+
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {

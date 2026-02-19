@@ -15,7 +15,7 @@
  */
 
 import React from 'react';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 import { useHistory } from 'react-router-dom';
 import { DeleteTabletParams } from '../../../api/http';
 import {

@@ -16,7 +16,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { createMemoryHistory, MemoryHistory } from 'history';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Route, Router, Switch } from 'react-router-dom';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 

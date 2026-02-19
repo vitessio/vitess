@@ -702,7 +702,10 @@
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/tabletmanager"
       ],
-      "Args": [],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
       "Command": [],
       "Manual": false,
       "Shard": "18",
