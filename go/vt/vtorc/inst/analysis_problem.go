@@ -65,7 +65,12 @@ func (dap *DetectionAnalysisProblem) GetPriority() int {
 
 // GetDetectionAnalysisProblem returns the DetectionAnalysisProblem for the given AnalysisCode.
 func GetDetectionAnalysisProblem(code AnalysisCode) *DetectionAnalysisProblem {
-	return detectionAnalysisProblems[code]
+	for _, p := range detectionAnalysisProblems {
+		if p.Meta.Analysis == code {
+			return p
+		}
+	}
+	return nil
 }
 
 // HasMatch returns true if a DetectionAnalysisProblem matches the provided states.
@@ -77,9 +82,9 @@ func (dap *DetectionAnalysisProblem) HasMatch(a *DetectionAnalysis, ca *clusterA
 }
 
 // detectionAnalysisProblems contains all possible problems to match during detection analysis.
-var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
+var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// InvalidPrimary and InvalidReplica
-	InvalidPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    InvalidPrimary,
 			Description: "VTOrc hasn't been able to reach the primary even once since restart/shutdown",
@@ -89,7 +94,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && isInvalid
 		},
 	},
-	InvalidReplica: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    InvalidReplica,
 			Description: "VTOrc hasn't been able to reach the replica even once since restart/shutdown",
@@ -101,7 +106,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// PrimaryDiskStalled
-	PrimaryDiskStalled: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           PrimaryDiskStalled,
 			Description:        "Primary has a stalled disk",
@@ -114,7 +119,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// DeadPrimary*
-	DeadPrimaryWithoutReplicas: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           DeadPrimaryWithoutReplicas,
 			Description:        "Primary cannot be reached by vtorc and has no replica",
@@ -124,7 +129,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0
 		},
 	},
-	DeadPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           DeadPrimary,
 			Description:        "Primary cannot be reached by vtorc and none of its replicas is replicating",
@@ -134,7 +139,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0
 		},
 	},
-	DeadPrimaryAndReplicas: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           DeadPrimaryAndReplicas,
 			Description:        "Primary cannot be reached by vtorc and none of its replicas is replicating",
@@ -145,7 +150,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 		},
 	},
 
-	DeadPrimaryAndSomeReplicas: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           DeadPrimaryAndSomeReplicas,
 			Description:        "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating",
@@ -157,7 +162,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// PrimaryHasPrimary
-	PrimaryHasPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           PrimaryHasPrimary,
 			Description:        "Primary is replicating from somewhere else",
@@ -169,7 +174,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// MySQL read-only checks
-	PrimaryIsReadOnly: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimaryIsReadOnly,
 			Description: "Primary is read-only",
@@ -179,7 +184,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && a.IsReadOnly
 		},
 	},
-	ReplicaIsWritable: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicaIsWritable,
 			Description: "Replica is writable",
@@ -191,7 +196,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Semi-sync checks
-	PrimarySemiSyncMustBeSet: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimarySemiSyncMustBeSet,
 			Description: "Primary semi-sync must be set",
@@ -205,7 +210,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled
 		},
 	},
-	PrimarySemiSyncMustNotBeSet: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimarySemiSyncMustNotBeSet,
 			Description: "Primary semi-sync must not be set",
@@ -215,7 +220,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled
 		},
 	},
-	ReplicaSemiSyncMustBeSet: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicaSemiSyncMustBeSet,
 			Description: "Replica semi-sync must be set",
@@ -226,7 +231,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled
 		},
 	},
-	ReplicaSemiSyncMustNotBeSet: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicaSemiSyncMustNotBeSet,
 			Description: "Replica semi-sync must not be set",
@@ -236,7 +241,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
 		},
 	},
-	PrimarySemiSyncBlocked: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           PrimarySemiSyncBlocked,
 			Description:        "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs",
@@ -248,7 +253,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Primary tablet type checks
-	PrimaryCurrentTypeMismatch: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimaryCurrentTypeMismatch,
 			Description: "Primary tablet's current type is not PRIMARY",
@@ -258,7 +263,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY
 		},
 	},
-	StaleTopoPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    StaleTopoPrimary,
 			Description: "Primary tablet is stale, older than current primary",
@@ -270,7 +275,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Errant GTID
-	ErrantGTIDDetected: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ErrantGTIDDetected,
 			Description: "Tablet has errant GTIDs",
@@ -282,7 +287,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Cluster primary checks
-	ClusterHasNoPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           ClusterHasNoPrimary,
 			Description:        "Cluster has no primary",
@@ -292,7 +297,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero()
 		},
 	},
-	PrimaryTabletDeleted: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:           PrimaryTabletDeleted,
 			Description:        "Primary tablet has been deleted",
@@ -304,7 +309,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Replica connectivity checks
-	NotConnectedToPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    NotConnectedToPrimary,
 			Description: "Not connected to the primary",
@@ -314,7 +319,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && a.IsPrimary
 		},
 	},
-	ReplicaMisconfigured: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicaMisconfigured,
 			Description: "Replica has been misconfigured",
@@ -324,7 +329,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout)
 		},
 	},
-	ConnectedToWrongPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ConnectedToWrongPrimary,
 			Description: "Connected to wrong primary",
@@ -334,7 +339,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias
 		},
 	},
-	ReplicationStopped: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicationStopped,
 			Description: "Replication is stopped",
@@ -346,7 +351,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Unreachable primary checks
-	UnreachablePrimaryWithLaggingReplicas: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    UnreachablePrimaryWithLaggingReplicas,
 			Description: "Primary cannot be reached by vtorc and all of its replicas are lagging",
@@ -356,7 +361,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0
 		},
 	},
-	UnreachablePrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    UnreachablePrimary,
 			Description: "Primary cannot be reached by vtorc but all of its replicas seem to be replicating; possibly a network/host issue",
@@ -366,7 +371,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas
 		},
 	},
-	UnreachablePrimaryWithBrokenReplicas: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    UnreachablePrimaryWithBrokenReplicas,
 			Description: "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue",
@@ -378,7 +383,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Locked semi-sync primary
-	LockedSemiSyncPrimary: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    LockedSemiSyncPrimary,
 			Description: "Semi sync primary is locked since it doesn't get enough replica acknowledgements",
@@ -388,7 +393,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount && isStaleBinlogCoordinates
 		},
 	},
-	LockedSemiSyncPrimaryHypothesis: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    LockedSemiSyncPrimaryHypothesis,
 			Description: "Semi sync primary seems to be locked, more samplings needed to validate",
@@ -400,7 +405,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 	},
 
 	// Primary replica health checks
-	PrimarySingleReplicaNotReplicating: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimarySingleReplicaNotReplicating,
 			Description: "Primary is reachable but its single replica is not replicating",
@@ -410,7 +415,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0
 		},
 	},
-	PrimarySingleReplicaDead: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimarySingleReplicaDead,
 			Description: "Primary is reachable but its single replica is dead",
@@ -420,7 +425,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0
 		},
 	},
-	AllPrimaryReplicasNotReplicating: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    AllPrimaryReplicasNotReplicating,
 			Description: "Primary is reachable but none of its replicas is replicating",
@@ -430,7 +435,7 @@ var detectionAnalysisProblems = map[AnalysisCode]*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0
 		},
 	},
-	AllPrimaryReplicasNotReplicatingOrDead: {
+	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    AllPrimaryReplicasNotReplicatingOrDead,
 			Description: "Primary is reachable but none of its replicas is replicating",
@@ -489,8 +494,8 @@ func compareDetectionAnalysisProblems(a, b *DetectionAnalysisProblem) int {
 // same priority/dependency logic as sortDetectionAnalysisMatchedProblems.
 func sortDetectionAnalyses(analyses []*DetectionAnalysis) {
 	slices.SortStableFunc(analyses, func(a, b *DetectionAnalysis) int {
-		aProblem := detectionAnalysisProblems[a.Analysis]
-		bProblem := detectionAnalysisProblems[b.Analysis]
+		aProblem := GetDetectionAnalysisProblem(a.Analysis)
+		bProblem := GetDetectionAnalysisProblem(b.Analysis)
 		if aProblem == nil || bProblem == nil {
 			return 0
 		}

@@ -18,8 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -425,15 +423,14 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		}
 		isInvalid := m.GetBool("is_invalid")
 		var matchedProblems []*DetectionAnalysisProblem
-		for _, key := range slices.Sorted(maps.Keys(detectionAnalysisProblems)) {
+		for _, problem := range detectionAnalysisProblems {
 			// When isInvalid is true, instance data is unreliable (never been reached).
 			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
 			// handles upgrading InvalidPrimary to DeadPrimary if needed.
-			if isInvalid && key != InvalidPrimary && key != InvalidReplica {
+			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
 				continue
 			}
-			problem := detectionAnalysisProblems[key]
-			if problem != nil && problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
+			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
 				matchedProblems = append(matchedProblems, problem)
 			}
 		}
