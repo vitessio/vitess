@@ -38,7 +38,7 @@ import (
 )
 
 // snapshotLockWaitTimeout is the lock_wait_timeout to use when attempting to start a snapshot.
-const snapshotLockWaitTimeout = 30 * time.Second
+var snapshotLockWaitTimeout = 30 * time.Second
 
 // snapshotConn is wrapper on mysql.Conn capable of
 // reading a table along with a GTID snapshot.
