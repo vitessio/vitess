@@ -558,9 +558,10 @@ func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
 		return "", false
 	}
 
-	if sel.GetLock() != sqlparser.ForUpdateLock &&
-		sel.GetLock() != sqlparser.ForUpdateLockNoWait &&
-		sel.GetLock() != sqlparser.ForUpdateLockSkipLocked {
+	lock := sel.GetLock()
+	if lock != sqlparser.ForUpdateLock &&
+		lock != sqlparser.ForUpdateLockNoWait &&
+		lock != sqlparser.ForUpdateLockSkipLocked {
 		return "", false
 	}
 
