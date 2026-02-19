@@ -121,8 +121,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-		"--log-format", "text",
 	)
+
+	if vttabletVer >= 24 {
+		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
+	}
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))

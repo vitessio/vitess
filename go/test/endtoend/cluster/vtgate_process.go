@@ -167,7 +167,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-		"--log-format", "text",
+	}
+
+	vtgateVer, err := GetMajorVersion(vtgate.Binary)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", vtgate.Binary, err))
+	} else if vtgateVer >= 24 {
+		args = append(args, "--log-format", "text")
 	}
 
 	// If no explicit mysql_server_version has been specified then we autodetect
