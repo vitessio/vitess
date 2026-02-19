@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -481,6 +482,14 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		case "replica":
 			mysqlctlProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
 		}
+
+		version, err := GetMajorVersion(mysqlctlProcess.Binary)
+		if err != nil {
+			log.Warn("failed to get major version", slog.String("binary", mysqlctlProcess.Binary), slog.Any("error", err))
+		} else {
+			mysqlctlProcess.MajorVersion = version
+		}
+
 		tablet.MysqlctlProcess = *mysqlctlProcess
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
