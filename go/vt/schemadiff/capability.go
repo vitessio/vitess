@@ -16,7 +16,7 @@ const (
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (eligible bool, err error) {
-	log.Info(fmt.Sprintf("Checking if ALTER %q is capable of INSTANT DDL", sqlparser.CanonicalString(alterOption)))
+	log.Info(fmt.Sprintf("Checking if ALTER %q is eligible for INSTANT DDL", sqlparser.CanonicalString(alterOption)))
 	defer func() {
 		if eligible {
 			log.Info(fmt.Sprintf("ALTER %q is eligible for INSTANT DDL", sqlparser.CanonicalString(alterOption)))
