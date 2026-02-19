@@ -3500,7 +3500,7 @@ alter_option:
   }
 | DROP CONSTRAINT sql_id
   {
-    $$ = &DropKey{Type:CheckKeyType, Name:$3}
+    $$ = &DropKey{Type:ConstraintType, Name:$3}
   }
 | FORCE
   {

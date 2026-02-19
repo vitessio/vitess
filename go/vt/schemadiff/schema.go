@@ -133,6 +133,21 @@ func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []
 	return names
 }
 
+func findForeignKeyDefinition(createTable *sqlparser.CreateTable, constraintName string) *sqlparser.ForeignKeyDefinition {
+	if createTable == nil || createTable.TableSpec == nil {
+		return nil
+	}
+	for _, cs := range createTable.TableSpec.Constraints {
+		if strings.EqualFold(cs.Name.String(), constraintName) {
+			if fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				return fk
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
 func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -1006,10 +1021,22 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 					}
 					return checkChildForeignKeyDefinition(fk, diff)
 				case *sqlparser.DropKey:
-					if node.Type != sqlparser.ForeignKeyType {
+					switch node.Type {
+					case sqlparser.ForeignKeyType, sqlparser.ConstraintType:
+						// Possibly dropping a foreign key; we need to check if this constraint references another table.
+						// The DropKey statement itself only _names_ the constraint, but does not have information
+						// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
+						fk := findForeignKeyDefinition(diff.from.CreateTable, node.Name.String())
+						if fk == nil {
+							return true, nil
+						}
+						parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+						checkDependencies(diff, []string{parentTableName})
+					default:
 						// Not interesting
 						return true, nil
 					}
+<<<<<<< HEAD
 					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
 					// The DropKey statement itself only _names_ the constraint, but does not have information
 					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
@@ -1021,6 +1048,8 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 							}
 						}
 					}
+=======
+>>>>>>> 1fadea998c (Fix `DROP CONSTRAINT` to work the same way as MySQL (#19183))
 				}
 
 				return true, nil
