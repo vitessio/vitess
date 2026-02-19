@@ -27,6 +27,9 @@ import (
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
+// TestParseTransactionModeString verifies that parseTransactionModeString correctly
+// maps valid mode strings (case-insensitive) to their protobuf enum values and
+// rejects invalid inputs such as empty strings, garbage, and untrimmed whitespace.
 func TestParseTransactionModeString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -58,6 +61,9 @@ func TestParseTransactionModeString(t *testing.T) {
 	}
 }
 
+// TestSetTransactionModeLimitWithUnspecifiedLimit verifies that when the
+// TransactionModeLimit is UNSPECIFIED (meaning "no explicit limit configured"),
+// all transaction modes are allowed via SET.
 func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
@@ -74,6 +80,9 @@ func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
 	}
 }
 
+// TestSetTransactionModeLimitErrorCode verifies that a limit violation returns
+// MySQL error code 1231 (ERWrongValueForVar) so that clients receive a standard
+// MySQL-compatible error.
 func TestSetTransactionModeLimitErrorCode(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
@@ -91,6 +100,9 @@ func TestSetTransactionModeLimitErrorCode(t *testing.T) {
 		"limit violation must return MySQL error code 1231 (ERWrongValueForVar)")
 }
 
+// TestCompoundSetWithLimitFailure tests the non-atomic behavior of compound SET
+// statements: operations before the failing SET take effect, while operations
+// after the failing SET are skipped.
 func TestCompoundSetWithLimitFailure(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
@@ -115,6 +127,10 @@ func TestCompoundSetWithLimitFailure(t *testing.T) {
 	})
 }
 
+// TestSelectTransactionModeRoundtrip verifies that SET followed by SELECT
+// @@transaction_mode returns the expected value, and that setting 'unspecified'
+// or using a fresh session shows the resolved server default rather than the
+// literal string "UNSPECIFIED".
 func TestSelectTransactionModeRoundtrip(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
@@ -153,6 +169,9 @@ func TestSelectTransactionModeRoundtrip(t *testing.T) {
 	})
 }
 
+// TestSequentialSetWithDynamicLimitChange verifies that dynamically changing the
+// TransactionModeLimit between SET calls correctly affects enforcement: a mode
+// allowed under one limit is rejected after the limit is tightened.
 func TestSequentialSetWithDynamicLimitChange(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 

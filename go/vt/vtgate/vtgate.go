@@ -148,6 +148,10 @@ var (
 						log.Error(fmt.Sprintf("invalid --transaction-mode value, defaulting to MULTI: %v", err))
 						return vtgatepb.TransactionMode_MULTI
 					}
+					if mode == vtgatepb.TransactionMode_UNSPECIFIED {
+						log.Error("--transaction-mode cannot be UNSPECIFIED, defaulting to MULTI")
+						return vtgatepb.TransactionMode_MULTI
+					}
 					return mode
 				}
 			},
@@ -162,17 +166,20 @@ var (
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
 				return func(key string) vtgatepb.TransactionMode {
+					var result vtgatepb.TransactionMode
 					switch txMode := strings.ToLower(v.GetString(key)); txMode {
 					case "", "unspecified":
-						return transactionMode.Get()
+						result = transactionMode.Get()
 					default:
 						mode, err := parseTransactionModeString(txMode)
 						if err != nil {
 							log.Error(fmt.Sprintf("invalid --transaction-mode-default value, falling back to --transaction-mode: %v", err))
-							return transactionMode.Get()
+							result = transactionMode.Get()
+						} else {
+							result = mode
 						}
-						return mode
 					}
+					return result
 				}
 			},
 		},

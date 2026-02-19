@@ -1865,6 +1865,9 @@ func TestVindexes(t *testing.T) {
 	}
 }
 
+// TestTransactionModeLimitTWOPC verifies that in a TWOPC-configured cluster all
+// transaction modes (twopc, multi, single) can be SET, and that SET to
+// 'unspecified' resets the session back to the server default (TWOPC).
 func TestTransactionModeLimitTWOPC(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

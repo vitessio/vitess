@@ -655,6 +655,10 @@ func TestExecutorTimeZone(t *testing.T) {
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
 }
 
+// TestExecutorSetTransactionModeLimit exercises the full matrix of
+// limit (SINGLE/MULTI/TWOPC) x requested mode (single/multi/twopc/unspecified)
+// combinations, verifying that modes within the limit succeed and modes above
+// the limit are rejected. Also checks that a nil limit allows all modes.
 func TestExecutorSetTransactionModeLimit(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 

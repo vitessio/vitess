@@ -271,6 +271,10 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 	})
 }
 
+// TestTransactionModeLimitSingle verifies limit enforcement in an E2E cluster
+// configured with --transaction-mode=SINGLE --transaction-mode-limit=MULTI:
+// the default is SINGLE, SET to MULTI is allowed, SET to TWOPC is rejected,
+// and SET to 'unspecified' resets to the server default (SINGLE).
 func TestTransactionModeLimitSingle(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
