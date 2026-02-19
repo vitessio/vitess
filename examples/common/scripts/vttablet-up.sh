@@ -54,7 +54,7 @@ vttablet \
    --pid-file $VTDATAROOT/$tablet_dir/vttablet.pid \
    --heartbeat-on-demand-duration=5s \
    --pprof-http \
-   --log-format pretty \
+   --log-format text \
    >$VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

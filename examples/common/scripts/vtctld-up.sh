@@ -34,7 +34,7 @@ vtctld \
    --grpc-port $grpc_port \
    --pid-file $VTDATAROOT/tmp/vtctld.pid \
    --pprof-http \
-   --log-format pretty \
+   --log-format text \
    >$VTDATAROOT/tmp/vtctld.out 2>&1 &
 
 echo "Curling \"http://${hostname}:${vtctld_web_port}/debug/status\" to check if vtctld is up"

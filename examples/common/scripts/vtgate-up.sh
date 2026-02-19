@@ -42,7 +42,7 @@ vtgate \
    --enable-buffer \
    --mysql-auth-server-impl none \
    --pprof-http \
-   --log-format pretty \
+   --log-format text \
    >$VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening

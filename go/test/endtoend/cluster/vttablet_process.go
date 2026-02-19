@@ -121,7 +121,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-		"--log-format", "pretty",
+		"--log-format", "text",
 	)
 
 	if *isCoverage {

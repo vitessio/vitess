@@ -132,7 +132,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--config-file":                orc.ConfigPath,
 		"--port":                       strconv.Itoa(orc.Port),
 		"--bind-address":               "127.0.0.1",
-		"--log-format":                 "pretty",
+		"--log-format":                 "text",
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)

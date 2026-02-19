@@ -56,7 +56,7 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
-		"--log-format", "pretty",
+		"--log-format", "text",
 		"--init_db_sql_file", mysqlctld.InitDBFile,
 	}
 	if mysqlctld.SocketFile != "" {
@@ -79,7 +79,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
-		"--log-format", "pretty",
+		"--log-format", "text",
 	}
 	if mysqlctld.SocketFile != "" {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -167,7 +167,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 		"mysqlctl",
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
-		"--log-format", "pretty",
+		"--log-format", "text",
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")

@@ -54,7 +54,7 @@ Flags:
       --ks-shard-map string                                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
       --ks-shard-map-file string                                    File containing json blob of keyspace name -> shard name -> ShardReference object
       --log-err-stacks                                              log stack traces for errors
-      --log-format string                                           log output format: json for machine-readable JSON, pretty for human-readable colored output (default "json")
+      --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                              enable structured JSON logging (default true)
