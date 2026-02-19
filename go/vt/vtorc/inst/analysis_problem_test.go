@@ -110,6 +110,13 @@ func TestRequiresOrderedExecution(t *testing.T) {
 		expected bool
 	}{
 		{
+			name: "critical priority",
+			problem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityCritical},
+			},
+			expected: true,
+		},
+		{
 			name: "HasShardWideAction",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{HasShardWideAction: true},
@@ -133,9 +140,18 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "has both BeforeAnalyses and AfterAnalyses",
+			problem: &DetectionAnalysisProblem{
+				Meta:           &DetectionAnalysisProblemMeta{},
+				BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustBeSet},
+				AfterAnalyses:  []AnalysisCode{PrimarySemiSyncMustBeSet},
+			},
+			expected: true,
+		},
+		{
 			name: "independent problem",
 			problem: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityLow},
 			},
 			expected: false,
 		},
