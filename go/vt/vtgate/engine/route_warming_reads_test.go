@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -87,6 +87,21 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 			expectedWarmingQuery: "select * from users where id = 1",
 		},
 		{
+			name:                 "SELECT FOR UPDATE NOWAIT",
+			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE NOWAIT",
+			expectedWarmingQuery: "select * from users where id = 1",
+		},
+		{
+			name:                 "SELECT FOR UPDATE SKIP LOCKED",
+			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE SKIP LOCKED",
+			expectedWarmingQuery: "select * from users where id = 1",
+		},
+		{
+			name:                 "UNION FOR UPDATE",
+			query:                "SELECT * FROM users WHERE id = 1 UNION SELECT * FROM users WHERE id = 2 FOR UPDATE",
+			expectedWarmingQuery: "select * from users where id = 1 union select * from users where id = 2",
+		},
+		{
 			name:                 "Regular SELECT",
 			query:                "SELECT * FROM users WHERE id = 1",
 			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1",
@@ -129,7 +144,7 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				warmingReadExecuted.Store(true)
 			}
 
-			_, err := route.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 
 			require.Eventually(t, func() bool {
