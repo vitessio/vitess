@@ -1128,7 +1128,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	// Fetch existing tables on the target for view validation. Views that are being moved may reference tables that
 	// already exist on the target (from a previous MoveTables for example).
-	targetTablesMap, _, err := getTablesAndViewsInKeyspace(ctx, sourceTopo, s.tmc, targetKeyspace)
+	targetTablesMap, _, err := getTablesAndViewsInKeyspace(ctx, s.ts, s.tmc, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1367,36 +1367,33 @@ func (s *Server) resolveTables(req *vtctldatapb.MoveTablesCreateRequest, sourceK
 		tables = maps.Keys(sourceTables)
 	}
 
-	// If a specific set of tables was requested to be excluded, validate them and filter them out.
+	// If a specific set of tables was requested to be excluded, validate them.
+	excludeSet := make(map[string]struct{}, len(req.ExcludeTables))
 	if len(req.ExcludeTables) > 0 {
 		err := validateSourceTablesExist(sourceKeyspace, sourceTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
 
-		excludeSet := make(map[string]struct{}, len(req.ExcludeTables))
 		for _, table := range req.ExcludeTables {
 			excludeSet[table] = struct{}{}
 		}
-
-		var includedTables []string
-		for _, t := range tables {
-			if shouldExclude(t, excludeSet) {
-				continue
-			}
-
-			includedTables = append(includedTables, t)
-		}
-
-		tables = includedTables
-
-		// Make sure we didn't exclude all tables.
-		if len(tables) == 0 {
-			return nil, errNoTablesToMove
-		}
 	}
 
-	return tables, nil
+	var includedTables []string
+	for _, t := range tables {
+		if shouldExclude(t, excludeSet) {
+			continue
+		}
+
+		includedTables = append(includedTables, t)
+	}
+
+	if len(includedTables) == 0 {
+		return nil, errNoTablesToMove
+	}
+
+	return includedTables, nil
 }
 
 func validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
