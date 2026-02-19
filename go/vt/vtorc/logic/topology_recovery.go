@@ -1000,10 +1000,11 @@ func CheckAndRecover() {
 		}
 	}
 
-	// Go map iteration is random, so each shard is processed in random order.
-	// Within each shard, analyses are sorted by priority. Problems that require
-	// ordered execution (shard-wide actions or those with Before/After dependencies)
-	// run sequentially first, then independent problems fan out concurrently.
+	// Go map iteration is random, so each shard is processed in random order. This helps
+	// reduce global shard lock contention when many VTOrcs watch the same shard(s).
+	// Within each shard, analyses are sorted by priority. Problems that require ordered
+	// execution (shard-wide actions or those with Before/After dependencies) run
+	// sequentially first, then independent problems fan out concurrently.
 	for _, shardAnalyses := range analysisByShard {
 		go func() {
 			var concurrent []*inst.DetectionAnalysis
