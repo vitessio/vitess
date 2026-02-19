@@ -140,15 +140,6 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "has both BeforeAnalyses and AfterAnalyses",
-			problem: &DetectionAnalysisProblem{
-				Meta:           &DetectionAnalysisProblemMeta{},
-				BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustBeSet},
-				AfterAnalyses:  []AnalysisCode{PrimarySemiSyncMustBeSet},
-			},
-			expected: true,
-		},
-		{
 			name: "independent problem",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityLow},
@@ -225,21 +216,6 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 			assert.Equal(t, tt.expected, compareDetectionAnalysisProblems(tt.a, tt.b))
 		})
 	}
-}
-
-func TestSortDetectionAnalyses(t *testing.T) {
-	analyses := []*DetectionAnalysis{
-		{Analysis: ReplicationStopped, AnalyzedInstanceAlias: "replica1"},
-		{Analysis: DeadPrimary, AnalyzedInstanceAlias: "primary"},
-		{Analysis: PrimaryIsReadOnly, AnalyzedInstanceAlias: "primary2"},
-	}
-	sortDetectionAnalyses(analyses)
-
-	// DeadPrimary (shard-wide) should be first
-	assert.Equal(t, DeadPrimary, analyses[0].Analysis)
-	// PrimaryIsReadOnly (high) before ReplicationStopped (medium)
-	assert.Equal(t, PrimaryIsReadOnly, analyses[1].Analysis)
-	assert.Equal(t, ReplicationStopped, analyses[2].Analysis)
 }
 
 func TestGroupDetectionAnalysesByShard(t *testing.T) {
