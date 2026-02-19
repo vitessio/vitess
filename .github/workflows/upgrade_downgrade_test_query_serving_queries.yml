@@ -112,35 +112,28 @@ jobs:
         cp -R bin /tmp/vitess-build-current/
         rm -Rf bin/*
 
-    # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
+    - name: Check out previous release code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
+      if: steps.cache-release-build.outputs.cache-hit != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        path: /tmp/vitess-build-other
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
-    - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the last release
-      if: steps.changes.outputs.end_to_end == 'true'
+    - name: Get previous release git sha
+      id: output-previous-release-sha
       run: |
-        go mod download
+        echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
-    - name: Building last release's binaries
+    - name: Build previous vitess release (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
-      run: |
-        source build.env
-        NOVTADMINBUILD=1 make build
-        mkdir -p /tmp/vitess-build-other/
-        cp -R bin /tmp/vitess-build-other/
-        rm -Rf bin/*
+      uses: ./.github/actions/build-release-binaries
+      with:
+        path: /tmp/vitess-build-other
+        branch: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        sha: ${{ steps.output-previous-release-sha.outputs.sha }}
+        cache: true
 
     - name: Convert ErrorContains checks to Error checks
       if: steps.changes.outputs.end_to_end == 'true'
