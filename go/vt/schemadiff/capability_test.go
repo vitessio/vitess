@@ -363,6 +363,40 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			alter:                     "alter table t1 add column i2 int, algorithm=COPY",
 			expectCapableOfInstantDDL: false,
 		},
+		// Cases where SHOW CREATE TABLE adds collation inherited from the table-level COLLATE clause.
+		// The user's ALTER TABLE does not repeat the collation, so the comparison must handle this.
+		{
+			name:                      "enum append on table with table-level collate",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci, primary key(id)) collate utf8mb4_unicode_ci",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "change enum default on table with table-level collate",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci default 'a', primary key(id)) collate utf8mb4_unicode_ci",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c') default 'b'",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "enum append while also changing collation is not instant",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci, primary key(id))",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd') collate utf8mb4_general_ci",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "enum append on nullable column with explicit NULL",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') null, primary key(id))",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
+		},
+		// And handle simple case mismatches in the colum type specification since MySQL is case-insensitive
+		// for type keywords and it's not a real difference.
+		{
+			name:                      "enum append with different type casing in alter",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c'), primary key(id))",
+			alter:                     "alter table t modify column c1 ENUM('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {

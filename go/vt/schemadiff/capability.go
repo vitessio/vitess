@@ -76,10 +76,38 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		strippedCol.Type.Options.DefaultLiteral = false
 		// strip `visibility`
 		strippedCol.Type.Options.Invisible = nil
+		// Normalize explicit NULL to implicit nullable: SHOW CREATE TABLE may add the NULL
+		// keyword explicitly for nullable columns, but user ALTER statements typically omit it.
+		// Both mean the same thing, so we treat them as equivalent.
+		if strippedCol.Type.Options.Null != nil && *strippedCol.Type.Options.Null {
+			strippedCol.Type.Options.Null = nil
+		}
+		// Normalize the type name to lowercase. The CanonicalString formatter uses %#s for the
+		// column type name which writes it as-is (case-sensitive), so "enum" and "ENUM" would
+		// produce different canonical strings without this normalization.
+		strippedCol.Type.Type = strings.ToLower(strippedCol.Type.Type)
+		// Strip charset and collation: SHOW CREATE TABLE adds the column's collation explicitly
+		// when it is inherited from a table-level COLLATE clause. User ALTER statements typically
+		// omit the collation. Stripping both sides allows a semantic comparison.
+		// Genuine charset/collation changes are detected separately via isCharsetOrCollationChange.
+		strippedCol.Type.Charset.Name = ""
+		strippedCol.Type.Options.Collate = ""
 		if stripEnum {
 			strippedCol.Type.EnumValues = nil
 		}
 		return sqlparser.CanonicalString(strippedCol)
+	}
+	// isCharsetOrCollationChange returns true if the new column definition explicitly specifies
+	// a different charset or collation than the old one. A missing value in newCol means the
+	// user did not specify it, which is treated as "no change".
+	isCharsetOrCollationChange := func(col, newCol *sqlparser.ColumnDefinition) bool {
+		if newCol.Type.Charset.Name != "" && !strings.EqualFold(col.Type.Charset.Name, newCol.Type.Charset.Name) {
+			return true
+		}
+		if newCol.Type.Options.Collate != "" && !strings.EqualFold(col.Type.Options.Collate, newCol.Type.Options.Collate) {
+			return true
+		}
+		return false
 	}
 	hasPrefix := func(vals []string, prefix []string) bool {
 		if len(vals) < len(prefix) {
@@ -100,7 +128,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// is instant-table.
 		tableColDefinition := colStringStrippedDown(col, false)
 		newColDefinition := colStringStrippedDown(newCol, false)
-		if tableColDefinition == newColDefinition {
+		if tableColDefinition == newColDefinition && !isCharsetOrCollationChange(col, newCol) {
 			capable, err := capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
 			if !capable {
 				log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support changing column default with INSTANT DDL", sqlparser.CanonicalString(alterOption)))
@@ -144,6 +172,11 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			tableColDefinition := colStringStrippedDown(col, true)
 			newColDefinition := colStringStrippedDown(newCol, true)
 			if tableColDefinition == newColDefinition {
+				if isCharsetOrCollationChange(col, newCol) {
+					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the charset or collation of the column is being changed. Old column: %q, new column: %q",
+						sqlparser.CanonicalString(alterOption), sqlparser.CanonicalString(col), sqlparser.CanonicalString(newCol)))
+					return false, nil
+				}
 				capable, err := capableOf(capabilities.InstantExpandEnumCapability)
 				if !capable {
 					log.Info(fmt.Sprintf("ALTER %q is not eligible for INSTANT DDL because the MySQL server version does not support INSTANT DDL for expanding ENUM/SET columns", sqlparser.CanonicalString(alterOption)))
