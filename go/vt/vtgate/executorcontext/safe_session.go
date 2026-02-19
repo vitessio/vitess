@@ -18,8 +18,8 @@ package executorcontext
 
 import (
 	"fmt"
-	"sort"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -420,22 +420,19 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// We take and return a snapshot of PreSessions, ShardSessions, and PostSessions
-// because multiple goroutines might access or mutate these slices at the same time,
-// which can lead to a race condition. This snapshot is used by Rollback/Release
-// so they can safely work on a stable copy without holding the lock.
+// ShardSessionsForCleanup returns a snapshot of PreSessions, ShardSessions, and PostSessions for Rollback/Release.
+// Safe for concurrent use by multiple goroutines.
 
-func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
+func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
 }
 
-// Returns a snapshot of all shard sessions (including LockSession)
-// for use in ReleaseAll, so it can safely operate without worrying
-// about other goroutines mutating the session at the same time.
+// ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.
+// Safe for concurrent use by multiple goroutines.
 
-func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
+func (session *SafeSession) ShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	var lockSessions []*vtgatepb.Session_ShardSession
@@ -444,7 +441,6 @@ func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_
 	}
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
 }
-
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
 // It performs additional checks and may modify the ShardSession in specific cases for single-mode transactions.
