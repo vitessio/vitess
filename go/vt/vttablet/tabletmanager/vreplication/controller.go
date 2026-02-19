@@ -312,7 +312,20 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			err = vterrors.Wrapf(err, TerminalErrorIndicator)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
 				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
-				return err // yes, err and not errSetState.
+				// The message column is varbinary(1000). The normal truncation limit
+				// (950 bytes) can still overflow after SQL encoding when the error
+				// contains binary data with invalid UTF-8 bytes, which EncodeStringSQL
+				// expands from 1 byte to 3 bytes each. Retry with an aggressively
+				// truncated message: 300 bytes * 3 = 900, which fits even in the
+				// pathological worst case where every byte is invalid UTF-8.
+				if errRetry := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, binlogplayer.LimitString(err.Error(), 300)); errRetry != nil {
+					log.Error(fmt.Sprintf("INTERNAL: unable to setState() with truncated message: %v", errRetry))
+					// Last resort: set the error state with a static message.
+					if errEmpty := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "terminal error: failed to save error message; check vttablet logs"); errEmpty != nil {
+						log.Error(fmt.Sprintf("INTERNAL: unable to setState() even with static message: %v", errEmpty))
+					}
+				}
+				return nil // still stop the retry loop; continuing to retry will not help
 			}
 			log.Error(fmt.Sprintf("vreplication stream %d going into error state due to %+v", ct.id, err))
 			return nil // this will cause vreplicate to quit the workflow
