@@ -55,6 +55,7 @@ Flags:
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                              log stack traces for errors
+      --log-format string                                           log output format: json for machine-readable JSON, pretty for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                              enable structured JSON logging (default true)

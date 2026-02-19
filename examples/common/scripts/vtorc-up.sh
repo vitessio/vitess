@@ -17,6 +17,7 @@ vtorc \
   --config-type="yml" \
   --cell $cell \
   --port $port \
+  --log-format pretty \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!

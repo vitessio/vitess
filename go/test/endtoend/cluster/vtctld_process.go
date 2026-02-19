@@ -72,6 +72,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
+		"--log-format", "pretty",
 	)
 
 	if *isCoverage {

@@ -22,10 +22,11 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
-	"time"
+	"testing"
 
 	"github.com/golang/glog"
 	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/utils"
@@ -34,6 +35,7 @@ import (
 var (
 	logStructured bool
 	logLevel      string
+	logFormat     string
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
@@ -44,6 +46,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&logStructured, "log-structured", true, "enable structured JSON logging")
 	fs.StringVar(&logLevel, "log-level", "info", "minimum log level when structured logging is enabled (debug, info, warn, error)")
+	fs.StringVar(&logFormat, "log-format", "json", "log output format: json for machine-readable JSON, pretty for human-readable colored output")
 }
 
 // Init configures the logging backend. By default, a slog.JSONHandler is
@@ -77,12 +80,18 @@ func Init(fs *pflag.FlagSet) error {
 	return nil
 }
 
-// newLogger creates a new logger. In CI environments, detected through the CI
-// environment variable, a human-readable handler is used so that logs are easy
-// to read in CI output. Otherwise, a JSON handler is used.
+// newLogger creates a new structured logger. When the log format is "pretty", or we detect
+// we're running tests, logs are outputted in a human-readable format (and optionally colored).
+// Otherwise, or when the log format is "json", logs are outputted as machine-readable JSON.
 func newLogger(level slog.Level) *slog.Logger {
-	if os.Getenv("CI") != "" {
-		return slog.New(tint.NewHandler(os.Stderr, &tint.Options{AddSource: true, Level: level, TimeFormat: time.Kitchen}))
+	if logFormat == "pretty" || testing.Testing() {
+		w := os.Stderr
+		return slog.New(tint.NewHandler(w, &tint.Options{
+			AddSource:  true,
+			Level:      level,
+			TimeFormat: "3:04:05PM",
+			NoColor:    !isatty.IsTerminal(w.Fd()),
+		}))
 	}
 
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
