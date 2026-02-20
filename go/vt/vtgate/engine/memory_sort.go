@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/engine/sortio"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -69,6 +71,13 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
 	defer evalengine.PanicHandler(&err)
 
+	if vcursor.SortBufferSize() > 0 {
+		return ms.tryStreamExecuteSpill(ctx, vcursor, bindVars, wantfields, callback)
+	}
+	return ms.tryStreamExecuteInMemory(ctx, vcursor, bindVars, wantfields, callback)
+}
+
+func (ms *MemorySort) tryStreamExecuteInMemory(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
@@ -104,6 +113,79 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return err
 	}
 	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
+}
+
+func (ms *MemorySort) tryStreamExecuteSpill(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	count, err := ms.fetchCount(ctx, vcursor, bindVars)
+	if err != nil {
+		return err
+	}
+
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(ms.TruncateColumnCount))
+	}
+
+	var fields []*querypb.Field
+	var ss *sortio.SpillSorter
+	var mu sync.Mutex
+
+	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(qr.Fields) != 0 {
+			fields = qr.Fields
+			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+				return err
+			}
+		}
+		if ss == nil && fields != nil {
+			ss = sortio.NewSpillSorter(ms.OrderBy, fields, vcursor.SortBufferSize(), vcursor.SortTmpDir())
+		}
+		if ss != nil {
+			for _, row := range qr.Rows {
+				if err := ss.Add(row); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		if ss != nil {
+			ss.Close()
+		}
+		return err
+	}
+
+	if ss == nil {
+		return nil
+	}
+	defer ss.Close()
+
+	const batchSize = 128
+	batch := make([]sqltypes.Row, 0, batchSize)
+	emitted := 0
+	err = ss.Finish(ctx, func(row sqltypes.Row) error {
+		if emitted >= count {
+			return io.EOF
+		}
+		emitted++
+		batch = append(batch, row)
+		if len(batch) >= batchSize {
+			if err := cb(&sqltypes.Result{Rows: batch}); err != nil {
+				return err
+			}
+			batch = batch[:0]
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if len(batch) > 0 {
+		return cb(&sqltypes.Result{Rows: batch})
+	}
+	return nil
 }
 
 // GetFields satisfies the Primitive interface.
