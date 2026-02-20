@@ -82,7 +82,7 @@ const (
 	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s'%s order by workflow, id"
 	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s' and workflow in ('%s') order by workflow, id"
 	readWorkflow             = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where workflow = '%s' and db_name = '%s'"
-	readWorkflowConfig       = "select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'"
+	readWorkflowConfig       = "select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s' and db_name = '%s'"
 	updateWorkflow           = "update _vt.vreplication set state = '%s', source = '%s', cell = '%s', tablet_types = '%s', message = '%s' where id in (%d)"
 	getNonEmptyTableQuery    = "select 1 from `%s` limit 1"
 )
@@ -438,7 +438,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, wf), sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, wf, tenv.dbName), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|cell|tablet_types|state|message",
 				"int64|blob|varchar|varchar|varchar|varchar",
@@ -706,7 +706,7 @@ func TestMoveTablesSharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, wf), sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, wf, tenv.dbName), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|cell|tablet_types|state|message",
 				"int64|blob|varchar|varchar|varchar|varchar",
@@ -888,9 +888,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf", ":db")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
+		"db": sqltypes.StringBindVariable(tenv.dbName),
 	}
 	selectQuery, err := parsed.GenerateQuery(bindVars, nil)
 	require.NoError(t, err)
@@ -2201,7 +2202,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 				isBackfillingOwned, err := workflow.IsBackfillingOwnedVindexes(tcase.expectedVschema.Vindexes)
 				require.NoError(t, err)
 				if tcase.expectStopped && len(tcase.expectedVschema.Vindexes) > 0 && isBackfillingOwned {
-					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, tcase.request.Name), sqltypes.MakeTestResult(
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, tcase.request.Name, tenv.dbName), sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id|source|cell|tablet_types|state|message",
 							"int64|blob|varchar|varchar|varchar|varchar",
