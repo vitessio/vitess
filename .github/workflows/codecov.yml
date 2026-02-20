@@ -49,36 +49,6 @@ jobs:
       with:
         go-version-file: go.mod
 
-    - name: Set up python
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-
-    - name: Tune the OS
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: ./.github/actions/tune-os
-
-    - name: Setup MySQL
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: ./.github/actions/setup-mysql
-      with:
-        flavor: mysql-8.4
-
-    - name: Get dependencies
-      if: steps.changes.outputs.changed_files == 'true'
-      run: |
-        export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
-
-        sudo apt-get install -y make unzip g++ curl git wget
-
-        go mod download
-        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
-
-    - name: Run make tools
-      if: steps.changes.outputs.changed_files == 'true'
-      run: |
-        make BUILD_JAVA=0 BUILD_PROTOC=0 tools
-
     - name: Detect changed Go packages
       if: steps.changes.outputs.changed_files == 'true'
       id: packages
@@ -114,6 +84,36 @@ jobs:
         echo "packages=$PACKAGES"
 
         echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+    - name: Set up python
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+
+    - name: Tune the OS
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      uses: ./.github/actions/tune-os
+
+    - name: Setup MySQL
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
+
+    - name: Get dependencies
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get update
+
+        sudo apt-get install -y make unzip g++ curl git wget
+
+        go mod download
+        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+
+    - name: Run make tools
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      run: |
+        make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 
     - name: Run coverage tests
       if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
