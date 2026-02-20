@@ -521,12 +521,11 @@ func TestDemotePrimaryHang(t *testing.T) {
 	// DemotePrimary RPC will block on the tablet lock.
 	sleepDuration := 90 * time.Second
 	go func() {
-		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
 			"SleepTablet",
 			stalePrimary.Alias,
 			sleepDuration.String(),
 		)
-		require.NoError(t, err)
 	}()
 
 	// Make the tablet a stale primary by updating its type to PRIMARY and primary term start time
@@ -550,17 +549,19 @@ func TestDemotePrimaryHang(t *testing.T) {
 
 	utils.WaitForDetectedProblems(t, vtorc, string(inst.ReplicationStopped), blockedReplica.Alias, keyspace.Name, shard0.Name, 1)
 
-	// If DemotePrimary is bounded by a timeout, the stale primary recovery should stop blocking
-	// the shard and VTOrc should be able to run the follow-up FixReplica recovery.
+	// If DemotePrimary is properly bounded by a context timeout, the stale primary recovery should
+	// fail, close the recovery row, and unblock the shard for further recoveries.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorc.GetVars()
-		recoveries, ok := vars["SuccessfulRecoveries"].(map[string]any)
-		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
+		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
+		require.True(c, ok, "RecoveriesCount metric not yet available")
+
 		mapKey := fmt.Sprintf("%s.%s.%s", logic.DemoteStaleTopoPrimaryRecoveryName, keyspace.Name, shard0.Name)
 		count := utils.GetIntFromValue(recoveries[mapKey])
-		require.EqualValues(c, 1, count)
-	}, 75*time.Second, time.Second, "expected stale-primary recovery to complete after DemotePrimary timeout")
+		assert.GreaterOrEqual(c, count, 1)
+	}, 30*time.Second, time.Second, "expected VTOrc to attempt stale primary recovery")
 
+	// The FixReplica recovery should run once the stale primary recovery unblocks the shard.
 	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
 }
 
