@@ -36,6 +36,11 @@ func NewTestDB(rowMaps [][]sqlutils.RowMap) *DB {
 	}
 }
 
+// InjectRows appends rows to be returned by the next QueryVTOrc calls.
+func (t *DB) InjectRows(rowMaps [][]sqlutils.RowMap) {
+	t.rowMaps = append(t.rowMaps, rowMaps...)
+}
+
 func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	log.Info("test")
 	rowMaps, err := t.getRowMapsForQuery()
@@ -49,6 +54,11 @@ func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMa
 		}
 	}
 	return nil
+}
+
+// IsTestDB marks this DB as a test double.
+func (t *DB) IsTestDB() bool {
+	return true
 }
 
 func (t *DB) getRowMapsForQuery() ([]sqlutils.RowMap, error) {

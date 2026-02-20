@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icon, Icons } from '../../Icon';
 import Dialog from '../../dialog/Dialog';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 
 interface KeyspaceActionProps {
     isOpen: boolean;
@@ -44,7 +44,7 @@ const KeyspaceAction: React.FC<KeyspaceActionProps> = ({
                 cancelText="Cancel"
                 onConfirm={hasRun ? onCloseDialog : mutation.mutate}
                 loadingText={loadingText}
-                loading={mutation.isLoading}
+                loading={mutation.isPending}
                 onCancel={onCloseDialog}
                 onClose={onCloseDialog}
                 hideCancel={hasRun}

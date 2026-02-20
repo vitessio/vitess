@@ -30,6 +30,7 @@ const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
 	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	IncapacitatedPrimary                   AnalysisCode = "IncapacitatedPrimary"
 	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
 	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
@@ -111,6 +112,7 @@ type DetectionAnalysis struct {
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool
 	LastCheckValid                            bool
+	PrimaryHealthUnhealthy                    bool
 	LastCheckPartialSuccess                   bool
 	CountReplicas                             uint
 	CountValidReplicas                        uint
