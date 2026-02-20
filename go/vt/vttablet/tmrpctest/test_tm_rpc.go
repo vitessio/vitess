@@ -1383,7 +1383,7 @@ func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, clien
 	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
+func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode, capability replicationdatapb.Capability) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1421,14 +1421,14 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 }
 
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD, replicationdatapb.Capability_MYSQLGTID)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
-	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_MYSQLGTID)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD, replicationdatapb.Capability_MYSQLGTID)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
