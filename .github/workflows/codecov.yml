@@ -17,7 +17,6 @@ jobs:
   test:
     name: Code Coverage
     runs-on: oracle-vm-8cpu-32gb-x86-64
-
     steps:
     - name: Harden the runner (Audit all outbound calls)
       uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
@@ -27,6 +26,7 @@ jobs:
     - name: Check out code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        fetch-depth: 0
         persist-credentials: 'false'
 
     - name: Check for changes in files relevant to code coverage
@@ -78,30 +78,56 @@ jobs:
       run: |
         make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 
-    - name: Run unit tests and generate code coverage reports
+    - name: Detect changed Go packages
       if: steps.changes.outputs.changed_files == 'true'
+      id: packages
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        else
+          BASE_SHA="${{ github.event.before }}"
+          HEAD_SHA="${{ github.sha }}"
+        fi
+
+        CHANGED_GO_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.go')
+
+        if [ -z "$CHANGED_GO_FILES" ]; then
+          echo "packages=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        PACKAGE_DIRS=$(echo "$CHANGED_GO_FILES" | xargs -n1 dirname | sort -u)
+
+        # Validate as Go packages and exclude endtoend tests
+        PACKAGES=""
+        for dir in $PACKAGE_DIRS; do
+          case "$dir" in
+            */endtoend*|go/cmd/vttestserver*) continue ;;
+          esac
+          if go list "./$dir" >/dev/null 2>&1; then
+            PACKAGES="${PACKAGES:+$PACKAGES }$dir"
+          fi
+        done
+
+        echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+    - name: Run coverage tests
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
       timeout-minutes: 45
       run: |
         set -exo pipefail
-        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
-        # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
-
         export NOVTADMINBUILD=1
+        source build.env
 
-        # Exclude endtoend tests from the coverage report.
-        # TODO: figure out how best to include our endtoend tests in the coverage report.
-        rm -rf go/test/endtoend go/*/endtoend go/vt/*/endtoend go/cmd/vttestserver
+        make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
 
-        make unit_test_cover
-
-        # Restore the files we deleted as codecov tries to fix their paths.
-        git reset --hard HEAD
-
-    - name: Upload coverage reports to codecov.io
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # https://github.com/codecov/codecov-action/releases/tag/v5.5.2
+    - name: Upload coverage reports
+      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
       with:
+        files: coverage.out
         fail_ci_if_error: true
         verbose: true
       env:
