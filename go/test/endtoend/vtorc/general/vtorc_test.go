@@ -473,6 +473,97 @@ func TestStalePrimary(t *testing.T) {
 	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
 
+// TestDemotePrimaryHang tests that when the `DemotePrimary` RPC hangs, VTOrc is not indefinitely blocked
+// on future recoveries.
+func TestDemotePrimaryHang(t *testing.T) {
+	ctx := t.Context()
+
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, curPrimary, "expected VTOrc to elect an initial primary")
+
+	var stalePrimary *cluster.Vttablet
+	var blockedReplica *cluster.Vttablet
+	var healthyReplica *cluster.Vttablet
+
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == curPrimary.Alias {
+			continue
+		}
+
+		if stalePrimary == nil {
+			stalePrimary = tablet
+			continue
+		}
+
+		if blockedReplica == nil {
+			blockedReplica = tablet
+			continue
+		}
+
+		healthyReplica = tablet
+	}
+
+	require.NotNil(t, stalePrimary, "expected a candidate tablet to mark as stale topo primary")
+	require.NotNil(t, blockedReplica, "expected a second replica to inject a separate failure")
+	require.NotNil(t, healthyReplica, "expected a healthy replica to keep normal replication coverage")
+
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{stalePrimary, blockedReplica, healthyReplica}, 15*time.Second)
+
+	// Hold the stale primary candidate's action queue for a long time. This guarantees that VTOrc's
+	// DemotePrimary RPC will block on the tablet lock.
+	sleepDuration := 90 * time.Second
+	go func() {
+		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+			"SleepTablet",
+			stalePrimary.Alias,
+			sleepDuration.String(),
+		)
+		require.NoError(t, err)
+	}()
+
+	// Make the tablet a stale primary by updating its type to PRIMARY and primary term start time
+	// to an older time than the current primary. This will trigger the StaleTopoPrimary recovery.
+	err := utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, stalePrimary, "")
+	require.NoError(t, err)
+
+	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, stalePrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now().Add(-1 * time.Minute))
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Wait until VTOrc has detected the stale topo primary.
+	utils.WaitForDetectedProblems(t, vtorc, string(inst.StaleTopoPrimary), stalePrimary.Alias, keyspace.Name, shard0.Name, 1)
+
+	// Inject a second problem on a different replica while the stale-primary recovery is still hanging.
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", blockedReplica.Alias)
+	require.NoError(t, err)
+
+	utils.WaitForDetectedProblems(t, vtorc, string(inst.ReplicationStopped), blockedReplica.Alias, keyspace.Name, shard0.Name, 1)
+
+	// If DemotePrimary is bounded by a timeout, the stale primary recovery should stop blocking
+	// the shard and VTOrc should be able to run the follow-up FixReplica recovery.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		vars := vtorc.GetVars()
+		recoveries, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
+		mapKey := fmt.Sprintf("%s.%s.%s", logic.DemoteStaleTopoPrimaryRecoveryName, keyspace.Name, shard0.Name)
+		count := utils.GetIntFromValue(recoveries[mapKey])
+		require.EqualValues(c, 1, count)
+	}, 75*time.Second, time.Second, "expected stale-primary recovery to complete after DemotePrimary timeout")
+
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+}
+
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
