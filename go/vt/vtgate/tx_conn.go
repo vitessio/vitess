@@ -262,22 +262,41 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSessi
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
 func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession) (txnType txType, err error) {
-	// If the number of participants is one or less, then it's a normal commit.
-	if len(session.ShardSessions) <= 1 {
-		return txc.commitNormal(ctx, session)
+	var modifiedShards []*vtgatepb.Session_ShardSession
+	var readOnlyShards []*vtgatepb.Session_ShardSession
+
+	for _, s := range session.ShardSessions {
+		if s.RowsAffected {
+			modifiedShards = append(modifiedShards, s)
+		} else {
+			readOnlyShards = append(readOnlyShards, s)
+		}
 	}
 
-	mmShard := session.ShardSessions[0]
-	rmShards := session.ShardSessions[1:]
+	if err = txc.runSessions(ctx, readOnlyShards, session.GetLogger(), txc.commitShard); err != nil {
+		return TXReadOnly, err
+	}
+
+	if len(modifiedShards) == 0 {
+		return TXReadOnly, nil
+	}
+
+	// If the number of participants is one or less, then it's a normal commit.
+	if len(modifiedShards) == 1 {
+		if err = txc.commitShard(ctx, modifiedShards[0], session.GetLogger()); err != nil {
+			return TXReadWrite, err
+		}
+		return TXReadWrite, nil
+	}
+
+	mmShard := modifiedShards[0]
+	rmShards := modifiedShards[1:]
 	dtid := dtids.New(mmShard)
 	if mmShard.RowsAffected {
 		txnType = TXReadWrite
 	}
 	participants := make([]*querypb.Target, len(rmShards))
 	for i, s := range rmShards {
-		if s.RowsAffected {
-			txnType = TXReadWrite
-		}
 		participants[i] = s.Target
 	}
 
