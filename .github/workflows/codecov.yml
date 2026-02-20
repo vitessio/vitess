@@ -88,6 +88,10 @@ jobs:
         CHANGED_GO_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.go')
 
         if [ -z "$CHANGED_GO_FILES" ]; then
+          echo "BASE_SHA=$BASE_SHA"
+          echo "HEAD_SHA=$HEAD_SHA"
+          echo "packages=$PACKAGES"
+
           echo "packages=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
