@@ -288,7 +288,9 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
@@ -325,7 +327,9 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
@@ -415,7 +419,9 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	// Get durability policy for the keyspace to determine semi-sync settings
@@ -1034,7 +1040,9 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1084,7 +1092,9 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1118,7 +1128,9 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1171,7 +1183,9 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(alias)
@@ -1239,7 +1253,9 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error("failed to resolve recovery", slog.Any("error", err))
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
