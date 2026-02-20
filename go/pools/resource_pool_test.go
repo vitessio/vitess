@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	lastID, count, closeCount, resetCount atomic.Int64
-	waitStarts                            []time.Time
+	lastID, count, closeCount atomic.Int64
+	waitStarts                []time.Time
 )
 
 type TestResource struct {
@@ -178,6 +178,7 @@ func TestShrinking(t *testing.T) {
 	waitStarts = waitStarts[:0]
 
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
+	defer p.Close()
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := range 4 {
@@ -341,6 +342,7 @@ func TestReopen(t *testing.T) {
 		return true, nil
 	}
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, refreshCheck, 500*time.Millisecond)
+	defer p.Close()
 	var resources [10]Resource
 	for i := range 5 {
 		var r Resource
