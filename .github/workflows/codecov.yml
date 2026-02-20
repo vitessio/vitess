@@ -110,6 +110,10 @@ jobs:
           fi
         done
 
+	echo "BASE_SHA=$BASE_SHA"
+	echo "HEAD_SHA=$HEAD_SHA"
+        echo "packages=$PACKAGES"
+
         echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
 
     - name: Run coverage tests
