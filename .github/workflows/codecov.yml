@@ -83,14 +83,8 @@ jobs:
       if: steps.changes.outputs.changed_files == 'true'
       id: packages
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-        else
-          BASE_SHA="${{ github.event.before }}"
-          HEAD_SHA="${{ github.sha }}"
-        fi
-
+        BASE_SHA="${{ github.event.pull_request.base.sha }}"
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
         CHANGED_GO_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.go')
 
         if [ -z "$CHANGED_GO_FILES" ]; then
