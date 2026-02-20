@@ -268,6 +268,7 @@ func ContinuousDiscovery() {
 	}
 
 	go handleDiscoveryRequests()
+	go startGossip()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
@@ -285,6 +286,7 @@ func ContinuousDiscovery() {
 	}()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
+	servenv.OnTerm(stopGossip)
 
 	log.Info("continuous discovery: starting")
 	for {
