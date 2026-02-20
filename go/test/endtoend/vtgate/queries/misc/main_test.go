@@ -73,6 +73,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		// Opt-in --transaction-mode-limit=TWOPC for tests that SET transaction_mode (e.g. TestTransactionModeLimitTWOPCAcceptsAll).
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views", "--transaction-mode-limit", "TWOPC")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 

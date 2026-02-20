@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
@@ -69,8 +68,9 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
+		// Start vtgate with opt-in enforcement: --transaction-mode-limit is set
+		// so SET transaction_mode is capped at MULTI (tested in TestTransactionModeLimitSingle).
+		// Without --transaction-mode-limit we would not enforce (backward compat).
 		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE", "--transaction-mode-limit", "MULTI"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {

@@ -492,10 +492,10 @@ func TestTransactionModeVar(t *testing.T) {
 	}
 }
 
-// TestTransactionModeLimitRejectsAboveLimit verifies that with
-// --transaction-mode-limit=TWOPC all modes are accepted, and that SET to
-// 'unspecified' resets the session to the server default (MULTI).
-func TestTransactionModeLimitRejectsAboveLimit(t *testing.T) {
+// TestTransactionModeLimitTWOPCAcceptsAll verifies that with opt-in
+// --transaction-mode-limit=TWOPC all modes (single, multi, twopc) are accepted,
+// and that SET to 'unspecified' resets the session to the server default (MULTI).
+func TestTransactionModeLimitTWOPCAcceptsAll(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 

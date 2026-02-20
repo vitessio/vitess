@@ -209,6 +209,8 @@ var (
 		},
 	)
 
+	effectiveTransactionModeLimit func() vtgatepb.TransactionMode
+
 	// schema tracking flags
 	enableSchemaChangeSignal = true
 	enableViews              = true
@@ -232,7 +234,10 @@ var (
 	warmingReadsConcurrency  = 500
 )
 
+var transactionModeFlagSet *pflag.FlagSet
+
 func registerFlags(fs *pflag.FlagSet) {
+	transactionModeFlagSet = fs
 	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Sets both default and limit unless overridden by --transaction-mode-default or --transaction-mode-limit")
 	fs.String("transaction-mode-default", "", "Default transaction mode for new sessions. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
 	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
@@ -398,9 +403,15 @@ func Init(
 
 	dynamicConfig := NewDynamicViperConfig()
 
-	if txDefault, txLimit := transactionModeDefault.Get(), transactionModeLimit.Get(); txDefault > txLimit {
-		log.Error(fmt.Sprintf("transaction-mode-default %s exceeds transaction-mode-limit %s", txDefault.String(), txLimit.String()))
-		os.Exit(1)
+	// Enforcement is only activated when --transaction-mode-limit is explicitly set.
+	// Using --transaction-mode or --transaction-mode-default alone preserves the
+	// existing behavior: SET transaction_mode is unrestricted (backward compatible).
+	if transactionModeFlagSet != nil && transactionModeFlagSet.Changed("transaction-mode-limit") {
+		limitMode := transactionModeLimit.Get()
+		effectiveTransactionModeLimit = func() vtgatepb.TransactionMode { return limitMode }
+		log.Info(fmt.Sprintf("Opt-in enforcement enabled: limit=%s", limitMode.String()))
+	} else {
+		effectiveTransactionModeLimit = nil
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a

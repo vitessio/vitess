@@ -61,12 +61,29 @@ func TestParseTransactionModeString(t *testing.T) {
 	}
 }
 
-// TestSetTransactionModeLimitWithUnspecifiedLimit verifies that when the
-// TransactionModeLimit is UNSPECIFIED (meaning "no explicit limit configured"),
-// all transaction modes are allowed via SET.
-func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
+// TestSetTransactionModeLimitNilNoEnforcement verifies core BC guarantee:
+// no --transaction-mode-limit flag -> nil limit -> unrestricted SET transaction_mode.
+
+func TestSetTransactionModeLimitNilNoEnforcement(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
+	// nil = --transaction-mode-limit was never passed -> no enforcement
+	executor.vConfig.TransactionModeLimit = nil
+
+	for _, mode := range []string{"single", "multi", "twopc", "unspecified"} {
+		t.Run(mode, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+mode+"'", nil)
+			require.NoError(t, err, "nil limit must never enforce anything, failed for mode=%s", mode)
+		})
+	}
+}
+
+// TestSetTransactionModeLimitWithUnspecifiedLimit verifies that a non-nil
+// TransactionModeLimit func returning UNSPECIFIED also allows all modes.
+// UNSPECIFIED from the func means "no cap configured", same as nil.
+func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
 		return vtgatepb.TransactionMode_UNSPECIFIED
 	}
@@ -75,9 +92,26 @@ func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+mode+"'", nil)
-			require.NoError(t, err, "limit=UNSPECIFIED should not reject any mode")
+			require.NoError(t, err, "UNSPECIFIED limit should not reject mode=%s", mode)
 		})
 	}
+}
+
+// TestBackwardCompatOldFlagOnly verifies that a user who passes only
+// --transaction-mode=SINGLE (the old flag) without --transaction-mode-limit
+// can still SET transaction_mode to any value including TWOPC.
+// This is the critical backward-compat guarantee of the whole feature.
+func TestBackwardCompatOldFlagOnly(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	// Simulate --transaction-mode=SINGLE but no --transaction-mode-limit.
+	// effectiveTransactionModeLimit will be nil (as set by vtgate.go Changed() check).
+	executor.vConfig.TransactionModeLimit = nil
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+	_, err := executorExecSession(ctx, executor, session, "set transaction_mode = 'twopc'", nil)
+	require.NoError(t, err, "--transaction-mode alone must not restrict SET transaction_mode")
+	assert.Equal(t, vtgatepb.TransactionMode_TWOPC, session.TransactionMode)
 }
 
 // TestSetTransactionModeLimitErrorCode verifies that a limit violation returns

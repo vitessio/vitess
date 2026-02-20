@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start Vtgate
+		// Start Vtgate with opt-in --transaction-mode-limit=TWOPC so benchmarks can use twopc.
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--transaction-mode-limit", "TWOPC")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
