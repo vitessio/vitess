@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-// Opt-in --transaction-mode-limit=TWOPC allows TestTransactionModes to use TWOPC.
+		// Opt-in --transaction-mode-limit=TWOPC allows TestTransactionModes to use TWOPC.
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--transaction-mode-limit", "TWOPC")
 		if err := clusterInstance.StartVtgate(); err != nil {

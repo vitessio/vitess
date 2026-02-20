@@ -195,12 +195,12 @@ var (
 				return func(key string) vtgatepb.TransactionMode {
 					switch txMode := strings.ToLower(v.GetString(key)); txMode {
 					case "", "unspecified":
-						return transactionMode.Get()
+						return vtgatepb.TransactionMode_UNSPECIFIED
 					default:
 						mode, err := parseTransactionModeString(txMode)
 						if err != nil {
-							log.Error(fmt.Sprintf("invalid --transaction-mode-limit value, falling back to --transaction-mode: %v", err))
-							return transactionMode.Get()
+							log.Error(fmt.Sprintf("invalid --transaction-mode-limit value, no enforcement: %v", err))
+							return vtgatepb.TransactionMode_UNSPECIFIED
 						}
 						return mode
 					}
@@ -238,9 +238,11 @@ var transactionModeFlagSet *pflag.FlagSet
 
 func registerFlags(fs *pflag.FlagSet) {
 	transactionModeFlagSet = fs
-	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Sets both default and limit unless overridden by --transaction-mode-default or --transaction-mode-limit")
-	fs.String("transaction-mode-default", "", "Default transaction mode for new sessions. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
-	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
+	fs.String("transaction-mode", "MULTI",
+	"SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Acts as the default mode for sessions.")
+	fs.String("transaction-mode-default", "",
+	"Default transaction mode for new sessions. Falls back to --transaction-mode if not set.Valid values: SINGLE, MULTI, TWOPC")
+	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET. If not set, no limit is enforced (existing behavior). Valid values: SINGLE, MULTI, TWOPC")
 	utils.SetFlagBoolVar(fs, &normalizeQueries, "normalize-queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
