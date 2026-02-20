@@ -115,7 +115,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	// Avoid waiting indefinitely when table metadata locks are held by another transaction.
 	lockWaitTimeoutSeconds := int(snapshotLockWaitTimeout.Seconds())
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("set session lock_wait_timeout = %d", lockWaitTimeoutSeconds), 1, false); err != nil {
-		return "", fmt.Errorf("startSnapshot: failed to set session lock_wait_timeout = %d for table %s: %w", lockWaitTimeoutSeconds, tableName, err)
+		return "", vterrors.Wrapf(err, "startSnapshot: failed to set session lock_wait_timeout = %d for table %s", lockWaitTimeoutSeconds, tableName)
 	}
 
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {

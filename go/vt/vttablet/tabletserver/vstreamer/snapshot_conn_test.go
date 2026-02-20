@@ -69,7 +69,7 @@ func TestStartSnapshotLock(t *testing.T) {
 	}
 
 	const tableName = "t1_lock_wait_timeout"
-	const shortLockWaitTimeout = 2 * time.Second
+	const shortLockWaitTimeout = time.Second
 
 	// Seed one row so the table can be locked and queried.
 	execStatements(t, []string{
@@ -88,17 +88,11 @@ func TestStartSnapshotLock(t *testing.T) {
 	// Open a second connection that will hold the metadata lock.
 	lockHolderConn, err := mysqlConnect(ctx, env.TabletEnv.Config().DB.AppWithDB())
 	require.NoError(t, err)
-	lockHeld := false
-	t.Cleanup(func() {
-		if lockHeld {
-			_, _ = lockHolderConn.ExecuteFetch("rollback", 1, false)
-		}
-		lockHolderConn.Close()
-	})
+	t.Cleanup(func() { lockHolderConn.Close() })
 
 	_, err = lockHolderConn.ExecuteFetch("begin", 1, false)
 	require.NoError(t, err)
-	lockHeld = true
+
 	_, err = lockHolderConn.ExecuteFetch(fmt.Sprintf("update %s set val = 'blocked' where id = 1", tableName), 1, false)
 	require.NoError(t, err)
 
