@@ -64,6 +64,10 @@ func (r *switcher) removeSourceTables(ctx context.Context, removalType TableRemo
 	return r.ts.removeSourceTables(ctx, removalType)
 }
 
+func (r *switcher) removeSourceViews(ctx context.Context, removalType TableRemovalType) error {
+	return r.ts.removeSourceViews(ctx, removalType)
+}
+
 func (r *switcher) dropSourceShards(ctx context.Context) error {
 	return r.ts.dropSourceShards(ctx)
 }

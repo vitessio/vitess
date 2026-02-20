@@ -37,6 +37,10 @@ var (
 		AllTables           bool
 		IncludeTables       []string
 		ExcludeTables       []string
+		AllViews            bool
+		IncludeViews        []string
+		ExcludeViews        []string
+		SkipViewValidation  bool
 		SourceTimeZone      string
 		NoRoutingRules      bool
 		AtomicCopy          bool
@@ -136,6 +140,10 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		AllTables:                 createOptions.AllTables,
 		IncludeTables:             createOptions.IncludeTables,
 		ExcludeTables:             createOptions.ExcludeTables,
+		AllViews:                  createOptions.AllViews,
+		IncludeViews:              createOptions.IncludeViews,
+		ExcludeViews:              createOptions.ExcludeViews,
+		SkipViewValidation:        createOptions.SkipViewValidation,
 		OnDdl:                     common.CreateOptions.OnDDL,
 		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
 		AutoStart:                 common.CreateOptions.AutoStart,

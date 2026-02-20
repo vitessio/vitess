@@ -339,6 +339,41 @@ func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType Ta
 	return nil
 }
 
+func (dr *switcherDryRun) removeSourceViews(ctx context.Context, removalType TableRemovalType) error {
+	views := dr.ts.Options().GetViews()
+	if len(views) == 0 {
+		return nil
+	}
+
+	logs := make([]string, 0)
+	sort.Strings(views) // For deterministic output
+	sources := maps.Values(dr.ts.Sources())
+
+	// Sort the slice for deterministic output.
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
+	})
+
+	for _, source := range sources {
+		for _, viewName := range views {
+			logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;dbname:%s;tablet:%d;view:%s",
+				source.GetPrimary().Keyspace, source.GetPrimary().Shard, source.GetPrimary().DbName(), source.GetPrimary().Alias.Uid, viewName))
+		}
+	}
+
+	action := "Dropping"
+	if removalType == RenameTable {
+		action = "Renaming"
+	}
+
+	if len(logs) > 0 {
+		dr.drLog.Logf("%s these views from the database for keyspace %s: [%s]",
+			action, dr.ts.SourceKeyspaceName(), strings.Join(logs, ","))
+	}
+
+	return nil
+}
+
 func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 	logs := make([]string, 0)
 	tabletsList := make(map[string][]string)

@@ -104,6 +104,9 @@ message MaterializeSettings {
 
   // ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
   repeated string reference_tables = 18;
+
+  // Views is the list of views to create in the target keyspace.
+  repeated string views = 19;
 }
 
 /* Data types for VtctldServer */
@@ -234,6 +237,9 @@ message WorkflowOptions {
   string global_keyspace = 5;
   // Lookup Vindexes that are being backfilled by the workflow.
   repeated string lookup_vindexes = 6;
+
+  // Views that are being moved by the workflow.
+  repeated string views = 7;
 }
 
 // TODO: comment the hell out of this.
@@ -1452,6 +1458,21 @@ message MoveTablesCreateRequest {
   // Run a single copy phase for the entire database.
   bool atomic_copy = 19;
   WorkflowOptions workflow_options = 20;
+
+  // AllViews configures the MoveTables workflow to move all views in the source keyspace to the target. This will
+  // create the views in the target.
+  bool all_views = 21;
+
+  // IncludeViews is the list of specific views to move in the workflow. This will create these views in the target.
+  // Takes precedence over AllViews.
+  repeated string include_views = 22;
+
+  // ExcludeViews is the list of specific views to exclude from moving in the workflow.
+  repeated string exclude_views = 23;
+
+  // SkipViewValidation skips checking that views being moved reference tables
+  // that are also being moved or already exist on the target.
+  bool skip_view_validation = 24;
 }
 
 message MoveTablesCreateResponse {

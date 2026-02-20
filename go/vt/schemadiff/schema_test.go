@@ -307,7 +307,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			tables, ctes := getViewDependentTableNames(createView)
+			tables, ctes := GetViewDependentTableNames(createView)
 			assert.Equal(t, ts.tables, tables)
 			assert.Equal(t, ts.ctes, ctes)
 		})

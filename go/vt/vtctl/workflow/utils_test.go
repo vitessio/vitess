@@ -248,7 +248,10 @@ func startEtcd(t *testing.T) string {
 
 func TestValidateSourceTablesExist(t *testing.T) {
 	ks := "source_keyspace"
-	ksTables := []string{"table1", "table2"}
+	ksTables := map[string]*tabletmanagerdatapb.TableDefinition{
+		"table1": nil,
+		"table2": nil,
+	}
 
 	testCases := []struct {
 		name        string

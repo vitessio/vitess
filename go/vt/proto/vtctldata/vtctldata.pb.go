@@ -577,8 +577,10 @@ type MaterializeSettings struct {
 	WorkflowOptions           *WorkflowOptions                            `protobuf:"bytes,17,opt,name=workflow_options,json=workflowOptions,proto3" json:"workflow_options,omitempty"`
 	// ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
 	ReferenceTables []string `protobuf:"bytes,18,rep,name=reference_tables,json=referenceTables,proto3" json:"reference_tables,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Views is the list of views to create in the target keyspace.
+	Views         []string `protobuf:"bytes,19,rep,name=views,proto3" json:"views,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MaterializeSettings) Reset() {
@@ -733,6 +735,13 @@ func (x *MaterializeSettings) GetWorkflowOptions() *WorkflowOptions {
 func (x *MaterializeSettings) GetReferenceTables() []string {
 	if x != nil {
 		return x.ReferenceTables
+	}
+	return nil
+}
+
+func (x *MaterializeSettings) GetViews() []string {
+	if x != nil {
+		return x.Views
 	}
 	return nil
 }
@@ -1342,8 +1351,10 @@ type WorkflowOptions struct {
 	GlobalKeyspace string `protobuf:"bytes,5,opt,name=global_keyspace,json=globalKeyspace,proto3" json:"global_keyspace,omitempty"`
 	// Lookup Vindexes that are being backfilled by the workflow.
 	LookupVindexes []string `protobuf:"bytes,6,rep,name=lookup_vindexes,json=lookupVindexes,proto3" json:"lookup_vindexes,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Views that are being moved by the workflow.
+	Views         []string `protobuf:"bytes,7,rep,name=views,proto3" json:"views,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkflowOptions) Reset() {
@@ -1414,6 +1425,13 @@ func (x *WorkflowOptions) GetGlobalKeyspace() string {
 func (x *WorkflowOptions) GetLookupVindexes() []string {
 	if x != nil {
 		return x.LookupVindexes
+	}
+	return nil
+}
+
+func (x *WorkflowOptions) GetViews() []string {
+	if x != nil {
+		return x.Views
 	}
 	return nil
 }
@@ -9947,8 +9965,19 @@ type MoveTablesCreateRequest struct {
 	// Run a single copy phase for the entire database.
 	AtomicCopy      bool             `protobuf:"varint,19,opt,name=atomic_copy,json=atomicCopy,proto3" json:"atomic_copy,omitempty"`
 	WorkflowOptions *WorkflowOptions `protobuf:"bytes,20,opt,name=workflow_options,json=workflowOptions,proto3" json:"workflow_options,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// AllViews configures the MoveTables workflow to move all views in the source keyspace to the target. This will
+	// create the views in the target.
+	AllViews bool `protobuf:"varint,21,opt,name=all_views,json=allViews,proto3" json:"all_views,omitempty"`
+	// IncludeViews is the list of specific views to move in the workflow. This will create these views in the target.
+	// Takes precedence over AllViews.
+	IncludeViews []string `protobuf:"bytes,22,rep,name=include_views,json=includeViews,proto3" json:"include_views,omitempty"`
+	// ExcludeViews is the list of specific views to exclude from moving in the workflow.
+	ExcludeViews []string `protobuf:"bytes,23,rep,name=exclude_views,json=excludeViews,proto3" json:"exclude_views,omitempty"`
+	// SkipViewValidation skips checking that views being moved reference tables
+	// that are also being moved or already exist on the target.
+	SkipViewValidation bool `protobuf:"varint,24,opt,name=skip_view_validation,json=skipViewValidation,proto3" json:"skip_view_validation,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *MoveTablesCreateRequest) Reset() {
@@ -10119,6 +10148,34 @@ func (x *MoveTablesCreateRequest) GetWorkflowOptions() *WorkflowOptions {
 		return x.WorkflowOptions
 	}
 	return nil
+}
+
+func (x *MoveTablesCreateRequest) GetAllViews() bool {
+	if x != nil {
+		return x.AllViews
+	}
+	return false
+}
+
+func (x *MoveTablesCreateRequest) GetIncludeViews() []string {
+	if x != nil {
+		return x.IncludeViews
+	}
+	return nil
+}
+
+func (x *MoveTablesCreateRequest) GetExcludeViews() []string {
+	if x != nil {
+		return x.ExcludeViews
+	}
+	return nil
+}
+
+func (x *MoveTablesCreateRequest) GetSkipViewValidation() bool {
+	if x != nil {
+		return x.SkipViewValidation
+	}
+	return false
 }
 
 type MoveTablesCreateResponse struct {
@@ -17441,7 +17498,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\ftarget_table\x18\x01 \x01(\tR\vtargetTable\x12+\n" +
 	"\x11source_expression\x18\x02 \x01(\tR\x10sourceExpression\x12\x1d\n" +
 	"\n" +
-	"create_ddl\x18\x03 \x01(\tR\tcreateDdl\"\xf5\x06\n" +
+	"create_ddl\x18\x03 \x01(\tR\tcreateDdl\"\x8b\a\n" +
 	"\x13MaterializeSettings\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
 	"\x0fsource_keyspace\x18\x02 \x01(\tR\x0esourceKeyspace\x12'\n" +
@@ -17462,7 +17519,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\vatomic_copy\x18\x10 \x01(\bR\n" +
 	"atomicCopy\x12E\n" +
 	"\x10workflow_options\x18\x11 \x01(\v2\x1a.vtctldata.WorkflowOptionsR\x0fworkflowOptions\x12)\n" +
-	"\x10reference_tables\x18\x12 \x03(\tR\x0freferenceTables\"N\n" +
+	"\x10reference_tables\x18\x12 \x03(\tR\x0freferenceTables\x12\x14\n" +
+	"\x05views\x18\x13 \x03(\tR\x05views\"N\n" +
 	"\bKeyspace\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12.\n" +
 	"\bkeyspace\x18\x02 \x01(\v2\x12.topodata.KeyspaceR\bkeyspace\"\x80\x14\n" +
@@ -17551,14 +17609,15 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x05Shard\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
-	"\x05shard\x18\x03 \x01(\v2\x0f.topodata.ShardR\x05shard\"\x83\x03\n" +
+	"\x05shard\x18\x03 \x01(\v2\x0f.topodata.ShardR\x05shard\"\x99\x03\n" +
 	"\x0fWorkflowOptions\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12n\n" +
 	"\x1fsharded_auto_increment_handling\x18\x02 \x01(\x0e2'.vtctldata.ShardedAutoIncrementHandlingR\x1cshardedAutoIncrementHandling\x12\x16\n" +
 	"\x06shards\x18\x03 \x03(\tR\x06shards\x12>\n" +
 	"\x06config\x18\x04 \x03(\v2&.vtctldata.WorkflowOptions.ConfigEntryR\x06config\x12'\n" +
 	"\x0fglobal_keyspace\x18\x05 \x01(\tR\x0eglobalKeyspace\x12'\n" +
-	"\x0flookup_vindexes\x18\x06 \x03(\tR\x0elookupVindexes\x1a9\n" +
+	"\x0flookup_vindexes\x18\x06 \x03(\tR\x0elookupVindexes\x12\x14\n" +
+	"\x05views\x18\a \x03(\tR\x05views\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcf\x11\n" +
@@ -18193,7 +18252,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x04name\x18\x04 \x01(\tR\x04name\"\x12\n" +
 	"\x10MountListRequest\")\n" +
 	"\x11MountListResponse\x12\x14\n" +
-	"\x05names\x18\x01 \x03(\tR\x05names\"\x82\a\n" +
+	"\x05names\x18\x01 \x03(\tR\x05names\"\x9b\b\n" +
 	"\x17MoveTablesCreateRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
 	"\x0fsource_keyspace\x18\x02 \x01(\tR\x0esourceKeyspace\x12'\n" +
@@ -18218,7 +18277,11 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x10no_routing_rules\x18\x12 \x01(\bR\x0enoRoutingRules\x12\x1f\n" +
 	"\vatomic_copy\x18\x13 \x01(\bR\n" +
 	"atomicCopy\x12E\n" +
-	"\x10workflow_options\x18\x14 \x01(\v2\x1a.vtctldata.WorkflowOptionsR\x0fworkflowOptions\"\xd5\x01\n" +
+	"\x10workflow_options\x18\x14 \x01(\v2\x1a.vtctldata.WorkflowOptionsR\x0fworkflowOptions\x12\x1b\n" +
+	"\tall_views\x18\x15 \x01(\bR\ballViews\x12#\n" +
+	"\rinclude_views\x18\x16 \x03(\tR\fincludeViews\x12#\n" +
+	"\rexclude_views\x18\x17 \x03(\tR\fexcludeViews\x120\n" +
+	"\x14skip_view_validation\x18\x18 \x01(\bR\x12skipViewValidation\"\xd5\x01\n" +
 	"\x18MoveTablesCreateResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12H\n" +
 	"\adetails\x18\x02 \x03(\v2..vtctldata.MoveTablesCreateResponse.TabletInfoR\adetails\x1aU\n" +

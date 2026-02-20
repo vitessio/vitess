@@ -1028,6 +1028,97 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
 }
 
+// TestMoveTablesViewRoutingRules confirms that MoveTables creates routing rules
+// for views in addition to tables.
+func TestMoveTablesViewRoutingRules(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := t.Context()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	viewDDL := "CREATE VIEW `v1` AS SELECT `id` FROM `t1`"
+	env.tmc.schema["sourceks.v1"] = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:   "v1",
+			Schema: viewDDL,
+			Type:   "VIEW",
+		}},
+	}
+
+	sourceSchema := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:   "t1",
+				Schema: "CREATE TABLE `t1` (`id` int)",
+				Type:   "BASE TABLE",
+			},
+			{
+				Name:   "v1",
+				Schema: viewDDL,
+				Type:   "VIEW",
+			},
+		},
+	}
+	env.tmc.SetGetSchemaResponse(100, sourceSchema)
+
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, viewDDL, &sqltypes.Result{})
+	env.tmc.expectFetchAsAllPrivsQuery(200, getNonEmptyTable, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
+
+	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       ms.Workflow,
+		SourceKeyspace: ms.SourceKeyspace,
+		TargetKeyspace: ms.TargetKeyspace,
+		IncludeTables:  []string{"t1"},
+		IncludeViews:   []string{"v1"},
+	})
+	require.NoError(t, err)
+
+	rr, err := env.ws.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+
+	// Check that both table and view routing rules are created
+	wantRules := map[string][]string{
+		// Table routing rules
+		"t1":                  {"sourceks.t1"},
+		"t1@replica":          {"sourceks.t1"},
+		"t1@rdonly":           {"sourceks.t1"},
+		"sourceks.t1":         {"sourceks.t1"},
+		"sourceks.t1@replica": {"sourceks.t1"},
+		"sourceks.t1@rdonly":  {"sourceks.t1"},
+		"targetks.t1":         {"sourceks.t1"},
+		"targetks.t1@replica": {"sourceks.t1"},
+		"targetks.t1@rdonly":  {"sourceks.t1"},
+		// View routing rules
+		"v1":                  {"sourceks.v1"},
+		"v1@replica":          {"sourceks.v1"},
+		"v1@rdonly":           {"sourceks.v1"},
+		"sourceks.v1":         {"sourceks.v1"},
+		"sourceks.v1@replica": {"sourceks.v1"},
+		"sourceks.v1@rdonly":  {"sourceks.v1"},
+		"targetks.v1":         {"sourceks.v1"},
+		"targetks.v1@replica": {"sourceks.v1"},
+		"targetks.v1@rdonly":  {"sourceks.v1"},
+	}
+
+	gotRules := make(map[string][]string)
+	for _, rule := range rr.Rules {
+		gotRules[rule.FromTable] = rule.ToTables
+	}
+	require.Equal(t, wantRules, gotRules, "routing rules should include both tables and views")
+}
+
 func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",

@@ -79,7 +79,24 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
-var tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdonlyTabletSuffix}
+var (
+	tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdonlyTabletSuffix}
+
+	// errNoTablesToMove is returned when a create MoveTables request specifies no tables to move.
+	errNoTablesToMove = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables to move")
+
+	// errNoViewsToMove is returned when a create MoveTables request excludes all views that were included
+	// to be moved.
+	errNoViewsToMove = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no views to move")
+
+	// errViewsNotFound is returned when views specified in a MoveTables request do not exist in the
+	// source keyspace.
+	errViewsNotFound = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "views not found in source keyspace")
+
+	// errViewMissingTable is returned when a MoveTables request includes a view that references a
+	// table not being moved and not already on the target.
+	errViewMissingTable = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "view references table not being moved")
+)
 
 // tableCopyProgress stores the row counts and disk sizes of the source and target tables
 type tableCopyProgress struct {
@@ -1054,7 +1071,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	var (
-		tables       = req.IncludeTables
 		externalTopo *topo.Server
 		sourceTopo   = s.ts
 	)
@@ -1105,39 +1121,49 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 
-	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
+	ksTables, ksViews, err := getTablesAndViewsInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
-	if len(tables) > 0 {
-		err = validateSourceTablesExist(sourceKeyspace, ksTables, tables)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		if req.AllTables {
-			tables = ksTables
-		} else {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables to move")
-		}
+
+	// Fetch existing tables on the target for view validation. Views that are being moved may reference tables that
+	// already exist on the target (from a previous MoveTables for example).
+	targetTablesMap, _, err := getTablesAndViewsInKeyspace(ctx, s.ts, s.tmc, targetKeyspace)
+	if err != nil {
+		return nil, err
 	}
-	if len(req.ExcludeTables) > 0 {
-		err = validateSourceTablesExist(sourceKeyspace, ksTables, req.ExcludeTables)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var tables2 []string
-	for _, t := range tables {
-		if shouldInclude(t, req.ExcludeTables) {
-			tables2 = append(tables2, t)
-		}
-	}
-	tables = tables2
-	if len(tables) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables to move")
+	targetTables := maps.Keys(targetTablesMap)
+
+	// Validate and build the list of tables to move.
+	tables, err := s.resolveTables(req, sourceKeyspace, ksTables)
+	if err != nil {
+		return nil, err
 	}
 	s.Logger().Infof("Found tables to move: %s", strings.Join(tables, ","))
+
+	// Combine tables being moved with tables already on the target for view validation.
+	targetTables = append(targetTables, tables...)
+
+	// Validate and build the list of views to move.
+	views, err := s.resolveViews(resolveViewsOptions{
+		req:                req,
+		sourceViews:        ksViews,
+		skipViewValidation: req.SkipViewValidation,
+		targetTables:       targetTables,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.Logger().Infof("Found views to move: %s", strings.Join(views, ","))
+
+	// Persist views in workflow options so they can be retrieved during completion (for renaming/dropping).
+	if len(views) > 0 {
+		if req.WorkflowOptions == nil {
+			req.WorkflowOptions = &vtctldatapb.WorkflowOptions{}
+		}
+
+		req.WorkflowOptions.Views = views
+	}
 
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
@@ -1169,6 +1195,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 		AtomicCopy:                req.AtomicCopy,
 		WorkflowOptions:           req.WorkflowOptions,
+		Views:                     views,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -1261,7 +1288,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
-		if err := s.setupInitialRoutingRules(ctx, req, mz, tables); err != nil {
+		if err := s.setupInitialRoutingRules(ctx, req, mz, tables, views); err != nil {
 			return nil, err
 		}
 	}
@@ -1321,6 +1348,54 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	})
 }
 
+// resolveTables returns the set of tables the MoveTables workflow should move based on the request.
+func (s *Server) resolveTables(req *vtctldatapb.MoveTablesCreateRequest, sourceKeyspace string, sourceTables map[string]*tabletmanagerdatapb.TableDefinition) ([]string, error) {
+	var tables []string
+
+	// If a specific set of tables was requested, validate them and use those.
+	if len(req.IncludeTables) > 0 {
+		tables = req.IncludeTables
+		if err := validateSourceTablesExist(sourceKeyspace, sourceTables, tables); err != nil {
+			return nil, err
+		}
+	} else {
+		// Otherwise, ensure that all tables were explicitly requested.
+		if !req.AllTables {
+			return nil, errNoTablesToMove
+		}
+
+		tables = maps.Keys(sourceTables)
+	}
+
+	// If a specific set of tables was requested to be excluded, validate them.
+	excludeSet := make(map[string]struct{}, len(req.ExcludeTables))
+	if len(req.ExcludeTables) > 0 {
+		err := validateSourceTablesExist(sourceKeyspace, sourceTables, req.ExcludeTables)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, table := range req.ExcludeTables {
+			excludeSet[table] = struct{}{}
+		}
+	}
+
+	var includedTables []string
+	for _, t := range tables {
+		if shouldExclude(t, excludeSet) {
+			continue
+		}
+
+		includedTables = append(includedTables, t)
+	}
+
+	if len(includedTables) == 0 {
+		return nil, errNoTablesToMove
+	}
+
+	return includedTables, nil
+}
+
 func validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
 	if mz.IsMultiTenantMigration() {
 		switch {
@@ -1350,7 +1425,7 @@ func setupInitialDeniedTables(ctx context.Context, ts *trafficSwitcher) error {
 	})
 }
 
-func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string) error {
+func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables, views []string) error {
 	if err := validateRoutingRuleFlags(req, mz); err != nil {
 		return err
 	}
@@ -1401,11 +1476,20 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 			rules[key+typ] = []string{route}
 		}
 	}
+
 	for _, table := range tables {
 		for _, ks := range []string{globalTableQualifier, targetKeyspace, sourceKeyspace} {
 			routeTableToSource(ks, table)
 		}
 	}
+
+	// Set up view routing rules.
+	for _, view := range views {
+		for _, ks := range []string{globalTableQualifier, targetKeyspace, sourceKeyspace} {
+			routeTableToSource(ks, view)
+		}
+	}
+
 	if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
 		return err
 	}
@@ -2468,6 +2552,11 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 				if err := sw.removeSourceTables(ctx, removalType); err != nil {
 					return nil, err
 				}
+
+				if err := sw.removeSourceViews(ctx, removalType); err != nil {
+					return nil, err
+				}
+
 				if err := sw.dropSourceDeniedTables(ctx); err != nil {
 					return nil, err
 				}

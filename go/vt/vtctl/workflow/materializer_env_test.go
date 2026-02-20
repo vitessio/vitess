@@ -146,6 +146,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:    tableName,
 				Schema:  ts.CreateDdl,
+				Type:    tmutils.TableBaseTable,
 				Columns: cols,
 				Fields:  fields,
 			}},
@@ -154,6 +155,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:    ts.TargetTable,
 				Schema:  ts.CreateDdl,
+				Type:    tmutils.TableBaseTable,
 				Columns: cols,
 				Fields:  fields,
 			}},
