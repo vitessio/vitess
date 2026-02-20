@@ -595,13 +595,7 @@ func (vc *VCursorImpl) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
-var (
-	errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
-
-	// anyShardDestination is reused across canResolveKeyspace calls to avoid
-	// allocating a new slice on every invocation.
-	anyShardDestination = []key.ShardDestination{key.DestinationAnyShard{}}
-)
+var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
 // AnyKeyspace returns a keyspace to use when no specific keyspace is selected.
 // It filters out keyspaces that do not serve vc.tabletType (e.g. skips PRIMARY-only
@@ -619,8 +613,10 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
+	ctx, cancel := context.WithTimeout(context.TODO(), 50*time.Millisecond)
+	defer cancel()
 
-	keyspaces := vc.filterKeyspacesByTabletType(vc.getSortedServingKeyspaces())
+	keyspaces := vc.filterKeyspacesByTabletType(ctx, vc.getSortedServingKeyspaces())
 
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
@@ -632,30 +628,29 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
-// canResolveKeyspace checks whether the given keyspace has a SrvKeyspace partition
-// for vc.tabletType. Uses ResolveDestinations which reads cached SrvKeyspace data,
-// following the same code path as explicit keyspace routing (Resolver.GetKeyspaceShards).
-func (vc *VCursorImpl) canResolveKeyspace(ksName string) bool {
+// canResolveKeyspace checks whether the given keyspace has a SrvKeyspace partition for vc.tabletType.
+func (vc *VCursorImpl) canResolveKeyspace(ctx context.Context, ksName string) bool {
 	if vc.resolver == nil {
 		return true
 	}
-	_, _, err := vc.resolver.ResolveDestinations(
-		context.Background(), ksName, vc.tabletType,
-		nil, anyShardDestination,
-	)
+	subCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	anyShardDestination := []key.ShardDestination{key.DestinationAnyShard{}}
+	_, _, err := vc.resolver.ResolveDestinations(subCtx, ksName, vc.tabletType, nil, anyShardDestination)
 	return err == nil
 }
 
 // filterKeyspacesByTabletType filters keyspaces to those that can serve vc.tabletType.
 // Returns the original list unchanged when the resolver is nil (no filtering possible)
 // or when no keyspaces pass the filter (backwards compatibility).
-func (vc *VCursorImpl) filterKeyspacesByTabletType(keyspaces []*vindexes.Keyspace) []*vindexes.Keyspace {
+func (vc *VCursorImpl) filterKeyspacesByTabletType(ctx context.Context, keyspaces []*vindexes.Keyspace) []*vindexes.Keyspace {
 	if vc.resolver == nil {
 		return keyspaces
 	}
+
 	var filtered []*vindexes.Keyspace
 	for _, ks := range keyspaces {
-		if vc.canResolveKeyspace(ks.Name) {
+		if vc.canResolveKeyspace(ctx, ks.Name) {
 			filtered = append(filtered, ks)
 		}
 	}
@@ -696,7 +691,10 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := vc.filterKeyspacesByTabletType(vc.getSortedServingKeyspaces())
+	ctx, cancel := context.WithTimeout(context.TODO(), 50*time.Millisecond)
+	defer cancel()
+
+	keyspaces := vc.filterKeyspacesByTabletType(ctx, vc.getSortedServingKeyspaces())
 
 	return keyspaces[0], nil
 }
