@@ -1426,7 +1426,9 @@
       "Manual": false,
       "Shard": "vtgate_transaction",
       "Tags": [],
-      "Needs": [],
+      "Needs": [
+        "larger-runner"
+      ],
       "BuildTag": "debug2PC"
     },
     "vtgate_transaction_restart": {
@@ -1517,7 +1519,9 @@
       "Manual": false,
       "Shard": "vtgate_transaction",
       "Tags": [],
-      "Needs": [],
+      "Needs": [
+        "larger-runner"
+      ],
       "BuildTag": "debug2PC"
     },
     "vtgate_transaction_timeout": {
@@ -1866,6 +1870,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1884,6 +1889,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1902,6 +1908,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1920,6 +1927,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1938,6 +1946,7 @@
       "Shard": "vreplication_multi_tenant",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1956,6 +1965,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1974,6 +1984,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1992,6 +2003,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2010,6 +2022,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2028,6 +2041,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2086,6 +2100,7 @@
       "Shard": "vreplication_copy_parallel",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2104,6 +2119,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2122,6 +2138,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2245,6 +2262,7 @@
       "Shard": "vtorc",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "memory-check"
       ]
     },
@@ -2320,6 +2338,7 @@
       "Shard": "vreplication_v2",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2358,6 +2377,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2376,6 +2396,7 @@
       "Shard": "vreplication_foreign_key_stress",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2396,6 +2417,7 @@
       "Shard": "vreplication_across_db_versions",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
