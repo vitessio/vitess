@@ -59,6 +59,10 @@ func run(cmd *cobra.Command, args []string) {
 		inst.EnableAuditSyslog()
 	}
 	config.MarkConfigurationLoaded()
+	if err := config.Validate(); err != nil {
+		log.Error(fmt.Sprintf("Failed to validate config: %+v", err))
+		os.Exit(1)
+	}
 
 	// Log final config values to debug if something goes wrong.
 	log.Info(fmt.Sprintf("Running with Configuration - %v", debug.AllSettings()))
