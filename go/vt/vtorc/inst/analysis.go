@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-/* faking a golang file change */
-
 type AnalysisCode string
 
 const (
