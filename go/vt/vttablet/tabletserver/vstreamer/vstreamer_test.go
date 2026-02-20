@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -2025,7 +2026,7 @@ func TestNoFutureGTID(t *testing.T) {
 	}()
 	defer close(ch)
 	err = vstream(ctx, t, future, nil, nil, ch, false)
-	want := "GTIDSet Mismatch"
+	want := vterrors.GTIDSetMismatch
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
