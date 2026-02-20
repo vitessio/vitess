@@ -94,7 +94,7 @@ var (
 	delimiter = "/"
 
 	// minimum part size
-	minPartSize int64
+	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -109,7 +109,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &tlsSkipVerifyCert, "s3-backup-tls-skip-verify-cert", false, "skip the 'certificate is valid' check for SSL connections.")
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
-	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", 5*1024*1024, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
+	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 }
 
 func init() {

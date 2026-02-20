@@ -512,7 +512,7 @@ func TestCalculateUploadPartSizeEdgeCases(t *testing.T) {
 func TestNoSSE(t *testing.T) {
 	sseData := S3ServerSideEncryption{}
 	err := sseData.init()
-	require.NoErrorf(t, err, "init() expected to succeed")
+	require.NoError(t, err, "init() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -520,14 +520,14 @@ func TestNoSSE(t *testing.T) {
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 
 	sseData.reset()
-	require.NoErrorf(t, err, "reset() expected to succeed")
+	require.NoError(t, err, "reset() expected to succeed")
 }
 
 func TestSSEAws(t *testing.T) {
 	sse = "aws:kms"
 	sseData := S3ServerSideEncryption{}
 	err := sseData.init()
-	require.NoErrorf(t, err, "init() expected to succeed")
+	require.NoError(t, err, "init() expected to succeed")
 
 	assert.Equal(t, types.ServerSideEncryption("aws:kms"), sseData.awsAlg, "awsAlg expected to be aws:kms")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -535,7 +535,7 @@ func TestSSEAws(t *testing.T) {
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 
 	sseData.reset()
-	require.NoErrorf(t, err, "reset() expected to succeed")
+	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -545,38 +545,38 @@ func TestSSEAws(t *testing.T) {
 
 func TestSSECustomerFileNotFound(t *testing.T) {
 	tempFile, err := os.CreateTemp("", "filename")
-	require.NoErrorf(t, err, "TempFile() expected to succeed")
+	require.NoError(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 
 	err = tempFile.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	require.NoError(t, err, "Close() expected to succeed")
 
 	err = os.Remove(tempFile.Name())
-	require.NoErrorf(t, err, "Remove() expected to succeed")
+	require.NoError(t, err, "Remove() expected to succeed")
 
 	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
-	require.Errorf(t, err, "init() expected to fail")
+	require.Error(t, err, "init() expected to fail")
 }
 
 func TestSSECustomerFileBinaryKey(t *testing.T) {
 	tempFile, err := os.CreateTemp("", "filename")
-	require.NoErrorf(t, err, "TempFile() expected to succeed")
+	require.NoError(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 
 	randomKey := make([]byte, 32)
 	_, err = rand.Read(randomKey)
-	require.NoErrorf(t, err, "Read() expected to succeed")
+	require.NoError(t, err, "Read() expected to succeed")
 	_, err = tempFile.Write(randomKey)
-	require.NoErrorf(t, err, "Write() expected to succeed")
+	require.NoError(t, err, "Write() expected to succeed")
 	err = tempFile.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	require.NoError(t, err, "Close() expected to succeed")
 
 	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
-	require.NoErrorf(t, err, "init() expected to succeed")
+	require.NoError(t, err, "init() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
@@ -585,7 +585,7 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
 	sseData.reset()
-	require.NoErrorf(t, err, "reset() expected to succeed")
+	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -595,23 +595,23 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 
 func TestSSECustomerFileBase64Key(t *testing.T) {
 	tempFile, err := os.CreateTemp("", "filename")
-	require.NoErrorf(t, err, "TempFile() expected to succeed")
+	require.NoError(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 
 	randomKey := make([]byte, 32)
 	_, err = rand.Read(randomKey)
-	require.NoErrorf(t, err, "Read() expected to succeed")
+	require.NoError(t, err, "Read() expected to succeed")
 
 	base64Key := base64.StdEncoding.EncodeToString(randomKey[:])
 	_, err = tempFile.WriteString(base64Key)
-	require.NoErrorf(t, err, "WriteString() expected to succeed")
+	require.NoError(t, err, "WriteString() expected to succeed")
 	err = tempFile.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	require.NoError(t, err, "Close() expected to succeed")
 
 	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
-	require.NoErrorf(t, err, "init() expected to succeed")
+	require.NoError(t, err, "init() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
@@ -620,7 +620,7 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
 	sseData.reset()
-	require.NoErrorf(t, err, "reset() expected to succeed")
+	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
