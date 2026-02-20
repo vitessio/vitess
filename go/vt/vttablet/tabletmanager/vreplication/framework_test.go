@@ -413,8 +413,13 @@ type fakeBinlogClient struct {
 	lastCharset  *binlogdatapb.Charset
 }
 
-// fakeBinlogClientErrorsByTablet allows injecting errors per tablet UID for binlog client.
+// fakeBinlogClientErrorsByTablet allows injecting a fixed error per tablet UID.
+// This error is returned forever until the map is cleared. If not set, then tablet will not return any errors.
 var fakeBinlogClientErrorsByTablet map[uint32]error
+
+// fakeBinlogClientErrorQueuesByTablet allows injecting a queue of errors per tablet UID.
+// Each call dequeues and returns the next error. When empty, it falls back to fakeBinlogClientErrorsByTablet.
+var fakeBinlogClientErrorQueuesByTablet map[uint32][]error
 
 // fakeBinlogClientCallback is called when a tablet is dialed.
 var fakeBinlogClientCallback func(tablet *topodatapb.Tablet)
@@ -434,6 +439,16 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 	fbc.lastPos = position
 	fbc.lastTables = tables
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
 	if fakeBinlogClientErrorsByTablet != nil {
 		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
 			return nil, err
@@ -446,6 +461,16 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 	fbc.lastPos = position
 	fbc.lastKeyRange = keyRange
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
 	if fakeBinlogClientErrorsByTablet != nil {
 		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
 			return nil, err

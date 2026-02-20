@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -670,6 +671,92 @@ func TestControllerReplicationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test what happens when all tablets are added to the ignore list.
+func TestControllerIgnoreListExhaustion(t *testing.T) {
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+
+	// Reduce tablet picker retry delay to speed up the test.
+	oldPickerDelay := discovery.GetTabletPickerRetryDelay()
+	defer discovery.SetTabletPickerRetryDelay(oldPickerDelay)
+	discovery.SetTabletPickerRetryDelay(10 * time.Millisecond)
+
+	resetBinlogClient()
+
+	ctx := t.Context()
+	err := env.AddCell(ctx, "cell2")
+	require.NoError(t, err)
+
+	err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
+		Cells: []string{"cell1", "cell2"},
+	})
+	require.NoError(t, err)
+	defer env.TopoServ.DeleteCellsAlias(ctx, "region1")
+
+	tablet1 := addTabletWithCell(100, env.Cells[0])
+	tablet2 := addTabletWithCell(200, env.Cells[1])
+	defer deleteTablet(tablet1)
+	defer deleteTablet(tablet2)
+
+	params := map[string]string{
+		"id":           "1",
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"cell":         "",
+		"tablet_types": "replica",
+		"options":      "{}",
+	}
+
+	pickedTablets := []uint32{}
+	var mu sync.Mutex
+
+	oldErrorQueues := fakeBinlogClientErrorQueuesByTablet
+	defer func() { fakeBinlogClientErrorQueuesByTablet = oldErrorQueues }()
+	// Create a queue of errors for each tablet, after the queue is exhausted, the tablet will not return any errors.
+	fakeBinlogClientErrorQueuesByTablet = map[uint32][]error{
+		100: {vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" tablet 100")},
+		200: {vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" tablet 200")},
+	}
+
+	oldCallback := fakeBinlogClientCallback
+	defer func() { fakeBinlogClientCallback = oldCallback }()
+	fakeBinlogClientCallback = func(tablet *topodatapb.Tablet) {
+		mu.Lock()
+		defer mu.Unlock()
+		pickedTablets = append(pickedTablets, tablet.Alias.Uid)
+	}
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set state=", testDMLResponse)
+	dbClient.AddInvariant("select pos", testSettingsResponse)
+	dbClient.AddInvariant("begin", testDMLResponse)
+	dbClient.AddInvariant("insert into t", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set pos=", testDMLResponse)
+	dbClient.AddInvariant("commit", testDMLResponse)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	defer setTabletTypesStr("replica")()
+
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
+	defer ct.Stop(true)
+
+	require.Eventuallyf(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		// We expect to attempt each tablet (receive an error for each), and then reset the ignore list
+		// so that we can attempt the tablets again. However, if the ignore list is not reset,
+		// then this test will timeout because no other tablets will be picked.
+		return slices.Equal(pickedTablets, []uint32{100, 200, 100})
+	}, 5*time.Second, 10*time.Millisecond, "expected ignore list to be reset and tablet 100 to be picked again (sequence should be [100 200 100...])")
 }
 
 // Test that logged messages match the expected format.

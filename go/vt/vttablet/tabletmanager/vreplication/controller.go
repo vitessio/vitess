@@ -376,7 +376,26 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	}
 	log.Info(fmt.Sprintf("%s trying to find an eligible source tablet in %s/%s", ct.logPrefix(), ct.source.Keyspace, ct.source.Shard))
 
-	// Create a fresh tablet picker with the current ignoreTablets list.
+	tablet, err := ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	// If we failed to find any tablet and we specified an ignore list, then clear the ignore list so that
+	// we can try tablets that were previously ignored(since some state may have changed since the last attempt).
+	if err != nil && len(ct.ignoreTablets) > 0 {
+		log.Info(fmt.Sprintf("%s clearing ignore list of %d tablets and retrying tablet picker",
+			ct.logPrefix(), len(ct.ignoreTablets)))
+		ct.ignoreTablets = nil
+		tablet, err = ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	}
+	if err != nil {
+		return tablet, err
+	}
+	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
+	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
+	ct.sourceTablet.Store(tablet.Alias)
+	ct.lastPickedTablet = tablet.Alias
+	return tablet, err
+}
+
+func (ct *controller) pickSourceTabletWithIgnoreList(ctx context.Context, dbClient binlogplayer.DBClient) (*topodatapb.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ctx, ct.tpTs, ct.tpCells, ct.vre.cell,
 		ct.source.Keyspace, ct.source.Shard, ct.tpTabletTypesStr, ct.tpOptions, ct.ignoreTablets...)
 	if err != nil {
@@ -395,13 +414,9 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
 			ct.setMessage(dbClient, "Error picking tablet: "+err.Error())
 		}
-		return tablet, err
+		return nil, err
 	}
-	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
-	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
-	ct.sourceTablet.Store(tablet.Alias)
-	ct.lastPickedTablet = tablet.Alias
-	return tablet, err
+	return tablet, nil
 }
 
 // Stop stops the controller and optionally stops its stats. The stats
