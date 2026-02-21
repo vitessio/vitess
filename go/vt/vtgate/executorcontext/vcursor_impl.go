@@ -91,6 +91,8 @@ type (
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
 		WarmingReadsChannel chan bool
+
+		TransactionModeLimit func() vtgatepb.TransactionMode
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -1193,8 +1195,16 @@ func (vc *VCursorImpl) SetSQLSelectLimit(limit int64) error {
 }
 
 // SetTransactionMode implements the SessionActions interface
-func (vc *VCursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
+func (vc *VCursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) error {
+	if mode != vtgatepb.TransactionMode_UNSPECIFIED && vc.config.TransactionModeLimit != nil {
+		limit := vc.config.TransactionModeLimit()
+		if limit != vtgatepb.TransactionMode_UNSPECIFIED && mode > limit {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar,
+				"transaction_mode %s exceeds vtgate limit %s", mode.String(), limit.String())
+		}
+	}
 	vc.SafeSession.TransactionMode = mode
+	return nil
 }
 
 // SetWorkload implements the SessionActions interface
