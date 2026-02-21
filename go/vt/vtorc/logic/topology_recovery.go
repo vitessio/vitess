@@ -289,7 +289,11 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", RecoverPrimaryHasPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -328,7 +332,11 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", recoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -417,10 +425,19 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 	logger.Info(fmt.Sprintf("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 
+	recoveryName := RestartAllDirectReplicasRecoveryName
+	if maxReplicas > 0 {
+		recoveryName = RestartArbitraryDirectReplicaRecoveryName
+	}
+
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", recoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -1041,7 +1058,11 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", ElectNewPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -1093,7 +1114,11 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", FixPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -1129,7 +1154,11 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", FixReplicaRecoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -1170,8 +1199,13 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
-		logger.Warn("skipping recovery, active or recent recovery exists", slog.String("tablet", alias))
-		_ = AuditTopologyRecovery(topologyRecovery, "found an active or recent recovery on "+alias)
+		logger.Warn("skipping recovery, active or recent recovery exists",
+			slog.String("tablet", alias),
+			slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+		)
+
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
 
@@ -1184,7 +1218,11 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
@@ -1205,7 +1243,10 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Error("failed to read durability policy", slog.String("keyspace", analyzedTablet.Keyspace))
+		logger.Error("failed to read durability policy",
+			slog.String("keyspace", analyzedTablet.Keyspace),
+			slog.String("shard", analyzedTablet.Shard),
+		)
 		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
 	}
 
@@ -1254,7 +1295,11 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error("failed to resolve recovery", slog.Any("error", err))
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", RecoverErrantGTIDDetectedName),
+				slog.Any("error", err),
+			)
 		}
 	}()
 
