@@ -146,10 +146,10 @@ rm -rf /tmp/percona-release.deb /tmp/percona-release-extract
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-tools' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql84)
-    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts mysql-tools' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
