@@ -21,11 +21,22 @@ KEYSERVERS=(
 )
 
 add_apt_key() {
+	local key_id="$1"
+	local keyring="$2"
+	local tmp_keyring
+	tmp_keyring=$(mktemp)
 	for i in {1..3}; do
 		for keyserver in "${KEYSERVERS[@]}"; do
-			if apt-key adv --no-tty --keyserver "${keyserver}" --recv-keys "$1"; then return; fi
+			if gpg --batch --no-default-keyring --keyring "${tmp_keyring}" \
+				--keyserver "${keyserver}" --recv-keys "${key_id}" 2>/dev/null; then
+				gpg --batch --no-default-keyring --keyring "${tmp_keyring}" \
+					--export "${key_id}" >> "${keyring}"
+				rm -f "${tmp_keyring}" "${tmp_keyring}~"
+				return
+			fi
 		done
 	done
+	rm -f "${tmp_keyring}" "${tmp_keyring}~"
 }
 
 # Set number of times to retry a download
@@ -143,40 +154,42 @@ percona84)
 esac
 
 # Get GPG keys for extra apt repositories.
+mkdir -p /etc/apt/keyrings
+
 # repo.mysql.com
-add_apt_key 8C718D3B5072E1F5
-add_apt_key A8D3785C
+add_apt_key 8C718D3B5072E1F5 /etc/apt/keyrings/mysql.gpg
+add_apt_key A8D3785C /etc/apt/keyrings/mysql.gpg
 
 # All flavors include Percona XtraBackup (from repo.percona.com).
-add_apt_key 9334A25F8507EFA5
+add_apt_key 9334A25F8507EFA5 /etc/apt/keyrings/percona.gpg
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb http://repo.mysql.com/apt/debian/ trixie mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql84)
-    echo 'deb http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 mysql84)
-    echo 'deb http://repo.percona.com/pxb-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt trixie main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt trixie main' > /etc/apt/sources.list.d/percona80.list
     ;;
 percona84)
-    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/pxb-84-lts/apt trixie main' >> /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/telemetry/apt trixie main' > /etc/apt/sources.list.d/percona-telemetry.list
-    echo 'deb http://repo.percona.com/ps-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona84.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt trixie main' >> /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/telemetry/apt trixie main' > /etc/apt/sources.list.d/percona-telemetry.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona84.list
     ;;
 esac
 
@@ -209,4 +222,4 @@ fi
 rm -rf /var/lib/apt/lists/*
 rm -rf /var/lib/mysql/
 rm -rf /tmp/*.deb
-rm -rf /etc/apt/sources.list.d/mysql.list /etc/apt/sources.list.d/percona*.list
+rm -rf /etc/apt/sources.list.d/mysql.list /etc/apt/sources.list.d/percona*.list /etc/apt/keyrings/mysql.gpg /etc/apt/keyrings/percona.gpg
