@@ -132,8 +132,9 @@ esac
 # Get GPG keys for extra apt repositories.
 mkdir -p /etc/apt/keyrings
 
-# repo.mysql.com - download official MySQL GPG key and convert to binary format.
-do_fetch https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 /tmp/mysql-key.asc
+# repo.mysql.com - fetch the current MySQL GPG key from a public keyserver.
+# The key at RPM-GPG-KEY-mysql-2023 is expired; the keyserver has the updated version.
+do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB7B3B788A8D3785C&options=mr" /tmp/mysql-key.asc
 gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
 rm -f /tmp/mysql-key.asc
 
