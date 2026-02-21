@@ -50,7 +50,7 @@ BASE_PACKAGES=(
 	libwww-perl
 	libev4
 	libjemalloc2
-	libtcmalloc-minimal4
+	libtcmalloc-minimal4t64
 	procps
 	rsync
 	strace
@@ -95,27 +95,27 @@ mysql80)
 	;;
 mysql84)
 	if [ -z "$VERSION" ]; then
-		VERSION=8.4.6
+		VERSION=8.4.8
 	fi
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-common_${VERSION}-1debian12_amd64.deb /tmp/mysql-common_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_${VERSION}-1debian12_amd64.deb /tmp/libmysqlclient24_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-core_${VERSION}-1debian12_amd64.deb /tmp/mysql-community-client-core_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian12_amd64.deb /tmp/mysql-community-client-plugins_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client_${VERSION}-1debian12_amd64.deb /tmp/mysql-community-client_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-client_${VERSION}-1debian12_amd64.deb /tmp/mysql-client_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian12_amd64.deb /tmp/mysql-community-server-core_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian12_amd64.deb /tmp/mysql-community-server_${VERSION}-1debian12_amd64.deb
-	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian12_amd64.deb /tmp/mysql-server_${VERSION}-1debian12_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-common_${VERSION}-1debian13_amd64.deb /tmp/mysql-common_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_${VERSION}-1debian13_amd64.deb /tmp/libmysqlclient24_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-core_${VERSION}-1debian13_amd64.deb /tmp/mysql-community-client-core_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian13_amd64.deb /tmp/mysql-community-client-plugins_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client_${VERSION}-1debian13_amd64.deb /tmp/mysql-community-client_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-client_${VERSION}-1debian13_amd64.deb /tmp/mysql-client_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian13_amd64.deb /tmp/mysql-community-server-core_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian13_amd64.deb /tmp/mysql-community-server_${VERSION}-1debian13_amd64.deb
+	do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian13_amd64.deb /tmp/mysql-server_${VERSION}-1debian13_amd64.deb
 	PACKAGES=(
-		/tmp/mysql-common_${VERSION}-1debian12_amd64.deb
-		/tmp/libmysqlclient24_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-community-client-core_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-community-client-plugins_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-community-client_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-client_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-community-server-core_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-community-server_${VERSION}-1debian12_amd64.deb
-		/tmp/mysql-server_${VERSION}-1debian12_amd64.deb
+		/tmp/mysql-common_${VERSION}-1debian13_amd64.deb
+		/tmp/libmysqlclient24_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-community-client-core_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-community-client-plugins_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-community-client_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-client_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-community-server-core_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-community-server_${VERSION}-1debian13_amd64.deb
+		/tmp/mysql-server_${VERSION}-1debian13_amd64.deb
 		mysql-shell
 		percona-xtrabackup-84
 	)
@@ -153,30 +153,30 @@ add_apt_key 9334A25F8507EFA5
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ trixie mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql84)
-    echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 mysql84)
-    echo 'deb http://repo.percona.com/pxb-84-lts/apt bookworm main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/pxb-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt bookworm main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/ps-80/apt trixie main' > /etc/apt/sources.list.d/percona80.list
     ;;
 percona84)
-    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/pxb-84-lts/apt bookworm main' >> /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/telemetry/apt bookworm main' > /etc/apt/sources.list.d/percona-telemetry.list
-    echo 'deb http://repo.percona.com/ps-84-lts/apt bookworm main' > /etc/apt/sources.list.d/percona84.list
+    echo 'deb http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/pxb-84-lts/apt trixie main' >> /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/telemetry/apt trixie main' > /etc/apt/sources.list.d/percona-telemetry.list
+    echo 'deb http://repo.percona.com/ps-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona84.list
     ;;
 esac
 
