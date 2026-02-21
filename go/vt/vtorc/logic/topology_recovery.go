@@ -1210,7 +1210,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	}
 
 	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = demotePrimary(ctx, analyzedTablet)
+	_, err = forceDemotePrimary(ctx, analyzedTablet)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
 	}
@@ -1232,8 +1232,8 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	return true, topologyRecovery, err
 }
 
-// demotePrimary calls the DemotePrimary RPC for the given tablet.
-func demotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+// forceDemotePrimary calls the DemotePrimary RPC for the given tablet.
+func forceDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
