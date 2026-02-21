@@ -137,8 +137,11 @@ do_fetch https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 /tmp/mysql-key.asc
 gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
 rm -f /tmp/mysql-key.asc
 
-# repo.percona.com - download official Percona GPG keyring.
-do_fetch https://repo.percona.com/apt/percona-keyring.gpg /etc/apt/keyrings/percona.gpg
+# repo.percona.com - extract keyring from official percona-release package.
+do_fetch https://repo.percona.com/apt/percona-release_latest.generic_all.deb /tmp/percona-release.deb
+dpkg-deb -x /tmp/percona-release.deb /tmp/percona-release-extract
+cp /tmp/percona-release-extract/usr/share/keyrings/percona-keyring.gpg /etc/apt/keyrings/percona.gpg
+rm -rf /tmp/percona-release.deb /tmp/percona-release-extract
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
