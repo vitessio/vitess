@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -435,3 +436,244 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 }
 
 var _ ResultsObserver = (*fakeObserver)(nil)
+
+type fakeGateway struct {
+	srvtopo.Gateway
+	servingKeyspaces []string
+}
+
+func (f *fakeGateway) GetServingKeyspaces() []string {
+	return f.servingKeyspaces
+}
+
+type fakeResolver struct {
+	gw                   *fakeGateway
+	servingKeyspaceTypes map[string][]topodatapb.TabletType
+}
+
+var _ Resolver = (*fakeResolver)(nil)
+
+func (f *fakeResolver) GetGateway() srvtopo.Gateway {
+	return f.gw
+}
+
+func (f *fakeResolver) ResolveDestinations(_ context.Context, keyspace string, tabletType topodatapb.TabletType, _ []*querypb.Value, _ []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	types, ok := f.servingKeyspaceTypes[keyspace]
+	if !ok {
+		return nil, nil, fmt.Errorf("keyspace %s not found", keyspace)
+	}
+	if slices.Contains(types, tabletType) {
+		return []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: keyspace}}}, nil, nil
+	}
+	return nil, nil, fmt.Errorf("no partition for tablet type %v in keyspace %s", tabletType, keyspace)
+}
+
+func (f *fakeResolver) ResolveDestinationsMultiCol(context.Context, string, topodatapb.TabletType, [][]sqltypes.Value, []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	panic("not implemented")
+}
+
+func TestAnyKeyspaceFiltersByTabletType(t *testing.T) {
+	alpha := &vindexes.Keyspace{Name: "alpha", Sharded: true}
+	alphaSchema := &vindexes.KeyspaceSchema{Keyspace: alpha}
+	commerce := &vindexes.Keyspace{Name: "commerce", Sharded: false}
+	commerceSchema := &vindexes.KeyspaceSchema{Keyspace: commerce}
+
+	vschema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			alpha.Name:    alphaSchema,
+			commerce.Name: commerceSchema,
+		},
+	}
+
+	tests := []struct {
+		name             string
+		targetString     string
+		resolver         Resolver
+		expectedKeyspace string
+	}{
+		{
+			name:         "REPLICA skips keyspace without REPLICA tablets",
+			targetString: "@replica",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				},
+			},
+			expectedKeyspace: "commerce",
+		},
+		{
+			name:         "PRIMARY picks sharded keyspace as before",
+			targetString: "@primary",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				},
+			},
+			expectedKeyspace: "alpha",
+		},
+		{
+			name:         "sharded preference preserved with REPLICA",
+			targetString: "@replica",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+					"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				},
+			},
+			expectedKeyspace: "alpha",
+		},
+		{
+			name:             "fallback when resolver is nil",
+			targetString:     "@replica",
+			resolver:         nil,
+			expectedKeyspace: "alpha",
+		},
+		{
+			name:         "fallback when no keyspace serves the type",
+			targetString: "@replica",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY},
+				},
+			},
+			expectedKeyspace: "alpha",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
+			vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil,
+				&fakeVSchemaOperator{vschema: vschema}, vschema, tc.resolver, nil,
+				fakeObserver{}, VCursorConfig{
+					DefaultTabletType: topodatapb.TabletType_PRIMARY,
+				}, nil)
+			require.NoError(t, err)
+
+			ks, err := vc.AnyKeyspace()
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedKeyspace, ks.Name)
+		})
+	}
+}
+
+func TestAnyKeyspaceSelectedKeyspaceShortCircuits(t *testing.T) {
+	alpha := &vindexes.Keyspace{Name: "alpha", Sharded: false}
+	alphaSchema := &vindexes.KeyspaceSchema{Keyspace: alpha}
+	commerce := &vindexes.Keyspace{Name: "commerce", Sharded: true}
+	commerceSchema := &vindexes.KeyspaceSchema{Keyspace: commerce}
+
+	vschema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			alpha.Name:    alphaSchema,
+			commerce.Name: commerceSchema,
+		},
+	}
+
+	resolver := &fakeResolver{
+		gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+		servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+			"alpha":    {topodatapb.TabletType_PRIMARY},
+			"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+		},
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "alpha@replica"})
+	vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil,
+		&fakeVSchemaOperator{vschema: vschema}, vschema, resolver, nil,
+		fakeObserver{}, VCursorConfig{
+			DefaultTabletType: topodatapb.TabletType_PRIMARY,
+		}, nil)
+	require.NoError(t, err)
+
+	ks, err := vc.AnyKeyspace()
+	require.NoError(t, err)
+	require.Equal(t, "alpha", ks.Name)
+}
+
+func TestFirstSortedKeyspaceFiltersByTabletType(t *testing.T) {
+	alpha := &vindexes.Keyspace{Name: "alpha", Sharded: true}
+	alphaSchema := &vindexes.KeyspaceSchema{Keyspace: alpha}
+	commerce := &vindexes.Keyspace{Name: "commerce", Sharded: false}
+	commerceSchema := &vindexes.KeyspaceSchema{Keyspace: commerce}
+
+	vschema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			alpha.Name:    alphaSchema,
+			commerce.Name: commerceSchema,
+		},
+	}
+
+	tests := []struct {
+		name             string
+		targetString     string
+		resolver         Resolver
+		expectedKeyspace string
+	}{
+		{
+			name:         "REPLICA skips keyspace without REPLICA tablets",
+			targetString: "@replica",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				},
+			},
+			expectedKeyspace: "commerce",
+		},
+		{
+			name:         "PRIMARY picks alphabetically first as before",
+			targetString: "@primary",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				},
+			},
+			expectedKeyspace: "alpha",
+		},
+		{
+			name:             "fallback when resolver is nil",
+			targetString:     "@replica",
+			resolver:         nil,
+			expectedKeyspace: "alpha",
+		},
+		{
+			name:         "fallback when no keyspace serves the type",
+			targetString: "@replica",
+			resolver: &fakeResolver{
+				gw: &fakeGateway{servingKeyspaces: []string{"alpha", "commerce"}},
+				servingKeyspaceTypes: map[string][]topodatapb.TabletType{
+					"alpha":    {topodatapb.TabletType_PRIMARY},
+					"commerce": {topodatapb.TabletType_PRIMARY},
+				},
+			},
+			expectedKeyspace: "alpha",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
+			vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil,
+				&fakeVSchemaOperator{vschema: vschema}, vschema, tc.resolver, nil,
+				fakeObserver{}, VCursorConfig{
+					DefaultTabletType: topodatapb.TabletType_PRIMARY,
+				}, nil)
+			require.NoError(t, err)
+
+			ks, err := vc.FirstSortedKeyspace()
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedKeyspace, ks.Name)
+		})
+	}
+}
