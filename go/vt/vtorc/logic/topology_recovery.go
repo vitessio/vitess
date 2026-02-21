@@ -425,17 +425,12 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 	logger.Info(fmt.Sprintf("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
 
-	recoveryName := RestartAllDirectReplicasRecoveryName
-	if maxReplicas > 0 {
-		recoveryName = RestartArbitraryDirectReplicaRecoveryName
-	}
-
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
 			logger.Error(
 				"failed to resolve recovery",
-				slog.String("recovery", recoveryName),
+				slog.String("recovery", "restartDirectReplicas"),
 				slog.Any("error", err),
 			)
 		}
