@@ -16,8 +16,8 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 # Detect Debian version to handle package renames (time_t ABI transition in trixie).
-source /etc/os-release
-if [[ "${VERSION_CODENAME}" == "trixie" ]]; then
+DEBIAN_CODENAME=$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release)
+if [[ "${DEBIAN_CODENAME}" == "trixie" ]]; then
 	LIBAIO=libaio1t64
 	LIBCURL=libcurl4t64
 	LIBEV=libev4t64
