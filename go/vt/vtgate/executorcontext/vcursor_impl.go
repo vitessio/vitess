@@ -628,6 +628,10 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// anyShardDestination is reused by canResolveKeyspace to avoid allocating a new
+// slice on every invocation. Colocated here as it is only used there.
+var anyShardDestination = []key.ShardDestination{key.DestinationAnyShard{}}
+
 // canResolveKeyspace checks whether the given keyspace has a SrvKeyspace partition for vc.tabletType.
 func (vc *VCursorImpl) canResolveKeyspace(ctx context.Context, ksName string) bool {
 	if vc.resolver == nil {
@@ -635,7 +639,6 @@ func (vc *VCursorImpl) canResolveKeyspace(ctx context.Context, ksName string) bo
 	}
 	subCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer cancel()
-	anyShardDestination := []key.ShardDestination{key.DestinationAnyShard{}}
 	_, _, err := vc.resolver.ResolveDestinations(subCtx, ksName, vc.tabletType, nil, anyShardDestination)
 	return err == nil
 }
