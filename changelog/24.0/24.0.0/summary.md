@@ -29,6 +29,9 @@
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
+    - **[Backup and Restore](#minor-changes-backup-restore)**
+        - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
+        - [New `TM_RESTORE_DATA_BACKUP_ENGINE` Environment Variable for Restore Hook](#restore-hook-backup-engine-env)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -227,4 +230,58 @@ The lack of facilities to read the snapshots created by this feature coupled wit
 **Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
 
 **Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+
+### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
+
+#### <a id="mysql-clone-support"/>MySQL CLONE Support for Replica Provisioning</a>
+
+VTTablet and VTBackup now support using MySQL's native [CLONE plugin](https://dev.mysql.com/doc/refman/8.0/en/clone-plugin.html) to provision new replicas by copying data directly from a donor tablet over the network. Physical-level data copying is significantly faster than logical backup and restore, especially for large datasets. Requires MySQL 8.0.17+ and InnoDB-only tables.
+
+**New Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--mysql-clone-enabled` | Enable the MySQL CLONE plugin and create the clone user during MySQL initialization. Required for all tablets that will participate in CLONE operations. |
+| `--clone-from-primary` | Clone data from the shard's primary tablet instead of restoring from backup. Mutually exclusive with `--clone-from-tablet`. |
+| `--clone-from-tablet` | Clone data from a specific tablet by alias (e.g., `zone1-123`) instead of restoring from backup. Mutually exclusive with `--clone-from-primary`. |
+| `--restore-with-clone` | Use MySQL CLONE for the restore phase instead of restoring from backup. Requires either `--clone-from-primary` or `--clone-from-tablet`. |
+| `--clone-restart-wait-timeout` | Timeout for waiting for MySQL to restart after CLONE REMOTE completes. Default: 5 minutes. |
+
+**Clone User Configuration:**
+
+| Flag | Description |
+|------|-------------|
+| `--db-clone-user` | MySQL username for CLONE operations (donor authentication). |
+| `--db-clone-password` | Password for the CLONE user. |
+| `--db-clone-use-ssl` | Use SSL when connecting to the donor for CLONE operations. |
+
+**Example Usage:**
+
+Clone from the shard's primary:
+
+```bash
+vttablet \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-primary \
+  ...
+```
+
+Clone from a specific tablet:
+
+```bash
+vtbackup \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-tablet=zone1-0000000100 \
+  ...
+```
+
+**Note:** All tablets participating in CLONE operations (both donors and recipients) must have `--mysql-clone-enabled` set during MySQL initialization to ensure the CLONE plugin is loaded and the clone user exists.
+
+#### <a id="restore-hook-backup-engine-env"/>New `TM_RESTORE_DATA_BACKUP_ENGINE` Environment Variable for Restore Hook</a>
+
+The `vttablet_restore_done` hook now includes a `TM_RESTORE_DATA_BACKUP_ENGINE` environment variable containing the backup engine used for the restore. The value comes from the backup manifest's `BackupMethod` field.
+
+This variable is only set when a restore reads from a backup (not for clone-based restores or when no backup is used). Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another backup engine.
 
