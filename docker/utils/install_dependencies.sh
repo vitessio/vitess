@@ -15,30 +15,6 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-KEYSERVERS=(
-	keyserver.ubuntu.com
-	hkp://keyserver.ubuntu.com:80
-)
-
-add_apt_key() {
-	local key_id="$1"
-	local keyring="$2"
-	local tmp_keyring
-	tmp_keyring=$(mktemp)
-	for i in {1..3}; do
-		for keyserver in "${KEYSERVERS[@]}"; do
-			if gpg --batch --no-default-keyring --keyring "${tmp_keyring}" \
-				--keyserver "${keyserver}" --recv-keys "${key_id}" 2>/dev/null; then
-				gpg --batch --no-default-keyring --keyring "${tmp_keyring}" \
-					--export "${key_id}" >> "${keyring}"
-				rm -f "${tmp_keyring}" "${tmp_keyring}~"
-				return
-			fi
-		done
-	done
-	rm -f "${tmp_keyring}" "${tmp_keyring}~"
-}
-
 # Set number of times to retry a download
 MAX_RETRY=20
 
@@ -156,12 +132,13 @@ esac
 # Get GPG keys for extra apt repositories.
 mkdir -p /etc/apt/keyrings
 
-# repo.mysql.com
-add_apt_key 8C718D3B5072E1F5 /etc/apt/keyrings/mysql.gpg
-add_apt_key A8D3785C /etc/apt/keyrings/mysql.gpg
+# repo.mysql.com - download official MySQL GPG key and convert to binary format.
+do_fetch https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 /tmp/mysql-key.asc
+gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
+rm -f /tmp/mysql-key.asc
 
-# All flavors include Percona XtraBackup (from repo.percona.com).
-add_apt_key 9334A25F8507EFA5 /etc/apt/keyrings/percona.gpg
+# repo.percona.com - download official Percona GPG keyring.
+do_fetch https://repo.percona.com/apt/percona-keyring.gpg /etc/apt/keyrings/percona.gpg
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
