@@ -43,12 +43,12 @@ BASE_PACKAGES=(
 	ca-certificates
 	dirmngr
 	gnupg
-	libaio1
+	libaio1t64
 	libatomic1
-	libcurl4
+	libcurl4t64
 	libdbd-mysql-perl
 	libwww-perl
-	libev4
+	libev4t64
 	libjemalloc2
 	libtcmalloc-minimal4t64
 	procps
