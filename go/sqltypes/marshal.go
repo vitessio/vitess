@@ -99,14 +99,14 @@ func ReplaceFields(result *Result, remap map[string]string) *Result {
 		}
 	}
 
-	var fields []*querypb.Field
+	fields := make([]*querypb.Field, 0, len(fieldIdx))
 	for _, name := range fieldIdx {
 		fields = append(fields, result.Fields[orig[name]])
 	}
 
 	fields = fields[:len(result.Fields)-len(remap)]
 
-	var rows []Row
+	rows := make([]Row, 0, len(result.Rows))
 	for _, origRow := range result.Rows {
 		var row []Value
 		for _, name := range rowIdx {
@@ -142,13 +142,15 @@ func MarshalResult(v any) (*Result, error) {
 	elem := val.Type().Elem()
 	elemType := elem.Elem()
 
+	visibleFields := reflect.VisibleFields(elemType)
+
 	var (
-		exportedStructFields []reflect.StructField
-		fields               []*querypb.Field
-		rows                 []Row
+		exportedStructFields = make([]reflect.StructField, 0, len(visibleFields))
+		fields               = make([]*querypb.Field, 0, len(visibleFields))
+		rows                 = make([]Row, 0, val.Len())
 	)
 
-	for _, field := range reflect.VisibleFields(elemType) {
+	for _, field := range visibleFields {
 		if !field.IsExported() {
 			continue
 		}

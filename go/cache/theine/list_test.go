@@ -49,7 +49,7 @@ func TestList(t *testing.T) {
 	entry := l.PopTail()
 	require.Nil(t, entry)
 
-	var entries []*Entry[StringKey, string]
+	entries := make([]*Entry[StringKey, string], 0, 5)
 	for i := range 5 {
 		new := NewEntry(StringKey(strconv.Itoa(i)), "", 1)
 		evicted := l.PushFront(new)

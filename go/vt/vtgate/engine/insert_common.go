@@ -215,11 +215,10 @@ func (ic *InsertCommon) processOwned(ctx context.Context, vcursor VCursor, vinde
 	}
 
 	// InsertIgnore
-	var createIndexes []int
-	var createKeys []sqltypes.Row
-	var createKsids []ksID
-	var vindexNull []bool
-
+	createIndexes := make([]int, 0, len(vindexColumnsKeys))
+	createKeys := make([]sqltypes.Row, 0, len(vindexColumnsKeys))
+	createKsids := make([]ksID, 0, len(vindexColumnsKeys))
+	vindexNull := make([]bool, 0, len(vindexColumnsKeys))
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
 		if ksids[rowNum] == nil {
 			continue
@@ -233,7 +232,6 @@ func (ic *InsertCommon) processOwned(ctx context.Context, vcursor VCursor, vinde
 				break
 			}
 		}
-
 		createIndexes = append(createIndexes, rowNum)
 		createKeys = append(createKeys, rowColumnKeys)
 		createKsids = append(createKsids, ksids[rowNum])

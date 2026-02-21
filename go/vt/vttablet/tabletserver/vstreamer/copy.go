@@ -130,7 +130,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 
 // send one RowEvent per row, followed by a LastPK (merged in VTGate with vgtid)
 func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse, qr *querypb.QueryResult) error {
-	var evs []*binlogdatapb.VEvent
+	evs := make([]*binlogdatapb.VEvent, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
 		ev := &binlogdatapb.VEvent{
 			Type:     binlogdatapb.VEventType_ROW,

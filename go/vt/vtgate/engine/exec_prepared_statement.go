@@ -56,7 +56,7 @@ func (e *ExecStmt) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (e *ExecStmt) description() PrimitiveDescription {
-	var params []string
+	params := make([]string, 0, len(e.Params))
 	for _, p := range e.Params {
 		params = append(params, p.Name.Lowered())
 	}
