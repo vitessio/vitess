@@ -133,7 +133,6 @@ esac
 mkdir -p /etc/apt/keyrings
 
 # repo.mysql.com - fetch the current MySQL GPG key from a public keyserver.
-# The key at RPM-GPG-KEY-mysql-2023 is expired; the keyserver has the updated version.
 do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB7B3B788A8D3785C&options=mr" /tmp/mysql-key.asc
 gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
 rm -f /tmp/mysql-key.asc
@@ -147,23 +146,23 @@ rm -rf /tmp/percona-release.deb /tmp/percona-release-extract
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-tools' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql84)
-    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts mysql-tools' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-80/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 mysql84)
     echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-80/apt trixie main' > /etc/apt/sources.list.d/percona.list
     echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt trixie main' > /etc/apt/sources.list.d/percona80.list
     ;;
 percona84)
