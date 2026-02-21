@@ -15,6 +15,20 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Detect Debian version to handle package renames (time_t ABI transition in trixie).
+source /etc/os-release
+if [[ "${VERSION_CODENAME}" == "trixie" ]]; then
+	LIBAIO=libaio1t64
+	LIBCURL=libcurl4t64
+	LIBEV=libev4t64
+	LIBTCMALLOC=libtcmalloc-minimal4t64
+else
+	LIBAIO=libaio1
+	LIBCURL=libcurl4
+	LIBEV=libev4
+	LIBTCMALLOC=libtcmalloc-minimal4
+fi
+
 # Set number of times to retry a download
 MAX_RETRY=20
 
@@ -30,14 +44,14 @@ BASE_PACKAGES=(
 	ca-certificates
 	dirmngr
 	gnupg
-	libaio1t64
+	"$LIBAIO"
 	libatomic1
-	libcurl4t64
+	"$LIBCURL"
 	libdbd-mysql-perl
 	libwww-perl
-	libev4t64
+	"$LIBEV"
 	libjemalloc2
-	libtcmalloc-minimal4t64
+	"$LIBTCMALLOC"
 	procps
 	rsync
 	strace
@@ -146,7 +160,7 @@ rm -rf /tmp/percona-release.deb /tmp/percona-release-extract
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql84)
     echo 'deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ trixie mysql-8.4-lts' > /etc/apt/sources.list.d/mysql.list
@@ -156,14 +170,14 @@ esac
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql80)
-    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-80/apt trixie main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
     ;;
 mysql84)
     echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt trixie main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-80/apt trixie main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt trixie main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt bookworm main' > /etc/apt/sources.list.d/percona80.list
     ;;
 percona84)
     echo 'deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt trixie main' > /etc/apt/sources.list.d/percona.list
