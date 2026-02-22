@@ -117,6 +117,13 @@ create table t1_seq(
   primary key(id)
 ) comment 'vitess_sequence';
 
+create table t2_seq(
+  id int,
+  next_id bigint,
+  cache bigint,
+  primary key(id)
+) COMMENT 'vitess_sequence';
+
 create table test_partitioned (
 	id bigint,
 	date_create int,
@@ -191,6 +198,10 @@ create table test_partitioned (
 	seq := tables["t1_seq"]
 	require.NotNil(t, seq)
 	assert.Equal(t, schema.Sequence, seq.Type)
+
+	seq2 := tables["t2_seq"]
+	require.NotNil(t, seq2)
+	assert.Equal(t, schema.Sequence, seq2.Type)
 }
 
 func TestErrParseSchema(t *testing.T) {
