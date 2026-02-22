@@ -691,6 +691,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsRowsQuery():
+		if !shouldSend(binlogdatapb.VEventType_ROW) {
+			return nil, nil
+		}
 		query, err := ev.RowsQuery(vs.format)
 		if err != nil {
 			return nil, fmt.Errorf("can't parse ROWS_QUERY_LOG_EVENT: %v", err)

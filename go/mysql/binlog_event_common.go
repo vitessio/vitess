@@ -19,6 +19,7 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -214,6 +215,9 @@ func (ev binlogEvent) IsRowsQuery() bool {
 //	rest      NUL-terminated SQL query string
 func (ev binlogEvent) RowsQuery(f BinlogFormat) (string, error) {
 	data := ev.Bytes()[f.HeaderLength:]
+	if len(data) < 2 {
+		return "", fmt.Errorf("ROWS_QUERY event payload too short: %d bytes", len(data))
+	}
 	// Skip 1-byte post-header, trim trailing NUL.
 	return string(bytes.TrimRight(data[1:], "\x00")), nil
 }
