@@ -36,6 +36,8 @@ fi
 # Set number of times to retry a download
 MAX_RETRY=20
 
+MYSQL_GPG_KEY="B7B3B788A8D3785C"
+
 do_fetch() {
 	wget \
 		--tries=$MAX_RETRY --read-timeout=30 --timeout=30 --retry-connrefused --waitretry=1 --no-dns-cache \
@@ -151,7 +153,7 @@ esac
 mkdir -p /etc/apt/keyrings
 
 # repo.mysql.com - fetch the current MySQL GPG key from a public keyserver.
-do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB7B3B788A8D3785C&options=mr" /tmp/mysql-key.asc
+do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${MYSQL_GPG_KEY}&options=mr" /tmp/mysql-key.asc
 gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
 rm -f /tmp/mysql-key.asc
 
