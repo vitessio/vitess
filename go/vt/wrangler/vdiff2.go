@@ -40,7 +40,7 @@ type VDiffOutput struct {
 func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, action vdiff2.VDiffAction, actionArg, uuid string,
 	options *tabletmanagerdata.VDiffOptions,
 ) (*VDiffOutput, error) {
-	log.Infof("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, action, actionArg, uuid, options)
+	log.Info(fmt.Sprintf("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, action, actionArg, uuid, options))
 
 	req := &tabletmanagerdata.VDiffRequest{
 		Keyspace:  keyspace,
@@ -73,7 +73,7 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, a
 		return err
 	})
 	if output.Err != nil {
-		log.Errorf("Error executing action %s: %v", action, output.Err)
+		log.Error(fmt.Sprintf("Error executing action %s: %v", action, output.Err))
 		return nil, output.Err
 	}
 

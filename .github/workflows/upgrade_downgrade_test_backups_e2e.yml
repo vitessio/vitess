@@ -22,7 +22,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+      uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
       with:
         egress-policy: audit
 
@@ -91,13 +91,14 @@ jobs:
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
+        sudo percona-release setup pxb-80
+
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget grep
 
         sudo service etcd stop
 
-        sudo apt-get install -y gnupg2
-        sudo percona-release enable-only tools
+        sudo apt-get install -y gnupg2 lz4
         sudo apt-get update
         sudo apt-get install -y percona-xtrabackup-80
 

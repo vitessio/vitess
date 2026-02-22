@@ -286,7 +286,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=52
+BOOTSTRAP_VERSION=53
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -318,7 +318,7 @@ define build_docker_image
 		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
-		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+		docker build --platform=linux/amd64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
 

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"math/bits"
 	"slices"
 	"strconv"
 
@@ -358,37 +359,111 @@ type mergeRow struct {
 	source int
 }
 
+// Merger performs a k-way merge of sorted streams using a tournament loser tree.
+// A loser tree requires only log₂(k) comparisons per ReplaceMin operation,
+// compared to 2·log₂(k) for a binary heap, because each internal node stores
+// the loser of its match and only one comparison is needed at each tree level.
 type Merger struct {
 	Compare Comparison
 
-	rows []mergeRow
-	less func(a, b mergeRow) bool
+	tree  []int      // tree[0] = winner index, tree[1..cap-1] = loser indices
+	keys  []mergeRow // keys[i] = current row from stream i; source < 0 means exhausted
+	cap   int        // power-of-2 capacity of the tree
+	count int        // number of active (non-exhausted) streams
 }
 
 func (m *Merger) Len() int {
-	return len(m.rows)
+	return m.count
 }
 
-func (m *Merger) Init() {
-	m.less = func(a, b mergeRow) bool {
-		return m.Compare.Less(a.row, b.row)
-	}
-	heapify(m.rows, m.less)
-}
-
+// Push adds a row from a source stream. Must be called before Init.
 func (m *Merger) Push(row sqltypes.Row, source int) {
-	m.rows = append(m.rows, mergeRow{row, source})
-	if m.less != nil {
-		up(m.rows, len(m.rows)-1, m.less)
+	m.keys = append(m.keys, mergeRow{row, source})
+	m.count++
+}
+
+// Init builds the loser tree from the pushed entries.
+func (m *Merger) Init() {
+	n := len(m.keys)
+	if n == 0 {
+		return
+	}
+
+	// Round up to next power of 2
+	m.cap = 1 << bits.Len(uint(n-1))
+
+	// Pad keys to capacity; padding entries are sentinel (source < 0)
+	m.keys = slices.Grow(m.keys, m.cap-n)
+	for i := n; i < m.cap; i++ {
+		m.keys = append(m.keys, mergeRow{source: -1})
+	}
+
+	// Initialize all tree nodes as unset
+	m.tree = make([]int, m.cap)
+	for i := range m.tree {
+		m.tree[i] = -1
+	}
+
+	// Insert each leaf from right to left to build the tree
+	for i := m.cap - 1; i >= 0; i-- {
+		m.replay(i)
 	}
 }
 
+// Peek returns the current minimum element without removing it.
+func (m *Merger) Peek() (sqltypes.Row, int) {
+	w := m.tree[0]
+	return m.keys[w].row, m.keys[w].source
+}
+
+// Pop removes and returns the current minimum element.
 func (m *Merger) Pop() (sqltypes.Row, int) {
-	x := m.rows[0]
-	m.rows[0] = m.rows[len(m.rows)-1]
-	m.rows = m.rows[:len(m.rows)-1]
-	down(m.rows, 0, m.less)
-	return x.row, x.source
+	w := m.tree[0]
+	result := m.keys[w]
+	m.keys[w].source = -1 // mark as exhausted
+	m.count--
+	if m.count > 0 {
+		m.replay(w)
+	}
+	return result.row, result.source
+}
+
+// ReplaceMin replaces the current minimum with a new row and restores the
+// tree. This performs exactly ⌈log₂(k)⌉ comparisons.
+func (m *Merger) ReplaceMin(row sqltypes.Row, source int) {
+	w := m.tree[0]
+	m.keys[w] = mergeRow{row, source}
+	m.replay(w)
+}
+
+// replay walks from leaf idx to the root, comparing the ascending value
+// against the loser stored at each internal node and swapping when the
+// ascending value loses.
+func (m *Merger) replay(idx int) {
+	winner := idx
+	for t := (m.cap + idx) / 2; t > 0; t /= 2 {
+		if m.tree[t] == -1 {
+			// Uninitialized node during Init; store and stop.
+			m.tree[t] = winner
+			return
+		}
+		if m.less(m.tree[t], winner) {
+			winner, m.tree[t] = m.tree[t], winner
+		}
+	}
+	m.tree[0] = winner
+}
+
+// less returns true if stream a should come before stream b in the output.
+// Exhausted streams (source < 0) are treated as infinity and never win.
+func (m *Merger) less(a, b int) bool {
+	if m.keys[a].source < 0 {
+		return false
+	}
+	if m.keys[b].source < 0 {
+		return true
+	}
+	return m.Compare.Less(m.keys[a].row, m.keys[b].row)
 }
 
 func heapify[T any](h []T, less func(a, b T) bool) {

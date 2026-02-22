@@ -1234,18 +1234,18 @@ func TestFkOneCase(t *testing.T) {
 	for _, query := range queries {
 		if strings.HasPrefix(query, "vexplain") {
 			res := utils.Exec(t, mcmp.VtConn, query)
-			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			log.Error(fmt.Sprintf("Query %v, Result - %v", query, res.Rows))
 			continue
 		}
 		_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		if t.Failed() {
-			log.Errorf("Query failed - %v", query)
+			log.Error(fmt.Sprintf("Query failed - %v", query))
 			break
 		}
 	}
 	vitessData := collectFkTablesState(mcmp.VtConn)
 	for idx, table := range fkTables {
-		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+		log.Error(fmt.Sprintf("Vitess data for %v -\n%v", table, vitessData[idx].Rows))
 	}
 
 	// ensure Vitess database has some data. This ensures not all the commands failed.

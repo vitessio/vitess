@@ -292,7 +292,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		tablet := &topodatapb.Tablet{}
 		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
-			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
+			log.Error(fmt.Sprintf("could not read tablet %v: %v", m.GetString("tablet_info"), err))
 			return nil
 		}
 
@@ -304,7 +304,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
-				log.Errorf("could not read tablet %v: %v", str, err)
+				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
 				return nil
 			}
 		}
@@ -318,7 +318,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
-			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
+			log.Error(fmt.Sprintf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace))
 			return nil
 		}
 
@@ -335,6 +335,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
+		a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
@@ -373,11 +374,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
+			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, PrimaryHealthUnhealthy: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
+				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.PrimaryHealthUnhealthy, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
-				log.Infof(analysisMessage)
+				log.Info(analysisMessage)
 			}
 		}
 		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
@@ -390,12 +391,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
-				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
+				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
-				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
+				log.Error(fmt.Sprintf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace))
 				return nil
 			}
 			clusters[keyspaceShard].durability = durability
@@ -444,6 +445,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
 			//
+		case a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy:
+			a.Analysis = IncapacitatedPrimary
+			a.Description = "Primary is consistently timing out on health checks and may be incapacitated"
+			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && !a.IsPrimary:
 			a.Analysis = PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
@@ -481,6 +487,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasShardWideAction = true
+		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
+			a.Analysis = NotConnectedToPrimary
+			a.Description = "Not connected to the primary"
+			//
 		case a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount:
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
@@ -491,10 +501,6 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case topo.IsReplicaType(a.TabletType) && !a.IsReadOnly:
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
-			//
-		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
-			a.Analysis = NotConnectedToPrimary
-			a.Description = "Not connected to the primary"
 			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout):
 			a.Analysis = ReplicaMisconfigured
@@ -614,7 +620,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
@@ -624,6 +630,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 // start time than the shard's current primary.
 func isStaleTopoPrimary(tablet *DetectionAnalysis, cluster *clusterAnalysis) bool {
 	if tablet.TabletType != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+	if cluster == nil {
 		return false
 	}
 
@@ -702,12 +711,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			string(analysisCode), tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		lastAnalysisChanged = rows > 0
@@ -731,12 +740,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		firstInsertion = rows > 0
@@ -762,7 +771,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)
 	} else {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }
@@ -777,7 +786,7 @@ func ExpireInstanceAnalysisChangelog() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }

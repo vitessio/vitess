@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
         with:
           egress-policy: audit
 
@@ -153,6 +153,8 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
         run: |
           sudo percona-release setup pdps8.0
+          sudo percona-release setup pxb-80
+          sudo percona-release enable ps-80 release
           sudo apt-get -qq update
           sudo apt-get -qq install -y percona-server-server percona-server-client
           sudo service mysql stop
@@ -179,7 +181,7 @@ jobs:
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        run: make tools
+        run: make BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies
         if: |

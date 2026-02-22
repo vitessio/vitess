@@ -21,15 +21,19 @@ viper's jww log.
 package log
 
 import (
+	"fmt"
+	"log/slog"
+	"os"
+
 	jww "github.com/spf13/jwalterweatherman"
 
-	"vitess.io/vitess/go/vt/log"
+	vtlog "vitess.io/vitess/go/vt/log"
 )
 
 var (
 	jwwlog = func(printer interface {
 		Printf(format string, args ...any)
-	}, vtlogger func(format string, args ...any),
+	}, vtlogger func(string, ...slog.Attr),
 	) func(format string, args ...any) {
 		switch vtlogger {
 		case nil:
@@ -37,7 +41,7 @@ var (
 		default:
 			return func(format string, args ...any) {
 				printer.Printf(format, args...)
-				vtlogger(format, args...)
+				vtlogger(fmt.Sprintf(format, args...))
 			}
 		}
 	}
@@ -47,12 +51,14 @@ var (
 	// DEBUG logs to viper's DEBUG level, and nothing to vitess logs.
 	DEBUG = jwwlog(jww.DEBUG, nil)
 	// INFO logs to viper and vitess at INFO levels.
-	INFO = jwwlog(jww.INFO, log.Infof)
-	// WARN logs to viper and vitess at WARN/WARNING levels.
-	WARN = jwwlog(jww.WARN, log.Warningf)
+	INFO = jwwlog(jww.INFO, vtlog.Info)
+	// WARN logs to viper and vitess at WARN levels.
+	WARN = jwwlog(jww.WARN, vtlog.Warn)
 	// ERROR logs to viper and vitess at ERROR levels.
-	ERROR = jwwlog(jww.ERROR, log.Errorf)
-	// CRITICAL logs to viper at CRITICAL level, and then fatally logs to
-	// vitess, exiting the process.
-	CRITICAL = jwwlog(jww.CRITICAL, log.Fatalf)
+	ERROR = jwwlog(jww.ERROR, vtlog.Error)
+	// CRITICAL logs to viper at CRITICAL level, and then fatally exits.
+	CRITICAL = jwwlog(jww.CRITICAL, func(msg string, attrs ...slog.Attr) {
+		vtlog.Error(msg, attrs...)
+		os.Exit(1)
+	})
 )

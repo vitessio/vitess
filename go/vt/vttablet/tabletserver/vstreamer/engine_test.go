@@ -107,6 +107,7 @@ func TestUpdateVSchema(t *testing.T) {
 	want := `{
   "mirror_rules": {},
   "routing_rules": {},
+  "view_routing_rules": {},
   "keyspaces": {
     "vttest": {
       "sharded": true,

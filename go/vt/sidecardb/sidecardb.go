@@ -21,6 +21,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -29,6 +30,8 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -51,6 +54,7 @@ const (
 	sidecarDBExistsQuery  = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
 	showCreateTableQuery  = "show create table %s.%s"
 	sidecarCollationQuery = "select @@global.collation_server"
+	sidecarVersionQuery   = "select @@version"
 
 	maxDDLErrorHistoryLength = 100
 
@@ -155,7 +159,7 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 			var module string
 			dir, fname := filepath.Split(path)
 			if !strings.HasSuffix(strings.ToLower(fname), sqlFileExtension) {
-				log.Infof("Ignoring non-SQL file: %s, found during sidecar database initialization", path)
+				log.Info(fmt.Sprintf("Ignoring non-SQL file: %s, found during sidecar database initialization", path))
 				return nil
 			}
 			dirparts := strings.Split(strings.Trim(dir, "/"), "/")
@@ -182,7 +186,7 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 		return nil
 	})
 	if err != nil {
-		log.Errorf("error loading schema files: %+v", err)
+		log.Error(fmt.Sprintf("error loading schema files: %+v", err))
 	}
 }
 
@@ -191,7 +195,7 @@ func printCallerDetails() {
 	pc, _, line, ok := runtime.Caller(2)
 	details := runtime.FuncForPC(pc)
 	if ok && details != nil {
-		log.Infof("%s schema init called from %s:%d\n", sidecar.GetName(), details.Name(), line)
+		log.Info(fmt.Sprintf("%s schema init called from %s:%d\n", sidecar.GetName(), details.Name(), line))
 	}
 }
 
@@ -201,6 +205,9 @@ type schemaInit struct {
 	exec      Exec
 	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
 	coll      collations.ID
+
+	// serverVersion is the version of the MySQL server.
+	serverVersion string
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -234,7 +241,7 @@ func getDDLErrorHistory() []*ddlError {
 // the declarative schema defined for all tables.
 func Init(ctx context.Context, env *vtenv.Environment, exec Exec) error {
 	printCallerDetails() // for debug purposes only, remove in v17
-	log.Infof("Starting sidecardb.Init()")
+	log.Info("Starting sidecardb.Init()")
 
 	once.Do(func() {
 		loadSchemaDefinitions(env.Parser())
@@ -316,16 +323,16 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 	}
 	rs, err := si.exec(si.ctx, query, 2, false)
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return false, err
 	}
 
 	switch len(rs.Rows) {
 	case 0:
-		log.Infof("doesSidecarDBExist: %s not found", sidecar.GetName())
+		log.Info(fmt.Sprintf("doesSidecarDBExist: %s not found", sidecar.GetName()))
 		return false, nil
 	case 1:
-		log.Infof("doesSidecarDBExist: found %s", sidecar.GetName())
+		log.Info("doesSidecarDBExist: found " + sidecar.GetName())
 		return true, nil
 	default:
 		// This should never happen.
@@ -336,10 +343,10 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 func (si *schemaInit) createSidecarDB() error {
 	_, err := si.exec(si.ctx, sidecar.GetCreateQuery(), 1, false)
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return err
 	}
-	log.Infof("createSidecarDB: %s", sidecar.GetName())
+	log.Info("createSidecarDB: " + sidecar.GetName())
 	return nil
 }
 
@@ -352,7 +359,7 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 func (si *schemaInit) collation() (collations.ID, error) {
 	rs, err := si.exec(si.ctx, sidecarCollationQuery, 2, false)
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return collations.Unknown, err
 	}
 
@@ -379,13 +386,72 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 			// table does not exist in the sidecar database
 			return "", nil
 		}
-		log.Errorf("Error getting table schema for %s: %+v", tableName, err)
+		log.Error(fmt.Sprintf("Error getting table schema for %s: %+v", tableName, err))
 		return "", err
 	}
 	if len(rs.Rows) > 0 {
 		currentTableSchema = rs.Rows[0][1].ToString()
 	}
 	return currentTableSchema, nil
+}
+
+// serverVersionString returns the MySQL server version reported by the
+// live sidecar connection.
+func (si *schemaInit) serverVersionString() string {
+	if si.serverVersion != "" {
+		return si.serverVersion
+	}
+
+	if si.exec == nil {
+		return si.env.MySQLVersion()
+	}
+
+	rs, err := si.exec(si.ctx, sidecarVersionQuery, 1, false)
+	if err != nil {
+		log.Warn("Error getting MySQL version during sidecar database initialization", slog.Any("error", err))
+		return ""
+	}
+
+	if len(rs.Rows) != 1 || len(rs.Rows[0]) == 0 {
+		log.Warn("Invalid results for SidecarDB version query", slog.String("query", sidecarVersionQuery), slog.Int("rows", len(rs.Rows)))
+		return ""
+	}
+
+	si.serverVersion = rs.Rows[0][0].ToString()
+	if si.serverVersion == "" {
+		log.Warn("MySQL version query returned empty result during sidecar database initialization")
+	}
+
+	return si.serverVersion
+}
+
+// alterTableAlgorithmStrategy returns the algorithm strategy to use for
+// sidecar table ALTER statements. On MySQL < 8.0.32 we force ALGORITHM=COPY
+// to work around a MySQL bug in the INSTANT DDL redo log format (8.0.29-8.0.31)
+// that could cause data corruption during crash recovery. On MySQL >= 8.0.32
+// the bug is fixed and we omit the clause, letting MySQL choose the most
+// efficient algorithm.
+func (si *schemaInit) alterTableAlgorithmStrategy() int {
+	version := si.serverVersionString()
+	if version == "" {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capableOf := mysql.ServerVersionCapableOf(version)
+	if capableOf == nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capable, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
+	if err != nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	if capable {
+		return schemadiff.AlterTableAlgorithmStrategyNone
+	}
+
+	return schemadiff.AlterTableAlgorithmStrategyCopy
 }
 
 // findTableSchemaDiff gets the diff which needs to be applied
@@ -396,7 +462,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreEmpty,
-		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
+		AlterTableAlgorithmStrategy: si.alterTableAlgorithmStrategy(),
 	}
 	env := schemadiff.NewEnv(si.env, si.coll)
 	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
@@ -409,9 +475,9 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		ddl = diff.CanonicalStatementString()
 
 		if ddl == "" {
-			log.Infof("No changes needed for table %s", tableName)
+			log.Info("No changes needed for table " + tableName)
 		} else {
-			log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
+			log.Info(fmt.Sprintf("Applying DDL for table %s:\n%s", tableName, ddl))
 		}
 	}
 
@@ -458,16 +524,16 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 			}
 			return nil
 		}
-		log.Infof("Applied DDL %s for table %s during sidecar database initialization", ddl, table)
+		log.Info(fmt.Sprintf("Applied DDL %s for table %s during sidecar database initialization", ddl, table))
 		ddlCount.Add(1)
 		return nil
 	}
-	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, sidecar.GetName())
+	log.Info(fmt.Sprintf("Table schema was already up to date for the %s table in the %s sidecar database", table.name, sidecar.GetName()))
 	return nil
 }
 
 func recordDDLError(tableName string, err error) {
-	log.Error(err)
+	log.Error(fmt.Sprint(err))
 	ddlErrorCount.Add(1)
 	ddlErrorHistory.Add(&ddlError{
 		tableName: tableName,
@@ -513,6 +579,13 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlpars
 			sqlparser.String(sqlparser.NewIdentifierCS(table.name))).Query, result)
 	}
 
+	mysqlVersionResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"@@version",
+		"varchar"),
+		config.DefaultMySQLVersion,
+	)
+	db.AddQuery(sidecarVersionQuery, mysqlVersionResult)
+
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"sql_mode",
 		"varchar"),
@@ -540,6 +613,9 @@ func MatchesInitQuery(query string) bool {
 	}
 	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	if strings.EqualFold(sdbe, query) {
+		return true
+	}
+	if strings.EqualFold(sidecarVersionQuery, query) {
 		return true
 	}
 	for _, q := range sidecar.DBInitQueryPatterns {
