@@ -1012,7 +1012,7 @@ func CheckAndRecover() {
 				problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
 				if problem != nil && problem.RequiresOrderedExecution() {
 					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-						log.Error(fmt.Sprint(err))
+						log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
 					}
 				} else {
 					concurrent = append(concurrent, analysisEntry)
@@ -1022,7 +1022,7 @@ func CheckAndRecover() {
 			for _, analysisEntry := range concurrent {
 				wg.Go(func() {
 					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-						log.Error(fmt.Sprint(err))
+						log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
 					}
 				})
 			}
