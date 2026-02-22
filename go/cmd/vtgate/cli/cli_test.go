@@ -22,17 +22,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtgate"
 )
 
 // TestExecute exercises the cobra Execute() path (PreRunE → RunE) with different
@@ -206,110 +202,3 @@ func TestCheckCellFlags_SuccessMultipleCells(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestRunWithTopo_* exercises runWithTopo (validation + ResilientServer creation)
-// with memory topo. We twiddle package globals so the code path sees valid config.
-func TestRunWithTopo_Success(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "test")
-	defer ts.Close()
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-
-	oldCell := cell
-	oldTabletTypes := tabletTypesToWait
-	oldCellsToWatch := vtgate.CellsToWatch
-	defer func() {
-		cell = oldCell
-		tabletTypesToWait = oldTabletTypes
-		vtgate.CellsToWatch = oldCellsToWatch
-	}()
-
-	cell = "test"
-	tabletTypesToWait = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
-	vtgate.CellsToWatch = "test"
-
-	tabletTypes, err := runWithTopo(ctx, cmd, ts)
-	require.NoError(t, err)
-	require.Len(t, tabletTypes, 1)
-	require.Equal(t, topodatapb.TabletType_PRIMARY, tabletTypes[0]) // should return filtered serving types
-}
-
-func TestRunWithTopo_NoServingTabletType(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "test")
-	defer ts.Close()
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-
-	oldTabletTypes := tabletTypesToWait
-	defer func() { tabletTypesToWait = oldTabletTypes }()
-
-	tabletTypesToWait = []topodatapb.TabletType{topodatapb.TabletType_SPARE}
-
-	_, err := runWithTopo(ctx, cmd, ts)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "tablet-types-to-wait must contain at least one serving tablet type") // SPARE is not serving
-}
-
-func TestRunWithTopo_CheckCellFlagsFails(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "test")
-	defer ts.Close()
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-
-	oldCell := cell
-	oldCellsToWatch := vtgate.CellsToWatch
-	defer func() {
-		cell = oldCell
-		vtgate.CellsToWatch = oldCellsToWatch
-	}()
-
-	cell = "test"
-	tabletTypesToWait = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
-	vtgate.CellsToWatch = "nonexistent"
-
-	_, err := runWithTopo(ctx, cmd, ts)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cells_to_watch validation failed") // nonexistent cell should fail CheckCellFlags
-}
-
-// TestRun_WithTestHooks runs the full run() path with testTopoOpener and testRunDefault
-// set so we don't open real topo or start the server. run() should complete without error.
-func TestRun_WithTestHooks(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "test")
-	// run() closes the topo returned by testTopoOpener, so we should not close ts here.
-
-	oldCell := cell
-	oldTabletTypes := tabletTypesToWait
-	oldCellsToWatch := vtgate.CellsToWatch
-	oldPlannerName := plannerName
-	defer func() {
-		cell = oldCell
-		tabletTypesToWait = oldTabletTypes
-		vtgate.CellsToWatch = oldCellsToWatch
-		plannerName = oldPlannerName
-	}()
-
-	t.Cleanup(func() {
-		testTopoOpener = nil
-		testRunDefault = nil
-	}) // reset hooks so other tests don't see them
-
-	cell = "test"
-	tabletTypesToWait = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
-	vtgate.CellsToWatch = "test"
-	plannerName = "Gen4"
-	testTopoOpener = func() *topo.Server { return ts }
-	testRunDefault = func() {}
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-
-	err := run(cmd, nil)
-	require.NoError(t, err)
-}

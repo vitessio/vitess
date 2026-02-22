@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
@@ -49,12 +48,6 @@ var (
 	tabletTypesToWait []topodatapb.TabletType
 	plannerName       string
 	resilientServer   *srvtopo.ResilientServer
-
-	// testTopoOpener and testRunDefault are set by tests to inject a topo
-	// and skip servenv.RunDefault. Must be nil in production. Tests that set
-	// these must not call t.Parallel().
-	testTopoOpener func() *topo.Server
-	testRunDefault func()
 
 	Main = &cobra.Command{
 		Use:   "vtgate",
@@ -87,6 +80,10 @@ var (
 
 	srvTopoCounts *stats.CountersWithSingleLabel
 )
+
+func init() {
+	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
+}
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
 // it will help to avoid strange behaviors when vtgate runs but actually does not work
@@ -138,30 +135,6 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 	return nil
 }
 
-// runWithTopo runs validation after topo is open (CheckCellFlags first to avoid
-// creating ResilientServer on invalid cells), then creates ResilientServer and
-// returns the filtered serving tablet types for use by run().
-func runWithTopo(ctx context.Context, cmd *cobra.Command, ts *topo.Server) ([]topodatapb.TabletType, error) {
-	tabletTypes := make([]topodatapb.TabletType, 0, 1)
-	for _, tt := range tabletTypesToWait {
-		if topoproto.IsServingType(tt) {
-			tabletTypes = append(tabletTypes, tt)
-		}
-	}
-
-	if len(tabletTypes) == 0 {
-		return nil, errors.New("tablet-types-to-wait must contain at least one serving tablet type")
-	}
-
-	// Validate cells before creating ResilientServer so we don't leak it on error.
-	if err := CheckCellFlags(ctx, &fakesrvtopo.FakeSrvTopo{Ts: ts}, cell, vtgate.CellsToWatch); err != nil {
-		return nil, fmt.Errorf("cells_to_watch validation failed: %v", err)
-	}
-
-	resilientServer = srvtopo.NewResilientServer(ctx, ts, srvTopoCounts)
-	return tabletTypes, nil
-}
-
 func run(cmd *cobra.Command, args []string) error {
 	defer exit.Recover()
 
@@ -171,26 +144,30 @@ func run(cmd *cobra.Command, args []string) error {
 	// defer that closes the topo runs after cancelling the context.
 	// This ensures that we've properly closed things like the watchers
 	// at that point.
-	var ts *topo.Server
-	if testTopoOpener != nil {
-		ts = testTopoOpener()
-	} else {
-		ts = topo.Open()
-	}
+	ts := topo.Open()
 	defer ts.Close()
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
+	resilientServer = srvtopo.NewResilientServer(ctx, ts, srvTopoCounts)
 
-	tabletTypes, err := runWithTopo(ctx, cmd, ts)
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	for _, tt := range tabletTypesToWait {
+		if topoproto.IsServingType(tt) {
+			tabletTypes = append(tabletTypes, tt)
+		}
+	}
+
+	if len(tabletTypes) == 0 {
+		return errors.New("tablet-types-to-wait must contain at least one serving tablet type")
+	}
+
+	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
 	if err != nil {
-		return err
+		return fmt.Errorf("cells_to_watch validation failed: %v", err)
 	}
 
-	plannerVersion, ok := plancontext.PlannerNameToVersion(plannerName)
-	if !ok {
-		return fmt.Errorf("invalid planner-version %q", plannerName)
-	}
+	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
 
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),
@@ -212,18 +189,12 @@ func run(cmd *cobra.Command, args []string) error {
 	servenv.OnClose(func() {
 		_ = vtg.Gateway().Close(ctx)
 	})
-	if testRunDefault != nil {
-		testRunDefault()
-	} else {
-		servenv.RunDefault()
-	}
+	servenv.RunDefault()
 
 	return nil
 }
 
 func init() {
-	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
-
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
