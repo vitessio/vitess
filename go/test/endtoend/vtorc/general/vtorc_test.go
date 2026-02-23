@@ -561,7 +561,7 @@ func TestDemotePrimaryHang(t *testing.T) {
 	}, 30*time.Second, time.Second, "expected VTOrc to attempt stale primary recovery")
 
 	// The FixReplica recovery should run once the stale primary recovery unblocks the shard.
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, 1)
 }
 
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
