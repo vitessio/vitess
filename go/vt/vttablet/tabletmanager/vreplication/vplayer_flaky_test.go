@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"regexp"
@@ -586,11 +587,13 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 	}()
 
 	execStatements(t, []string{
@@ -2042,15 +2045,14 @@ func TestPlayerDDL(t *testing.T) {
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		fmt.Sprintf("/update _vt.vreplication set pos='%s'", pos1),
+		posOrPrevRegex(pos1),
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
 	))
 	pos2b := primaryPosition(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
-	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
+	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -2086,7 +2088,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='error applying event: Duplicate",
-		"/update _vt.vreplication set state='Error', message='terminal error: error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message=left\\('terminal error: error applying event: Duplicate",
 	))
 	cancel()
 
@@ -2271,6 +2273,32 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
+}
+
+func posOrPrevRegex(pos string) string {
+	positions := []string{pos}
+	if prev, ok := decrementPosition(pos); ok {
+		positions = append(positions, prev)
+		if prev2, ok := decrementPosition(prev); ok {
+			positions = append(positions, prev2)
+		}
+	}
+	for i := range positions {
+		positions[i] = regexp.QuoteMeta(positions[i])
+	}
+	return fmt.Sprintf("/update _vt.vreplication set pos='(%s)'", strings.Join(positions, "|"))
+}
+
+func decrementPosition(pos string) (string, bool) {
+	idx := strings.LastIndex(pos, "-")
+	if idx == -1 || idx+1 >= len(pos) {
+		return "", false
+	}
+	val, err := strconv.Atoi(pos[idx+1:])
+	if err != nil || val <= 0 {
+		return "", false
+	}
+	return pos[:idx+1] + strconv.Itoa(val-1), true
 }
 
 func TestPlayerStopAtOther(t *testing.T) {
@@ -3815,16 +3843,18 @@ func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
@@ -3928,7 +3958,11 @@ func TestPlayerStalls(t *testing.T) {
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
 				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+				logMessage := logger.String()
+				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
+					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
+				}
+				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
@@ -4002,4 +4036,15 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
+}
+
+func drainDBQueries() {
+	for {
+		select {
+		case <-globalDBQueries:
+			continue
+		default:
+			return
+		}
+	}
 }

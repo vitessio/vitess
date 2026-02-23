@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -267,10 +266,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 75},
 	}, {
 		in:  "set @@transaction_timeout = 50",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: ptr.Of(int64(50))}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: new(int64(50))}},
 	}, {
 		in:  "set @@transaction_timeout = 50, transaction_timeout = 75",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: ptr.Of(int64(75))}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionTimeout: new(int64(75))}},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {

@@ -51,6 +51,27 @@ type TableSummary struct {
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 
+// TableState captures the per-table VDiff state on a single shard.
+type TableState struct {
+	TableName       string           `json:"TableName"`
+	State           vdiff.VDiffState `json:"State"`
+	RowsCompared    int64            `json:"RowsCompared"`
+	MatchingRows    int64            `json:"MatchingRows"`
+	MismatchedRows  int64            `json:"MismatchedRows"`
+	ExtraRowsSource int64            `json:"ExtraRowsSource"`
+	ExtraRowsTarget int64            `json:"ExtraRowsTarget"`
+	HasMismatch     bool             `json:"HasMismatch"`
+}
+
+// ShardSummary captures the per-shard VDiff state, including per-table detail.
+type ShardSummary struct {
+	State       vdiff.VDiffState      `json:"State"`
+	StartedAt   string                `json:"StartedAt,omitempty"`
+	CompletedAt string                `json:"CompletedAt,omitempty"`
+	LastError   string                `json:"LastError,omitempty"`
+	TableStates map[string]TableState `json:"TableStates,omitempty"`
+}
+
 // Summary aggregates the current state of the vdiff from all shards.
 type Summary struct {
 	Workflow, Keyspace string
@@ -61,6 +82,7 @@ type Summary struct {
 	Shards             string
 	StartedAt          string                  `json:"StartedAt,omitempty"`
 	CompletedAt        string                  `json:"CompletedAt,omitempty"`
+	ShardSummaries     map[string]ShardSummary `json:"ShardSummaries,omitempty"`
 	TableSummaryMap    map[string]TableSummary `json:"TableSummary,omitempty"`
 	// This is keyed by table name and then by shard name.
 	Reports map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
@@ -88,18 +110,19 @@ func (s *Summary) SortedTableSummaries() []TableSummary {
 // BuildSummary generates a summary from a vdiff show response.
 func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (*Summary, error) {
 	summary := &Summary{
-		Workflow:     workflow,
-		Keyspace:     keyspace,
-		UUID:         uuid,
-		State:        vdiff.UnknownState,
-		RowsCompared: 0,
-		StartedAt:    "",
-		CompletedAt:  "",
-		HasMismatch:  false,
-		Shards:       "",
-		Reports:      make(map[string]map[string]vdiff.DiffReport),
-		Errors:       make(map[string]string),
-		Progress:     nil,
+		Workflow:       workflow,
+		Keyspace:       keyspace,
+		UUID:           uuid,
+		State:          vdiff.UnknownState,
+		RowsCompared:   0,
+		StartedAt:      "",
+		CompletedAt:    "",
+		HasMismatch:    false,
+		Shards:         "",
+		Reports:        make(map[string]map[string]vdiff.DiffReport),
+		Errors:         make(map[string]string),
+		ShardSummaries: make(map[string]ShardSummary),
+		Progress:       nil,
 	}
 
 	var tableSummaryMap map[string]TableSummary
@@ -158,7 +181,17 @@ func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowRe
 					// Keep track of how many shards are marked as a specific state. We check
 					// this combined with the shard.table states to determine the VDiff summary
 					// state.
-					shardStateCounts[vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))]++
+					shardState := vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
+					shardStateCounts[shardState]++
+
+					// Preserve per-shard detail for callers that need it.
+					summary.ShardSummaries[shard] = ShardSummary{
+						State:       shardState,
+						StartedAt:   row.AsString("started_at", ""),
+						CompletedAt: row.AsString("completed_at", ""),
+						LastError:   row.AsString("last_error", ""),
+						TableStates: make(map[string]TableState),
+					}
 				}
 
 				// Global VDiff summary updates that take into account the per table details
@@ -226,6 +259,22 @@ func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowRe
 
 					reports[table][shard] = dr
 					tableSummaryMap[table] = ts
+
+					// Store per-table state within the shard summary.
+					if ss, ok := summary.ShardSummaries[shard]; ok {
+						hasMismatch, _ := row.ToBool("has_mismatch")
+						ss.TableStates[table] = TableState{
+							TableName:       table,
+							State:           sts,
+							RowsCompared:    dr.ProcessedRows,
+							MatchingRows:    dr.MatchingRows,
+							MismatchedRows:  dr.MismatchedRows,
+							ExtraRowsSource: dr.ExtraRowsSource,
+							ExtraRowsTarget: dr.ExtraRowsTarget,
+							HasMismatch:     hasMismatch,
+						}
+						summary.ShardSummaries[shard] = ss
+					}
 				}
 			}
 		}
@@ -271,6 +320,7 @@ func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowRe
 	if !summary.HasMismatch && !verbose {
 		summary.Reports = nil
 		summary.TableSummaryMap = nil
+		summary.ShardSummaries = nil
 	}
 	// If we haven't completed the global VDiff then be sure to reflect that with no
 	// CompletedAt value.

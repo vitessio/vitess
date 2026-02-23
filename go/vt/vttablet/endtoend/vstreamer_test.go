@@ -46,7 +46,7 @@ func getSchemaVersionTableCreationEvents() []string {
 	client := framework.NewClient()
 	_, err := client.Execute("describe _vt.schema_version", nil)
 	if err != nil {
-		log.Errorf("_vt.schema_version not found, will expect its table creation events")
+		log.Error("_vt.schema_version not found, will expect its table creation events")
 		return tableCreationEvents
 	}
 	return nil
@@ -171,7 +171,7 @@ func TestSchemaVersioning(t *testing.T) {
 			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 				continue
 			}
-			log.Infof("Received event %v", event)
+			log.Info(fmt.Sprintf("Received event %v", event))
 			evs = append(evs, event)
 		}
 		select {
@@ -189,7 +189,7 @@ func TestSchemaVersioning(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	log.Infof("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
+	log.Info("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
 	runCases(ctx, t, cases, eventCh)
 
 	tsv.SetTracking(false)
@@ -214,7 +214,7 @@ func TestSchemaVersioning(t *testing.T) {
 	cancel()
 	wg.Wait()
 
-	log.Infof("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
+	log.Info("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
@@ -224,7 +224,7 @@ func TestSchemaVersioning(t *testing.T) {
 			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 				continue
 			}
-			log.Infof("Received event %v", event)
+			log.Info(fmt.Sprintf("Received event %v", event))
 			evs = append(evs, event)
 		}
 		// Ignore unrelated events.
@@ -287,7 +287,7 @@ func TestSchemaVersioning(t *testing.T) {
 	cancel()
 	wg.Wait()
 
-	log.Infof("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
+	log.Info("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
 	tsv.EnableHistorian(false)
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
@@ -298,7 +298,7 @@ func TestSchemaVersioning(t *testing.T) {
 			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 				continue
 			}
-			log.Infof("Received event %v", event)
+			log.Info(fmt.Sprintf("Received event %v", event))
 			evs = append(evs, event)
 		}
 		// Ignore unrelated events.
@@ -395,7 +395,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	var evs []*binlogdatapb.VEvent
-	log.Infof("In expectLogs for query %s, output len %d", query, len(output))
+	log.Info(fmt.Sprintf("In expectLogs for query %s, output len %d", query, len(output)))
 	for {
 		select {
 		case allevs, ok := <-eventCh:
@@ -431,7 +431,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 
 				evs = append(evs, ev)
 			}
-			log.Infof("In expectLogs, have got %d events, want %d", len(evs), len(output))
+			log.Info(fmt.Sprintf("In expectLogs, have got %d events, want %d", len(evs), len(output)))
 		case <-ctx.Done():
 			t.Fatalf("expectLog: Done(), stream ended early")
 		case <-timer.C:
@@ -500,7 +500,7 @@ func encodeString(in string) string {
 func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
 	qr, _ := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
 	if len(qr.Rows) == 1 {
-		log.Infof("Found ddl in schema_version: %s", ddl)
+		log.Info("Found ddl in schema_version: " + ddl)
 		return true
 	}
 	return false
@@ -513,12 +513,12 @@ func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, erro
 	for {
 		select {
 		case <-timeout:
-			log.Infof("waitForVersionInsert timed out")
+			log.Info("waitForVersionInsert timed out")
 			return false, errors.New("waitForVersionInsert timed out")
 		case <-tick:
 			ok := validateSchemaInserted(client, ddl)
 			if ok {
-				log.Infof("Found version insert for %s", ddl)
+				log.Info("Found version insert for " + ddl)
 				return true, nil
 			}
 		}

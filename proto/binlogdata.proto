@@ -321,6 +321,9 @@ enum VEventType {
   COPY_COMPLETED = 20;
   // Indicates rotation into a new binary log
   PREVIOUS_GTIDS = 21;
+  // ROWS_QUERY contains the original SQL query that produced the subsequent
+  // ROW events. Only present when MySQL's binlog_rows_query_log_events is ON.
+  ROWS_QUERY = 22;
 }
 
 
@@ -511,6 +514,8 @@ message VStreamOptions {
   // Don't add any additional timeouts to the stream. For example the
   // row streamer should not add a MAX_EXECUTION_TIME query hint.
   bool no_timeouts = 4;
+  // Only stream events for these types. If not provided, the default behavior is to send all event types.
+  repeated VEventType event_types = 5;
 }
 
 // VStreamRequest is the payload for VStreamer

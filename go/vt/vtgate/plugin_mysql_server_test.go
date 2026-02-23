@@ -571,6 +571,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -616,6 +624,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -652,6 +668,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),
@@ -688,6 +712,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "3",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(3),
@@ -733,6 +765,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -769,6 +809,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),

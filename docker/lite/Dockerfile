@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM --platform=linux/amd64 golang:1.25.7-bookworm@sha256:db60aab8dc5b066b5018f1bcad7e70b688f31e2fa3427c1623585b680557f975 AS go-builder
+FROM golang:1.26.0-trixie@sha256:889885d7cc1275935e3f9920aabadc5fadbe873f633d92a746f1bc401dd40f69 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -44,7 +44,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
 # Build vtadmin separately.
-FROM --platform=linux/amd64 node:22-bookworm-slim@sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554 AS vtadmin-builder
+FROM node:25-trixie-slim@sha256:5249f8aedf9432a08f0cfcca3d07a04ece95e6a8f4710590e1a8226b028c1233 AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 
@@ -59,7 +59,7 @@ RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
     npm run build
 
 # Build the final image with the minimum Go binaries + static files.
-FROM --platform=linux/amd64 debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
+FROM debian:trixie-slim@sha256:f6e2cfac5cf956ea044b4bd75e6397b4372ad88fe00908045e9a0d21712ae3ba
 
 # Install locale required for mysqlsh
 RUN apt-get update && apt-get install -y locales tar \
@@ -75,9 +75,9 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot /home/vitess && chown -R vitess:vitess /vt /home/vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
-ENV VTDATAROOT /vt/vtdataroot
-ENV PATH $VTROOT/bin:$PATH
+ENV VTROOT=/vt
+ENV VTDATAROOT=/vt/vtdataroot
+ENV PATH=$VTROOT/bin:$PATH
 
 # Copy artifacts from builder layers.
 COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
