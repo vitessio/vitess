@@ -1996,6 +1996,7 @@ func TestRowsQueryEvent(t *testing.T) {
 			output: [][]string{{
 				`begin`,
 				`type:ROWS_QUERY statement:"insert into rq_test values (2, '` + longVal + `')"`,
+				// No Field event is generated because we re-use the cached plan.
 				`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:500 values:"2` + longVal + `"}}}`,
 				`gtid`,
 				`commit`,
