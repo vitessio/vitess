@@ -1044,6 +1044,32 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	return true, nil
 }
 
+// recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
+// that require ordered execution run sequentially first, then the remaining
+// independent analyses fan out concurrently.
+func recoverShardAnalyses(analyses []*inst.DetectionAnalysis, recoverFunc func(*inst.DetectionAnalysis) error) {
+	var concurrent []*inst.DetectionAnalysis
+	for _, analysisEntry := range analyses {
+		problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
+		if problem != nil && problem.RequiresOrderedExecution() {
+			if err := recoverFunc(analysisEntry); err != nil {
+				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
+			}
+		} else {
+			concurrent = append(concurrent, analysisEntry)
+		}
+	}
+	var wg sync.WaitGroup
+	for _, analysisEntry := range concurrent {
+		wg.Go(func() {
+			if err := recoverFunc(analysisEntry); err != nil {
+				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
+			}
+		})
+	}
+	wg.Wait()
+}
+
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
@@ -1090,26 +1116,7 @@ func CheckAndRecover() {
 	// sequentially first, then independent problems fan out concurrently.
 	for _, shardAnalyses := range analysisByShard {
 		go func() {
-			var concurrent []*inst.DetectionAnalysis
-			for _, analysisEntry := range shardAnalyses {
-				problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
-				if problem != nil && problem.RequiresOrderedExecution() {
-					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-						log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
-					}
-				} else {
-					concurrent = append(concurrent, analysisEntry)
-				}
-			}
-			var wg sync.WaitGroup
-			for _, analysisEntry := range concurrent {
-				wg.Go(func() {
-					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-						log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
-					}
-				})
-			}
-			wg.Wait()
+			recoverShardAnalyses(shardAnalyses, executeCheckAndRecoverFunction)
 		}()
 	}
 }
