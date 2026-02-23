@@ -80,7 +80,7 @@ func Init(fs *pflag.FlagSet) error {
 	return nil
 }
 
-// newLogger creates a new structured logger. When the log format is "pretty", or we detect
+// newLogger creates a new structured logger. When the log format is "text", or we detect
 // we're running tests, logs are outputted in a human-readable format (and optionally colored).
 // Otherwise, or when the log format is "json", logs are outputted as machine-readable JSON.
 func newLogger(level slog.Level) *slog.Logger {
