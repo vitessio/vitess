@@ -177,6 +177,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		encodeString(err.Error()),
 		extraCols,
 		ct.id,
+		encodeString(ct.vde.dbName),
 	)
 	if _, err := dbClient.ExecuteFetch(query.Query, 1); err != nil {
 		return err
@@ -275,7 +276,7 @@ func (ct *controller) markStoppedByRequest() error {
 	}
 	defer dbClient.Close()
 
-	query, err := sqlparser.ParseAndBind(sqlUpdateVDiffStopped, sqltypes.Int64BindVariable(ct.id))
+	query, err := sqlparser.ParseAndBind(sqlUpdateVDiffStopped, sqltypes.Int64BindVariable(ct.id), sqltypes.StringBindVariable(ct.vde.dbName))
 	if err != nil {
 		return err
 	}

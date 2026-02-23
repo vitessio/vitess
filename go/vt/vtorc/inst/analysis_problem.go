@@ -161,6 +161,17 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:           IncapacitatedPrimary,
+			Description:        "Primary is consistently timing out on health checks and may be incapacitated",
+			HasShardWideAction: true,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy
+		},
+	},
+
 	// PrimaryHasPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
