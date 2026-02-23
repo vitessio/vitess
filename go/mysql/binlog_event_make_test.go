@@ -498,3 +498,46 @@ func TestLargeRowsEvent(t *testing.T) {
 	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
 }
+
+func TestRowsQueryEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "simple insert",
+			query: "INSERT INTO t1 (id, name) VALUES (1, 'hello')",
+		},
+		{
+			name:  "with comment",
+			query: "/* app=myservice */ UPDATE users SET active = 1 WHERE id = 42",
+		},
+		{
+			name:  "empty query",
+			query: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			event := NewRowsQueryEvent(f, s, tc.query)
+			require.True(t, event.IsValid(), "IsValid() returned false")
+			require.True(t, event.IsRowsQuery(), "IsRowsQuery() returned false")
+
+			// Verify other Is* methods return false.
+			assert.False(t, event.IsQuery(), "IsQuery() should be false")
+			assert.False(t, event.IsTableMap(), "IsTableMap() should be false")
+			assert.False(t, event.IsWriteRows(), "IsWriteRows() should be false")
+
+			event, _, err := event.StripChecksum(f)
+			require.NoError(t, err, "StripChecksum failed")
+
+			got, err := event.RowsQuery(f)
+			require.NoError(t, err, "RowsQuery() failed")
+			assert.Equal(t, tc.query, got)
+		})
+	}
+}

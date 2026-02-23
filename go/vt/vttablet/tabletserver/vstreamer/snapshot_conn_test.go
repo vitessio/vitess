@@ -18,7 +18,9 @@ package vstreamer
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,4 +60,50 @@ func TestStartSnapshot(t *testing.T) {
 	qr, err := conn.ExecuteFetch("select * from t1", 10, false)
 	require.NoError(t, err)
 	assert.Equal(t, wantqr, qr)
+}
+
+// TestStartSnapshotLock validates startSnapshot does not hang indefinitely when waiting on a metadata lock.
+func TestStartSnapshotLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	const tableName = "t1_lock_wait_timeout"
+	const shortLockWaitTimeout = time.Second
+
+	// Seed one row so the table can be locked and queried.
+	execStatements(t, []string{
+		fmt.Sprintf("create table %s(id int, val varbinary(128), primary key(id))", tableName),
+		fmt.Sprintf("insert into %s values (1, 'aaa')", tableName),
+	})
+	t.Cleanup(func() { execStatements(t, []string{"drop table " + tableName}) })
+
+	// Shorten the configured snapshot lock wait timeout for this test only.
+	originalLockWaitTimeout := snapshotLockWaitTimeout
+	snapshotLockWaitTimeout = shortLockWaitTimeout
+	t.Cleanup(func() { snapshotLockWaitTimeout = originalLockWaitTimeout })
+
+	ctx := t.Context()
+
+	// Open a second connection that will hold the metadata lock.
+	lockHolderConn, err := mysqlConnect(ctx, env.TabletEnv.Config().DB.AppWithDB())
+	require.NoError(t, err)
+	t.Cleanup(func() { lockHolderConn.Close() })
+
+	_, err = lockHolderConn.ExecuteFetch("begin", 1, false)
+	require.NoError(t, err)
+
+	_, err = lockHolderConn.ExecuteFetch(fmt.Sprintf("update %s set val = 'blocked' where id = 1", tableName), 1, false)
+	require.NoError(t, err)
+
+	conn, err := snapshotConnect(ctx, env.TabletEnv.Config().DB.AppWithDB())
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	// Attempt to start the snapshot while the metadata lock is still held.
+	_, err = conn.startSnapshot(ctx, tableName)
+
+	// Confirm we fail with the expected lock wait timeout error.
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Lock wait timeout exceeded")
 }
