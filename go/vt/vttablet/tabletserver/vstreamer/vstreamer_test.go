@@ -1959,29 +1959,49 @@ func TestRowsQueryEvent(t *testing.T) {
 	}
 
 	execStatements(t, []string{
-		"create table rq_test(id int, val varbinary(128), primary key(id))",
+		"create table rq_test(id int, val varbinary(600), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table rq_test",
 	})
 
-	testcases := []testcase{{
-		input: []string{
-			"set @@session.binlog_rows_query_log_events=ON",
-			"begin",
-			"insert into rq_test values (1, 'aaa')",
-			"commit",
-			"set @@session.binlog_rows_query_log_events=OFF",
+	longVal := strings.Repeat("a", 500)
+
+	testcases := []testcase{
+		{
+			input: []string{
+				"set @@session.binlog_rows_query_log_events=ON",
+				"begin",
+				"insert into rq_test values (1, 'aaa')",
+				"commit",
+				"set @@session.binlog_rows_query_log_events=OFF",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:ROWS_QUERY statement:"insert into rq_test values (1, 'aaa')"`,
+				fmt.Sprintf(`type:FIELD field_event:{table_name:"rq_test" fields:{name:"id" type:INT32 table:"rq_test" org_table:"rq_test" database:"%s" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"rq_test" org_table:"rq_test" database:"%s" org_name:"val" column_length:600 charset:63 column_type:"varbinary(600)"}}`, testenv.DBName, testenv.DBName),
+				`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+				`gtid`,
+				`commit`,
+			}},
 		},
-		output: [][]string{{
-			`begin`,
-			`type:ROWS_QUERY statement:"insert into rq_test values (1, 'aaa')"`,
-			fmt.Sprintf(`type:FIELD field_event:{table_name:"rq_test" fields:{name:"id" type:INT32 table:"rq_test" org_table:"rq_test" database:"%s" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"rq_test" org_table:"rq_test" database:"%s" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`, testenv.DBName, testenv.DBName),
-			`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`gtid`,
-			`commit`,
-		}},
-	}}
+		{ // An SQL statement longer than 255 chars (uint8 length)
+			input: []string{
+				"set @@session.binlog_rows_query_log_events=ON",
+				"begin",
+				"insert into rq_test values (2, '" + longVal + "')",
+				"commit",
+				"set @@session.binlog_rows_query_log_events=OFF",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:ROWS_QUERY statement:"insert into rq_test values (2, '` + longVal + `')"`,
+				`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:500 values:"2` + longVal + `"}}}`,
+				`gtid`,
+				`commit`,
+			}},
+		},
+	}
 	runCases(t, nil, testcases, "", nil)
 }
 

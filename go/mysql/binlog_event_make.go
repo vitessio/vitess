@@ -384,15 +384,16 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 	return NewMariadbBinlogEvent(ev)
 }
 
-// NewRowsQueryEvent returns a ROWS_QUERY_LOG_EVENT containing the given SQL query.
+// NewRowsQueryEvent returns a ROWS_QUERY_LOG_EVENT containing the given SQL query
+// which is encoded as a NULL byte terminated string.
 func NewRowsQueryEvent(f BinlogFormat, s *FakeBinlogStream, query string) BinlogEvent {
-	length := 1 + // post-header (always 1)
+	length := 1 + // post-header (always 1 byte)
 		len(query) + // SQL query
-		1 // NUL terminator
+		1 // NULL byte terminator
 	data := make([]byte, length)
-	data[0] = 1 // post-header length byte
+	data[0] = 1 // post-header length byte which is ignored
 	copy(data[1:], query)
-	// data[length-1] is already 0 (NUL terminator)
+	// data[length-1] is already 0 (NULL byte terminator)
 
 	ev := s.Packetize(f, eRowsQueryEvent, 0, data)
 	return NewMysql56BinlogEvent(ev)
