@@ -2298,10 +2298,22 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				// If not found in Constraints, check TableSpec.Indexes for named UNIQUE/PRIMARY KEY constraints
 				if !found {
 					for i, index := range c.TableSpec.Indexes {
-						// Only match UNIQUE or PRIMARY KEY indexes with matching ConstraintName
+						// Only match UNIQUE or PRIMARY KEY indexes
+						if index.Info.Type != sqlparser.IndexTypeUnique && index.Info.Type != sqlparser.IndexTypePrimary {
+							continue
+						}
+						// Prefer matching on ConstraintName when present
 						if index.Info.ConstraintName.String() != "" &&
-							(index.Info.Type == sqlparser.IndexTypeUnique || index.Info.Type == sqlparser.IndexTypePrimary) &&
 							strings.EqualFold(index.Info.ConstraintName.String(), opt.Name.String()) {
+							found = true
+							c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+							break
+						}
+						// Fallback: allow DROP CONSTRAINT <name> to target a UNIQUE KEY defined without the CONSTRAINT
+						// keyword (i.e. created via `UNIQUE KEY uk_name (...)`). In that case ConstraintName is empty
+						// and the index is identified by its Name.
+						if index.Info.ConstraintName.String() == "" &&
+							strings.EqualFold(index.Info.Name.String(), opt.Name.String()) {
 							found = true
 							c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
 							break

@@ -205,6 +205,41 @@ func (p *Parser) Parse(sql string) (Statement, error) {
 // ParseStrictDDL is the same as Parse except it errors on
 // partially parsed DDL statements.
 func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
+	// MySQL syntax for dropping a primary key is `DROP PRIMARY KEY`.
+	// Some callers (and tests) also use the more generic, non-MySQL form
+	// `DROP CONSTRAINT PRIMARY`. The core grammar does not accept this form,
+	// so we normalize it here to the canonical MySQL syntax before parsing.
+	//
+	// We intentionally keep this rewrite very small and targeted so that it
+	// only changes the specific unsupported construct and leaves all other
+	// DDL unchanged.
+	lowered := strings.ToLower(sql)
+	const needle = "drop constraint primary"
+	if idx := strings.Index(lowered, needle); idx != -1 {
+		var b strings.Builder
+		start := 0
+		for idx != -1 {
+			// Copy everything up to the match from the original string to
+			// preserve original casing outside the rewritten fragment.
+			b.WriteString(sql[start:idx])
+			// Rewrite to the MySQL-compatible form.
+			b.WriteString("drop primary key")
+			start = idx + len(needle)
+			if start >= len(sql) {
+				break
+			}
+			if next := strings.Index(strings.ToLower(sql[start:]), needle); next != -1 {
+				idx = start + next
+			} else {
+				idx = -1
+			}
+		}
+		if start < len(sql) {
+			b.WriteString(sql[start:])
+		}
+		sql = b.String()
+	}
+
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
