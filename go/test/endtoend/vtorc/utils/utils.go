@@ -1084,33 +1084,22 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	t.Helper()
 	key := strings.Join([]string{code, alias, ks, shard}, ".")
 	timeout := 15 * time.Second
-	startTime := time.Now()
-
-	for time.Since(startTime) < timeout {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]interface{})
-		actual := GetIntFromValue(problems[key])
-		if actual == expect {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-
-	vars := vtorcInstance.GetVars()
-	problems := vars["DetectedProblems"].(map[string]interface{})
-	actual, ok := problems[key]
-	actual = GetIntFromValue(actual)
-
-	assert.True(t, ok,
-		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
-		key, problems,
-	)
-
-	assert.EqualValues(t, expect, actual,
-		"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
-		key, expect, actual,
-		problems,
-	)
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
+		actual, ok := problems[key]
+		actual = GetIntFromValue(actual)
+		require.True(c, ok,
+			"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+			key, problems,
+		)
+		require.EqualValues(c, expect, actual,
+			"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+			key, expect, actual,
+			problems,
+		)
+	}, timeout, time.Second, "timed out waiting for detected problem(s)")
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.

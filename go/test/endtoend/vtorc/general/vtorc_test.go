@@ -555,7 +555,7 @@ func TestDemotePrimaryHang(t *testing.T) {
 		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
 		require.True(c, ok, "RecoveriesCount metric not yet available")
 
-		mapKey := fmt.Sprintf("%s.%s.%s", logic.DemoteStaleTopoPrimaryRecoveryName, keyspace.Name, shard0.Name)
+		mapKey := logic.DemoteStaleTopoPrimaryRecoveryName
 		count := utils.GetIntFromValue(recoveries[mapKey])
 		assert.GreaterOrEqual(c, count, 1)
 	}, 30*time.Second, time.Second, "expected VTOrc to attempt stale primary recovery")
