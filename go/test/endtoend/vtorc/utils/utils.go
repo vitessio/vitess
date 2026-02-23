@@ -994,6 +994,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
+<<<<<<< HEAD
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 		successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 		if successCount == countExpected {
@@ -1005,6 +1006,26 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 	successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 	assert.EqualValues(t, countExpected, successCount)
+=======
+		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
+		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
+		assert.EqualValues(c, countExpected, successCount)
+	}, timeout, time.Second, "timed out waiting for successful recovery count")
+}
+
+// WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected or greater
+func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, recoverySkipCode logic.RecoverySkipCode, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, recoverySkipCode)
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		vars := vtorcInstance.GetVars()
+		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]any)
+		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
+		assert.GreaterOrEqual(c, skippedCount, countExpected)
+	}, timeout, time.Second, "timeout waiting for skipped recoveries")
+>>>>>>> 42742eb786 (vtorc: Add a timeout to `DemotePrimary` RPC (#19432))
 }
 
 // WaitForSuccessfulPRSCount waits until the given keyspace-shard's count of successful prs runs matches the count expected.
@@ -1087,6 +1108,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
+<<<<<<< HEAD
 		problems := vars["DetectedProblems"].(map[string]interface{})
 		actual := GetIntFromValue(problems[key])
 		if actual == expect {
@@ -1110,6 +1132,22 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 		key, expect, actual,
 		problems,
 	)
+=======
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
+		actual, ok := problems[key]
+		actual = GetIntFromValue(actual)
+		assert.True(c, ok,
+			"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+			key, problems,
+		)
+		assert.EqualValues(c, expect, actual,
+			"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+			key, expect, actual,
+			problems,
+		)
+	}, timeout, time.Second, "timed out waiting for detected problem(s)")
+>>>>>>> 42742eb786 (vtorc: Add a timeout to `DemotePrimary` RPC (#19432))
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.
