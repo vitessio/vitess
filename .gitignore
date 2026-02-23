@@ -93,3 +93,8 @@ report
 # mise files
 .mise.toml
 /errors/
+<<<<<<< HEAD
+=======
+go/flags/endtoend/count_flags.sh
+/coverage.out
+>>>>>>> e5073f36c8 (`ci`: run code coverage CI only on go packages that had changes (#19431))
