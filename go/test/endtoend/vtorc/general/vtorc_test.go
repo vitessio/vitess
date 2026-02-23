@@ -480,7 +480,7 @@ func TestDemotePrimaryHang(t *testing.T) {
 
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	}, 1, policy.DurabilitySemiSync)
 
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
