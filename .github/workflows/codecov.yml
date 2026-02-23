@@ -1,5 +1,7 @@
 name: Code Coverage
 on:
+  schedule:
+    - cron: '0 0 * * 6'  # Saturday midnight UTC
   push:
     branches:
       - "main"
@@ -8,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
+  group: format('{0}-{1}-{2}', ${{ github.ref }}, ${{ github.event_name }}, 'Code Coverage')
   cancel-in-progress: true
 
 permissions: read-all
@@ -30,7 +32,17 @@ jobs:
         fetch-depth: 0
         persist-credentials: 'false'
 
+    - name: Determine run mode
+      id: mode
+      run: |
+        if [ "${{ github.event_name }}" = "schedule" ]; then
+          echo "is_full_run=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_full_run=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Check for changes in files relevant to code coverage
+      if: steps.mode.outputs.is_full_run != 'true'
       uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
       id: changes
       with:
@@ -44,13 +56,13 @@ jobs:
             - Makefile
 
     - name: Set up Go
-      if: steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
 
     - name: Detect changed Go packages
-      if: steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
       id: packages
       run: |
         BASE_SHA="${{ github.event.pull_request.base.sha }}"
@@ -86,21 +98,21 @@ jobs:
         echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
 
     - name: Set up python
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Tune the OS
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -111,27 +123,32 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
     - name: Run make tools
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |
         make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 
     - name: Run coverage tests
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
-      timeout-minutes: 45
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 60
       run: |
         set -exo pipefail
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
         source build.env
 
-        make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
+        if [ "${{ steps.mode.outputs.is_full_run }}" = "true" ]; then
+          make unit_test_cover
+        else
+          make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
+        fi
 
     - name: Upload coverage reports
-      if: steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != ''
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
       with:
         files: coverage.out
         fail_ci_if_error: true
         verbose: true
+        flags: ${{ steps.mode.outputs.is_full_run == 'true' && '' || 'partial' }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
