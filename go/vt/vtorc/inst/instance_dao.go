@@ -198,7 +198,13 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tablet)
 	if err != nil {
+		if tablet.Type == topodatapb.TabletType_PRIMARY {
+			RecordPrimaryHealthCheck(tabletAlias, false)
+		}
 		goto Cleanup
+	}
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
 	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
 		stalledDisk = true

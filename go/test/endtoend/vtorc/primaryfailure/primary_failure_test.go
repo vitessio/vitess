@@ -76,13 +76,13 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
-	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
