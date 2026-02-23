@@ -141,7 +141,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	if err != nil {
 		return err
 	}
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, tablet := range shard0.Vttablets {
 		log.Infof("Starting MySql for tablet %v", tablet.Alias)
@@ -591,7 +591,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
-	var timeoutDuration = time.Duration(5 * len(sqls))
+	timeoutDuration := time.Duration(5 * len(sqls))
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
@@ -614,7 +614,6 @@ func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, er
 
 // StartVttablet is used to start a vttablet from the given cell and type
 func StartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, cell string, isRdonly bool) *cluster.Vttablet {
-
 	var tablet *cluster.Vttablet
 	for _, cellInfo := range clusterInfo.CellInfos {
 		if cellInfo.CellName == cell {
@@ -818,7 +817,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -892,7 +891,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	err := clusterInfo.ClusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -994,7 +993,8 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
-		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(t, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 		if successCount == countExpected {
 			return
@@ -1002,7 +1002,8 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 		time.Sleep(time.Second)
 	}
 	vars := vtorcInstance.GetVars()
-	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+	require.True(t, ok, "SuccessfulRecoveries metric not yet available")
 	successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 	assert.EqualValues(t, countExpected, successCount)
 }
@@ -1083,33 +1084,22 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	t.Helper()
 	key := strings.Join([]string{code, alias, ks, shard}, ".")
 	timeout := 15 * time.Second
-	startTime := time.Now()
-
-	for time.Since(startTime) < timeout {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]interface{})
-		actual := GetIntFromValue(problems[key])
-		if actual == expect {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-
-	vars := vtorcInstance.GetVars()
-	problems := vars["DetectedProblems"].(map[string]interface{})
-	actual, ok := problems[key]
-	actual = GetIntFromValue(actual)
-
-	assert.True(t, ok,
-		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
-		key, problems,
-	)
-
-	assert.EqualValues(t, expect, actual,
-		"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
-		key, expect, actual,
-		problems,
-	)
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
+		actual, ok := problems[key]
+		actual = GetIntFromValue(actual)
+		require.True(c, ok,
+			"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+			key, problems,
+		)
+		require.EqualValues(c, expect, actual,
+			"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+			key, expect, actual,
+			problems,
+		)
+	}, timeout, time.Second, "timed out waiting for detected problem(s)")
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.
@@ -1123,7 +1113,7 @@ func WaitForTabletType(t *testing.T, tablet *cluster.Vttablet, expectedTabletTyp
 // It expects to find minimum occurrence or exact count of `keyName` provided.
 func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
 	t.Helper()
-	var sinceInSeconds = 30
+	sinceInSeconds := 30
 	duration := time.Duration(sinceInSeconds)
 	time.Sleep(duration * time.Second)
 
