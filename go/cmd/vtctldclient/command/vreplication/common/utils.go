@@ -190,9 +190,11 @@ func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parse
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
-	if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(CreateOptions.OnDDL)]; !ok {
+	normalized := strings.ToUpper(CreateOptions.OnDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[normalized]; !ok {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
+	CreateOptions.OnDDL = normalized
 	return nil
 }
 
