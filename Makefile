@@ -219,13 +219,7 @@ e2e_test: build
 
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
-	source build.env
-	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
-	# Handle go tool cover failures due to not handling `//line` directives, which
-	# the goyacc compiler adds to the generated parser in sql.go. See:
-	# https://github.com/golang/go/issues/41222
-	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
-	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
+	source build.env && tools/run_codecov.sh $(COVERAGE_PACKAGES)
 
 unit_test_race: build dependency_check
 	RACE=1 tools/unit_test_runner.sh
@@ -318,7 +312,7 @@ define build_docker_image
 		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
-		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+		docker build --platform=linux/amd64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
 

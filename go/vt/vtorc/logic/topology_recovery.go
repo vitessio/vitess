@@ -22,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net"
+	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +49,7 @@ const (
 	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
 	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
+	RecoverIncapacitatedPrimaryRecoveryName          string = "RecoverIncapacitatedPrimary"
 	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
 	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
 	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
@@ -142,6 +146,7 @@ const (
 	restartArbitraryDirectReplicaFunc
 	restartAllDirectReplicasFunc
 	recoverDeadPrimaryFunc
+	recoverIncapacitatedPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
 	recoverLockedSemiSyncPrimaryFunc
@@ -365,6 +370,73 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverDeadPrimary", false, logger)
 }
 
+// recoverIncapacitatedPrimary checks a given analysis, decides whether to take action, and possibly takes action.
+// Returns true when action was taken.
+// The primary is not dead, but it's incapacitated in a way that it is not able to perform its duties at an acceptable
+// level and is struggling to respond to requests in a timely manner. This is different from recoverDeadPrimary
+// because the primary is still alive and reachable, so we want to try to do a planned reparent if possible, and only
+// do an emergency reparent if the planned one fails.
+func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
+	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
+	if reachErr != nil {
+		logger.Info(fmt.Sprintf("healthz probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr))
+	}
+	if !reachable {
+		logger.Info(fmt.Sprintf("Skipping IncapacitatedPrimary recovery; primary is not reachable via healthz: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
+			analysisEntry.AnalyzedInstanceAlias))
+		return false, nil, nil
+	}
+	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, recoveryName, logger)
+	if err == nil {
+		return recoveryAttempted, topologyRecovery, nil
+	}
+	if topologyRecovery == nil {
+		return recoveryAttempted, nil, err
+	}
+	logger.Warn(fmt.Sprintf("PlannedReparentShard failed for %s/%s: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
+	if !isERSEnabled(analysisEntry) {
+		log.Warn("VTOrc not configured to run EmergencyReparentShard, skipping recovering " + recoveryName)
+		return recoveryAttempted, topologyRecovery, nil
+	}
+	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
+}
+
+// healthzProbe is a swappable function to check a tablet's /healthz endpoint.
+// Tests can replace it to avoid network calls and control the reachability result.
+var healthzProbe = probeTabletHealthz
+
+// isPrimaryHealthzReachable loads the analyzed primary tablet from the vtorc DB
+// and checks whether its /healthz endpoint is reachable within a short timeout.
+// It returns false with a nil error when the tablet is missing or incomplete so
+// the caller can decide whether to skip recovery without failing outright.
+func isPrimaryHealthzReachable(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+	if analysisEntry == nil || analysisEntry.AnalyzedInstanceAlias == "" {
+		return false, nil
+	}
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil || tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
+		return false, err
+	}
+	return healthzProbe(tablet)
+}
+
+func probeTabletHealthz(tablet *topodatapb.Tablet) (bool, error) {
+	vtPort, ok := tablet.PortMap["vt"]
+	if !ok || vtPort == 0 {
+		return false, nil
+	}
+	addr := net.JoinHostPort(tablet.Hostname, strconv.Itoa(int(vtPort)))
+	url := fmt.Sprintf("http://%s/healthz", addr)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, nil
+}
+
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
 func recoverPrimaryTabletDeleted(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	return runEmergencyReparentOp(ctx, analysisEntry, "PrimaryTabletDeleted", true, logger)
@@ -549,6 +621,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
+	case inst.IncapacitatedPrimary:
+		recoveryFunc = recoverIncapacitatedPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
@@ -613,6 +687,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverDeadPrimaryFunc:
 		return true
+	case recoverIncapacitatedPrimaryFunc:
+		return true
 	case recoverPrimaryTabletDeletedFunc:
 		return true
 	case recoverPrimaryHasPrimaryFunc:
@@ -649,6 +725,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return restartAllDirectReplicas
 	case recoverDeadPrimaryFunc:
 		return recoverDeadPrimary
+	case recoverIncapacitatedPrimaryFunc:
+		return recoverIncapacitatedPrimary
 	case recoverPrimaryTabletDeletedFunc:
 		return recoverPrimaryTabletDeleted
 	case recoverPrimaryHasPrimaryFunc:
@@ -684,6 +762,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RestartAllDirectReplicasRecoveryName
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
+	case recoverIncapacitatedPrimaryFunc:
+		return RecoverIncapacitatedPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
 		return RecoverPrimaryTabletDeletedRecoveryName
 	case recoverPrimaryHasPrimaryFunc:
@@ -708,14 +788,14 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case recoverDeadPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
+	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
 		return true
 	default:
 		return false
 	}
 }
 
-// analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
+// analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not.
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
 	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
@@ -870,6 +950,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// Actually attempt recovery:
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceAlias) {
 		logger.Info(fmt.Sprintf("executeCheckAndRecoverFunction: proceeding with recovery on %+v; isRecoverable?: %+v", analysisEntry.AnalyzedInstanceAlias, isActionableRecovery))
+		if recoveryName != "" {
+			logger.Info(fmt.Sprintf("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias))
+		}
 	}
 	recoveryAttempted, topologyRecovery, err := getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, logger)
 	if !recoveryAttempted {
@@ -1016,16 +1099,15 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.D
 	}
 }
 
-// electNewPrimary elects a new primary while none were present before.
-func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnalysis, operationName string, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
-		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %s.", analysisEntry.AnalyzedInstanceAlias, operationName)
 		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Info(fmt.Sprintf("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
+	logger.Info(fmt.Sprintf("Analysis: %v, will run %s for %v:%v", analysisEntry.Analysis, operationName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
@@ -1039,7 +1121,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 		logger.Error(fmt.Sprintf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
 		return false, topologyRecovery, err
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting PlannedReparentShard for %s.", operationName))
 
 	ev, err := reparentutil.NewPlannedReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
@@ -1066,6 +1148,11 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 	}
 	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
 	return true, topologyRecovery, err
+}
+
+// electNewPrimary elects a new primary while none were present before.
+func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	return runPlannedReparentOp(ctx, analysisEntry, ElectNewPrimaryRecoveryName, logger)
 }
 
 // fixPrimary sets the primary as read-write.

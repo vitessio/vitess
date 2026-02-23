@@ -20862,6 +20862,212 @@ export namespace vtorcdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a PrimaryHealthEvent. */
+    interface IPrimaryHealthEvent {
+
+        /** PrimaryHealthEvent at_unix_nanos */
+        at_unix_nanos?: (number|Long|null);
+
+        /** PrimaryHealthEvent success */
+        success?: (boolean|null);
+    }
+
+    /** Represents a PrimaryHealthEvent. */
+    class PrimaryHealthEvent implements IPrimaryHealthEvent {
+
+        /**
+         * Constructs a new PrimaryHealthEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IPrimaryHealthEvent);
+
+        /** PrimaryHealthEvent at_unix_nanos. */
+        public at_unix_nanos: (number|Long);
+
+        /** PrimaryHealthEvent success. */
+        public success: boolean;
+
+        /**
+         * Creates a new PrimaryHealthEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrimaryHealthEvent instance
+         */
+        public static create(properties?: vtorcdata.IPrimaryHealthEvent): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @param message PrimaryHealthEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IPrimaryHealthEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @param message PrimaryHealthEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IPrimaryHealthEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Verifies a PrimaryHealthEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrimaryHealthEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrimaryHealthEvent
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Creates a plain object from a PrimaryHealthEvent message. Also converts values to other types if specified.
+         * @param message PrimaryHealthEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.PrimaryHealthEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrimaryHealthEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryHealthEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a PrimaryHealthState. */
+    interface IPrimaryHealthState {
+
+        /** PrimaryHealthState events */
+        events?: (vtorcdata.IPrimaryHealthEvent[]|null);
+
+        /** PrimaryHealthState unhealthy */
+        unhealthy?: (boolean|null);
+    }
+
+    /** Represents a PrimaryHealthState. */
+    class PrimaryHealthState implements IPrimaryHealthState {
+
+        /**
+         * Constructs a new PrimaryHealthState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IPrimaryHealthState);
+
+        /** PrimaryHealthState events. */
+        public events: vtorcdata.IPrimaryHealthEvent[];
+
+        /** PrimaryHealthState unhealthy. */
+        public unhealthy: boolean;
+
+        /**
+         * Creates a new PrimaryHealthState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrimaryHealthState instance
+         */
+        public static create(properties?: vtorcdata.IPrimaryHealthState): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Encodes the specified PrimaryHealthState message. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @param message PrimaryHealthState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IPrimaryHealthState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrimaryHealthState message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @param message PrimaryHealthState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IPrimaryHealthState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Verifies a PrimaryHealthState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrimaryHealthState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrimaryHealthState
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Creates a plain object from a PrimaryHealthState message. Also converts values to other types if specified.
+         * @param message PrimaryHealthState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.PrimaryHealthState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrimaryHealthState to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryHealthState
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace querythrottler. */
