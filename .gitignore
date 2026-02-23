@@ -77,3 +77,4 @@ report
 .mise.toml
 /errors/
 go/flags/endtoend/count_flags.sh
+.cache/

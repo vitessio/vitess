@@ -679,25 +679,29 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			switch node.Type {
-			case sqlparser.CheckKeyType, sqlparser.ForeignKeyType:
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint - these must be in constraintMap
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
-					return false, fmt.Errorf(
-						"Found DROP CONSTRAINT: %v, but could not find constraint name in map",
-						sqlparser.CanonicalString(node),
-					)
+					return false, fmt.Errorf("Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
 				node.Name = sqlparser.NewIdentifierCI(mappedName)
-		
-			case sqlparser.ConstraintType:
+			} else if node.Type == sqlparser.ConstraintType {
+				// DROP CONSTRAINT can refer to FK/CHECK (in constraintMap) or named UNIQUE/PRIMARY (in indexes, not in constraintMap)
+				// Special case: DROP CONSTRAINT PRIMARY should be converted to DROP PRIMARY KEY
 				if strings.EqualFold(node.Name.String(), "PRIMARY") {
 					node.Type = sqlparser.PrimaryKeyType
 					node.Name = sqlparser.NewIdentifierCI("")
 				} else if mappedName, ok := constraintMap[node.Name.String()]; ok {
+					// Only remap if found in constraintMap; otherwise leave unchanged (it's a named UNIQUE/PRIMARY constraint)
 					node.Name = sqlparser.NewIdentifierCI(mappedName)
 				}
 			}
+		case *sqlparser.AddConstraintDefinition:
+			oldName := node.ConstraintDefinition.Name.String()
+			newName := newConstraintName(originalTableName, baseUUID, node.ConstraintDefinition, hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
+			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
+			constraintMap[oldName] = newName
 		}
 		return true, nil
 	}
