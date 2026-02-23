@@ -401,21 +401,11 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	resultch := participant.result
 
 	defer func() {
-<<<<<<< HEAD
-		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
-		select {
-		case <-ctx.Done():
-		default:
-			close(participant.result)
-			close(gtidch)
-		}
-=======
-		log.Info(fmt.Sprintf("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err))
+		log.Info("streamOneShard End on " + participant.tablet.Alias.String())
 
 		close(resultch)
 		close(gtidch)
 
->>>>>>> c4af32913d (Address a few VDiff concerns (#19413))
 		td.wgShardStreamers.Done()
 	}()
 
