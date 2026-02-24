@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -196,6 +195,15 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		) AS count_valid_semi_sync_replicas,
 		IFNULL(
 			SUM(
+				replica_instance.last_checked <= replica_instance.last_seen
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
+				AND replica_instance.semi_sync_replica_enabled != 0
+			),
+			0
+		) AS count_valid_semi_sync_replicating_replicas,
+		IFNULL(
+			SUM(
 				replica_instance.log_bin
 				AND replica_instance.log_replica_updates
 			),
@@ -348,6 +356,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicating_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
@@ -402,8 +411,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		ca := clusters[keyspaceShard]
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
+<<<<<<< HEAD
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
+=======
+		if ca.hasShardWideAction {
+			// We can only take one shard-wide action at a time.
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 			return nil
 		}
 		if ca.durability == nil {
@@ -411,6 +425,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
+<<<<<<< HEAD
 		if a.IsClusterPrimary && isInvalid {
 			a.Analysis = InvalidPrimary
 			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
@@ -547,6 +562,32 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
+=======
+		var matchedProblems []*DetectionAnalysisProblem
+		for _, problem := range detectionAnalysisProblems {
+			// When isInvalid is true, instance data is unreliable (never been reached).
+			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
+			// handles upgrading InvalidPrimary to DeadPrimary if needed.
+			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
+				continue
+			}
+			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
+				matchedProblems = append(matchedProblems, problem)
+			}
+		}
+		if len(matchedProblems) > 0 {
+			sortDetectionAnalysisMatchedProblems(matchedProblems)
+			for _, problem := range matchedProblems {
+				a.AnalysisMatchedProblems = append(a.AnalysisMatchedProblems, problem.Meta)
+			}
+			// We return a single problem per tablet. Any remaining problems will be discovered/recovered
+			// by VTOrc(s) on future polls. Often many problems are resolved by a single recovery of the
+			// first problem. The first element of matchedProblems is the highest-priority problem.
+			chosenProblem := matchedProblems[0]
+			a.Analysis = chosenProblem.Meta.Analysis
+			a.Description = chosenProblem.Meta.Description
+			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
 		//			a.Analysis = PrimaryWithoutReplicas

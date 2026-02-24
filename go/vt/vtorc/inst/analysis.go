@@ -21,6 +21,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -114,11 +115,13 @@ type ReplicationAnalysis struct {
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	ReplicationStopped                        bool
 	ErrantGTID                                string
 	ReplicaNetTimeout                         int32
 	HeartbeatInterval                         float64
 	Analysis                                  AnalysisCode
+	AnalysisMatchedProblems                   []*DetectionAnalysisProblemMeta
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
@@ -147,7 +150,21 @@ type ReplicationAnalysis struct {
 	IsDiskStalled                             bool
 }
 
+<<<<<<< HEAD
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+=======
+// hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
+}
+
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	i := struct {
 		ReplicationAnalysis
 	}{}
