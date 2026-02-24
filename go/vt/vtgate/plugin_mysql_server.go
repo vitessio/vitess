@@ -616,16 +616,16 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 			// a clean error packet since the client is expecting more data.
 			// Just close the connection.
 			c.MarkForClose()
-			log.Errorf("ComBinlogDump: error mid-packet, closing connection: %v", err)
+			log.Error(fmt.Sprintf("ComBinlogDump: error mid-packet, closing connection: %v", err))
 			return nil
 		}
 
 		// At a message boundary - we can send a proper error packet.
 		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
-			log.Errorf("ComBinlogDump: failed to write error packet: %v", writeErr)
+			log.Error(fmt.Sprintf("ComBinlogDump: failed to write error packet: %v", writeErr))
 		}
 		c.MarkForClose()
-		log.Errorf("ComBinlogDump: %v", err)
+		log.Error(fmt.Sprintf("ComBinlogDump: %v", err))
 		return nil
 	}
 
@@ -775,16 +775,16 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 			// a clean error packet since the client is expecting more data.
 			// Just close the connection.
 			c.MarkForClose()
-			log.Errorf("ComBinlogDumpGTID: error mid-packet, closing connection: %v", err)
+			log.Error(fmt.Sprintf("ComBinlogDumpGTID: error mid-packet, closing connection: %v", err))
 			return nil
 		}
 
 		// At a message boundary - we can send a proper error packet.
 		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
-			log.Errorf("ComBinlogDumpGTID: failed to write error packet: %v", writeErr)
+			log.Error(fmt.Sprintf("ComBinlogDumpGTID: failed to write error packet: %v", writeErr))
 		}
 		c.MarkForClose()
-		log.Errorf("ComBinlogDumpGTID: %v", err)
+		log.Error(fmt.Sprintf("ComBinlogDumpGTID: %v", err))
 		return nil
 	}
 
