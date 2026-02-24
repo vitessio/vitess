@@ -423,15 +423,14 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	tabletAliasString := topoproto.TabletAliasString(participant.tablet.Alias)
 	log.Info(fmt.Sprintf("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, tabletAliasString, query))
 	td.wgShardStreamers.Add(1)
+	resultch := participant.result
 
 	defer func() {
 		log.Info(fmt.Sprintf("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err))
-		select {
-		case <-ctx.Done():
-		default:
-			close(participant.result)
-			close(gtidch)
-		}
+
+		close(resultch)
+		close(gtidch)
+
 		td.wgShardStreamers.Done()
 	}()
 
@@ -484,7 +483,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 				result.Fields = nil
 			}
 			select {
-			case participant.result <- result:
+			case resultch <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:
@@ -558,8 +557,13 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	}
 	dr.TableName = td.table.Name
 
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
+	// Scope executor goroutines to this single diff attempt, rather
+	// than surviving until the controller context is canceled.
+	execCtx, cancelExec := context.WithCancel(ctx)
+	defer cancelExec()
+
+	sourceExecutor := newPrimitiveExecutor(execCtx, td.sourcePrimitive, "source")
+	targetExecutor := newPrimitiveExecutor(execCtx, td.targetPrimitive, "target")
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	advanceSource := true
 	advanceTarget := true
