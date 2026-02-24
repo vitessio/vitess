@@ -43,7 +43,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
-FROM node:25-bookworm-slim@sha256:32f45869cf02c26971de72c383d5f99cab002905ed8b515b56df925007941782 AS vtadmin-builder
+FROM node:25-bookworm-slim@sha256:01d959f21ccdf9193bd4f5100dbef61927ff824cbaff3b6c55dfc62713319509 AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 
@@ -58,7 +58,7 @@ RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
     npm run build
 
 # Start over and build the final image.
-FROM debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
+FROM debian:bookworm-slim@sha256:74d56e3931e0d5a1dd51f8c8a2466d21de84a271cd3b5a733b803aa91abf4421
 
 # Install locale required for mysqlsh
 RUN apt-get update && apt-get install -y locales \
