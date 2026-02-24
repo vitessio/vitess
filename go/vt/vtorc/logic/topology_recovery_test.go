@@ -308,6 +308,406 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 
 			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, "")
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
+<<<<<<< HEAD
+=======
+			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
+		})
+	}
+}
+
+func TestRecheckPrimaryHealth(t *testing.T) {
+	tests := []struct {
+		name    string
+		info    []*test.InfoForRecoveryAnalysis
+		wantErr string
+	}{
+		{
+			name: "analysis change",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+			}},
+			wantErr: "aborting ReplicationStopped, primary mitigation is required",
+		},
+		{
+			name: "analysis did not change",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: policy.DurabilityNone,
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				},
+				LastCheckValid:     1,
+				ReadOnly:           1,
+				ReplicationStopped: 1,
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldDB := db.Db
+			defer func() {
+				db.Db = oldDB
+			}()
+
+			var rowMaps []sqlutils.RowMap
+			for _, analysis := range tt.info {
+				analysis.SetValuesFromTabletInfo()
+				rowMaps = append(rowMaps, analysis.ConvertToRowMap())
+			}
+			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+
+			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				Analysis:              inst.ReplicationStopped,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}, []string{"ks", "0", ""}, func(s string, b bool) {
+				// the implementation for DiscoverInstance is not required because we are mocking the db response.
+			})
+
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestRecoverIncapacitatedPrimary(t *testing.T) {
+	tests := []struct {
+		name        string
+		analysis    *inst.DetectionAnalysis
+		probeOK     bool
+		wantAttempt bool
+		setupDB     bool
+		rows        int
+		prsFails    bool
+	}{
+		{
+			name: "reachable healthz (prs failure)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			probeOK:     true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable healthz (ers fallback)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        false,
+			},
+			probeOK:     true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable healthz (prs ok)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			probeOK:     true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+		},
+		{
+			name: "unreachable healthz",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+			},
+			probeOK:     false,
+			wantAttempt: false,
+			setupDB:     true,
+			rows:        3,
+		},
+	}
+
+	for idx, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prevERS := config.ERSEnabled()
+			config.SetERSEnabled(true)
+			defer config.SetERSEnabled(prevERS)
+
+			logger := log.NewPrefixedLogger("test")
+
+			keyspace := fmt.Sprintf("ks_incap_%d", idx)
+			shard := strconv.Itoa(idx)
+			analysis := *tt.analysis
+			analysis.AnalyzedKeyspace = keyspace
+			analysis.AnalyzedShard = shard
+
+			oldProbe := healthzProbe
+			healthzProbe = func(_ *topodatapb.Tablet) (bool, error) {
+				return tt.probeOK, nil
+			}
+			defer func() {
+				healthzProbe = oldProbe
+			}()
+
+			oldTs := ts
+			oldTmc := tmc
+			defer func() {
+				ts = oldTs
+				tmc = oldTmc
+			}()
+
+			type stderrCapture struct {
+				mu  sync.Mutex
+				buf bytes.Buffer
+			}
+			capture := &stderrCapture{}
+			captureWrite := func(p []byte) (int, error) {
+				capture.mu.Lock()
+				defer capture.mu.Unlock()
+				return capture.buf.Write(p)
+			}
+
+			var restoreStderr func()
+			if tt.prsFails {
+				oldStderr := os.Stderr
+				r, w, err := os.Pipe()
+				require.NoError(t, err)
+				oldFD, err := syscall.Dup(int(os.Stderr.Fd()))
+				require.NoError(t, err)
+				require.NoError(t, syscall.Dup3(int(w.Fd()), int(os.Stderr.Fd()), 0))
+				os.Stderr = w
+				done := make(chan struct{})
+				go func() {
+					_, _ = io.Copy(writerFunc(captureWrite), r)
+					_ = r.Close()
+					close(done)
+				}()
+				restoreStderr = func() {
+					log.Flush()
+					_ = w.Close()
+					os.Stderr = oldStderr
+					_ = syscall.Dup3(oldFD, int(os.Stderr.Fd()), 0)
+					_ = syscall.Close(oldFD)
+					<-done
+				}
+			}
+
+			if tt.setupDB {
+				orcDb, fromCache, err := db.OpenVTOrcWithCache()
+				require.NoError(t, err)
+				defer func() {
+					if !fromCache {
+						require.NoError(t, orcDb.Close())
+					}
+				}()
+				_, err = orcDb.Exec("delete from topology_recovery_steps")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from topology_recovery")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from recovery_detection")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from vitess_tablet")
+				require.NoError(t, err)
+
+				primaryTablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt": 15000,
+					},
+				}
+				require.NoError(t, inst.SaveTablet(primaryTablet))
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt": 15001,
+					},
+				}))
+
+				ctx := t.Context()
+				ts = memorytopo.NewServer(ctx, "zon1")
+				err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone})
+				require.NoError(t, err)
+				err = ts.CreateShard(ctx, keyspace, shard)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, primaryTablet)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PortMap: map[string]int32{
+						"vt": 15001,
+					},
+				})
+				require.NoError(t, err)
+
+				tmc = &testutil.TabletManagerClient{}
+				fullStatusPosition := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).FullStatusResult = &replicationdatapb.FullStatus{
+					PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: fullStatusPosition},
+					ReplicationStatus: &replicationdatapb.Status{
+						Position: fullStatusPosition,
+					},
+				}
+				pos := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).StopReplicationAndGetStatusResults = map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zon1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+					"zon1-0000000101": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).WaitForPositionResults = map[string]map[string]error{
+					"zon1-0000000100": {pos: nil},
+					"zon1-0000000101": {pos: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).PrimaryPositionResults = map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zon1-0000000100": {Position: "pos", Error: nil},
+				}
+				if tt.prsFails {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: nil, Error: errors.New("prs failed")},
+					}
+				} else {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "pos"}, Error: nil},
+					}
+				}
+				tmc.(*testutil.TabletManagerClient).InitPrimaryResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).SetReplicationSourceResults = map[string]error{
+					"zon1-0000000100": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).PopulateReparentJournalResults = map[string]error{
+					"zon1-0000000100": nil,
+					"zon1-0000000101": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).ReadReparentJournalInfoResults = map[string]int32{
+					"zon1-0000000100": 1,
+					"zon1-0000000101": 1,
+				}
+				tmc.(*testutil.TabletManagerClient).PromoteReplicaResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+			}
+
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), &analysis, logger)
+			if restoreStderr != nil {
+				log.Flush()
+				require.Eventually(t, func() bool {
+					err := db.QueryVTOrc("select message from topology_recovery_steps where message like 'ERS - %'", nil, func(_ sqlutils.RowMap) error {
+						return nil
+					})
+					return err == nil
+				}, 2*time.Second, 10*time.Millisecond)
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantAttempt, attempted)
+			if tt.wantAttempt {
+				require.NotNil(t, topologyRecovery)
+			} else {
+				require.Nil(t, topologyRecovery)
+			}
+			if restoreStderr != nil {
+				restoreStderr()
+			}
+>>>>>>> 5ed73ddd88 (vtorc: use syscall.Dup3 instead of Dup2 in test (#19455))
 		})
 	}
 }
