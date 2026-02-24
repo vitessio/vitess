@@ -36,17 +36,30 @@ const (
 
 // DetectionAnalysisProblemMeta contains basic metadata describing a problem.
 type DetectionAnalysisProblemMeta struct {
-	Analysis    AnalysisCode
+	// Analysis is the AnalysisCode representing the type of problem.
+	Analysis AnalysisCode
+
+	// Description is a human-readable description of the problem.
 	Description string
-	Priority    int
+
+	// Priority is an integer influencing the priority sorting of problems. A lower
+	// number is considered to be higher in the sort, with 0 being the top-priority.
+	Priority int
 }
 
 // DetectionAnalysisProblem describes how to match, sort and track a problem.
 type DetectionAnalysisProblem struct {
-	Meta           *DetectionAnalysisProblemMeta
-	AfterAnalyses  []AnalysisCode
+	// Meta contains the metadata describing a problem.
+	Meta *DetectionAnalysisProblemMeta
+
+	// AfterAnalyses defines problems that must be recovered before this problem.
+	AfterAnalyses []AnalysisCode
+
+	// BeforeAnalyses defines problems that must be recovered after this problem.
 	BeforeAnalyses []AnalysisCode
-	MatchFunc      func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool
+
+	// MatchFunc is a function that returns true when the provided conditions match this problem.
+	MatchFunc func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool
 }
 
 // RequiresOrderedExecution returns true if the problem must be executed
