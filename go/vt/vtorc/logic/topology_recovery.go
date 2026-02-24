@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"net"
@@ -38,7 +39,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -293,7 +296,13 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", RecoverPrimaryHasPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
@@ -330,7 +339,13 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", recoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
@@ -487,7 +502,13 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", "restartDirectReplicas"),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	// Get durability policy for the keyspace to determine semi-sync settings
@@ -1154,7 +1175,13 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", ElectNewPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1209,7 +1236,13 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", FixPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1243,7 +1276,13 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", FixReplicaRecoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1278,46 +1317,68 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 // been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
 // to the current primary.
 func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	alias := analysisEntry.AnalyzedInstanceAlias
+
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
+		logger.Warn("skipping recovery, active or recent recovery exists",
+			slog.String("tablet", alias),
+			slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+		)
+
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
 
-	logger.Info(fmt.Sprintf("Analysis: %v, will demote stale topo primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
+	logger.Info("demoting stale topo primary",
+		slog.String("analysis", string(analysisEntry.Analysis)),
+		slog.String("tablet", alias),
+	)
+
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
-	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	analyzedTablet, err := inst.ReadTablet(alias)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to read instance %q, aborting recovery", analysisEntry.AnalyzedInstanceAlias))
+		logger.Error("failed to read tablet, aborting recovery", slog.String("tablet", alias))
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
 	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
-		logger.Info(fmt.Sprintf("Could not compute primary for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard))
+		logger.Error("failed to find primary for shard",
+			slog.String("keyspace", analyzedTablet.Keyspace),
+			slog.String("shard", analyzedTablet.Shard),
+		)
 		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
 	}
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Info(fmt.Sprintf("Could not read the durability policy for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard))
+		logger.Error("failed to read durability policy",
+			slog.String("keyspace", analyzedTablet.Keyspace),
+			slog.String("shard", analyzedTablet.Shard),
+		)
 		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
 	}
 
 	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = tmc.DemotePrimary(ctx, analyzedTablet, true)
+	_, err = forceDemotePrimary(ctx, analyzedTablet)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
 	}
-	logger.Info("Successfully demoted the stale primary " + analysisEntry.AnalyzedInstanceAlias)
+	logger.Info("successfully demoted stale primary", slog.String("tablet", alias))
 
 	// Set tablet to REPLICA in topology.
 	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
@@ -1335,6 +1396,14 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	return true, topologyRecovery, err
 }
 
+// forceDemotePrimary calls the DemotePrimary RPC for the given tablet.
+func forceDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.DemotePrimary(ctx, tablet, true)
+}
+
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
 func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
@@ -1348,7 +1417,13 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", RecoverErrantGTIDDetectedName),
+				slog.Any("error", err),
+			)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)

@@ -272,9 +272,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// But at this time the tests will fail as this event is unexpected. This is a TODO for the earliest
 			// opportunity to work on this.
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_JOURNAL:
+			binlogdatapb.VEventType_JOURNAL, binlogdatapb.VEventType_ROWS_QUERY:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
+			// A ROWS_QUERY event always precedes the ROW events it describes.
 			// So, we don't have to send it right away.
 			if shouldBuffer(vevent) {
 				bufferedEvents = append(bufferedEvents, vevent)
@@ -689,6 +690,18 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		default:
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
+	case ev.IsRowsQuery():
+		if !shouldSend(binlogdatapb.VEventType_ROWS_QUERY) {
+			return nil, nil
+		}
+		query, err := ev.RowsQuery(vs.format)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "failed to parse ROWS_QUERY_LOG_EVENT")
+		}
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type:      binlogdatapb.VEventType_ROWS_QUERY,
+			Statement: query,
+		})
 	case ev.IsTableMap():
 		if !shouldSend(binlogdatapb.VEventType_ROW) && !shouldSend(binlogdatapb.VEventType_FIELD) {
 			return nil, nil
