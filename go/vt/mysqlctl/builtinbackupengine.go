@@ -30,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -180,7 +181,9 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 }
 
-// fullPath returns the full path of the entry, based on its type
+// fullPath returns the full path of the entry, based on its type.
+// It validates that the resolved path does not escape the base directory
+// via path traversal (e.g. "../../" sequences in fe.Name).
 func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
 	var root string
@@ -197,7 +200,14 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
-	return path.Join(fe.ParentPath, root, fe.Name), nil
+	baseDir := filepath.Clean(path.Join(fe.ParentPath, root))
+	resolved := filepath.Clean(path.Join(baseDir, fe.Name))
+
+	if !strings.HasPrefix(resolved, baseDir+string(filepath.Separator)) && resolved != baseDir {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "path traversal not allowed: name %q escapes base directory %q", fe.Name, baseDir)
+	}
+
+	return resolved, nil
 }
 
 // open attempts to open the file
