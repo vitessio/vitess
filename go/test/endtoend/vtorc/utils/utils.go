@@ -1024,7 +1024,8 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]any)
+		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
 		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
@@ -1122,7 +1123,8 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	timeout := 15 * time.Second
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]any)
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
 		actual, ok := problems[key]
 		actual = GetIntFromValue(actual)
 		assert.True(c, ok,
