@@ -50,6 +50,15 @@
   "FullQuery": "show table status"
 }
 
+# show other (ShowOther uses ddl_skip_to_end so FullQuery is lossy, but
+# PlanOtherRead ensures the original query string is used at execution time)
+"show binary log status"
+{
+  "PlanID": "OtherRead",
+  "TableName": "",
+  "FullQuery": "show binary log"
+}
+
 # other
 "desc foo"
 {

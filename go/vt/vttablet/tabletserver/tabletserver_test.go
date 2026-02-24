@@ -961,6 +961,40 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 }
 
+func TestTabletServerStreamExecuteShowOther(t *testing.T) {
+	// ShowOther statements (e.g. SHOW BINARY LOG STATUS) use ddl_skip_to_end
+	// in the parser grammar, which discards trailing tokens from the AST.
+	// This test verifies that the streaming path uses the original query
+	// string rather than the lossy AST reconstruction.
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "show binary log status"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "File", Type: sqltypes.VarChar},
+			{Name: "Position", Type: sqltypes.Uint64},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("binlog.000001"), sqltypes.NewUint64(12345)},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	var gotRows int
+	callback := func(qr *sqltypes.Result) error {
+		gotRows += len(qr.Rows)
+		return nil
+	}
+	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback)
+	require.NoError(t, err)
+	assert.Equal(t, 1, gotRows)
+}
+
 func TestTabletServerBeginStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
