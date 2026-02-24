@@ -4644,6 +4644,10 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
   }
+| SHOW BINARY ci_identifier STATUS /* SHOW BINARY LOG STATUS */
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String() + " " + string($4)}}
+  }
 | SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
   {
     $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
