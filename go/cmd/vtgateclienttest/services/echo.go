@@ -74,7 +74,7 @@ func printSortedMap(val reflect.Value) []byte {
 func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	qr := &sqltypes.Result{}
 
-	row := make([]sqltypes.Value, 0, len(vals)+2)
+	var row []sqltypes.Value
 
 	// The first two returned fields are always a field with a MySQL NULL value,
 	// and another field with a zero-length string.
@@ -145,7 +145,7 @@ func (c *echoClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateserv
 
 func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sqlList) > 0 && strings.HasPrefix(sqlList[0], EchoPrefix) {
-		var queryResponse []sqltypes.QueryResponse
+		queryResponse := make([]sqltypes.QueryResponse, 0, len(sqlList))
 		if bindVariablesList == nil {
 			bindVariablesList = make([]map[string]*querypb.BindVariable, len(sqlList))
 		}

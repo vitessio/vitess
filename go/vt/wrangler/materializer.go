@@ -670,7 +670,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		// Unreachable
 		return nil, nil, nil, fmt.Errorf("schema looks incorrect: %s, expecting at least four lines", tableSchema.TableDefinitions[0].Schema)
 	}
-	modified := make([]string, 0)
+	var modified []string
 	modified = append(modified, strings.Replace(lines[0], sourceTableName, targetTableName, 1))
 	for i := range sourceVindexColumns {
 		line, err := generateColDef(lines, sourceVindexColumns[i], vindexFromCols[i])

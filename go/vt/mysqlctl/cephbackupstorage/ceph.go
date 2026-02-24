@@ -160,7 +160,7 @@ func (bs *CephBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 	doneCh := make(chan struct{})
 	searchPrefix := objName(dir, "")
 	objects := c.ListObjects(bucket, searchPrefix, false, doneCh)
-	subdirs := make([]string, 0)
+	var subdirs []string
 
 	for object := range objects {
 		if object.Err != nil {

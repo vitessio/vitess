@@ -177,7 +177,7 @@ func (d *Distinct) description() PrimitiveDescription {
 	for _, checkCol := range d.CheckCols {
 		colls = append(colls, checkCol.String())
 	}
-	other := make(map[string]any, 0)
+	other := map[string]any{}
 	if colls != nil {
 		other["Collations"] = colls
 	}

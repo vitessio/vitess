@@ -108,7 +108,7 @@ func ReplaceFields(result *Result, remap map[string]string) *Result {
 
 	rows := make([]Row, 0, len(result.Rows))
 	for _, origRow := range result.Rows {
-		var row []Value
+		row := make([]Value, 0, len(rowIdx))
 		for _, name := range rowIdx {
 			row = append(row, origRow[orig[name]])
 		}

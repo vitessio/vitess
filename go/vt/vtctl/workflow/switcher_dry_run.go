@@ -87,8 +87,8 @@ func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topod
 }
 
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	sourceShards := make([]string, 0)
-	targetShards := make([]string, 0)
+	sourceShards := make([]string, 0, len(dr.ts.Sources()))
+	targetShards := make([]string, 0, len(dr.ts.Targets()))
 	for _, source := range dr.ts.Sources() {
 		sourceShards = append(sourceShards, source.GetShard().ShardName())
 	}
@@ -176,8 +176,8 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
-	logs := make([]string, 0)
 	targets := maps.Values(ts.Targets())
+	logs := make([]string, 0, len(targets))
 	// Sort the slice for deterministic output.
 	sort.Slice(targets, func(i, j int) bool {
 		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid

@@ -166,7 +166,7 @@ func makeversions(output string) {
 		return sorted[i].id < sorted[j].id
 	})
 	for _, vi := range sorted {
-		var reverse []alias
+		reverse := make([]alias, 0, len(vi.alias))
 		for a, m := range vi.alias {
 			reverse = append(reverse, alias{mask: m, name: a})
 		}

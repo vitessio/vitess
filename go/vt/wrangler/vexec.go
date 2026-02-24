@@ -100,7 +100,7 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 		Name: "RowsAffected",
 		Type: sqltypes.Uint64,
 	}}
-	row2 := make([]sqltypes.Value, 0, 2)
+	var row2 []sqltypes.Value
 	for tablet, result := range results {
 		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))

@@ -57,7 +57,7 @@ var (
 )
 
 func commandUpdate(cmd *cobra.Command, args []string) error {
-	tableSettings := []*vtctldatapb.TableMaterializeSettings{}
+	tableSettings := make([]*vtctldatapb.TableMaterializeSettings, 0, len(updateOptions.AddReferenceTables))
 	for _, table := range updateOptions.AddReferenceTables {
 		tableSettings = append(tableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable: table,

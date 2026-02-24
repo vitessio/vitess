@@ -1414,7 +1414,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	// And the suffix is any remaining definitions
 	addedPartitions2 := definitions2[len(definitions1):]
 
-	partitionSpecs := make([]*sqlparser.PartitionSpec, 0, 2)
+	var partitionSpecs []*sqlparser.PartitionSpec
 	// Dropped partitions:
 	if len(droppedPartitions1) > 0 {
 		// A single DROP PARTITION clause can specify multiple partition names

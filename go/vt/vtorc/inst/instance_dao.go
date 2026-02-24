@@ -925,7 +925,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		values = append(values, "DATETIME('now')")
 	}
 
-	args := make([]any, 0)
+	var args []any
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()

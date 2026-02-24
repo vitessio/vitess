@@ -1486,7 +1486,7 @@ func (node *DropProcedure) GetTableSpec() *TableSpec {
 
 // GetFromTables implements the DDLStatement interface
 func (node *RenameTable) GetFromTables() TableNames {
-	var fromTables TableNames
+	fromTables := make(TableNames, 0, len(node.TablePairs))
 	for _, pair := range node.TablePairs {
 		fromTables = append(fromTables, pair.FromTable)
 	}
@@ -1776,7 +1776,7 @@ func (node *DropProcedure) GetParsedComments() *ParsedComments {
 
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
-	var toTables TableNames
+	toTables := make(TableNames, 0, len(node.TablePairs))
 	for _, pair := range node.TablePairs {
 		toTables = append(toTables, pair.ToTable)
 	}

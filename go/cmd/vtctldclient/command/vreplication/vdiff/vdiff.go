@@ -492,7 +492,7 @@ func getStructFieldNames(s any) []string {
 }
 
 func buildListings(listings []*listing) string {
-	lines := make([][]string, 0, len(listings)+1)
+	var lines [][]string
 	var result string
 
 	if len(listings) == 0 {

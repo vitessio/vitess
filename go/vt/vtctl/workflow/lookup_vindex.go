@@ -84,7 +84,7 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 		materializeQuery string
 
 		targetKeyspace string
-		tableSettings  = make([]*vtctldatapb.TableMaterializeSettings, 0)
+		tableSettings  []*vtctldatapb.TableMaterializeSettings
 	)
 
 	if specs == nil || len(specs.Vindexes) == 0 {
@@ -433,7 +433,7 @@ func (lv *lookupVindex) generateCreateDDLStatement(tableSchema *tabletmanagerdat
 			tableSchema.TableDefinitions[0].Schema)
 	}
 
-	modified := make([]string, 0, len(sourceVindexColumns)+4)
+	var modified []string
 	modified = append(modified, strings.Replace(lines[0], vInfo.sourceTableName, vInfo.targetTableName, 1))
 	for i := range sourceVindexColumns {
 		line, err := generateColDef(lines, sourceVindexColumns[i], vInfo.fromCols[i])
