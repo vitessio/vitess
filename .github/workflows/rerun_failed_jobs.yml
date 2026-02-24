@@ -17,6 +17,9 @@ concurrency:
   group: rerun-failed-jobs
   cancel-in-progress: false
 
+env:
+  BASE_BRANCHES: "main, release-*"
+
 jobs:
   rerun:
     runs-on: ubuntu-latest
@@ -45,6 +48,17 @@ jobs:
             const MAX_PR_AGE_DAYS = 5;
             const MAX_ALLOWED_FAILURES = 10;
             const MAX_PRS = 20;
+
+            // Parse base branch patterns from env. Supports exact names
+            // and trailing wildcards (e.g. "release-*").
+            const baseBranchPatterns = (process.env.BASE_BRANCHES || 'main')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+              .map(p => p.endsWith('*')
+                ? new RegExp(`^${p.slice(0, -1)}`)
+                : new RegExp(`^${p}$`)
+              );
 
             const ignoreWorkflows = (process.env.IGNORE_WORKFLOWS || '')
               .split(',')
@@ -94,6 +108,7 @@ jobs:
             rule();
             console.log('');
             info(`Repository:           ${BOLD}${owner}/${repo}${RESET}`);
+            info(`Base branches:        ${BOLD}${process.env.BASE_BRANCHES}${RESET}`);
             info(`Max retries:          ${BOLD}${MAX_RETRIES}${RESET}`);
             info(`Max PR age:           ${BOLD}${MAX_PR_AGE_DAYS} days${RESET}`);
             info(`Max allowed failures: ${BOLD}${MAX_ALLOWED_FAILURES}${RESET}`);
@@ -116,12 +131,16 @@ jobs:
               per_page: 100,
             });
 
+            debug(`${allPRs.length} open PR(s) fetched`);
+
             const prs = allPRs
+              .filter(pr => baseBranchPatterns.some(p => p.test(pr.base.ref)))
               .filter(pr => new Date(pr.updated_at) >= cutoff)
               .slice(0, MAX_PRS);
 
             info(`Found ${BOLD}${prs.length}${RESET} eligible open PR(s)`);
             debug(`PR numbers: ${prs.map(pr => pr.number).join(', ')}`);
+            debug(`Skipped ${allPRs.length - prs.length} PR(s) (wrong base branch or too old)`);
             console.log('');
 
             // -----------------------------------------------------------
