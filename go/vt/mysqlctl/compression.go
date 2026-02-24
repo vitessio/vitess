@@ -94,7 +94,7 @@ func getExtensionFromEngine(engine string) (string, error) {
 
 // resolveExternalDecompressor returns the external decompressor command to use
 // at restore time. The CLI flag (--external-decompressor) takes precedence. The
-// backup manifest value is only used when --external-decompressor-allow-manifest
+// backup manifest value is only used when --external-decompressor-use-manifest
 // is explicitly set to true.
 func resolveExternalDecompressor(manifestDecompressor string) string {
 	if ExternalDecompressorCmd != "" {
