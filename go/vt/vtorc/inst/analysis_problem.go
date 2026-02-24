@@ -149,7 +149,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0
 		},
 	},
-
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    DeadPrimaryAndSomeReplicas,
@@ -161,6 +160,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
+	// IncapacitatedPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    IncapacitatedPrimary,
