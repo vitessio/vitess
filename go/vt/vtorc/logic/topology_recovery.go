@@ -1120,11 +1120,15 @@ func CheckAndRecover() {
 	rand.Shuffle(len(shardKeys), func(i, j int) {
 		shardKeys[i], shardKeys[j] = shardKeys[j], shardKeys[i]
 	})
+	var wg sync.WaitGroup
 	for _, key := range shardKeys {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			recoverShardAnalyses(analysisByShard[key], executeCheckAndRecoverFunction)
 		}()
 	}
+	wg.Wait()
 }
 
 func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.DetectionAnalysis, promotedReplica *inst.Instance) {
