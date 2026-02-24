@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1109,14 +1111,18 @@ func CheckAndRecover() {
 		}
 	}
 
-	// Iterate over analysisByShard map so each shard is processed in random order. Randomness
-	// helps reduce global shard lock contention when many VTOrcs watch the same shard(s).
-	// Within each shard, analyses are sorted by priority. Problems that require ordered
+	// Shuffle shard keys to ensure random processing order. Randomness helps reduce
+	// global shard lock contention when many VTOrcs watch the same shard(s). Within
+	// each shard, analyses are sorted by priority. Problems that require ordered
 	// execution (shard-wide actions or those with Before/After dependencies) run
 	// sequentially first, then independent problems fan out concurrently.
-	for _, shardAnalyses := range analysisByShard {
+	shardKeys := slices.Collect(maps.Keys(analysisByShard))
+	rand.Shuffle(len(shardKeys), func(i, j int) {
+		shardKeys[i], shardKeys[j] = shardKeys[j], shardKeys[i]
+	})
+	for _, key := range shardKeys {
 		go func() {
-			recoverShardAnalyses(shardAnalyses, executeCheckAndRecoverFunction)
+			recoverShardAnalyses(analysisByShard[key], executeCheckAndRecoverFunction)
 		}()
 	}
 }
