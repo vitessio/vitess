@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -198,6 +197,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		) AS count_valid_semi_sync_replicas,
 		IFNULL(
 			SUM(
+				replica_instance.last_checked <= replica_instance.last_seen
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
+				AND replica_instance.semi_sync_replica_enabled != 0
+			),
+			0
+		) AS count_valid_semi_sync_replicating_replicas,
+		IFNULL(
+			SUM(
 				replica_instance.log_bin
 				AND replica_instance.log_replica_updates
 			),
@@ -351,6 +359,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicating_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
@@ -406,7 +415,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
 		if ca.hasShardWideAction {
-			// We can only take one shard level action at a time.
+			// We can only take one shard-wide action at a time.
 			return nil
 		}
 		if ca.durability == nil {
@@ -414,157 +423,30 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
-		switch {
-		case a.IsClusterPrimary && isInvalid:
-			a.Analysis = InvalidPrimary
-			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
-		case isInvalid:
-			a.Analysis = InvalidReplica
-			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
-		case a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled:
-			a.Analysis = PrimaryDiskStalled
-			a.Description = "Primary has a stalled disk"
-			ca.hasShardWideAction = true
-		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0:
-			a.Analysis = DeadPrimaryWithoutReplicas
-			a.Description = "Primary cannot be reached by vtorc and has no replica"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = DeadPrimary
-			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = DeadPrimaryAndReplicas
-			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = DeadPrimaryAndSomeReplicas
-			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy:
-			a.Analysis = IncapacitatedPrimary
-			a.Description = "Primary is consistently timing out on health checks and may be incapacitated"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && !a.IsPrimary:
-			a.Analysis = PrimaryHasPrimary
-			a.Description = "Primary is replicating from somewhere else"
-			ca.hasShardWideAction = true
-			//
-		case a.IsClusterPrimary && a.IsReadOnly:
-			a.Analysis = PrimaryIsReadOnly
-			a.Description = "Primary is read-only"
-			//
-		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled:
-			a.Analysis = PrimarySemiSyncMustBeSet
-			a.Description = "Primary semi-sync must be set"
-			//
-		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled:
-			a.Analysis = PrimarySemiSyncMustNotBeSet
-			a.Description = "Primary semi-sync must not be set"
-			//
-		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
-			a.Analysis = PrimaryCurrentTypeMismatch
-			a.Description = "Primary tablet's current type is not PRIMARY"
-		case isStaleTopoPrimary(a, ca):
-			a.Analysis = StaleTopoPrimary
-			a.Description = "Primary tablet is stale, older than current primary"
-		case topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "":
-			a.Analysis = ErrantGTIDDetected
-			a.Description = "Tablet has errant GTIDs"
-		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero():
-			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
-			a.Analysis = ClusterHasNoPrimary
-			a.Description = "Cluster has no primary"
-			ca.hasShardWideAction = true
-		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero():
-			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
-			// the primary tablet was deleted.
-			a.Analysis = PrimaryTabletDeleted
-			a.Description = "Primary tablet has been deleted"
-			ca.hasShardWideAction = true
-		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
-			a.Analysis = NotConnectedToPrimary
-			a.Description = "Not connected to the primary"
-			//
-		case a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount:
-			// The primary is reporting that semi-sync monitor is blocked on writes.
-			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
-			// There is some network diruption in progress. We should run an ERS.
-			a.Analysis = PrimarySemiSyncBlocked
-			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
-			ca.hasShardWideAction = true
-		case topo.IsReplicaType(a.TabletType) && !a.IsReadOnly:
-			a.Analysis = ReplicaIsWritable
-			a.Description = "Replica is writable"
-			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout):
-			a.Analysis = ReplicaMisconfigured
-			a.Description = "Replica has been misconfigured"
-			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias:
-			a.Analysis = ConnectedToWrongPrimary
-			a.Description = "Connected to wrong primary"
-			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped:
-			a.Analysis = ReplicationStopped
-			a.Description = "Replication is stopped"
-			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled:
-			a.Analysis = ReplicaSemiSyncMustBeSet
-			a.Description = "Replica semi-sync must be set"
-			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled:
-			a.Analysis = ReplicaSemiSyncMustNotBeSet
-			a.Description = "Replica semi-sync must not be set"
-			//
-			// TODO(sougou): Events below here are either ignored or not possible.
-		case a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0:
-			a.Analysis = UnreachablePrimaryWithLaggingReplicas
-			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
-			//
-		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas:
-			// partial success is here to reduce noise
-			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but all of its replicas seem to be replicating; possibly a network/host issue"
-			//
-		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 && a.CountValidReplicatingReplicas < a.CountValidReplicas:
-			// partial success is here to reduce noise
-			a.Analysis = UnreachablePrimaryWithBrokenReplicas
-			a.Description = "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue"
-			//
-		case a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount:
-			if isStaleBinlogCoordinates {
-				a.Analysis = LockedSemiSyncPrimary
-				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
-			} else {
-				a.Analysis = LockedSemiSyncPrimaryHypothesis
-				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
+		var matchedProblems []*DetectionAnalysisProblem
+		for _, problem := range detectionAnalysisProblems {
+			// When isInvalid is true, instance data is unreliable (never been reached).
+			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
+			// handles upgrading InvalidPrimary to DeadPrimary if needed.
+			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
+				continue
 			}
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = PrimarySingleReplicaNotReplicating
-			a.Description = "Primary is reachable but its single replica is not replicating"
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0:
-			a.Analysis = PrimarySingleReplicaDead
-			a.Description = "Primary is reachable but its single replica is dead"
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = AllPrimaryReplicasNotReplicating
-			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
-			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-			// case a.IsPrimary && a.CountReplicas == 0:
-			//	a.Analysis = PrimaryWithoutReplicas
-			//	a.Description = "Primary has no replicas"
-			// }
+			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
+				matchedProblems = append(matchedProblems, problem)
+			}
+		}
+		if len(matchedProblems) > 0 {
+			sortDetectionAnalysisMatchedProblems(matchedProblems)
+			for _, problem := range matchedProblems {
+				a.AnalysisMatchedProblems = append(a.AnalysisMatchedProblems, problem.Meta)
+			}
+			// We return a single problem per tablet. Any remaining problems will be discovered/recovered
+			// by VTOrc(s) on future polls. Often many problems are resolved by a single recovery of the
+			// first problem. The first element of matchedProblems is the highest-priority problem.
+			chosenProblem := matchedProblems[0]
+			a.Analysis = chosenProblem.Meta.Analysis
+			a.Description = chosenProblem.Meta.Description
+			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
 		}
 
 		{
