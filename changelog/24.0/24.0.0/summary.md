@@ -8,6 +8,7 @@
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
         - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
+        - [MoveTables support for views](#movetables-views)
 - **[Minor Changes](#minor-changes)**
     - **[Logging](#minor-changes-logging)**
         - [Structured logging](#structured-logging)
@@ -88,6 +89,17 @@ USE commerce:-80@replica|zone1-0000000100;
 Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
 
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
+
+#### <a id="movetables-views"/>MoveTables support for views</a>
+
+MoveTables now supports copying views from the source keyspace to the target keyspace. The following new flags have been added to `MoveTables create`:
+
+- `--views`: Specify source views to copy.
+- `--all-views`: Copy all views from the source.
+- `--exclude-views`: Exclude specific source views from copying.
+- `--skip-view-validation`: Skip validating that views reference tables being moved.
+
+On creation, the specified views are created in the target keyspace and routing rules are set up, just as they are for tables. `SwitchTraffic` handles views the same way as tables. On `MoveTables complete`, views are dropped, renamed, or kept based on the `--keep-data` and `--rename-tables` flags.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
