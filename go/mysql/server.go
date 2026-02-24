@@ -462,14 +462,25 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
-	// Check if username contains a target override (format: user|target).
-	// This allows replication clients to specify the target tablet in the username.
-	// The target string format is "keyspace:shard@type|alias" (e.g., "commerce:-80@replica|zone1-100").
-	// Note: We use strings.Index to find only the FIRST "|" since the target string itself
-	// may contain "|" to separate tablet type from alias.
-	if idx := strings.Index(user, "|"); idx != -1 {
-		c.schemaName = user[idx+1:]
-		user = user[:idx]
+	// Parse username for optional target, alias, and workload.
+	// Format: user|target|alias|workload (e.g., "vt_repl|commerce:0@primary|zone1-100|olap").
+	var workload string
+	parts := strings.Split(user, "|")
+	switch len(parts) {
+	case 2:
+		user = parts[0]
+		c.schemaName = parts[1]
+	case 3:
+		user = parts[0]
+		c.schemaName = parts[1] + "|" + parts[2]
+	case 4:
+		user = parts[0]
+		c.schemaName = parts[1] + "|" + parts[2]
+		if !strings.EqualFold(parts[3], "olap") {
+			c.writeErrorPacketFromError(fmt.Errorf("invalid workload in username: %q (only 'olap' is supported)", parts[3]))
+			return
+		}
+		workload = "olap"
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
@@ -544,6 +555,17 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// a target string with special characters (e.g., "keyspace:shard@type|alias").
 	if c.schemaName != "" {
 		err = l.handler.ComQuery(c, "use `"+c.schemaName+"`", func(result *sqltypes.Result) error {
+			return nil
+		})
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+			return
+		}
+	}
+
+	// Set initial workload if specified in the username (e.g., "user|target|alias|olap").
+	if workload != "" {
+		err = l.handler.ComQuery(c, "set workload = '"+workload+"'", func(result *sqltypes.Result) error {
 			return nil
 		})
 		if err != nil {

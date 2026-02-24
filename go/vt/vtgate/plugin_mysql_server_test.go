@@ -292,6 +292,14 @@ func TestDefaultWorkloadOLAP(t *testing.T) {
 	}
 }
 
+func TestOLAPModeNotSetByDefault(t *testing.T) {
+	vh := &vtgateHandler{}
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLTP)
+	conn := &mysql.Conn{}
+	sess := vh.session(conn)
+	require.Equal(t, querypb.ExecuteOptions_OLTP, sess.Options.Workload)
+}
+
 func TestInitTLSConfigWithoutServerCA(t *testing.T) {
 	testInitTLSConfig(t, false)
 }
