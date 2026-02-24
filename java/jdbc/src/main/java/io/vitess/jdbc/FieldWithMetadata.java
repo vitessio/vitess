@@ -17,17 +17,19 @@
 package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
-
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.regex.PatternSyntaxException;
 
+/**
+ * FieldWithMetadata wraps a Query.Field with additional metadata derived from connection
+ * properties and field characteristics.
+ */
 public class FieldWithMetadata {
 
   private final ConnectionProperties connectionProperties;

@@ -58,7 +58,7 @@ func (vp *VtAdminProcess) Setup() (err error) {
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(vp.LogDir, 0o755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtadmin: %v", err)
+		log.Error(fmt.Sprintf("cannot create log directory for vtadmin: %v", err))
 		return err
 	}
 	rbacFile, err := vp.CreateAndWriteFile("rbac", `rules:
@@ -107,8 +107,6 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		"--tracer", `"opentracing-jaeger"`,
 		"--grpc-tracing",
 		"--http-tracing",
-		"--logtostderr",
-		"--alsologtostderr",
 		"--rbac",
 		"--rbac-config", rbacFile,
 		"--cluster", fmt.Sprintf(`id=%s,name=%s,discovery=staticfile,discovery-staticfile-path=%s,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m`,
@@ -122,12 +120,11 @@ func (vp *VtAdminProcess) Setup() (err error) {
 	}
 
 	vp.proc.Args = append(vp.proc.Args, vp.ExtraArgs...)
-	vp.proc.Args = append(vp.proc.Args, "--alsologtostderr")
 
 	logFile := fmt.Sprintf("vtadmin-stderr-%d.txt", timeNow)
 	errFile, err := os.Create(path.Join(vp.LogDir, logFile))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtadmin: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtadmin: %v", err))
 		return err
 	}
 	vp.proc.Stderr = errFile
@@ -135,7 +132,7 @@ func (vp *VtAdminProcess) Setup() (err error) {
 	vp.proc.Env = append(vp.proc.Env, os.Environ()...)
 	vp.proc.Env = append(vp.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtadmin with command: %v", strings.Join(vp.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtadmin with command: %v", strings.Join(vp.proc.Args, " ")))
 
 	err = vp.proc.Start()
 	if err != nil {
@@ -147,9 +144,9 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		if vp.proc != nil {
 			exitErr := vp.proc.Wait()
 			if exitErr != nil {
-				log.Errorf("vtadmin process exited with error: %v", exitErr)
+				log.Error(fmt.Sprintf("vtadmin process exited with error: %v", exitErr))
 				data, _ := os.ReadFile(logFile)
-				log.Errorf("vtadmin stderr - %s", string(data))
+				log.Error("vtadmin stderr - " + string(data))
 			}
 			vp.exit <- exitErr
 			close(vp.exit)
@@ -164,7 +161,7 @@ func (vp *VtAdminProcess) CreateAndWriteFile(prefix string, content string, exte
 	timeNow := time.Now().UnixNano()
 	file, err := os.Create(path.Join(vp.LogDir, fmt.Sprintf("%s-%d.%s", prefix, timeNow, extension)))
 	if err != nil {
-		log.Errorf("cannot create file for vtadmin: %v", err)
+		log.Error(fmt.Sprintf("cannot create file for vtadmin: %v", err))
 		return "", err
 	}
 

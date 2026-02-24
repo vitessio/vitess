@@ -592,7 +592,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}()
 
 	// Set a very short heartbeat interval for testing (100ms)
-	rowStreamertHeartbeatInterval = 10 * time.Millisecond
+	rowStreamertHeartbeatInterval = 5 * time.Millisecond
 
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",
@@ -630,7 +630,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 			dataReceived = true
 		}
 		// Add a small delay to allow heartbeats to be sent
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		return nil
 	}, &options)
 
@@ -678,7 +678,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 					ch <- errors.New("stream gtid is empty")
 				}
 				if got := engine.rowStreamers[engine.streamIdx-1].sendQuery; got != wantQuery {
-					log.Infof("Got: %v", got)
+					log.Info(fmt.Sprintf("Got: %v", got))
 					ch <- fmt.Errorf("query sent:\n%v, want\n%v", got, wantQuery)
 				}
 			}

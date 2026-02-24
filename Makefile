@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate_ci_workflows generate-flag-testdata
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate-flag-testdata
 
 all: build
 
@@ -219,13 +219,7 @@ e2e_test: build
 
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
-	source build.env
-	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
-	# Handle go tool cover failures due to not handling `//line` directives, which
-	# the goyacc compiler adds to the generated parser in sql.go. See:
-	# https://github.com/golang/go/issues/41222
-	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
-	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
+	source build.env && tools/run_codecov.sh $(COVERAGE_PACKAGES)
 
 unit_test_race: build dependency_check
 	RACE=1 tools/unit_test_runner.sh
@@ -286,7 +280,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=50
+BOOTSTRAP_VERSION=53
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -318,7 +312,7 @@ define build_docker_image
 		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
-		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+		docker build --platform=linux/amd64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
 
@@ -394,12 +388,6 @@ vtadmin_web_proto_types: vtadmin_web_install
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
 	go tool gofumpt -w ./go/vt/vtadmin/
-
-# Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
-# Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
-# is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
-generate_ci_workflows:
-	cd test && go run ci_workflow_gen.go && cd ..
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

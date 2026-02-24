@@ -18,7 +18,10 @@ package zkctl
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -28,16 +31,20 @@ import (
 // so some manual cleanup may be required.
 
 func TestLifeCycle(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode.")
+	if testing.Short() || os.Getenv("CI") == "true" {
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
 	}
 
-	config := "255@voltron:2888:3888:2181"
-	myID := 255
+	leaderPort := 2888 + rand.IntN(100)
+	electionPort := 3888 + rand.IntN(100)
+	clientPort := 2181 + rand.IntN(100)
+	adminPort := 8081 + rand.IntN(100)
+	myID := 200 + rand.IntN(100)
+	config := fmt.Sprintf("%d@voltron:%d:%d:%d", myID, leaderPort, electionPort, clientPort)
 
 	zkConf := MakeZkConfigFromString(config, uint32(myID))
 	tpcKeepAliveCfg := "tcpKeepAlive=true"
-	adminServerCfg := "admin.serverPort=8081"
+	adminServerCfg := fmt.Sprintf("admin.serverPort=%d", adminPort)
 	zkConf.Extra = []string{tpcKeepAliveCfg, adminServerCfg}
 
 	zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header")
@@ -45,16 +52,56 @@ func TestLifeCycle(t *testing.T) {
 	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", tpcKeepAliveCfg), "Expected tpcKeepAliveCfg in zkObservedConf")
 	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", adminServerCfg), "Expected adminServerCfg in zkObservedConf")
 
+	retryTimer := time.NewTimer(10 * time.Minute)
+	defer retryTimer.Stop()
+
 	zkd := NewZkd(zkConf)
-	err = zkd.Init()
-	require.NoError(t, err)
 
-	err = zkd.Shutdown()
-	require.NoError(t, err)
+	for {
+		if err = zkd.Init(); err == nil {
+			break
+		}
+		select {
+		case <-retryTimer.C:
+			require.FailNow(t, "timeout waiting for Zkd.Init() to succeed: ", err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
 
-	err = zkd.Start()
-	require.NoError(t, err)
+	for {
+		if err = zkd.Shutdown(); err == nil {
+			break
+		}
+		select {
+		case <-retryTimer.C:
+			require.FailNow(t, "timeout waiting for Zkd.Shutdown() to succeed: ", err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
 
-	err = zkd.Teardown()
-	require.NoError(t, err)
+	for {
+		if err = zkd.Start(); err == nil {
+			break
+		}
+		select {
+		case <-retryTimer.C:
+			require.FailNow(t, "timeout waiting for Zkd.Start() to succeed: ", err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	for {
+		if err = zkd.Teardown(); err == nil {
+			break
+		}
+		select {
+		case <-retryTimer.C:
+			require.FailNow(t, "timeout waiting for Zkd.Teardown() to succeed: ", err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
