@@ -1323,10 +1323,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		externalDecompressorCmd := ExternalDecompressorCmd
-		if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-			externalDecompressorCmd = bm.ExternalDecompressor
-		}
+		externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 		if externalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
 				deCompressionEngine = externalDecompressorCmd

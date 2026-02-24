@@ -638,10 +638,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 				// then we assign the default value of compressionEngine.
 				deCompressionEngine = PgzipCompressor
 			}
-			externalDecompressorCmd := ExternalDecompressorCmd
-			if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-				externalDecompressorCmd = bm.ExternalDecompressor
-			}
+			externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 			if externalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
 					deCompressionEngine = externalDecompressorCmd
