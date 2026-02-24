@@ -1,0 +1,68 @@
+name: Docker Lite Build Check
+
+on:
+  pull_request:
+    branches: '**'
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+
+permissions: read-all
+
+jobs:
+  generate-matrix:
+    name: Generate matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      dockerfiles: ${{ steps.generate-matrix.outputs.dockerfiles }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: 'false'
+
+      - name: Generate matrix
+        id: generate-matrix
+        run: |
+          dockerfiles=$(ls docker/lite/Dockerfile* | jq -Rnc '[inputs]')
+          echo "dockerfiles=${dockerfiles}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.dockerfile }}
+    runs-on: ubuntu-24.04
+    needs: generate-matrix
+
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile: ${{ fromJson(needs.generate-matrix.outputs.dockerfiles) }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: 'false'
+
+      - name: Build lite image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.dockerfile }}
+      cancel-in-progress: true

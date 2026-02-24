@@ -17,7 +17,7 @@ limitations under the License.
 package syslogger
 
 import (
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -26,47 +26,45 @@ type loggerMsg struct {
 	msg   string
 	level string
 }
+
 type testLogger struct {
-	logs          []loggerMsg
-	savedInfof    func(format string, args ...any)
-	savedWarningf func(format string, args ...any)
-	savedErrorf   func(format string, args ...any)
+	logs      []loggerMsg
+	savedInfo func(msg string, attrs ...slog.Attr)
+	savedWarn func(msg string, attrs ...slog.Attr)
+	savedErr  func(msg string, attrs ...slog.Attr)
 }
 
 func NewTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:    log.Infof,
-		savedWarningf: log.Warningf,
-		savedErrorf:   log.Errorf,
+		savedInfo: log.Info,
+		savedWarn: log.Warn,
+		savedErr:  log.Error,
 	}
-	log.Infof = tl.recordInfof
-	log.Warningf = tl.recordWarningf
-	log.Errorf = tl.recordErrorf
+	log.Info = tl.recordInfo
+	log.Warn = tl.recordWarn
+	log.Error = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Warningf = tl.savedWarningf
-	log.Errorf = tl.savedErrorf
+	log.Info = tl.savedInfo
+	log.Warn = tl.savedWarn
+	log.Error = tl.savedErr
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
 	tl.logs = append(tl.logs, loggerMsg{msg, "INFO"})
-	tl.savedInfof(msg)
+	tl.savedInfo(msg, attrs...)
 }
 
-func (tl *testLogger) recordWarningf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordWarn(msg string, attrs ...slog.Attr) {
 	tl.logs = append(tl.logs, loggerMsg{msg, "WARNING"})
-	tl.savedWarningf(msg)
+	tl.savedWarn(msg, attrs...)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
 	tl.logs = append(tl.logs, loggerMsg{msg, "ERROR"})
-	tl.savedErrorf(msg)
+	tl.savedErr(msg, attrs...)
 }
 
 func (tl *testLogger) getLog() loggerMsg {

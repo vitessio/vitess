@@ -94,6 +94,7 @@ type CompressionDetails struct {
 	ExternalCompressorCmd           string
 	ExternalCompressorExt           string
 	ExternalDecompressorCmd         string
+	ExternalDecompressorUseManifest bool
 	ManifestExternalDecompressorCmd string
 }
 
@@ -306,6 +307,9 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 	if cDetails.ExternalDecompressorCmd != "" {
 		args = append(args, "--external-decompressor="+cDetails.ExternalDecompressorCmd)
+	}
+	if cDetails.ExternalDecompressorUseManifest {
+		args = append(args, "--external-decompressor-use-manifest")
 	}
 	if cDetails.ManifestExternalDecompressorCmd != "" {
 		args = append(args, "--manifest-external-decompressor="+cDetails.ManifestExternalDecompressorCmd)
@@ -1080,7 +1084,7 @@ func terminateBackup(t *testing.T, alias string) {
 		stopBackupMsg = "Starting backup with"
 	}
 
-	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "Backup", alias)
+	args := append([]string{"--server", localCluster.VtctldClientProcess.Server}, "Backup", alias)
 	tmpProcess := exec.Command(
 		"vtctldclient",
 		args...,
@@ -1110,7 +1114,7 @@ func terminateRestore(t *testing.T) {
 		stopRestoreMsg = "Restore: Preparing"
 	}
 
-	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", primary.Alias)
+	args := append([]string{"--server", localCluster.VtctldClientProcess.Server}, "RestoreFromBackup", primary.Alias)
 	tmpProcess := exec.Command(
 		"vtctldclient",
 		args...,

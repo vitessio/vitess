@@ -29,7 +29,7 @@ import (
 func prettyPrint(qr sqltypes.Result) string {
 	out, err := json.Marshal(qr)
 	if err != nil {
-		log.Errorf("Could not marshal result to json for %#v", qr)
+		log.Error(fmt.Sprintf("Could not marshal result to json for %#v", qr))
 		return fmt.Sprintf("%#v", qr)
 	}
 	return string(out)

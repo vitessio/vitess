@@ -16,14 +16,25 @@ limitations under the License.
 
 package command
 
-import "github.com/spf13/cobra"
+import (
+	"time"
+
+	"github.com/spf13/cobra"
+)
 
 var Teardown = &cobra.Command{
 	Use:   "teardown",
 	Short: "Shuts down the zookeeper server and removes its data dir.",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return zkd.Teardown()
+		var err error
+		for range 3 {
+			if err = zkd.Teardown(); err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		return err
 	},
 }
 

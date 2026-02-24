@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
         with:
           egress-policy: audit
 
@@ -145,7 +145,6 @@ jobs:
           make minimaltools
 
       - name: Install goimports
-        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
@@ -188,7 +187,7 @@ jobs:
           install-mode: "goinstall"
           skip-cache: true
           working-directory: go
-          version: v2.8.0
+          version: v2.9.0
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

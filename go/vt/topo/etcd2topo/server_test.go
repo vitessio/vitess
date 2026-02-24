@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -91,11 +92,11 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 	t.Cleanup(func() {
 		// log error
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd.Process.Kill() failed : %v", err)
+			log.Error(fmt.Sprintf("cmd.Process.Kill() failed : %v", err))
 		}
 		// log error
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd.wait() failed : %v", err)
+			log.Error(fmt.Sprintf("cmd.wait() failed : %v", err))
 		}
 	})
 
@@ -181,11 +182,11 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	t.Cleanup(func() {
 		// log error
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd.Process.Kill() failed : %v", err)
+			log.Error(fmt.Sprintf("cmd.Process.Kill() failed : %v", err))
 		}
 		// log error
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd.wait() failed : %v", err)
+			log.Error(fmt.Sprintf("cmd.wait() failed : %v", err))
 		}
 	})
 
@@ -330,6 +331,12 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	require.NoError(t, err, "Unexpected error: %v, output: %s", err, strings.Join(stdout, "\n"))
 	// We get each of the single tablets in each cell.
 	require.Len(t, stdout, len(cells))
+	// Filter out gRPC transport warnings emitted by the etcd v3.6 client
+	// during connection establishment.
+	stderr = slices.DeleteFunc(stderr, func(line string) bool {
+		return strings.Contains(line, "grpc: addrConn.createTransport failed to connect")
+	})
+
 	// And no error message.
 	require.Len(t, stderr, 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 

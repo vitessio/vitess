@@ -405,6 +405,27 @@ type tableSummary struct {
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 
+// tableState captures the per-table VDiff state on a single shard.
+type tableState struct {
+	TableName       string           `json:"TableName"`
+	State           vdiff.VDiffState `json:"State"`
+	RowsCompared    int64            `json:"RowsCompared"`
+	MatchingRows    int64            `json:"MatchingRows"`
+	MismatchedRows  int64            `json:"MismatchedRows"`
+	ExtraRowsSource int64            `json:"ExtraRowsSource"`
+	ExtraRowsTarget int64            `json:"ExtraRowsTarget"`
+	HasMismatch     bool             `json:"HasMismatch"`
+}
+
+// shardSummary captures the per-shard VDiff state, including per-table detail.
+type shardSummary struct {
+	State       vdiff.VDiffState      `json:"State"`
+	StartedAt   string                `json:"StartedAt,omitempty"`
+	CompletedAt string                `json:"CompletedAt,omitempty"`
+	LastError   string                `json:"LastError,omitempty"`
+	TableStates map[string]tableState `json:"TableStates,omitempty"`
+}
+
 // summary aggregates the current state of the vdiff from all shards.
 type summary struct {
 	Workflow, Keyspace string
@@ -415,6 +436,7 @@ type summary struct {
 	Shards             string
 	StartedAt          string                  `json:"StartedAt,omitempty"`
 	CompletedAt        string                  `json:"CompletedAt,omitempty"`
+	ShardSummaries     map[string]shardSummary `json:"ShardSummaries,omitempty"`
 	TableSummaryMap    map[string]tableSummary `json:"TableSummary,omitempty"`
 	// This is keyed by table name and then by shard name.
 	Reports map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`

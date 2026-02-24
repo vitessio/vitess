@@ -26,7 +26,6 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -692,7 +691,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = ptr.Of(1)
+			col.Type.Length = new(1)
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)

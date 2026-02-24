@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useHistory } from 'react-router-dom';
 
 import { useClusters, useCreateKeyspace } from '../../../hooks/api';
@@ -58,7 +58,7 @@ export const CreateKeyspace = () => {
         },
         {
             onSuccess: (res) => {
-                queryClient.invalidateQueries('keyspaces');
+                queryClient.invalidateQueries({ queryKey: ['keyspaces'] });
                 success(`Created keyspace ${res?.keyspace?.keyspace?.name}`, { autoClose: 1600 });
                 history.push(`/keyspace/${res?.keyspace?.cluster?.id}/${res?.keyspace?.keyspace?.name}`);
             },
@@ -71,7 +71,7 @@ export const CreateKeyspace = () => {
     }
 
     const isValid = !!selectedCluster && !!formData.keyspaceName;
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -117,13 +117,13 @@ export const CreateKeyspace = () => {
                         />
                     </Label>
 
-                    {mutation.isError && !mutation.isLoading && (
+                    {mutation.isError && !mutation.isPending && (
                         <FormError error={mutation.error} title="Couldn't create keyspace. Please try again." />
                     )}
 
                     <div className="my-12">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating Keyspace...' : 'Create Keyspace'}
+                            {mutation.isPending ? 'Creating Keyspace...' : 'Create Keyspace'}
                         </button>
                     </div>
                 </form>

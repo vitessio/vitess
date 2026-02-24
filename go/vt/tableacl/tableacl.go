@@ -107,7 +107,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	}
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Errorf("unable to read tableACL config file: %v  Error: %v", configFile, err)
+		log.Error(fmt.Sprintf("unable to read tableACL config file: %v  Error: %v", configFile, err))
 		return err
 	}
 	if len(data) == 0 {
@@ -118,7 +118,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file
 		if jsonErr := json2.UnmarshalPB(data, config); jsonErr != nil {
-			log.Errorf("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr)
+			log.Error(fmt.Sprintf("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr))
 			return fmt.Errorf("unable to unmarshal Table ACL data: %s", data)
 		}
 	}

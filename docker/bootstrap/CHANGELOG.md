@@ -212,3 +212,12 @@ List of changes between bootstrap image versions.
 - Add SHA256 checksum verification for downloaded tools
 - Exclude Go module cache from image
 - Remove Maven from base image (CVE-2024-47554)
+
+
+## [52] - 2026-02-08
+### Changes
+- Update build to golang 1.25.7
+
+## [53] - 2026-02-11
+### Changes
+- Update build to golang 1.26.0
