@@ -18,7 +18,6 @@ package inst
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -198,6 +197,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		) AS count_valid_semi_sync_replicas,
 		IFNULL(
 			SUM(
+				replica_instance.last_checked <= replica_instance.last_seen
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
+				AND replica_instance.semi_sync_replica_enabled != 0
+			),
+			0
+		) AS count_valid_semi_sync_replicating_replicas,
+		IFNULL(
+			SUM(
 				replica_instance.log_bin
 				AND replica_instance.log_replica_updates
 			),
@@ -350,6 +358,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicating_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
@@ -405,7 +414,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
 		if ca.hasShardWideAction {
-			// We can only take one shard level action at a time.
+			// We can only take one shard-wide action at a time.
 			return nil
 		}
 		if ca.durability == nil {
@@ -413,6 +422,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
+<<<<<<< HEAD
 		switch {
 		case a.IsClusterPrimary && isInvalid:
 			a.Analysis = InvalidPrimary
@@ -538,27 +548,32 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			} else {
 				a.Analysis = LockedSemiSyncPrimaryHypothesis
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
+=======
+		var matchedProblems []*DetectionAnalysisProblem
+		for _, problem := range detectionAnalysisProblems {
+			// When isInvalid is true, instance data is unreliable (never been reached).
+			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
+			// handles upgrading InvalidPrimary to DeadPrimary if needed.
+			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
+				continue
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 			}
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = PrimarySingleReplicaNotReplicating
-			a.Description = "Primary is reachable but its single replica is not replicating"
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0:
-			a.Analysis = PrimarySingleReplicaDead
-			a.Description = "Primary is reachable but its single replica is dead"
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = AllPrimaryReplicasNotReplicating
-			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
-			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
-			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-			// case a.IsPrimary && a.CountReplicas == 0:
-			//	a.Analysis = PrimaryWithoutReplicas
-			//	a.Description = "Primary has no replicas"
-			// }
+			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
+				matchedProblems = append(matchedProblems, problem)
+			}
+		}
+		if len(matchedProblems) > 0 {
+			sortDetectionAnalysisMatchedProblems(matchedProblems)
+			for _, problem := range matchedProblems {
+				a.AnalysisMatchedProblems = append(a.AnalysisMatchedProblems, problem.Meta)
+			}
+			// We return a single problem per tablet. Any remaining problems will be discovered/recovered
+			// by VTOrc(s) on future polls. Often many problems are resolved by a single recovery of the
+			// first problem. The first element of matchedProblems is the highest-priority problem.
+			chosenProblem := matchedProblems[0]
+			a.Analysis = chosenProblem.Meta.Analysis
+			a.Description = chosenProblem.Meta.Description
+			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
 		}
 
 		{

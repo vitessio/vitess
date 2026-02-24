@@ -21,7 +21,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+<<<<<<< HEAD
 	"math/rand/v2"
+=======
+	"log/slog"
+	"maps"
+	"math/rand/v2"
+	"net"
+	"net/http"
+	"slices"
+	"strconv"
+	"sync"
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	"sync/atomic"
 	"time"
 
@@ -968,6 +979,32 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	return true, nil
 }
 
+// recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
+// that require ordered execution run sequentially first, then the remaining
+// independent analyses fan out concurrently.
+func recoverShardAnalyses(analyses []*inst.DetectionAnalysis, recoverFunc func(*inst.DetectionAnalysis) error) {
+	var concurrent []*inst.DetectionAnalysis
+	for _, analysisEntry := range analyses {
+		problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
+		if problem != nil && problem.RequiresOrderedExecution() {
+			if err := recoverFunc(analysisEntry); err != nil {
+				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
+			}
+		} else {
+			concurrent = append(concurrent, analysisEntry)
+		}
+	}
+	var wg sync.WaitGroup
+	for _, analysisEntry := range concurrent {
+		wg.Go(func() {
+			if err := recoverFunc(analysisEntry); err != nil {
+				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
+			}
+		})
+	}
+	wg.Wait()
+}
+
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
@@ -977,22 +1014,26 @@ func CheckAndRecover() {
 		return
 	}
 
+	analysisByShard := inst.GroupDetectionAnalysesByShard(detectionAnalysis)
+
 	// Regardless of if the problem is solved or not we want to monitor active
 	// issues, we use a map of labels and set a counter to `1` for each problem
 	// then we reset any counter that is not present in the current analysis.
 	active := make(map[string]struct{})
-	for _, e := range detectionAnalysis {
-		if e.Analysis != inst.NoProblem {
-			names := [...]string{
-				string(e.Analysis),
-				e.AnalyzedInstanceAlias,
-				e.AnalyzedKeyspace,
-				e.AnalyzedShard,
-			}
+	for _, shardAnalyses := range analysisByShard {
+		for _, e := range shardAnalyses {
+			if e.Analysis != inst.NoProblem {
+				names := [...]string{
+					string(e.Analysis),
+					e.AnalyzedInstanceAlias,
+					e.AnalyzedKeyspace,
+					e.AnalyzedShard,
+				}
 
-			key := detectedProblems.GetLabelName(names[:]...)
-			active[key] = struct{}{}
-			detectedProblems.Set(names[:], 1)
+				key := detectedProblems.GetLabelName(names[:]...)
+				active[key] = struct{}{}
+				detectedProblems.Set(names[:], 1)
+			}
 		}
 	}
 
@@ -1003,14 +1044,24 @@ func CheckAndRecover() {
 		}
 	}
 
-	// intentionally iterating entries in random order
-	for _, j := range rand.Perm(len(detectionAnalysis)) {
-		analysisEntry := detectionAnalysis[j]
-
+	// Shuffle shard keys to ensure random processing order. Randomness helps reduce
+	// global shard lock contention when many VTOrcs watch the same shard(s). Within
+	// each shard, analyses are sorted by priority. Problems that require ordered
+	// execution (shard-wide actions or those with Before/After dependencies) run
+	// sequentially first, then independent problems fan out concurrently.
+	shardKeys := slices.Collect(maps.Keys(analysisByShard))
+	rand.Shuffle(len(shardKeys), func(i, j int) {
+		shardKeys[i], shardKeys[j] = shardKeys[j], shardKeys[i]
+	})
+	for _, key := range shardKeys {
 		go func() {
+<<<<<<< HEAD
 			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
 				log.Error(err)
 			}
+=======
+			recoverShardAnalyses(analysisByShard[key], executeCheckAndRecoverFunction)
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 		}()
 	}
 }

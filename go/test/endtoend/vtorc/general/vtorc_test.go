@@ -18,7 +18,13 @@ package general
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+<<<<<<< HEAD
+=======
+	"strconv"
+	"strings"
+>>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	"testing"
 	"time"
 
@@ -892,4 +898,86 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	})
 	assert.Equal(t, 200, status)
 	assert.Equal(t, "null", resp)
+}
+
+// TestSemiSyncRecoveryOrdering verifies that when the durability policy changes
+// to semi_sync, VTOrc fixes ReplicaSemiSyncMustBeSet before PrimarySemiSyncMustBeSet.
+// This ordering is enforced by the AfterAnalyses/BeforeAnalyses dependencies.
+func TestSemiSyncRecoveryOrdering(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	// Start with durability "none" so no semi-sync is required initially.
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// Wait for primary election and healthy replication.
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+	utils.CheckReplication(t, clusterInfo, primary, shard0.Vttablets, 10*time.Second)
+
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	// Change durability to semi_sync. VTOrc should detect that replicas and primary
+	// need semi-sync enabled, and fix them in the correct order.
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy="+policy.DurabilitySemiSync)
+	require.NoError(t, err, out)
+
+	// Poll the database-state API to verify recovery ordering.
+	// The topology_recovery table has auto-incremented recovery_id values that
+	// reflect execution order. All ReplicaSemiSyncMustBeSet recovery_ids should
+	// be less than any PrimarySemiSyncMustBeSet recovery_id.
+	type tableState struct {
+		TableName string
+		Rows      []map[string]any
+	}
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		status, response, err := utils.MakeAPICall(t, vtorc, "/api/database-state")
+		assert.NoError(c, err)
+		assert.Equal(c, 200, status)
+
+		var tables []tableState
+		if !assert.NoError(c, json.Unmarshal([]byte(response), &tables)) {
+			return
+		}
+
+		var maxReplicaRecoveryID, minPrimaryRecoveryID int
+		var replicaCount, primaryCount int
+		for _, table := range tables {
+			if table.TableName != "topology_recovery" {
+				continue
+			}
+			for _, row := range table.Rows {
+				analysis, _ := row["analysis"].(string)
+				recoveryIDStr, _ := row["recovery_id"].(string)
+				recoveryID, err := strconv.Atoi(recoveryIDStr)
+				if err != nil {
+					continue
+				}
+				switch inst.AnalysisCode(analysis) {
+				case inst.ReplicaSemiSyncMustBeSet:
+					replicaCount++
+					if replicaCount == 1 || recoveryID > maxReplicaRecoveryID {
+						maxReplicaRecoveryID = recoveryID
+					}
+				case inst.PrimarySemiSyncMustBeSet:
+					primaryCount++
+					if primaryCount == 1 || recoveryID < minPrimaryRecoveryID {
+						minPrimaryRecoveryID = recoveryID
+					}
+				}
+			}
+		}
+
+		assert.Greater(c, replicaCount, 0, "should have ReplicaSemiSyncMustBeSet recoveries")
+		assert.Greater(c, primaryCount, 0, "should have PrimarySemiSyncMustBeSet recoveries")
+		if replicaCount > 0 && primaryCount > 0 {
+			assert.Less(c, maxReplicaRecoveryID, minPrimaryRecoveryID,
+				"all ReplicaSemiSyncMustBeSet recoveries should have lower recovery_id than PrimarySemiSyncMustBeSet")
+		}
+	}, 30*time.Second, time.Second)
 }
