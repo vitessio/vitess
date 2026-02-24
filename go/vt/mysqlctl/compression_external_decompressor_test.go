@@ -77,14 +77,14 @@ func TestResolveExternalDecompressor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			origCmd := ExternalDecompressorCmd
-			origAllow := ExternalDecompressorAllowManifest
+			origAllow := ExternalDecompressorUseManifest
 			t.Cleanup(func() {
 				ExternalDecompressorCmd = origCmd
-				ExternalDecompressorAllowManifest = origAllow
+				ExternalDecompressorUseManifest = origAllow
 			})
 
 			ExternalDecompressorCmd = tt.cliDecompressorCmd
-			ExternalDecompressorAllowManifest = tt.allowManifest
+			ExternalDecompressorUseManifest = tt.allowManifest
 
 			result := resolveExternalDecompressor(tt.manifestDecompressor)
 			assert.Equal(t, tt.expected, result)
