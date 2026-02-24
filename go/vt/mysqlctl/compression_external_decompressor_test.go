@@ -26,49 +26,49 @@ func TestResolveExternalDecompressor(t *testing.T) {
 	tests := []struct {
 		name                 string
 		cliDecompressorCmd   string
-		allowManifest        bool
+		useManifest          bool
 		manifestDecompressor string
 		expected             string
 	}{
 		{
 			name:                 "CLI flag takes precedence over manifest",
 			cliDecompressorCmd:   "zstd -d",
-			allowManifest:        true,
+			useManifest:          true,
 			manifestDecompressor: "gzip -d",
 			expected:             "zstd -d",
 		},
 		{
-			name:                 "CLI flag takes precedence even when allow-manifest is false",
+			name:                 "CLI flag takes precedence even when use-manifest is false",
 			cliDecompressorCmd:   "zstd -d",
-			allowManifest:        false,
+			useManifest:          false,
 			manifestDecompressor: "gzip -d",
 			expected:             "zstd -d",
 		},
 		{
-			name:                 "manifest used when allow-manifest is true and no CLI flag",
+			name:                 "manifest used when use-manifest is true and no CLI flag",
 			cliDecompressorCmd:   "",
-			allowManifest:        true,
+			useManifest:          true,
 			manifestDecompressor: "gzip -d",
 			expected:             "gzip -d",
 		},
 		{
-			name:                 "manifest ignored when allow-manifest is false",
+			name:                 "manifest ignored when use-manifest is false",
 			cliDecompressorCmd:   "",
-			allowManifest:        false,
+			useManifest:          false,
 			manifestDecompressor: "gzip -d",
 			expected:             "",
 		},
 		{
 			name:                 "empty when nothing is set",
 			cliDecompressorCmd:   "",
-			allowManifest:        false,
+			useManifest:          false,
 			manifestDecompressor: "",
 			expected:             "",
 		},
 		{
-			name:                 "empty when allow-manifest is true but manifest is empty",
+			name:                 "empty when use-manifest is true but manifest is empty",
 			cliDecompressorCmd:   "",
-			allowManifest:        true,
+			useManifest:          true,
 			manifestDecompressor: "",
 			expected:             "",
 		},
@@ -84,7 +84,7 @@ func TestResolveExternalDecompressor(t *testing.T) {
 			})
 
 			ExternalDecompressorCmd = tt.cliDecompressorCmd
-			ExternalDecompressorUseManifest = tt.allowManifest
+			ExternalDecompressorUseManifest = tt.useManifest
 
 			result := resolveExternalDecompressor(tt.manifestDecompressor)
 			assert.Equal(t, tt.expected, result)
