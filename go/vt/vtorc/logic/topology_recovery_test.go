@@ -680,7 +680,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				require.NoError(t, err)
 				oldFD, err := syscall.Dup(int(os.Stderr.Fd()))
 				require.NoError(t, err)
-				require.NoError(t, syscall.Dup2(int(w.Fd()), int(os.Stderr.Fd())))
+				require.NoError(t, syscall.Dup3(int(w.Fd()), int(os.Stderr.Fd()), 0))
 				os.Stderr = w
 				done := make(chan struct{})
 				go func() {
@@ -692,7 +692,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					log.Flush()
 					_ = w.Close()
 					os.Stderr = oldStderr
-					_ = syscall.Dup2(oldFD, int(os.Stderr.Fd()))
+					_ = syscall.Dup3(oldFD, int(os.Stderr.Fd()), 0)
 					_ = syscall.Close(oldFD)
 					<-done
 				}
