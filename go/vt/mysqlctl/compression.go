@@ -50,11 +50,11 @@ var (
 	// CompressionEngineName specifies which compressor/decompressor to use
 	CompressionEngineName = "pargzip"
 	// ExternalCompressorCmd / ExternalDecompressorCmd specify the external commands compress/decompress the backups
-	ExternalCompressorCmd             string
-	ExternalCompressorExt             string
-	ExternalDecompressorCmd           string
+	ExternalCompressorCmd           string
+	ExternalCompressorExt           string
+	ExternalDecompressorCmd         string
 	ExternalDecompressorUseManifest bool
-	ManifestExternalDecompressorCmd   string
+	ManifestExternalDecompressorCmd string
 
 	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine. Alternatively, set --external-decompressor-use-manifest to use the decompressor command from the backup manifest, but this is NOT RECOMMENDED as it is a security risk")
 	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
