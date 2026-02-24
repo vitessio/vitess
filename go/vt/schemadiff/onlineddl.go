@@ -648,12 +648,13 @@ func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID stri
 			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		case *sqlparser.IndexDefinition:
-			// Handle named UNIQUE/PRIMARY KEY constraints stored in IndexInfo.ConstraintName
 			if node.Info.ConstraintName.String() != "" {
 				oldName := node.Info.ConstraintName.String()
-				// For CREATE TABLE, named UNIQUE/PRIMARY KEY constraints should just append "_" suffix
-				// (hash suffixing is only for specific OnlineDDL flows, not regular CREATE TABLE)
-				newName := oldName + "_"
+				constraintType := sqlparser.String(node.Info.Type)
+				newName := generateConstraintNameWithHash(
+					originalTableName, baseUUID, hashExists,
+					sqlparser.CanonicalString(node), oldName, constraintType,
+				)
 				node.Info.ConstraintName = sqlparser.NewIdentifierCI(newName)
 				constraintMap[oldName] = newName
 			}

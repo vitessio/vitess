@@ -1098,8 +1098,10 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						constraint uk_name unique (name)
 					)
 				`,
-			countConstraints:    1,
-			expectConstraintMap: map[string]string{"uk_name": "uk_name_"},
+			countConstraints: 1,
+			expectConstraintMap: map[string]string{
+				"uk_name": "uk_name_2wtivm6zk4lthpz14g9uoyaqk",
+			},
 		},
 		{
 			name: "table with UNIQUE KEY syntax (no constraint keyword)",
