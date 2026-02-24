@@ -487,12 +487,18 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowBinlogEvents(in)
 	case *ShowCreate:
 		return CloneRefOfShowCreate(in)
+	case *ShowCreateUser:
+		return CloneRefOfShowCreateUser(in)
+	case *ShowEngine:
+		return CloneRefOfShowEngine(in)
 	case *ShowFilter:
 		return CloneRefOfShowFilter(in)
+	case *ShowGrants:
+		return CloneRefOfShowGrants(in)
 	case *ShowMigrationLogs:
 		return CloneRefOfShowMigrationLogs(in)
-	case *ShowOther:
-		return CloneRefOfShowOther(in)
+	case *ShowProfile:
+		return CloneRefOfShowProfile(in)
 	case *ShowReplicas:
 		return CloneRefOfShowReplicas(in)
 	case *ShowReplicationSourceStatus:
@@ -3067,6 +3073,7 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	out.Tbl = CloneTableName(n.Tbl)
 	out.DbName = CloneIdentifierCS(n.DbName)
 	out.Filter = CloneRefOfShowFilter(n.Filter)
+	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
 
@@ -3100,6 +3107,25 @@ func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	return &out
 }
 
+// CloneRefOfShowCreateUser creates a deep clone of the input.
+func CloneRefOfShowCreateUser(n *ShowCreateUser) *ShowCreateUser {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.User = CloneRefOfUserOrRole(n.User)
+	return &out
+}
+
+// CloneRefOfShowEngine creates a deep clone of the input.
+func CloneRefOfShowEngine(n *ShowEngine) *ShowEngine {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfShowFilter creates a deep clone of the input.
 func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	if n == nil {
@@ -3107,6 +3133,17 @@ func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	}
 	out := *n
 	out.Filter = CloneExpr(n.Filter)
+	return &out
+}
+
+// CloneRefOfShowGrants creates a deep clone of the input.
+func CloneRefOfShowGrants(n *ShowGrants) *ShowGrants {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.User = CloneRefOfUserOrRole(n.User)
+	out.UsingRole = CloneSliceOfUserOrRole(n.UsingRole)
 	return &out
 }
 
@@ -3120,12 +3157,15 @@ func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 	return &out
 }
 
-// CloneRefOfShowOther creates a deep clone of the input.
-func CloneRefOfShowOther(n *ShowOther) *ShowOther {
+// CloneRefOfShowProfile creates a deep clone of the input.
+func CloneRefOfShowProfile(n *ShowProfile) *ShowProfile {
 	if n == nil {
 		return nil
 	}
 	out := *n
+	out.Types = CloneSliceOfString(n.Types)
+	out.ForQuery = CloneRefOfLiteral(n.ForQuery)
+	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
 
@@ -4526,8 +4566,14 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 		return CloneRefOfShowBinlogEvents(in)
 	case *ShowCreate:
 		return CloneRefOfShowCreate(in)
-	case *ShowOther:
-		return CloneRefOfShowOther(in)
+	case *ShowCreateUser:
+		return CloneRefOfShowCreateUser(in)
+	case *ShowEngine:
+		return CloneRefOfShowEngine(in)
+	case *ShowGrants:
+		return CloneRefOfShowGrants(in)
+	case *ShowProfile:
+		return CloneRefOfShowProfile(in)
 	case *ShowReplicas:
 		return CloneRefOfShowReplicas(in)
 	case *ShowReplicationSourceStatus:
@@ -5159,6 +5205,27 @@ func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
 	return res
 }
 
+// CloneRefOfUserOrRole creates a deep clone of the input.
+func CloneRefOfUserOrRole(n *UserOrRole) *UserOrRole {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneSliceOfUserOrRole creates a deep clone of the input.
+func CloneSliceOfUserOrRole(n []UserOrRole) []UserOrRole {
+	if n == nil {
+		return nil
+	}
+	res := make([]UserOrRole, len(n))
+	for i, x := range n {
+		res[i] = CloneUserOrRole(x)
+	}
+	return res
+}
+
 // CloneSliceOfRefOfSignalSet creates a deep clone of the input.
 func CloneSliceOfRefOfSignalSet(n []*SignalSet) []*SignalSet {
 	if n == nil {
@@ -5306,6 +5373,11 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	out.FromTable = CloneTableName(n.FromTable)
 	out.ToTable = CloneTableName(n.ToTable)
 	return &out
+}
+
+// CloneUserOrRole creates a deep clone of the input.
+func CloneUserOrRole(n UserOrRole) UserOrRole {
+	return *CloneRefOfUserOrRole(&n)
 }
 
 // CloneRefOfDatabaseOption creates a deep clone of the input.

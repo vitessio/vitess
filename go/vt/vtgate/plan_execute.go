@@ -324,10 +324,8 @@ func showStartsImplicitTx(stmt sqlparser.Statement) bool {
 	case *sqlparser.ShowCreate:
 		// SHOW CREATE TABLE/DATABASE/etc. do not start implicit transactions in MySQL.
 		return false
-	case *sqlparser.ShowOther:
-		// ShowOther covers SHOW PROCESSLIST, SHOW ENGINE STATUS, SHOW BINARY LOGS,
-		// SHOW GRANTS, SHOW REPLICA STATUS, etc. These are server-state commands
-		// that don't start implicit transactions in MySQL.
+	case *sqlparser.ShowEngine, *sqlparser.ShowGrants, *sqlparser.ShowProfile, *sqlparser.ShowCreateUser:
+		// Server-state commands that don't start implicit transactions in MySQL.
 		return false
 	case *sqlparser.ShowBasic:
 		// Some SHOW commands do not start implicit transactions in MySQL, but we need to look at the command to determine which ones.
@@ -335,7 +333,8 @@ func showStartsImplicitTx(stmt sqlparser.Statement) bool {
 		case sqlparser.VariableSession, sqlparser.VariableGlobal,
 			sqlparser.StatusSession, sqlparser.StatusGlobal,
 			sqlparser.Warnings, sqlparser.Engines, sqlparser.Plugins, sqlparser.Privilege,
-			sqlparser.OpenTable,
+			sqlparser.OpenTable, sqlparser.Errors, sqlparser.Events, sqlparser.ProcessList,
+			sqlparser.Profiles, sqlparser.FunctionC, sqlparser.ProcedureC,
 			// Vitess-specific SHOW commands are handled internally by vtgate and don't access InnoDB data.
 			sqlparser.GtidExecGlobal, sqlparser.VGtidExecGlobal,
 			sqlparser.VitessMigrations, sqlparser.VitessReplicationStatus,

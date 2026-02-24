@@ -3065,14 +3065,23 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(node.Command.ToString())
 	if !node.Tbl.IsEmpty() {
-		buf.WriteString(" from ")
-		node.Tbl.FormatFast(buf)
+		switch node.Command {
+		case FunctionC, ProcedureC:
+			buf.WriteByte(' ')
+			node.Tbl.FormatFast(buf)
+		default:
+			buf.WriteString(" from ")
+			node.Tbl.FormatFast(buf)
+		}
 	}
 	if node.DbName.NotEmpty() {
 		buf.WriteString(" from ")
 		node.DbName.FormatFast(buf)
 	}
 	node.Filter.FormatFast(buf)
+	if node.Limit != nil {
+		node.Limit.FormatFast(buf)
+	}
 }
 
 func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
@@ -3098,9 +3107,59 @@ func (node *ShowCreate) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node *ShowOther) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("show ")
-	buf.WriteString(node.Command)
+func (node *ShowEngine) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show engine ")
+	buf.WriteString(node.EngineName)
+	buf.WriteByte(' ')
+	buf.WriteString(node.Action)
+}
+
+// FormatFast formats the node.
+func (node *ShowGrants) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show grants")
+	if node.User != nil {
+		buf.WriteString(" for ")
+		node.User.formatTo(buf)
+		if len(node.UsingRole) > 0 {
+			buf.WriteString(" using ")
+			for i, role := range node.UsingRole {
+				if i > 0 {
+					buf.WriteString(", ")
+				}
+				role.formatTo(buf)
+			}
+		}
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowProfile) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show profile")
+	for i, t := range node.Types {
+		if i == 0 {
+			buf.WriteString(" ")
+		} else {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(t)
+	}
+	if node.ForQuery != nil {
+		buf.WriteString(" for query ")
+		node.ForQuery.FormatFast(buf)
+	}
+	if node.Limit != nil {
+		node.Limit.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowCreateUser) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show create user ")
+	if node.User != nil {
+		node.User.formatTo(buf)
+	} else {
+		buf.WriteString("current_user")
+	}
 }
 
 // FormatFast formats the node.

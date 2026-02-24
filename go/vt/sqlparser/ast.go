@@ -2012,6 +2012,7 @@ type (
 		Tbl     TableName
 		DbName  IdentifierCS
 		Filter  *ShowFilter
+		Limit   *Limit
 	}
 
 	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
@@ -2026,9 +2027,34 @@ type (
 		Op      TableName
 	}
 
-	// ShowOther is of ShowInternal type, holds show queries that is not handled specially.
-	ShowOther struct {
-		Command string
+	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
+	UserOrRole struct {
+		Name string
+		Host string
+	}
+
+	// ShowEngine represents SHOW ENGINE engine_name {STATUS | MUTEX}.
+	ShowEngine struct {
+		EngineName string
+		Action     string // "status" or "mutex"
+	}
+
+	// ShowGrants represents SHOW GRANTS [FOR user_or_role [USING role, ...]].
+	ShowGrants struct {
+		User      *UserOrRole
+		UsingRole []UserOrRole
+	}
+
+	// ShowProfile represents SHOW PROFILE [type, ...] [FOR QUERY n] [LIMIT row_count [OFFSET offset]].
+	ShowProfile struct {
+		Types    []string
+		ForQuery *Literal
+		Limit    *Limit
+	}
+
+	// ShowCreateUser represents SHOW CREATE USER user_or_role.
+	ShowCreateUser struct {
+		User *UserOrRole
 	}
 
 	// ShowBinlogEvents represents SHOW BINLOG EVENTS / SHOW RELAYLOG EVENTS statements.
@@ -2062,7 +2088,10 @@ type (
 
 func (*ShowBasic) isShowInternal()                   {}
 func (*ShowCreate) isShowInternal()                  {}
-func (*ShowOther) isShowInternal()                   {}
+func (*ShowEngine) isShowInternal()                  {}
+func (*ShowGrants) isShowInternal()                  {}
+func (*ShowProfile) isShowInternal()                 {}
+func (*ShowCreateUser) isShowInternal()              {}
 func (*ShowTransactionStatus) isShowInternal()       {}
 func (*ShowBinlogEvents) isShowInternal()            {}
 func (*ShowReplicationStatus) isShowInternal()       {}

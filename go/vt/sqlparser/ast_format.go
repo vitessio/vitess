@@ -2343,12 +2343,20 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%s", node.Command.ToString())
 	if !node.Tbl.IsEmpty() {
-		buf.astPrintf(node, " from %v", node.Tbl)
+		switch node.Command {
+		case FunctionC, ProcedureC:
+			buf.astPrintf(node, " %v", node.Tbl)
+		default:
+			buf.astPrintf(node, " from %v", node.Tbl)
+		}
 	}
 	if node.DbName.NotEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
 }
 
 func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
@@ -2368,8 +2376,55 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowOther) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Command)
+func (node *ShowEngine) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show engine %s %s", node.EngineName, node.Action)
+}
+
+// Format formats the node.
+func (node *ShowGrants) Format(buf *TrackedBuffer) {
+	buf.literal("show grants")
+	if node.User != nil {
+		buf.literal(" for ")
+		node.User.formatTo(buf)
+		if len(node.UsingRole) > 0 {
+			buf.literal(" using ")
+			for i, role := range node.UsingRole {
+				if i > 0 {
+					buf.literal(", ")
+				}
+				role.formatTo(buf)
+			}
+		}
+	}
+}
+
+// Format formats the node.
+func (node *ShowProfile) Format(buf *TrackedBuffer) {
+	buf.literal("show profile")
+	for i, t := range node.Types {
+		if i == 0 {
+			buf.literal(" ")
+		} else {
+			buf.literal(", ")
+		}
+		buf.literal(t)
+	}
+	if node.ForQuery != nil {
+		buf.astPrintf(node, " for query %v", node.ForQuery)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+}
+
+// Format formats the node.
+func (node *ShowCreateUser) Format(buf *TrackedBuffer) {
+	buf.literal("show create user ")
+	if node.User != nil {
+		node.User.formatTo(buf)
+	} else {
+		buf.literal("current_user")
+	}
 }
 
 // Format formats the node.

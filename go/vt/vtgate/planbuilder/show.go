@@ -57,7 +57,10 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
 		prim, err = buildShowCreatePlan(show, vschema)
-	case *sqlparser.ShowOther:
+	case *sqlparser.ShowEngine,
+		*sqlparser.ShowGrants,
+		*sqlparser.ShowProfile,
+		*sqlparser.ShowCreateUser:
 		prim, err = buildShowOtherPlan(sql, vschema)
 	case *sqlparser.ShowBinlogEvents,
 		*sqlparser.ShowBinaryLogs:
@@ -122,7 +125,9 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	switch show.Command {
 	case sqlparser.Charset:
 		return buildCharsetPlan(show)
-	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure:
+	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
+		sqlparser.Errors, sqlparser.Events, sqlparser.ProcessList, sqlparser.Profiles,
+		sqlparser.FunctionC, sqlparser.ProcedureC:
 		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.VariableGlobal, sqlparser.VariableSession:
 		return buildVariablePlan(show, vschema)

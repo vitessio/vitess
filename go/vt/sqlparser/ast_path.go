@@ -437,11 +437,14 @@ const (
 	RefOfShowBasicTbl
 	RefOfShowBasicDbName
 	RefOfShowBasicFilter
+	RefOfShowBasicLimit
 	RefOfShowBinlogEventsPosition
 	RefOfShowBinlogEventsLimit
 	RefOfShowCreateOp
 	RefOfShowFilterFilter
 	RefOfShowMigrationLogsComments
+	RefOfShowProfileForQuery
+	RefOfShowProfileLimit
 	RefOfSignalCondition
 	RefOfSignalSetValuesOffset
 	RefOfSignalSetValue
@@ -1438,6 +1441,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowBasic).DbName"
 	case RefOfShowBasicFilter:
 		return "(*ShowBasic).Filter"
+	case RefOfShowBasicLimit:
+		return "(*ShowBasic).Limit"
 	case RefOfShowBinlogEventsPosition:
 		return "(*ShowBinlogEvents).Position"
 	case RefOfShowBinlogEventsLimit:
@@ -1448,6 +1453,10 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowFilter).Filter"
 	case RefOfShowMigrationLogsComments:
 		return "(*ShowMigrationLogs).Comments"
+	case RefOfShowProfileForQuery:
+		return "(*ShowProfile).ForQuery"
+	case RefOfShowProfileLimit:
+		return "(*ShowProfile).Limit"
 	case RefOfSignalCondition:
 		return "(*Signal).Condition"
 	case RefOfSignalSetValuesOffset:
@@ -2703,6 +2712,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowBasic).DbName
 		case RefOfShowBasicFilter:
 			node = node.(*ShowBasic).Filter
+		case RefOfShowBasicLimit:
+			node = node.(*ShowBasic).Limit
 		case RefOfShowBinlogEventsPosition:
 			node = node.(*ShowBinlogEvents).Position
 		case RefOfShowBinlogEventsLimit:
@@ -2713,6 +2724,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowFilter).Filter
 		case RefOfShowMigrationLogsComments:
 			node = node.(*ShowMigrationLogs).Comments
+		case RefOfShowProfileForQuery:
+			node = node.(*ShowProfile).ForQuery
+		case RefOfShowProfileLimit:
+			node = node.(*ShowProfile).Limit
 		case RefOfSignalCondition:
 			node = node.(*Signal).Condition
 		case RefOfSignalSetValuesOffset:

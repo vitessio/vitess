@@ -2357,7 +2357,13 @@ var validSQL = []struct {
 	input: "show create trigger t",
 }, {
 	input:  "show create user u",
-	output: "show create user",
+	output: "show create user 'u'",
+}, {
+	input:  "show create user 'root'@'localhost'",
+	output: "show create user 'root'@'localhost'",
+}, {
+	input:  "show create user current_user",
+	output: "show create user current_user",
 }, {
 	input: "show create view v",
 }, {
@@ -2373,23 +2379,49 @@ var validSQL = []struct {
 	input:  "show schemas like '%'",
 	output: "show databases like '%'",
 }, {
-	input:  "show engine INNODB",
-	output: "show engine",
+	input:  "show engine INNODB status",
+	output: "show engine innodb status",
+}, {
+	input:  "show engine INNODB mutex",
+	output: "show engine innodb mutex",
 }, {
 	input: "show engines",
 }, {
 	input:  "show storage engines",
-	output: "show storage",
+	output: "show engines",
 }, {
 	input: "show errors",
 }, {
+	input:  "show errors limit 10",
+	output: "show errors limit 10",
+}, {
+	input:  "show errors limit 5, 10",
+	output: "show errors limit 5, 10",
+}, {
 	input: "show events",
+}, {
+	input:  "show events from db_name",
+	output: "show events from db_name",
+}, {
+	input:  "show events like '%pattern%'",
+	output: "show events like '%pattern%'",
 }, {
 	input: "show function code func",
 }, {
 	input: "show function status",
 }, {
 	input:  "show grants for 'root@localhost'",
+	output: "show grants for 'root@localhost'",
+}, {
+	input: "show grants",
+}, {
+	input:  "show grants for 'root'@'localhost'",
+	output: "show grants for 'root'@'localhost'",
+}, {
+	input:  "show grants for current_user",
+	output: "show grants",
+}, {
+	input:  "show grants for current_user()",
 	output: "show grants",
 }, {
 	input:  "show index from t",
@@ -2418,10 +2450,24 @@ var validSQL = []struct {
 	output: "show processlist",
 }, {
 	input:  "show full processlist",
-	output: "show processlist",
+	output: "show full processlist",
+}, {
+	input: "show profile",
+}, {
+	input:  "show profile cpu",
+	output: "show profile cpu",
+}, {
+	input:  "show profile cpu, memory",
+	output: "show profile cpu, memory",
+}, {
+	input:  "show profile all for query 1",
+	output: "show profile all for query 1",
 }, {
 	input:  "show profile cpu for query 1",
-	output: "show profile",
+	output: "show profile cpu for query 1",
+}, {
+	input:  "show profile cpu for query 1 limit 10",
+	output: "show profile cpu for query 1 limit 10",
 }, {
 	input:  "show profiles",
 	output: "show profiles",
@@ -2552,8 +2598,6 @@ var validSQL = []struct {
 }, {
 	input: "show vitess_tablets where hostname = 'some-tablet'",
 }, {
-	input: "show vitess_targets",
-}, {
 	input: "show vschema tables",
 }, {
 	input: "show vschema keyspaces",
@@ -2661,14 +2705,11 @@ var validSQL = []struct {
 }, {
 	input: "show warnings",
 }, {
+	input:  "show warnings limit 10",
+	output: "show warnings limit 10",
+}, {
 	input:  "select warnings from t",
 	output: "select `warnings` from t",
-}, {
-	input:  "show foobar",
-	output: "show foobar",
-}, {
-	input:  "show foobar like select * from table where syntax is 'ignored'",
-	output: "show foobar",
 }, {
 	// Making sure "force_cutover" is not a keyword
 	input:  "select force_cutover from t",

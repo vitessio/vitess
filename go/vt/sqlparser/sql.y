@@ -228,6 +228,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   jtOnResponse	*JtOnResponse
   variables      []*Variable
   variable       *Variable
+  userOrRole     *UserOrRole
+  userOrRoles    []UserOrRole
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -390,8 +392,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> PURGE BEFORE
 
 // SHOW tokens
-%token <str> BINLOG CODE COLLATION COLUMNS DATABASES ENGINES EVENT EVENTS EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
-%token <str> KEYSPACES LOG MASTER OPEN PLUGINS PRIVILEGES PROCESSLIST RELAYLOG REPLICA REPLICAS SCHEMAS SLAVE TABLES TRIGGERS USER
+%token <str> BINLOG CODE COLLATION COLUMNS DATABASES ENGINES ERRORS EVENT EVENTS EXTENDED FIELDS FULL FUNCTION GRANTS GTID_EXECUTED
+%token <str> KEYSPACES LOG MASTER MUTEX OPEN PLUGINS PRIVILEGES PROCESSLIST PROFILE PROFILES RELAYLOG REPLICA REPLICAS SCHEMAS SLAVE TABLES TRIGGERS USER
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA VITESS_THROTTLED_APPS
 
 // SET tokens
@@ -607,13 +609,18 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt for_opt
+%type <userOrRole> user_or_role show_grants_opt
+%type <userOrRoles> user_or_role_list
+%type <strs> show_profile_types_opt show_profile_type_list
+%type <str> show_profile_type
+%type <literal> for_query_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
 %type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
-%type <empty> skip_to_end ddl_skip_to_end
+%type <empty> skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
 %type <convertType> convert_type returning_type_opt convert_type_weight_string
@@ -4614,9 +4621,9 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
   }
-| SHOW WARNINGS
+| SHOW WARNINGS limit_opt
   {
-    $$ = &Show{&ShowBasic{Command: Warnings}}
+    $$ = &Show{&ShowBasic{Command: Warnings, Limit: $3}}
   }
 | SHOW VITESS_SHARDS like_or_where_opt
   {
@@ -4677,40 +4684,58 @@ show_statement:
   {
     $$ = &Show{&ShowReplicas{Legacy: true}}
   }
-/*
- * Catch-all for show statements without vitess keywords:
- */
-| SHOW ci_identifier ddl_skip_to_end
+| SHOW ERRORS limit_opt
   {
-    $$ = &Show{&ShowOther{Command: string($2.String())}}
+    $$ = &Show{&ShowBasic{Command: Errors, Limit: $3}}
   }
-| SHOW CREATE USER ddl_skip_to_end
+| SHOW EVENTS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
-   }
-| SHOW EVENTS ddl_skip_to_end
-  {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = &Show{&ShowBasic{Command: Events, DbName: $3, Filter: $4}}
   }
-| SHOW ENGINE ddl_skip_to_end
+| SHOW ENGINE ci_identifier STATUS
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "status"}}
+  }
+| SHOW ENGINE ci_identifier MUTEX
+  {
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "mutex"}}
   }
 | SHOW FUNCTION CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = &Show{&ShowBasic{Command: FunctionC, Tbl: $4}}
   }
 | SHOW PROCEDURE CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = &Show{&ShowBasic{Command: ProcedureC, Tbl: $4}}
   }
-| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
+| SHOW full_opt PROCESSLIST
   {
-    $$ = &Show{&ShowOther{Command: string($3)}}
+    $$ = &Show{&ShowBasic{Full: $2, Command: ProcessList}}
   }
-| SHOW STORAGE ddl_skip_to_end
+| SHOW STORAGE ENGINES
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = &Show{&ShowBasic{Command: Engines}}
+  }
+| SHOW CREATE USER user_or_role
+  {
+    $$ = &Show{&ShowCreateUser{User: $4}}
+  }
+| SHOW GRANTS show_grants_opt
+  {
+    sg := &ShowGrants{User: $3}
+    $$ = &Show{sg}
+  }
+| SHOW GRANTS FOR user_or_role USING user_or_role_list
+  {
+    $$ = &Show{&ShowGrants{User: $4, UsingRole: $6}}
+  }
+| SHOW PROFILE show_profile_types_opt for_query_opt limit_opt
+  {
+    $$ = &Show{&ShowProfile{Types: $3, ForQuery: $4, Limit: $5}}
+  }
+| SHOW PROFILES
+  {
+    $$ = &Show{&ShowBasic{Command: Profiles}}
   }
 | SHOW TRANSACTION STATUS for_opt STRING
   {
@@ -4729,6 +4754,104 @@ for_opt:
   {}
 | FOR
   {}
+
+user_or_role:
+  STRING AT_ID
+  {
+    $$ = &UserOrRole{Name: string($1), Host: formatUserOrRoleHost($2)}
+  }
+| STRING
+  {
+    $$ = &UserOrRole{Name: string($1)}
+  }
+| CURRENT_USER openb closeb
+  {
+    $$ = nil
+  }
+| CURRENT_USER
+  {
+    $$ = nil
+  }
+| ci_identifier AT_ID
+  {
+    $$ = &UserOrRole{Name: $1.String(), Host: formatUserOrRoleHost($2)}
+  }
+| ci_identifier
+  {
+    $$ = &UserOrRole{Name: $1.String()}
+  }
+
+show_grants_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR user_or_role
+  {
+    $$ = $2
+  }
+
+user_or_role_list:
+  user_or_role
+  {
+    if $1 != nil {
+      $$ = []UserOrRole{*$1}
+    }
+  }
+| user_or_role_list ',' user_or_role
+  {
+    if $3 != nil {
+      $$ = append($1, *$3)
+    }
+  }
+
+show_profile_types_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| show_profile_type_list
+  {
+    $$ = $1
+  }
+
+show_profile_type_list:
+  show_profile_type
+  {
+    $$ = []string{$1}
+  }
+| show_profile_type_list ',' show_profile_type
+  {
+    $$ = append($1, $3)
+  }
+
+show_profile_type:
+  ALL
+  {
+    $$ = "all"
+  }
+| MEMORY
+  {
+    $$ = "memory"
+  }
+| ci_identifier
+  {
+    $$ = $1.String()
+  }
+| ci_identifier ci_identifier
+  {
+    $$ = $1.String() + " " + $2.String()
+  }
+
+for_query_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR QUERY INTEGRAL
+  {
+    $$ = NewIntLiteral($3)
+  }
 
 binlog_in_opt:
   /* empty */
@@ -8982,6 +9105,7 @@ non_reserved_keyword:
 | ENGINES
 | ENUM
 | ERROR
+| ERRORS
 | ESCAPED
 | EVENT
 | EVENTS
@@ -9015,6 +9139,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GET_SOURCE_PUBLIC_KEY
 | GLOBAL
+| GRANTS
 | GROUP_CONCAT %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_EXECUTED
 | GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
@@ -9114,6 +9239,7 @@ non_reserved_keyword:
 | MULTILINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
+| MUTEX
 | MYSQL_ERRNO
 | NAME
 | NAMES
@@ -9154,6 +9280,8 @@ non_reserved_keyword:
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESS
+| PROFILE
+| PROFILES
 | PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
@@ -9415,15 +9543,4 @@ skip_to_end:
   skipToEnd(yylex)
 }
 
-ddl_skip_to_end:
-  {
-    skipToEnd(yylex)
-  }
-| openb
-  {
-    skipToEnd(yylex)
-  }
-| reserved_sql_id
-  {
-    skipToEnd(yylex)
-  }
+
