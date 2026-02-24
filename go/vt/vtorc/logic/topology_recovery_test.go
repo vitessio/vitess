@@ -567,8 +567,8 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 }
 
 func TestRecoverShardAnalyses(t *testing.T) {
-	// DeadPrimary and PrimaryHasPrimary have HasShardWideAction=true, so they
-	// require ordered execution. ReplicationStopped and ReplicaIsWritable are
+	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
+	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
 	// medium priority with no shard-wide action or before/after dependencies,
 	// so they run concurrently.
 	analyses := []*inst.DetectionAnalysis{

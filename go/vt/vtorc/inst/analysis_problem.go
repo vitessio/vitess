@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	detectionAnalysisPriorityCritical = iota
+	detectionAnalysisPriorityShardWideAction = iota
+	detectionAnalysisPriorityCritical
 	detectionAnalysisPriorityHigh
 	detectionAnalysisPriorityMedium
 	detectionAnalysisPriorityLow
@@ -35,10 +36,9 @@ const (
 
 // DetectionAnalysisProblemMeta contains basic metadata describing a problem.
 type DetectionAnalysisProblemMeta struct {
-	Analysis           AnalysisCode
-	Description        string
-	HasShardWideAction bool
-	Priority           int
+	Analysis    AnalysisCode
+	Description string
+	Priority    int
 }
 
 // DetectionAnalysisProblem describes how to match, sort and track a problem.
@@ -52,7 +52,7 @@ type DetectionAnalysisProblem struct {
 // RequiresOrderedExecution returns true if the problem must be executed
 // sequentially relative to other problems in the same shard.
 func (dap *DetectionAnalysisProblem) RequiresOrderedExecution() bool {
-	return dap.Meta.Priority == detectionAnalysisPriorityCritical || dap.Meta.HasShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0
+	return dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0
 }
 
 // GetPriority returns the priority of a problem as an int.
@@ -108,9 +108,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// PrimaryDiskStalled
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           PrimaryDiskStalled,
-			Description:        "Primary has a stalled disk",
-			HasShardWideAction: true,
+			Analysis:    PrimaryDiskStalled,
+			Description: "Primary has a stalled disk",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -121,9 +121,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// DeadPrimary*
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           DeadPrimaryWithoutReplicas,
-			Description:        "Primary cannot be reached by vtorc and has no replica",
-			HasShardWideAction: true,
+			Analysis:    DeadPrimaryWithoutReplicas,
+			Description: "Primary cannot be reached by vtorc and has no replica",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0
@@ -131,9 +131,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           DeadPrimary,
-			Description:        "Primary cannot be reached by vtorc and none of its replicas is replicating",
-			HasShardWideAction: true,
+			Analysis:    DeadPrimary,
+			Description: "Primary cannot be reached by vtorc and none of its replicas is replicating",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0
@@ -141,9 +141,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           DeadPrimaryAndReplicas,
-			Description:        "Primary cannot be reached by vtorc and none of its replicas is replicating",
-			HasShardWideAction: true,
+			Analysis:    DeadPrimaryAndReplicas,
+			Description: "Primary cannot be reached by vtorc and none of its replicas is replicating",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0
@@ -152,9 +152,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           DeadPrimaryAndSomeReplicas,
-			Description:        "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating",
-			HasShardWideAction: true,
+			Analysis:    DeadPrimaryAndSomeReplicas,
+			Description: "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
@@ -163,9 +163,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           IncapacitatedPrimary,
-			Description:        "Primary is consistently timing out on health checks and may be incapacitated",
-			HasShardWideAction: true,
+			Analysis:    IncapacitatedPrimary,
+			Description: "Primary is consistently timing out on health checks and may be incapacitated",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy
@@ -175,9 +175,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// PrimaryHasPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           PrimaryHasPrimary,
-			Description:        "Primary is replicating from somewhere else",
-			HasShardWideAction: true,
+			Analysis:    PrimaryHasPrimary,
+			Description: "Primary is replicating from somewhere else",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.IsPrimary
@@ -254,9 +254,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           PrimarySemiSyncBlocked,
-			Description:        "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs",
-			HasShardWideAction: true,
+			Analysis:    PrimarySemiSyncBlocked,
+			Description: "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount
@@ -300,9 +300,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// Cluster primary checks
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           ClusterHasNoPrimary,
-			Description:        "Cluster has no primary",
-			HasShardWideAction: true,
+			Analysis:    ClusterHasNoPrimary,
+			Description: "Cluster has no primary",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero()
@@ -310,9 +310,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:           PrimaryTabletDeleted,
-			Description:        "Primary tablet has been deleted",
-			HasShardWideAction: true,
+			Analysis:    PrimaryTabletDeleted,
+			Description: "Primary tablet has been deleted",
+			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero()
@@ -480,16 +480,9 @@ func compareDetectionAnalysisProblems(a, b *DetectionAnalysisProblem) int {
 		return -1
 	}
 
-	// effective priority (lower is better):
-	// HasShardWideAction is always treated as critical (0).
+	// effective priority (lower is better).
 	aPriority := a.GetPriority()
-	if a.Meta.HasShardWideAction {
-		aPriority = detectionAnalysisPriorityCritical
-	}
 	bPriority := b.GetPriority()
-	if b.Meta.HasShardWideAction {
-		bPriority = detectionAnalysisPriorityCritical
-	}
 	switch {
 	case aPriority > bPriority:
 		return 1

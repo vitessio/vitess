@@ -415,7 +415,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
 		if ca.hasShardWideAction {
-			// We can only take one shard level action at a time.
+			// We can only take one shard-wide action at a time.
 			return nil
 		}
 		if ca.durability == nil {
@@ -446,7 +446,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			chosenProblem := matchedProblems[0]
 			a.Analysis = chosenProblem.Meta.Analysis
 			a.Description = chosenProblem.Meta.Description
-			ca.hasShardWideAction = chosenProblem.Meta.HasShardWideAction
+			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
 		}
 
 		{

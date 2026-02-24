@@ -49,7 +49,7 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 				{
 					Meta: &DetectionAnalysisProblemMeta{
 						Analysis:    PrimaryIsReadOnly,
-						Description: "should be after DeadPrimary, not a shardWideAction, high priority",
+						Description: "should be after DeadPrimary, high priority",
 						Priority:    detectionAnalysisPriorityHigh,
 					},
 				},
@@ -71,9 +71,9 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 				},
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:           DeadPrimary,
-						Description:        "should be 1st, HasShardWideAction is always critical priority",
-						HasShardWideAction: true,
+						Analysis:    DeadPrimary,
+						Description: "should be 1st, shard-wide action priority",
+						Priority:    detectionAnalysisPriorityShardWideAction,
 					},
 				},
 			},
@@ -110,18 +110,18 @@ func TestRequiresOrderedExecution(t *testing.T) {
 		expected bool
 	}{
 		{
-			name: "critical priority",
+			name: "shard-wide action priority",
 			problem: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityCritical},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityShardWideAction},
 			},
 			expected: true,
 		},
 		{
-			name: "HasShardWideAction",
+			name: "critical priority",
 			problem: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{HasShardWideAction: true},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityCritical},
 			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name: "has BeforeAnalyses",
@@ -170,9 +170,9 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 		expected int
 	}{
 		{
-			name: "shard-wide beats non-shard-wide",
+			name: "shard-wide action beats non-shard-wide",
 			a: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{HasShardWideAction: true},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityShardWideAction},
 			},
 			b: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityHigh},
