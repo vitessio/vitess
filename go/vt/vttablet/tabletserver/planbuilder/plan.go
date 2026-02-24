@@ -278,7 +278,11 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 			plan.NeedsReservedConn = true
 		}
 		plan.Table = lookupTables(stmt.From, tables)
-	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+	case *sqlparser.Show:
+		if _, ok := stmt.Internal.(*sqlparser.ShowOther); ok {
+			plan.PlanID = PlanOtherRead
+		}
+	case *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
 	default:

@@ -358,6 +358,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	switch qre.plan.PlanID {
+	case p.PlanOtherRead:
+		return qre.streamOther(callback)
 	case p.PlanSelectStream:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
@@ -827,6 +829,20 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 	}
 	defer conn.Recycle()
 	return qre.execDBConn(conn.Conn, qre.query, true)
+}
+
+func (qre *QueryExecutor) streamOther(callback StreamCallback) error {
+	conn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	sql := qre.marginComments.Leading + qre.query + qre.marginComments.Trailing
+	return qre.execStreamSQL(conn, false, sql, func(result *sqltypes.Result) error {
+		defer returnStreamResult(result)
+		return callback(result)
+	})
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
