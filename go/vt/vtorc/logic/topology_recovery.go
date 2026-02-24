@@ -1143,11 +1143,10 @@ func CheckAndRecover() {
 	})
 	var wg sync.WaitGroup
 	for _, key := range shardKeys {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			defer wg.Done()
 			recoverShardAnalyses(analysisByShard[key], executeCheckAndRecoverFunction)
-		}()
+		})
 	}
 	wg.Wait()
 }
