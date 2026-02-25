@@ -60,6 +60,7 @@ var (
 	insertIntoFuzzInsert   = "INSERT INTO twopc_fuzzer_insert (id, updateSet, threadId) VALUES (%d, %d, %d)"
 	selectFromFuzzUpdate   = "SELECT col FROM twopc_fuzzer_update WHERE id = %d"
 	selectIdFromFuzzInsert = "SELECT threadId FROM twopc_fuzzer_insert WHERE updateSet = %d AND id = %d ORDER BY col"
+	vtgateQueryTimeout     = 5 * time.Second
 )
 
 // TestTwoPCFuzzTest tests 2PC transactions in a fuzzer environment.
@@ -277,7 +278,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(threadId)
+		fz.generateAndExecuteTransaction(t, threadId)
 	}
 
 }
@@ -306,13 +307,15 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	// Create a connection to the vtgate to run transactions.
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	if err != nil {
-		return
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), vtgateQueryTimeout)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
 	defer conn.Close()
+	_, err = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
+	require.NoError(t, err)
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -335,7 +338,12 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 			break
 		}
 	}
-	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
+	_, err = conn.ExecuteFetch(finalCommand, 0, false)
+	// We don't care about the following case of errors here as the transaction is aborted, which is what we ultimately wanted:
+	// target: ks.80-.primary: vttablet: rpc error: code = Aborted desc = transaction 1771351525769549550: in use: for query (CallerID: userData1) (errno 1317) (sqlstate 70100) during query: rollback
+	if finalCommand != "rollback" {
+		require.NoError(t, err)
+	}
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
@@ -485,6 +493,7 @@ func vttabletRestarts(t *testing.T) {
 		return
 	}
 	tablet.VttabletProcess.ServingStatus = "SERVING"
+	deadline := time.Now().Add(2 * time.Minute)
 	for {
 		err = tablet.VttabletProcess.Setup()
 		if err == nil {
@@ -493,6 +502,10 @@ func vttabletRestarts(t *testing.T) {
 		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
 		// We don't want to fail the test, so we retry setting up the vttablet.
 		log.Errorf("error restarting vttablet - %v", err)
+		if time.Now().After(deadline) {
+			log.Errorf("giving up restarting vttablet after timeout: %v", tablet.Alias)
+			return
+		}
 		time.Sleep(1 * time.Second)
 	}
 }

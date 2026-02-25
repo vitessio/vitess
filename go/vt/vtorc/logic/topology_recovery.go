@@ -32,7 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -285,7 +287,9 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Detection
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", RecoverPrimaryHasPrimaryRecoveryName, err)
+		}
 	}()
 
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
@@ -322,7 +326,9 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", recoveryName, err)
+		}
 	}()
 
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
@@ -412,7 +418,9 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", "restartDirectReplicas", err)
+		}
 	}()
 
 	// Get durability policy for the keyspace to determine semi-sync settings
@@ -1031,7 +1039,9 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis,
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, promotedReplica)
+		if err := resolveRecovery(topologyRecovery, promotedReplica); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", ElectNewPrimaryRecoveryName, err)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1081,7 +1091,9 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", FixPrimaryRecoveryName, err)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1115,7 +1127,9 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", FixReplicaRecoveryName, err)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
@@ -1150,6 +1164,8 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 // been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
 // to the current primary.
 func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	alias := analysisEntry.AnalyzedInstanceAlias
+
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
@@ -1163,10 +1179,12 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", DemoteStaleTopoPrimaryRecoveryName, err)
+		}
 	}()
 
-	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	analyzedTablet, err := inst.ReadTablet(alias)
 	if err != nil {
 		logger.Errorf("Failed to read instance %q, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
@@ -1185,7 +1203,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	}
 
 	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = tmc.DemotePrimary(ctx, analyzedTablet, true)
+	_, err = forceDemotePrimary(ctx, analyzedTablet)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
 	}
@@ -1207,6 +1225,14 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	return true, topologyRecovery, err
 }
 
+// forceDemotePrimary calls the DemotePrimary RPC for the given tablet.
+func forceDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.DemotePrimary(ctx, tablet, true)
+}
+
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
 func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
@@ -1220,7 +1246,9 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
-		_ = resolveRecovery(topologyRecovery, nil)
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Errorf("failed to resolve recovery for %q: %v", RecoverErrantGTIDDetectedName, err)
+		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)

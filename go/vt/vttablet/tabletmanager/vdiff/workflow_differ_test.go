@@ -59,7 +59,7 @@ func TestReconcileExtraRows(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
@@ -317,7 +317,7 @@ func TestReconcileReferenceTables(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	ct.sourceKeyspace = tstenv.KeyspaceName
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
@@ -428,7 +428,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	ct.sources = map[string]*migrationSource{
 		tstenv.ShardName: {
@@ -1076,7 +1076,7 @@ func TestBuildPlanFailure(t *testing.T) {
 	),
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	testcases := []struct {
 		input *binlogdatapb.Rule

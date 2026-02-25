@@ -398,15 +398,14 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	td.wgShardStreamers.Add(1)
+	resultch := participant.result
 
 	defer func() {
-		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
-		select {
-		case <-ctx.Done():
-		default:
-			close(participant.result)
-			close(gtidch)
-		}
+		log.Info("streamOneShard End on " + participant.tablet.Alias.String())
+
+		close(resultch)
+		close(gtidch)
+
 		td.wgShardStreamers.Done()
 	}()
 
@@ -455,7 +454,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 				result.Fields = nil
 			}
 			select {
-			case participant.result <- result:
+			case resultch <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:
@@ -529,8 +528,13 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	}
 	dr.TableName = td.table.Name
 
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
+	// Scope executor goroutines to this single diff attempt, rather
+	// than surviving until the controller context is canceled.
+	execCtx, cancelExec := context.WithCancel(ctx)
+	defer cancelExec()
+
+	sourceExecutor := newPrimitiveExecutor(execCtx, td.sourcePrimitive, "source")
+	targetExecutor := newPrimitiveExecutor(execCtx, td.targetPrimitive, "target")
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	advanceSource := true
 	advanceTarget := true
