@@ -732,11 +732,13 @@ func recoverShardAnalyses(analyses []*inst.DetectionAnalysis, recoverFunc func(*
 	}
 	var wg sync.WaitGroup
 	for _, analysisEntry := range concurrent {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			if err := recoverFunc(analysisEntry); err != nil {
 				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
 			}
-		})
+		}()
 	}
 	wg.Wait()
 }
