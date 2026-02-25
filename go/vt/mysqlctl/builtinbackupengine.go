@@ -30,13 +30,13 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -200,14 +200,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
-	baseDir := filepath.Clean(path.Join(fe.ParentPath, root))
-	resolved := filepath.Clean(path.Join(baseDir, fe.Name))
-
-	if !strings.HasPrefix(resolved, baseDir+string(filepath.Separator)) && resolved != baseDir {
-		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "path traversal not allowed: name %q escapes base directory %q", fe.Name, baseDir)
-	}
-
-	return resolved, nil
+	return fileutil.SafePathJoin(path.Join(fe.ParentPath, root), fe.Name)
 }
 
 // open attempts to open the file

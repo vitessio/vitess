@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/fileutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -83,7 +84,7 @@ func TestFileEntryFullPath(t *testing.T) {
 		name      string
 		entry     FileEntry
 		wantPath  string
-		wantError string
+		wantError error
 	}{
 		{
 			name:     "valid relative path in DataDir",
@@ -113,41 +114,43 @@ func TestFileEntryFullPath(t *testing.T) {
 		{
 			name:      "path traversal escapes base directory",
 			entry:     FileEntry{Base: backupData, Name: "../../etc/passwd"},
-			wantError: "path traversal not allowed",
+			wantError: fileutil.ErrInvalidJoinedPath,
 		},
 		{
 			name:      "path traversal with deeper nesting",
 			entry:     FileEntry{Base: backupData, Name: "mydb/../../../etc/shadow"},
-			wantError: "path traversal not allowed",
+			wantError: fileutil.ErrInvalidJoinedPath,
 		},
 		{
 			name:      "path traversal to root",
 			entry:     FileEntry{Base: backupData, Name: "../../../../../etc/crontab"},
-			wantError: "path traversal not allowed",
+			wantError: fileutil.ErrInvalidJoinedPath,
 		},
 		{
 			name:      "path traversal escapes ParentPath",
 			entry:     FileEntry{Base: backupData, Name: "../../../../etc/passwd", ParentPath: "/tmp/restore"},
-			wantError: "path traversal not allowed",
+			wantError: fileutil.ErrInvalidJoinedPath,
 		},
 		{
 			name:     "relative path with dot-dot that stays within base",
 			entry:    FileEntry{Base: backupData, Name: "mydb/../mydb/table1.ibd"},
 			wantPath: "/vt/data/mydb/table1.ibd",
 		},
-		{
-			name:      "unknown base",
-			entry:     FileEntry{Base: "unknown", Name: "file"},
-			wantError: "unknown base",
-		},
 	}
+
+	// Test unknown base separately since it returns a different error type.
+	t.Run("unknown base", func(t *testing.T) {
+		entry := FileEntry{Base: "unknown", Name: "file"}
+		_, err := entry.fullPath(cnf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown base")
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.entry.fullPath(cnf)
-			if tt.wantError != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantError)
+			if tt.wantError != nil {
+				require.ErrorIs(t, err, tt.wantError)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantPath, got)
