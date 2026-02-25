@@ -25,7 +25,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/netutil"
@@ -118,9 +118,12 @@ const (
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
 	params.Logger.Infof("Starting ExecuteBackup in %s", params.TabletAlias)
 
-	location := path.Join(mysqlShellBackupLocation, bh.Directory(), bh.Name())
+	location, err := be.backupLocation(bh.Directory(), bh.Name())
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "cannot safely determine backup location")
+	}
 
-	err := be.backupPreCheck(location)
+	err = be.backupPreCheck(location)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed backup precheck")
 	}
@@ -262,6 +265,14 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, err
 	}
 
+	// Reconstruct the backup location from the backup handle rather than
+	// trusting bm.BackupLocation from the MANIFEST, which could contain
+	// a path traversal if the MANIFEST was tampered with.
+	location, err := be.backupLocation(bh.Directory(), bh.Name())
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot safely determine backup location")
+	}
+
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
 		return nil, err
@@ -346,7 +357,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.loadDump(%q, %s)",
-		bm.BackupLocation,
+		location,
 		mysqlShellLoadFlags,
 	))
 
@@ -403,6 +414,14 @@ func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 }
 
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
+
+// backupLocation returns a safe backup location path by joining the
+// configured mysqlShellBackupLocation with the provided directory and
+// name components. It uses fileutil.SafePathJoin to prevent path
+// traversal outside the configured backup location.
+func (be *MySQLShellBackupEngine) backupLocation(dir, name string) (string, error) {
+	return fileutil.SafePathJoin(mysqlShellBackupLocation, dir, name)
+}
 
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
