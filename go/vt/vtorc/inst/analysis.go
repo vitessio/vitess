@@ -85,12 +85,12 @@ const (
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
-type ReplicationAnalysisHints struct {
+type DetectionAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// ReplicationAnalysis notes analysis on replication chain status, per instance
-type ReplicationAnalysis struct {
+// DetectionAnalysis notes analysis on replication chain status, per instance
+type DetectionAnalysis struct {
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
 
@@ -150,9 +150,6 @@ type ReplicationAnalysis struct {
 	IsDiskStalled                             bool
 }
 
-<<<<<<< HEAD
-func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
-=======
 // hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
 // True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
 // a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
@@ -164,11 +161,10 @@ func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, 
 }
 
 func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
->>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	i := struct {
-		ReplicationAnalysis
+		DetectionAnalysis
 	}{}
-	i.ReplicationAnalysis = *replicationAnalysis
+	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
 }

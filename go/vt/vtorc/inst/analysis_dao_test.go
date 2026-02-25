@@ -45,10 +45,10 @@ var initialSQL = []string{
 	`INSERT INTO vitess_keyspace VALUES('ks',0,'semi_sync');`,
 }
 
-// TestGetReplicationAnalysisDecision tests the code of GetReplicationAnalysis decision-making. It doesn't check the SQL query
+// TestGetDetectionAnalysisDecision tests the code of GetDetectionAnalysis decision-making. It doesn't check the SQL query
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
-func TestGetReplicationAnalysisDecision(t *testing.T) {
+func TestGetDetectionAnalysisDecision(t *testing.T) {
 	tests := []struct {
 		name           string
 		info           []*test.InfoForRecoveryAnalysis
@@ -1003,7 +1003,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
+			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
@@ -1112,7 +1112,7 @@ func TestStalePrimary(t *testing.T) {
 	// Each sampling should yield the placeholder analysis that represents the future recovery behavior once
 	// the demotion logic is implemented, which makes this test fail until the actual fix is in place.
 	for range 2 {
-		got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
+		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 		require.NoError(t, err, "expected detection analysis to run without error")
 		require.Len(t, got, 1, "expected exactly one analysis entry for the shard")
 		require.Equal(t, AnalysisCode("StaleTopoPrimary"), got[0].Analysis, "expected stale primary analysis")
@@ -1121,11 +1121,11 @@ func TestStalePrimary(t *testing.T) {
 	}
 }
 
-// TestGetReplicationAnalysis tests the entire GetReplicationAnalysis. It inserts data into the database and runs the function.
-// The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetReplicationAnalysisDecision.
+// TestGetDetectionAnalysis tests the entire GetDetectionAnalysis. It inserts data into the database and runs the function.
+// The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetDetectionAnalysisDecision.
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
-func TestGetReplicationAnalysis(t *testing.T) {
+func TestGetDetectionAnalysis(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string
@@ -1187,7 +1187,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
+			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
 				require.Len(t, got, 0)
@@ -1294,12 +1294,12 @@ func TestPostProcessAnalyses(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		analyses []*ReplicationAnalysis
-		want     []*ReplicationAnalysis
+		analyses []*DetectionAnalysis
+		want     []*DetectionAnalysis
 	}{
 		{
 			name: "No processing needed",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:       ReplicationStopped,
 					TabletType:     topodatapb.TabletType_REPLICA,
@@ -1320,7 +1320,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 		{
 			name: "Conversion of InvalidPrimary to DeadPrimary",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
@@ -1360,7 +1360,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 					ClusterDetails:        ks80,
 				},
 			},
-			want: []*ReplicationAnalysis{
+			want: []*DetectionAnalysis{
 				{
 					Analysis:              DeadPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
@@ -1383,7 +1383,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 		{
 			name: "Unable to convert InvalidPrimary to DeadPrimary",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",

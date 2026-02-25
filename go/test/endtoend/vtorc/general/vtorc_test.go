@@ -20,11 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-<<<<<<< HEAD
-=======
 	"strconv"
-	"strings"
->>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	"testing"
 	"time"
 
@@ -907,7 +903,7 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	// Start with durability "none" so no semi-sync is required initially.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -917,7 +913,7 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, primary, shard0.Vttablets, 10*time.Second)
 
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, 1)
 
 	// Change durability to semi_sync. VTOrc should detect that replicas and primary
 	// need semi-sync enabled, and fix them in the correct order.

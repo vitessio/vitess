@@ -173,18 +173,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
-	// IncapacitatedPrimary
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    IncapacitatedPrimary,
-			Description: "Primary is consistently timing out on health checks and may be incapacitated",
-			Priority:    detectionAnalysisPriorityShardWideAction,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy
-		},
-	},
-
 	// PrimaryHasPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
@@ -318,7 +306,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == ""
 		},
 	},
 	{
@@ -328,7 +316,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != ""
 		},
 	},
 
@@ -395,17 +383,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas
 		},
 	},
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    UnreachablePrimaryWithBrokenReplicas,
-			Description: "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue",
-			Priority:    detectionAnalysisPriorityMedium,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 && a.CountValidReplicatingReplicas < a.CountValidReplicas
-		},
-	},
-
 	// Locked semi-sync primary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
