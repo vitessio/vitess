@@ -324,7 +324,9 @@ func showStartsImplicitTx(stmt sqlparser.Statement) bool {
 	case *sqlparser.ShowCreate:
 		// SHOW CREATE TABLE/DATABASE/etc. do not start implicit transactions in MySQL.
 		return false
-	case *sqlparser.ShowEngine, *sqlparser.ShowGrants, *sqlparser.ShowProfile, *sqlparser.ShowCreateUser:
+	case *sqlparser.ShowEngine, *sqlparser.ShowGrants, *sqlparser.ShowProfile, *sqlparser.ShowCreateUser,
+		*sqlparser.ShowBinlogEvents, *sqlparser.ShowBinaryLogs,
+		*sqlparser.ShowReplicationStatus, *sqlparser.ShowReplicationSourceStatus, *sqlparser.ShowReplicas:
 		// Server-state commands that don't start implicit transactions in MySQL.
 		return false
 	case *sqlparser.ShowBasic:

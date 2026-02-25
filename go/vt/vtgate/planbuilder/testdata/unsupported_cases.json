@@ -443,20 +443,5 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
-  },
-  {
-    "comment": "show binary log status not supported through vtgate",
-    "query": "show binary log status",
-    "plan": "VT12001: unsupported: show binary log status"
-  },
-  {
-    "comment": "show replica status not supported through vtgate",
-    "query": "show replica status",
-    "plan": "VT12001: unsupported: show replica status"
-  },
-  {
-    "comment": "show replicas not supported through vtgate",
-    "query": "show replicas",
-    "plan": "VT12001: unsupported: show replicas"
   }
 ]

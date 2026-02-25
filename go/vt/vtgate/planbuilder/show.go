@@ -66,30 +66,11 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 		*sqlparser.ShowBinaryLogs:
 		// Backwards compatible: these were always sent to any shard
 		prim, err = buildShowOtherPlan(sql, vschema)
-	case *sqlparser.ShowReplicationStatus:
-		if show.Legacy {
-			// SHOW SLAVE STATUS - backwards compatible
-			prim, err = buildShowOtherPlan(sql, vschema)
-		} else {
-			// SHOW REPLICA STATUS - new, not supported
-			return nil, vterrors.VT12001(sqlparser.String(stmt))
-		}
-	case *sqlparser.ShowReplicationSourceStatus:
-		if show.Legacy {
-			// SHOW MASTER STATUS - backwards compatible
-			prim, err = buildShowOtherPlan(sql, vschema)
-		} else {
-			// SHOW BINARY LOG STATUS - new, not supported
-			return nil, vterrors.VT12001(sqlparser.String(stmt))
-		}
-	case *sqlparser.ShowReplicas:
-		if show.Legacy {
-			// SHOW SLAVE HOSTS - backwards compatible
-			prim, err = buildShowOtherPlan(sql, vschema)
-		} else {
-			// SHOW REPLICAS - new, not supported
-			return nil, vterrors.VT12001(sqlparser.String(stmt))
-		}
+	case *sqlparser.ShowReplicationStatus,
+		*sqlparser.ShowReplicationSourceStatus,
+		*sqlparser.ShowReplicas:
+		// Backwards compatible: these were always sent to any shard
+		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("undefined SHOW type: %T", stmt.Internal))
 	}
