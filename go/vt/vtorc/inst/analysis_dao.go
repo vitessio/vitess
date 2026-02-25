@@ -51,8 +51,8 @@ func initializeAnalysisDaoPostConfiguration() {
 
 type clusterAnalysis struct {
 	hasShardWideAction bool
-	totalTablets         int
-	primaryAlias         string
+	totalTablets       int
+	primaryAlias       string
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
