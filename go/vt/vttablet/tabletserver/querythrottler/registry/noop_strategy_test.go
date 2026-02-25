@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -94,5 +95,5 @@ func TestNoOpStrategy_Evaluate(t *testing.T) {
 
 func TestNoOpStrategy_GetStrategyName(t *testing.T) {
 	strategy := &NoOpStrategy{}
-	require.Equal(t, string(ThrottlingStrategyUnknown), strategy.GetStrategyName())
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_UNKNOWN.String(), strategy.GetStrategyName())
 }

@@ -118,7 +118,7 @@ func TestAddFileStats(t *testing.T) {
 		readOnly: false,
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		wc, err := bh.AddFile(context.Background(), fmt.Sprintf("somefile-%d", i), 100000)
 		require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 		assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")

@@ -56,9 +56,11 @@ type grHelpers struct {
 
 func (h *grHelpers) getSchema(tables []string) string {
 	var createSQL string
+	var createSQLSb59 strings.Builder
 	for _, table := range tables {
-		createSQL += fmt.Sprintf("CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table)
+		createSQLSb59.WriteString(fmt.Sprintf("CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table))
 	}
+	createSQL += createSQLSb59.String()
 	return createSQL
 }
 
@@ -173,7 +175,7 @@ func (h *grHelpers) isAmbiguous(t *testing.T, tables []string) bool {
 // the unsharded keyspace has a vschema. The value is a struct containing callbacks for verifying the global routing
 // behavior after each keyspace is added.
 func (h *grHelpers) getExpectations() *map[bool]*grTestExpectations {
-	var exp = make(map[bool]*grTestExpectations)
+	exp := make(map[bool]*grTestExpectations)
 	exp[false] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
 			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
@@ -213,12 +215,14 @@ func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []strin
 		return ""
 	}
 	vschema := `{"tables": {`
+	var vschemaSb216 strings.Builder
 	for i, table := range tables {
 		if i != 0 {
-			vschema += `,`
+			vschemaSb216.WriteString(`,`)
 		}
-		vschema += fmt.Sprintf(`"%s": {}`, table)
+		vschemaSb216.WriteString(fmt.Sprintf(`"%s": {}`, table))
 	}
+	vschema += vschemaSb216.String()
 	vschema += `}}`
 	return vschema
 }

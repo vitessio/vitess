@@ -39,13 +39,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
 // that the matching rows are correctly identified and removed.
 func TestReconcileExtraRows(t *testing.T) {
@@ -59,7 +52,7 @@ func TestReconcileExtraRows(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
@@ -317,7 +310,7 @@ func TestReconcileReferenceTables(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	ct.sourceKeyspace = tstenv.KeyspaceName
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
@@ -428,7 +421,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	ct.sources = map[string]*migrationSource{
 		tstenv.ShardName: {
@@ -1076,7 +1069,7 @@ func TestBuildPlanFailure(t *testing.T) {
 	),
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	testcases := []struct {
 		input *binlogdatapb.Rule

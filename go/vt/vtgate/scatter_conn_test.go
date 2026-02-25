@@ -17,10 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"fmt"
+	"log/slog"
 	"testing"
 
-	"github.com/aws/smithy-go/ptr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -162,21 +161,21 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			fetchLastInsertID:  true,
 			expectSessionNil:   true,
 
-			expectFetchLastID: ptr.Bool(true),
+			expectFetchLastID: new(true),
 		},
 		{
 			name:               "session options set, fetchLastInsertID = false",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  false,
 			expectSessionNil:   false,
-			expectFetchLastID:  ptr.Bool(false),
+			expectFetchLastID:  new(false),
 		},
 		{
 			name:               "session options set, fetchLastInsertID = true",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  true,
 			expectSessionNil:   false,
-			expectFetchLastID:  ptr.Bool(true),
+			expectFetchLastID:  new(true),
 		},
 	}
 
@@ -274,14 +273,14 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
-	original := log.Errorf
+	original := log.Error
 	defer func() {
-		log.Errorf = original
+		log.Error = original
 	}()
 
 	var logMessage string
-	log.Errorf = func(format string, args ...any) {
-		logMessage = fmt.Sprintf(format, args...)
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logMessage = msg
 	}
 
 	assert.Panics(t, func() {
@@ -309,7 +308,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
 		assert.EqualValues(t, 0, sbc0_1.BeginCount.Load()+sbc0_2.BeginCount.Load(), "sbc0 begin count")
@@ -345,7 +344,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:      []string{"0", "1"},
 				transaction: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve",
 		actions: []testAction{
@@ -361,7 +361,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:   []string{"0", "1"},
 				reserved: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve everywhere",
 		actions: []testAction{
@@ -370,7 +371,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				reserved:    true,
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
-			}},
+			},
+		},
 	}, {
 		name: "begin then reserve",
 		actions: []testAction{
@@ -385,7 +387,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserve then begin",
 		actions: []testAction{
@@ -404,7 +407,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin",
 		actions: []testAction{
@@ -425,7 +429,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin everywhere",
 		actions: []testAction{
@@ -437,7 +442,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Begin:   1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}}
 	for _, test := range tests {
 		keyspace := "keyspace"
@@ -596,7 +602,7 @@ func TestReservedConnFail(t *testing.T) {
 }
 
 func TestIsConnClosed(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		err       error
 		conClosed bool

@@ -16,7 +16,6 @@ limitations under the License.
 package topotests
 
 import (
-	"context"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -37,8 +36,7 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// Set up topology.
 	cells := []string{"cell1", "cell2"}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 

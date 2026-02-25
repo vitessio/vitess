@@ -457,7 +457,7 @@ func TestInvalidSchema(t *testing.T) {
 			//      t10
 			//       ^
 			//       |
-			//t12<->t11<-t13
+			// t12<->t11<-t13
 			schema: `
 				create table t10(id int primary key);
 				create table t11 (id int primary key, i int, i10 int, constraint f111205 foreign key (i) references t12 (id) on delete restrict, constraint f111005 foreign key (i10) references t10 (id) on delete restrict);
@@ -730,7 +730,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 }
 
 func TestGetEntityColumnNames(t *testing.T) {
-	var queries = []string{
+	queries := []string{
 		"create table t1(id int, state int, some char(5))",
 		"create table t2(id int primary key, c char(5))",
 		"create view v1 as select id as id from t1",
@@ -1104,7 +1104,7 @@ func TestMassiveSchema(t *testing.T) {
 		}
 		queries0 := make([]string, 0, numTables) // to be loaded into schema0
 		queries1 := make([]string, 0, numTables) // to be loaded into schema1
-		for i := 0; i < numTables; i++ {
+		for i := range numTables {
 			tableName := fmt.Sprintf("tbl_%05d", i)
 			query := strings.ReplaceAll(tableBase, "placeholder", tableName)
 			queries0 = append(queries0, query)

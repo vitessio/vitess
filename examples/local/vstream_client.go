@@ -52,14 +52,16 @@ func main() {
 				Keyspace: "customer",
 				Shard:    "80-",
 				Gtid:     "",
-			}}}
+			}},
+		}
 	} else {
 		vgtid = &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "commerce",
 				Shard:    "0",
 				Gtid:     "",
-			}}}
+			}},
+		}
 	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

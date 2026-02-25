@@ -387,7 +387,6 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 		// Where the lookup table and VReplication workflow were created.
 		TableKeyspace: baseOptions.TableKeyspace,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -411,7 +410,6 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TabletTypes:                createOptions.TabletTypes,
 		TabletSelectionPreference:  tsp,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -438,7 +436,6 @@ func commandExternalize(cmd *cobra.Command, args []string) error {
 		// Delete the workflow after externalizing, instead of stopping.
 		DeleteWorkflow: externalizeOptions.Delete,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -467,7 +464,6 @@ func commandInternalize(cmd *cobra.Command, args []string) error {
 		// Where the lookup table and VReplication workflow were created.
 		TableKeyspace: baseOptions.TableKeyspace,
 	})
-
 	if err != nil {
 		return err
 	}

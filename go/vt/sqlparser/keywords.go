@@ -142,6 +142,7 @@ var keywords = []keyword{
 	{"between", BETWEEN},
 	{"bigint", BIGINT},
 	{"binary", BINARY},
+	{"binlog", BINLOG},
 	{"bit", BIT},
 	{"bit_and", BIT_AND},
 	{"bit_or", BIT_OR},
@@ -266,9 +267,11 @@ var keywords = []keyword{
 	{"engines", ENGINES},
 	{"enum", ENUM},
 	{"error", ERROR},
+	{"errors", ERRORS},
 	{"escape", ESCAPE},
 	{"escaped", ESCAPED},
 	{"event", EVENT},
+	{"events", EVENTS},
 	{"exchange", EXCHANGE},
 	{"exclusive", EXCLUSIVE},
 	{"execute", EXECUTE},
@@ -317,6 +320,7 @@ var keywords = []keyword{
 	{"gtid_subset", GTID_SUBSET},
 	{"gtid_subtract", GTID_SUBTRACT},
 	{"grant", UNUSED},
+	{"grants", GRANTS},
 	{"group", GROUP},
 	{"grouping", UNUSED},
 	{"groups", UNUSED},
@@ -428,6 +432,7 @@ var keywords = []keyword{
 	{"locate", LOCATE},
 	{"lock", LOCK},
 	{"locked", LOCKED},
+	{"log", LOG},
 	{"logs", LOGS},
 	{"long", UNUSED},
 	{"longblob", LONGBLOB},
@@ -438,6 +443,7 @@ var keywords = []keyword{
 	{"mid", MID},
 	{"min", MIN},
 	{"manifest", MANIFEST},
+	{"master", MASTER},
 	{"master_bind", UNUSED},
 	{"manual", MANUAL},
 	{"match", MATCH},
@@ -449,6 +455,7 @@ var keywords = []keyword{
 	{"mediumtext", MEDIUMTEXT},
 	{"memory", MEMORY},
 	{"member", MEMBER},
+	{"mutex", MUTEX},
 	{"merge", MERGE},
 	{"message_text", MESSAGE_TEXT},
 	{"microsecond", MICROSECOND},
@@ -527,6 +534,8 @@ var keywords = []keyword{
 	{"purge", PURGE},
 	{"processlist", PROCESSLIST},
 	{"procedure", PROCEDURE},
+	{"profile", PROFILE},
+	{"profiles", PROFILES},
 	{"ps_current_thread_id", PS_CURRENT_THREAD_ID},
 	{"ps_thread_id", PS_THREAD_ID},
 	{"qualify", QUALIFY},
@@ -550,6 +559,7 @@ var keywords = []keyword{
 	{"regexp_replace", REGEXP_REPLACE},
 	{"regexp_substr", REGEXP_SUBSTR},
 	{"relay", RELAY},
+	{"relaylog", RELAYLOG},
 	{"release", RELEASE},
 	{"release_all_locks", RELEASE_ALL_LOCKS},
 	{"release_lock", RELEASE_LOCK},
@@ -558,6 +568,8 @@ var keywords = []keyword{
 	{"reorganize", REORGANIZE},
 	{"repair", REPAIR},
 	{"repeat", UNUSED},
+	{"replica", REPLICA},
+	{"replicas", REPLICAS},
 	{"repeatable", REPEATABLE},
 	{"replace", REPLACE},
 	{"require", UNUSED},
@@ -601,6 +613,7 @@ var keywords = []keyword{
 	{"signed", SIGNED},
 	{"simple", SIMPLE},
 	{"skip", SKIP},
+	{"slave", SLAVE},
 	{"slow", SLOW},
 	{"smallint", SMALLINT},
 	{"snapshot", SNAPSHOT},
@@ -818,8 +831,10 @@ var keywords = []keyword{
 }
 
 // keywordStrings contains the reverse mapping of token to keyword strings
-var keywordStrings = map[int]string{}
-var keywordVals = map[string]int{}
+var (
+	keywordStrings = map[int]string{}
+	keywordVals    = map[string]int{}
+)
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
@@ -875,8 +890,10 @@ func KeywordString(id int) string {
 	return str
 }
 
-const offset64 = uint64(14695981039346656037)
-const prime64 = uint64(1099511628211)
+const (
+	offset64 = uint64(14695981039346656037)
+	prime64  = uint64(1099511628211)
+)
 
 func fnv1aIstr(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {

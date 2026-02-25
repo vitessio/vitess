@@ -395,6 +395,7 @@ type Pre struct {
 func (r Pre) String() string {
 	return fmt.Sprintf("Pre(%s)", r.el.String())
 }
+
 func (r Post) String() string {
 	return fmt.Sprintf("Post(%s)", r.el.String())
 }
@@ -411,10 +412,12 @@ func (tv *rewriteTestVisitor) pre(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
 	return true
 }
+
 func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Post{el: cursor.Node()})
 	return true
 }
+
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	t.Helper()
 	assertStepsEqual(t, tv.walk, expected)

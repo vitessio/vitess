@@ -17,7 +17,6 @@
 package io.vitess.util;
 
 import com.google.protobuf.ByteString;
-
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 
@@ -61,6 +60,7 @@ public class Constants {
   }
 
 
+  /** SQLExceptionMessages contains standard SQL exception message strings. */
   public static final class SQLExceptionMessages {
 
     public static final String CONN_UNAVAILABLE = "Connection not available";
@@ -121,6 +121,7 @@ public class Constants {
   }
 
 
+  /** Property contains JDBC connection property name constants. */
   public static final class Property {
 
     @Deprecated
@@ -156,10 +157,12 @@ public class Constants {
   }
 
 
+  /** QueryExecuteType defines whether queries execute in simple or streaming mode. */
   public enum QueryExecuteType {
     SIMPLE, STREAM
   }
 
+  /** ZeroDateTimeBehavior defines how zero datetime values are handled. */
   public enum ZeroDateTimeBehavior {
     /**
      * This is the current behavior. It completely garbles null timestamps. It is mostly likely

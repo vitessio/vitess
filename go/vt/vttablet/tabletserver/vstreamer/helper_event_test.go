@@ -68,10 +68,8 @@ const (
 	lengthJSON      = 4294967295
 )
 
-var (
-	// noEvents is used to indicate that a query is expected to generate no events.
-	noEvents = []TestRowEvent{}
-)
+// noEvents is used to indicate that a query is expected to generate no events.
+var noEvents = []TestRowEvent{}
 
 // TestColumn has all the attributes of a column required for the test cases.
 type TestColumn struct {
@@ -648,13 +646,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 	var hasSkip bool
 	for i, l := range currentState.Lengths {
 		skip := false
-		isPKColumn := false
-		for _, pkColumn := range ts.pkColumns[table] {
-			if pkColumn == ts.fieldEvents[table].cols[i].name {
-				isPKColumn = true
-				break
-			}
-		}
+		isPKColumn := slices.Contains(ts.pkColumns[table], ts.fieldEvents[table].cols[i].name)
 		if ts.options.noblob {
 			switch ts.fieldEvents[table].cols[i].dataTypeLowered {
 			case "blob", "text":
@@ -741,9 +733,11 @@ func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
 }
 
 func getLastPKEvent(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
-	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
+	lastPK := getQRFromLastPK([]*query.Field{{
+		Name: colName,
 		Type: colType, Charset: collationId,
-		Flags: flags}}, colValue)
+		Flags: flags,
+	}}, colValue)
 	ev := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_LASTPK,
 		LastPKEvent: &binlogdatapb.LastPKEvent{

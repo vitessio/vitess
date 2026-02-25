@@ -509,7 +509,7 @@ func TestUpdateWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}
@@ -544,7 +544,7 @@ func TestDeleteWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}

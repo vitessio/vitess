@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -270,7 +271,7 @@ func (code JoinOpcode) String() string {
 // MarshalJSON serializes the JoinOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code JoinOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -280,12 +281,8 @@ func (jn *Join) NeedsTransaction() bool {
 
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
-	for k, v := range bv1 {
-		out[k] = v
-	}
-	for k, v := range bv2 {
-		out[k] = v
-	}
+	maps.Copy(out, bv1)
+	maps.Copy(out, bv2)
 	return out
 }
 

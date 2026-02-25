@@ -17,16 +17,10 @@
 package io.vitess.util;
 
 import io.vitess.proto.Query;
-
 import java.sql.Connection;
 import java.sql.Types;
 import java.util.HashMap;
 import java.util.Map;
-
-/**
- * Created by ashudeep.sharma on 07/03/16.
- */
-
 
 /**
  * MysqlDefs contains many values that are needed for communication with the MySQL server.

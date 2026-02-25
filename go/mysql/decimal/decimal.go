@@ -68,10 +68,12 @@ var divisionPrecision = 16
 // Zero should never be compared with == or != directly, please use decimal.Equal or decimal.Cmp instead.
 var Zero = New(0, 0)
 
-var zeroInt = big.NewInt(0)
-var oneInt = big.NewInt(1)
-var fiveInt = big.NewInt(5)
-var tenInt = big.NewInt(10)
+var (
+	zeroInt = big.NewInt(0)
+	oneInt  = big.NewInt(1)
+	fiveInt = big.NewInt(5)
+	tenInt  = big.NewInt(10)
+)
 
 const powTabLen = 20
 

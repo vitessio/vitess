@@ -42,8 +42,10 @@ import (
 	cmp "vitess.io/vitess/go/test/utils"
 )
 
-var testMessage = "{\"message\": \"hello world\"}"
-var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+var (
+	testMessage         = "{\"message\": \"hello world\"}"
+	testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+)
 
 var createMessage = `
 create table vitess_message(
@@ -594,7 +596,7 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
-				log.Infof("Message stream ended: %v", err)
+				log.Info(fmt.Sprintf("Message stream ended: %v", err))
 				return
 			}
 
@@ -639,7 +641,7 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 	}
 }
 
-func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
+func parseDebugVars(t *testing.T, output any, vttablet *cluster.Vttablet) {
 	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
 	resp, err := http.Get(debugVarURL)
 	if err != nil {

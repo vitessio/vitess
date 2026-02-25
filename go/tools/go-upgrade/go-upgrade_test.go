@@ -87,6 +87,14 @@ func TestRegularExpressions(t *testing.T) {
 				require.Equal(t, `flag.String("bootstrap-version", "18.2", "the version identifier to use for the docker images")`, res)
 			},
 		},
+		{
+			regexp: regexpReplaceGolangDockerImage,
+			input:  "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:414a753c2f67d0efccb01b5f58b3d3a8a2cbb7c012ce9e535418b5b3492b2c24 AS builder",
+			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
+				res := regexp.ReplaceAllString(input, "${1}1.25.4-bookworm@sha256:1111111111111111111111111111111111111111111111111111111111111111")
+				require.Equal(t, "FROM --platform=linux/amd64 golang:1.25.4-bookworm@sha256:1111111111111111111111111111111111111111111111111111111111111111 AS builder", res)
+			},
+		},
 	}
 
 	for _, list := range lists {

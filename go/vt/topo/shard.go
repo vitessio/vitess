@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path"
 	"slices"
 	"sort"
@@ -183,7 +184,6 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	shardPath := shardFilePath(keyspace, shard)
 
 	data, version, err := ts.globalCell.Get(ctx, shardPath)
-
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +415,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 		if remove {
 			// We tried to remove something that doesn't exist, log a warning.
 			// But we know that our work is done.
-			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			log.Warn(fmt.Sprintf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName))
 			return nil
 		}
 
@@ -451,13 +451,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
 	var newTables []string
 	for _, table := range tables {
-		exists := false
-		for _, blt := range tc.DeniedTables {
-			if blt == table {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(tc.DeniedTables, table)
 		if !exists {
 			newTables = append(newTables, table)
 		}
@@ -465,18 +459,12 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if remove {
 		if len(newTables) != 0 {
 			// These tables did not exist in the denied list so we don't need to remove them.
-			log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
+			log.Warn(fmt.Sprintf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ",")))
 		}
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
 			for _, blt := range tc.DeniedTables {
-				mustDelete := false
-				for _, table := range tables {
-					if blt == table {
-						mustDelete = true
-						break
-					}
-				}
+				mustDelete := slices.Contains(tables, blt)
 				if !mustDelete {
 					newDenyList = append(newDenyList, blt)
 				}
@@ -491,7 +479,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if len(newTables) != len(tables) {
 		// Some of the tables already existed in the DeniedTables list so we don't
 		// need to add them.
-		log.Warningf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ","))
+		log.Warn(fmt.Sprintf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ",")))
 		// We do need to merge the lists, however.
 		tables = append(tables, newTables...)
 		tc.DeniedTables = append(tc.DeniedTables, tables...)
@@ -534,12 +522,7 @@ func InCellList(cell string, cells []string) bool {
 	if len(cells) == 0 {
 		return true
 	}
-	for _, c := range cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cells, cell)
 }
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the
@@ -617,7 +600,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	wg.Wait()
 	err = nil
 	if rec.HasErrors() {
-		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error())
+		log.Warn(fmt.Sprintf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error()))
 		err = NewError(PartialResult, shard)
 	}
 

@@ -129,7 +129,7 @@ func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, n
 	cs := c.charset
 
 	hasher.Write64(uint64(c.id))
-	var left = numCodepoints
+	left := numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
 	}
@@ -157,8 +157,8 @@ func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	var sort = c.unicase.unicodeSort
-	var equals = func(a, b rune) bool {
+	sort := c.unicase.unicodeSort
+	equals := func(a, b rune) bool {
 		return sort(a) == sort(b)
 	}
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
@@ -295,7 +295,7 @@ func (c *Collation_unicode_bin) hashUnicode(hasher *vthash.Hasher, src []byte, n
 	cs := c.charset
 
 	hasher.Write64(uint64(c.id))
-	var left = numCodepoints
+	left := numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
 	}
@@ -320,7 +320,7 @@ func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCo
 	cs := c.charset
 
 	hasher.Write64(uint64(c.id))
-	var left = numCodepoints
+	left := numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
 	}

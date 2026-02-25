@@ -58,8 +58,7 @@ func TestGRPCTabletConn(t *testing.T) {
 	go server.Serve(listener)
 	defer server.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
@@ -114,8 +113,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,

@@ -90,12 +90,10 @@ func TestDBDDLPlugin(t *testing.T) {
 
 	createAndDrop := func(t *testing.T) {
 		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			qr := utils.Exec(t, conn, `create database aaa`)
 			require.EqualValues(t, 1, qr.RowsAffected)
-		}()
+		})
 		time.Sleep(300 * time.Millisecond)
 		start(t, "aaa")
 
@@ -107,11 +105,9 @@ func TestDBDDLPlugin(t *testing.T) {
 		utils.Exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
 		utils.AssertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = utils.Exec(t, conn, `drop database aaa`)
-		}()
+		})
 		time.Sleep(300 * time.Millisecond)
 		shutdown(t, "aaa")
 

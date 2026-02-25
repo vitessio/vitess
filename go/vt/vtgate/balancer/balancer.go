@@ -248,7 +248,7 @@ func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletH
 	allocationMap, totalAllocation := b.getAllocation(target, tablets)
 
 	r := rand.IntN(totalAllocation)
-	for i := 0; i < numTablets; i++ {
+	for i := range numTablets {
 		flow := allocationMap[tablets[i].Tablet.Alias.Uid]
 		if r < flow {
 			return tablets[i]

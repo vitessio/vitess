@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -186,10 +187,8 @@ func (pp *TxPreparedPool) IsEmptyForTable(tableName string) bool {
 	}
 	for _, connection := range pp.conns {
 		for _, query := range connection.txProps.Queries {
-			for _, table := range query.Tables {
-				if table == tableName {
-					return false
-				}
+			if slices.Contains(query.Tables, tableName) {
+				return false
 			}
 		}
 	}

@@ -30,11 +30,14 @@ export const filterNouns = <T extends { [k: string]: any }>(needle: string | nul
     const [kvTokens, otherTokens] = partition(tokens, (t) => t.type === SearchTokenTypes.KEY_VALUE);
 
     // This assumes that values are ALWAYS exact matches.
-    const kvMap = (kvTokens as KeyValueSearchToken[]).reduce((acc, t) => {
-        if (!(t.key in acc)) acc[t.key] = [];
-        acc[t.key].push(t.value.toLowerCase());
-        return acc;
-    }, {} as { [key: string]: string[] });
+    const kvMap = (kvTokens as KeyValueSearchToken[]).reduce(
+        (acc, t) => {
+            if (!(t.key in acc)) acc[t.key] = [];
+            acc[t.key].push(t.value.toLowerCase());
+            return acc;
+        },
+        {} as { [key: string]: string[] }
+    );
 
     // Filter out key/value tokens first
     const results = haystack.filter((noun: T) => {

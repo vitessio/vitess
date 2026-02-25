@@ -241,6 +241,13 @@ func (a *streamExecuteMultiAdapter) Recv() (*sqltypes.Result, bool, error) {
 		// we reach here, only when it is the last packet.
 		// as in the last packet we receive the session and there is no result
 	}
+
+	// When a new result set starts, clear cached fields from the previous
+	// result set.
+	if newResult {
+		a.fields = nil
+	}
+
 	if err != nil {
 		return nil, newResult, err
 	}
@@ -319,7 +326,8 @@ func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
 }
 
 func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (vtgateconn.VStreamReader, error) {
 	req := &vtgatepb.VStreamRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		TabletType: tabletType,

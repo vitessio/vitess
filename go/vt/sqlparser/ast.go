@@ -623,8 +623,7 @@ type (
 	DDLAction int8
 
 	// Load represents a LOAD statement
-	Load struct {
-	}
+	Load struct{}
 
 	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
 	PurgeBinaryLogs struct {
@@ -899,10 +898,12 @@ func (*HandlerConditionSQLException) iHandlerCondition() {}
 func (*HandlerConditionSQLWarning) iHandlerCondition()   {}
 func (*HandlerConditionNotFound) iHandlerCondition()     {}
 
-var _ OrderAndLimit = (*Select)(nil)
-var _ OrderAndLimit = (*Update)(nil)
-var _ OrderAndLimit = (*Delete)(nil)
-var _ OrderAndLimit = (*ValuesStatement)(nil)
+var (
+	_ OrderAndLimit = (*Select)(nil)
+	_ OrderAndLimit = (*Update)(nil)
+	_ OrderAndLimit = (*Delete)(nil)
+	_ OrderAndLimit = (*ValuesStatement)(nil)
+)
 
 func (*Union) iStatement()                 {}
 func (*Select) iStatement()                {}
@@ -2011,6 +2012,7 @@ type (
 		Tbl     TableName
 		DbName  IdentifierCS
 		Filter  *ShowFilter
+		Limit   *Limit
 	}
 
 	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
@@ -2025,16 +2027,77 @@ type (
 		Op      TableName
 	}
 
-	// ShowOther is of ShowInternal type, holds show queries that is not handled specially.
-	ShowOther struct {
-		Command string
+	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
+	UserOrRole struct {
+		Name string
+		Host string
 	}
+
+	// ShowEngine represents SHOW ENGINE engine_name {STATUS | MUTEX}.
+	ShowEngine struct {
+		EngineName string
+		Action     string // "status" or "mutex"
+	}
+
+	// ShowGrants represents SHOW GRANTS [FOR user_or_role [USING role, ...]].
+	ShowGrants struct {
+		User      *UserOrRole
+		UsingRole []UserOrRole
+	}
+
+	// ShowProfile represents SHOW PROFILE [type, ...] [FOR QUERY n] [LIMIT row_count [OFFSET offset]].
+	ShowProfile struct {
+		Types    []string
+		ForQuery *Literal
+		Limit    *Limit
+	}
+
+	// ShowCreateUser represents SHOW CREATE USER user_or_role.
+	ShowCreateUser struct {
+		User *UserOrRole
+	}
+
+	// ShowBinlogEvents represents SHOW BINLOG EVENTS / SHOW RELAYLOG EVENTS statements.
+	ShowBinlogEvents struct {
+		IsRelaylog bool
+		LogName    string
+		Position   Expr
+		Limit      *Limit
+		Channel    string // only for RELAYLOG
+	}
+
+	// ShowReplicationStatus represents SHOW REPLICA STATUS / SHOW SLAVE STATUS statements.
+	ShowReplicationStatus struct {
+		Legacy  bool // true for SLAVE (deprecated), false for REPLICA
+		Channel string
+	}
+
+	// ShowReplicationSourceStatus represents SHOW BINARY LOG STATUS / SHOW MASTER STATUS statements.
+	ShowReplicationSourceStatus struct {
+		Legacy bool // true for MASTER (deprecated), false for BINARY LOG
+	}
+
+	// ShowReplicas represents SHOW REPLICAS / SHOW SLAVE HOSTS statements.
+	ShowReplicas struct {
+		Legacy bool // true for SLAVE HOSTS (deprecated), false for REPLICAS
+	}
+
+	// ShowBinaryLogs represents SHOW BINARY LOGS statement.
+	ShowBinaryLogs struct{}
 )
 
-func (*ShowBasic) isShowInternal()             {}
-func (*ShowCreate) isShowInternal()            {}
-func (*ShowOther) isShowInternal()             {}
-func (*ShowTransactionStatus) isShowInternal() {}
+func (*ShowBasic) isShowInternal()                   {}
+func (*ShowCreate) isShowInternal()                  {}
+func (*ShowEngine) isShowInternal()                  {}
+func (*ShowGrants) isShowInternal()                  {}
+func (*ShowProfile) isShowInternal()                 {}
+func (*ShowCreateUser) isShowInternal()              {}
+func (*ShowTransactionStatus) isShowInternal()       {}
+func (*ShowBinlogEvents) isShowInternal()            {}
+func (*ShowReplicationStatus) isShowInternal()       {}
+func (*ShowReplicationSourceStatus) isShowInternal() {}
+func (*ShowReplicas) isShowInternal()                {}
+func (*ShowBinaryLogs) isShowInternal()              {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -3873,6 +3936,7 @@ func (count *Count) SetArgs(exprs []Expr) error {
 	count.Args = exprs
 	return nil
 }
+
 func (grpConcat *GroupConcatExpr) SetArgs(exprs []Expr) error {
 	grpConcat.Exprs = exprs
 	return nil

@@ -136,9 +136,7 @@ var (
 	writeMetrics WriteMetrics
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -169,7 +167,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -236,7 +234,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
 	})
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This first tests the general functionality of initializing the table with data,
 		// no concurrency involved. Just counting.
 		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
@@ -245,7 +243,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			testSelectTableMetrics(t)
 		})
 	}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This tests running a workload on the table, then comparing expected metrics with
 		// actual table metrics. All this without any ALTER TABLE: this is to validate
 		// that our testing/metrics logic is sound in the first place.
@@ -257,11 +255,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			defer cancel()
 
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				runMultipleConnections(ctx, t)
-			}()
+			})
 			wg.Wait()
 			testSelectTableMetrics(t)
 		})
@@ -277,7 +273,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// Finally, this is the real test:
 		// We populate a table, and begin a concurrent workload (this is the "mini stress")
 		// We then ALTER TABLE via vreplication.
@@ -298,11 +294,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				defer cancel()
 
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					runMultipleConnections(ctx, t)
-				}()
+				})
 				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -493,7 +487,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
-	log.Infof("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -517,7 +511,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -537,22 +531,20 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
-	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
+	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, sleepInterval)
-		}()
+		})
 	}
 	wg.Wait()
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	t.Run("cancel pending migrations", func(t *testing.T) {
 		cancelQuery := "alter vitess_migration cancel all"
@@ -572,13 +564,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }
@@ -596,7 +588,7 @@ func testSelectTableMetrics(t *testing.T) {
 		fmt.Printf("# max op_order in table: %d\n", maxOpOrder)
 	}
 
-	log.Infof("%s", writeMetrics.String())
+	log.Info(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -608,7 +600,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 	assert.NotZero(t, numRows)

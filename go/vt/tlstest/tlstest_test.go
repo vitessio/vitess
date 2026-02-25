@@ -248,7 +248,7 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 	firstConfigChannel := make(chan *tls.Config, configsToGenerate)
 	secondConfigChannel := make(chan *tls.Config, configsToGenerate)
 
-	var configCounter = 0
+	configCounter := 0
 
 	for i := 1; i <= configsToGenerate; i++ {
 		go func() {
@@ -293,7 +293,6 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		clientServerKeyPairs.ClientCRL,
 		serverCA,
 		tls.VersionTLS12)
-
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -323,15 +322,13 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 	wg := sync.WaitGroup{}
 
 	var clientErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		var clientConn *tls.Conn
 		clientConn, clientErr = tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
 		if clientErr == nil {
 			clientConn.Close()
 		}
-	}()
+	})
 
 	serverConn, err := listener.Accept()
 	if err != nil {

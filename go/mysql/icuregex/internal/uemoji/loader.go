@@ -29,10 +29,12 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var uemojiOnce sync.Once
-var uemoji struct {
-	trie *utrie.UcpTrie
-}
+var (
+	uemojiOnce sync.Once
+	uemoji     struct {
+		trie *utrie.UcpTrie
+	}
+)
 
 func loadUEmoji() {
 	uemojiOnce.Do(func() {

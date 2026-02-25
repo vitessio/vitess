@@ -21,6 +21,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -30,6 +31,7 @@ const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
 	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	IncapacitatedPrimary                   AnalysisCode = "IncapacitatedPrimary"
 	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
 	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
@@ -60,6 +62,10 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+
+	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
+	// has been elected. VTOrc should demote this primary to a replica.
+	StaleTopoPrimary AnalysisCode = "StaleTopoPrimary"
 )
 
 type StructureAnalysisCode string
@@ -87,10 +93,15 @@ type DetectionAnalysisHints struct {
 
 // DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
-	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryAlias              string
-	TabletType                                topodatapb.TabletType
-	CurrentTabletType                         topodatapb.TabletType
+	AnalyzedInstanceAlias        string
+	AnalyzedInstancePrimaryAlias string
+
+	// TabletType is the tablet's type as seen in the topology.
+	TabletType topodatapb.TabletType
+
+	// CurrentTabletType is the type this tablet is currently running as.
+	CurrentTabletType topodatapb.TabletType
+
 	PrimaryTimeStamp                          time.Time
 	AnalyzedKeyspace                          string
 	AnalyzedShard                             string
@@ -102,15 +113,18 @@ type DetectionAnalysis struct {
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool
 	LastCheckValid                            bool
+	PrimaryHealthUnhealthy                    bool
 	LastCheckPartialSuccess                   bool
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	ReplicationStopped                        bool
 	ErrantGTID                                string
 	ReplicaNetTimeout                         int32
 	HeartbeatInterval                         float64
 	Analysis                                  AnalysisCode
+	AnalysisMatchedProblems                   []*DetectionAnalysisProblemMeta
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
@@ -137,6 +151,16 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+}
+
+// hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
 }
 
 func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {

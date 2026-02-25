@@ -19,11 +19,10 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
 	"reflect"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"

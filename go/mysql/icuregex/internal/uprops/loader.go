@@ -29,11 +29,13 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 )
 
-var pnamesOnce sync.Once
-var pnames struct {
-	valueMaps []uint32
-	byteTrie  []uint8
-}
+var (
+	pnamesOnce sync.Once
+	pnames     struct {
+		valueMaps []uint32
+		byteTrie  []uint8
+	}
+)
 
 func valueMaps() []uint32 {
 	loadPNames()

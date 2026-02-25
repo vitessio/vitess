@@ -260,7 +260,8 @@ func (client *fakeTabletManagerClient) AddSchemaChange(sql string, schemaResult 
 }
 
 func (client *fakeTabletManagerClient) AddSchemaDefinition(
-	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition) {
+	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition,
+) {
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
@@ -372,7 +373,8 @@ type fakeController struct {
 }
 
 func newFakeController(
-	sqls []string, openFail bool, readFail bool, closeFail bool) *fakeController {
+	sqls []string, openFail bool, readFail bool, closeFail bool,
+) *fakeController {
 	return &fakeController{
 		sqls:      sqls,
 		keyspace:  "test_keyspace",

@@ -42,8 +42,7 @@ import (
 )
 
 func TestStateOpenClose(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -66,8 +65,7 @@ func TestStateOpenClose(t *testing.T) {
 }
 
 func TestStateRefreshFromTopo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -77,8 +75,7 @@ func TestStateRefreshFromTopo(t *testing.T) {
 }
 
 func TestStateResharding(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -105,8 +102,7 @@ func TestStateResharding(t *testing.T) {
 }
 
 func TestStateDenyList(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -137,8 +133,7 @@ func TestStateDenyList(t *testing.T) {
 }
 
 func TestStateTabletControls(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -166,8 +161,7 @@ func TestStateTabletControls(t *testing.T) {
 }
 
 func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -338,8 +332,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 }
 
 func TestStateNonServing(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -355,8 +348,7 @@ func TestStateNonServing(t *testing.T) {
 }
 
 func TestStateChangeTabletType(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
@@ -397,8 +389,7 @@ func TestStateChangeTabletType(t *testing.T) {
 the new table type
 */
 func TestStateChangeTabletTypeWithFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
 	// create TM with replica and put a hook to return error during SetServingType
@@ -530,8 +521,7 @@ func TestPublishStateNew(t *testing.T) {
 	// we can't do using memorytopo, but we do test the retry
 	// code path.
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 42, "ks", "0", nil)
 	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
@@ -577,8 +567,7 @@ func TestPublishStateNew(t *testing.T) {
 }
 
 func TestPublishDeleted(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
 	defer tm.Stop()

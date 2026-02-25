@@ -62,8 +62,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -116,15 +115,18 @@ func TestNoBlob(t *testing.T) {
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
 		{"update t1 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t2 values (1, 'text1', 'aaa')", nil},
 		{"update t2 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t4 (id, blb, val) values (1, 'text1', 'aaa')", []TestRowEvent{
 			{event: insertGeneratedFE.String()},
 			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{after: []string{"1", "aaatsty", "text1", "aaa"}}}}},
@@ -200,7 +202,8 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
 	defer ts.Close()
 	ts.Init()
@@ -333,9 +336,11 @@ func TestStmtComment(t *testing.T) {
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa')", nil},
 		{"commit", nil},
-		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
-			{restart: true, event: "gtid"},
-			{event: "other"}},
+		{
+			"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
+				{restart: true, event: "gtid"},
+				{event: "other"},
+			},
 		},
 	}}
 	ts.Run()
@@ -384,9 +389,11 @@ func TestVersion(t *testing.T) {
 		// External table events don't get sent.
 		output: [][]string{{
 			`begin`,
-			`type:VERSION`}, {
+			`type:VERSION`,
+		}, {
 			`gtid`,
-			`commit`}},
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
 	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid)
@@ -543,9 +550,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
-	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
+	log.Info("Pos before bulk insert: " + primaryPosition(t))
 	insertSomeRows(t, 10)
-	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
+	log.Info("Pos after bulk insert: " + primaryPosition(t))
 
 	ctx := context.Background()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
@@ -636,7 +643,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
-	log.Infof("Pos at end of test: %s", primaryPosition(t))
+	log.Info("Pos at end of test: " + primaryPosition(t))
 }
 
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
@@ -651,8 +658,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	ts.Init()
 	defer ts.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/t2.*",
@@ -685,7 +691,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		fe.enumSetStrings = true
 	}
 
-	var expectedEvents = []string{
+	expectedEvents := []string{
 		"begin",
 		t1FieldEvent.String(),
 		"gtid",
@@ -734,7 +740,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				allEvents = append(allEvents, ev)
 			}
 			if len(allEvents) == len(expectedEvents) {
-				log.Infof("Got %d events as expected", len(allEvents))
+				log.Info(fmt.Sprintf("Got %d events as expected", len(allEvents)))
 				for i, ev := range allEvents {
 					ev.Timestamp = 0
 					switch ev.Type {
@@ -1473,8 +1479,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -1895,8 +1900,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -1949,6 +1953,59 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+func TestRowsQueryEvent(t *testing.T) {
+	if !checkIfOptionIsSupported(t, "binlog_rows_query_log_events") {
+		t.Skip("binlog_rows_query_log_events not supported")
+	}
+
+	execStatements(t, []string{
+		"create table rq_test(id int, val varbinary(600), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table rq_test",
+	})
+
+	longVal := strings.Repeat("a", 500)
+
+	testcases := []testcase{
+		{
+			input: []string{
+				"set @@session.binlog_rows_query_log_events=ON",
+				"begin",
+				"insert into rq_test values (1, 'aaa')",
+				"commit",
+				"set @@session.binlog_rows_query_log_events=OFF",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:ROWS_QUERY statement:"insert into rq_test values (1, 'aaa')"`,
+				fmt.Sprintf(`type:FIELD field_event:{table_name:"rq_test" fields:{name:"id" type:INT32 table:"rq_test" org_table:"rq_test" database:"%s" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"rq_test" org_table:"rq_test" database:"%s" org_name:"val" column_length:600 charset:63 column_type:"varbinary(600)"}}`, testenv.DBName, testenv.DBName),
+				`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+				`gtid`,
+				`commit`,
+			}},
+		},
+		{ // An SQL statement longer than 255 chars (uint8 length)
+			input: []string{
+				"set @@session.binlog_rows_query_log_events=ON",
+				"begin",
+				"insert into rq_test values (2, '" + longVal + "')",
+				"commit",
+				"set @@session.binlog_rows_query_log_events=OFF",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:ROWS_QUERY statement:"insert into rq_test values (2, '` + longVal + `')"`,
+				// No Field event is generated because we re-use the cached plan.
+				`type:ROW row_event:{table_name:"rq_test" row_changes:{after:{lengths:1 lengths:500 values:"2` + longVal + `"}}}`,
+				`gtid`,
+				`commit`,
+			}},
+		},
+	}
+	runCases(t, nil, testcases, "", nil)
+}
+
 func TestHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1962,8 +2019,7 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
 	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
@@ -2013,8 +2069,7 @@ func TestNoFutureGTID(t *testing.T) {
 	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {

@@ -37,7 +37,7 @@ func TestPrometheusCounter(t *testing.T) {
 	c := stats.NewCounter(name, "blah")
 	c.Add(1)
 	checkHandlerForMetrics(t, name, 1)
-	//TODO: ban this? And for other counter types too?
+	// TODO: ban this? And for other counter types too?
 	// c.Add(-1)
 	c.Reset()
 	checkHandlerForMetrics(t, name, 0)
@@ -262,7 +262,7 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 	response := testMetricsHandler(t)
 
 	kvPairs := make([]string, 0)
-	for i := 0; i < len(labels); i++ {
+	for i := range labels {
 		kvPairs = append(kvPairs, fmt.Sprintf("%s=\"%s\"", labels[i], labelValues[i]))
 	}
 

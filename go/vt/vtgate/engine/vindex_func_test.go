@@ -46,7 +46,7 @@ func (*uvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	destinations := make([]key.ShardDestination, 0, len(ids))
 	dkid := []byte("foo")
-	for i := 0; i < len(ids); i++ {
+	for range ids {
 		if v.matchkr {
 			destinations = append(destinations,
 				key.DestinationKeyRange{
@@ -77,7 +77,7 @@ func (*nvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 
 func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	destinations := make([]key.ShardDestination, 0)
-	for i := 0; i < len(ids); i++ {
+	for range ids {
 		if v.matchid {
 			destinations = append(destinations,
 				[]key.ShardDestination{

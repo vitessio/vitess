@@ -1,31 +1,43 @@
-FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:414a753c2f67d0efccb01b5f58b3d3a8a2cbb7c012ce9e535418b5b3492b2c24
+# Copyright 2026 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG image=golang:1.26.0-bookworm@sha256:eae3cdfa040d0786510a5959d36a836978724d03b34a166ba2e0e198baac9196
+
+# Build the Vitess Go binaries
+FROM $image
 
 # Install Vitess build dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && apt-get install -y --no-install-recommends \
     # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
     ant \
     ca-certificates \
-    chromium \
     curl \
-    default-jdk \
-    etcd-client \
-    etcd-server \
+    default-jdk-headless \
     g++ \
     git \
     gnupg \
     make \
-    maven \
     unzip \
     zip \
-    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (equivalent to '. dev.env')
-ENV VTROOT /vt/src/vitess.io/vitess
-ENV VTDATAROOT /vt/vtdataroot
-ENV VTPORTSTART 15000
-ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
-ENV USER vitess
+ENV VTROOT=/vt/src/vitess.io/vitess
+ENV VTDATAROOT=/vt/vtdataroot
+ENV VTPORTSTART=15000
+ENV PATH=$VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
+ENV USER=vitess
 
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
@@ -33,13 +45,15 @@ COPY config /vt/src/vitess.io/vitess/config
 COPY tools /vt/src/vitess.io/vitess/tools
 
 # Create vitess user
-RUN groupadd -r vitess && useradd -r -g vitess vitess && \
+RUN groupadd -r -g 1000 vitess && \
+    useradd -r -u 1000 -g 1000 vitess && \
     mkdir -p /vt/vtdataroot /home/vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
 # Download vendored Go dependencies
-RUN cd /vt/src/vitess.io/vitess && \
- su vitess -c "/usr/local/go/bin/go mod download"
+RUN --mount=type=cache,target=/go/pkg/mod,uid=1000,gid=1000 \
+    cd /vt/src/vitess.io/vitess && \
+    su vitess -c "/usr/local/go/bin/go mod download"
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
@@ -52,7 +66,7 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
-RUN ./bootstrap.sh
+RUN BUILD_CONSUL=0 ./bootstrap.sh
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]

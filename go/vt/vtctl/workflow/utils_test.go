@@ -31,8 +31,7 @@ import (
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
 func TestCreateDefaultShardRoutingRules(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ks1 := &testKeyspace{
 		KeyspaceName: "sourceks",
@@ -101,8 +100,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
 func TestUpdateKeyspaceRoutingRule(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	routes := make(map[string]string)
@@ -136,7 +134,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 	})
 
 	etcdServerAddress := startEtcd(t)
-	log.Infof("Successfully started etcd server at %s", etcdServerAddress)
+	log.Info("Successfully started etcd server at " + etcdServerAddress)
 	topoName := "etcd2_test" // "etcd2" is already registered on init(), so using a different name
 	topo.RegisterFactory(topoName, etcd2topo.Factory{})
 	ts, err := topo.OpenServer(topoName, etcdServerAddress, "/vitess")
@@ -156,8 +154,8 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	log.Infof("Starting %d concurrent updates", concurrency)
-	for i := 0; i < concurrency; i++ {
+	log.Info(fmt.Sprintf("Starting %d concurrent updates", concurrency))
+	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
 			for {
@@ -171,7 +169,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 		}(i)
 	}
 	wg.Wait()
-	log.Infof("All updates completed")
+	log.Info("All updates completed")
 	rules, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
@@ -241,7 +239,7 @@ func startEtcd(t *testing.T) string {
 	}
 	t.Cleanup(func() {
 		if cmd.Process.Kill() != nil {
-			log.Infof("cmd.Process.Kill() failed : %v", err)
+			log.Info(fmt.Sprintf("cmd.Process.Kill() failed : %v", err))
 		}
 	})
 

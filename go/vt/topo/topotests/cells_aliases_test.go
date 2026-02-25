@@ -17,7 +17,6 @@ limitations under the License.
 package topotests
 
 import (
-	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -33,8 +32,7 @@ func TestCellsAliases(t *testing.T) {
 	// Create an alias
 
 	cell := "cell1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 

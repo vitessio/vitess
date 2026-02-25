@@ -908,7 +908,7 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 				continue outer
 			}
 
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if st.EqualsExpr(expr, exprs[j]) {
 					continue outer
 				}

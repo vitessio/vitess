@@ -203,11 +203,9 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 
-	db.acceptWG.Add(1)
-	go func() {
-		defer db.acceptWG.Done()
+	db.acceptWG.Go(func() {
 		db.listener.Accept()
-	}()
+	})
 
 	db.AddQuery(useQuery, &sqltypes.Result{})
 	// Return the db.
@@ -413,7 +411,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.Error(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -426,7 +424,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.Error(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -471,7 +469,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		parser.TruncateForUI(query), db.name)
-	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
+	log.Error("Query not found: " + parser.TruncateForUI(query))
 
 	return err
 }

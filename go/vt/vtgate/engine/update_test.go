@@ -598,7 +598,8 @@ func TestUpdateIn(t *testing.T) {
 				Values: []evalengine.Expr{evalengine.TupleExpr{
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
-				}}},
+				}},
+			},
 			Query: "dummy_update",
 		},
 	}
@@ -623,7 +624,8 @@ func TestUpdateInStreamExecute(t *testing.T) {
 			Values: []evalengine.Expr{evalengine.TupleExpr{
 				evalengine.NewLiteralInt(1),
 				evalengine.NewLiteralInt(2),
-			}}},
+			}},
+		},
 		Query: "dummy_update",
 	}}
 
@@ -934,7 +936,8 @@ func TestUpdateInUnique(t *testing.T) {
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
 					evalengine.NewLiteralInt(4),
-				}}},
+				}},
+			},
 			Query: "update t set n = 'b' where id in ::__vals",
 		},
 	}

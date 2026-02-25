@@ -160,7 +160,8 @@ func TestVtctldclientCLI(t *testing.T) {
 			"vreplication-net-read-timeout":                     "6000",
 			utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		}
-		createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false",
+		createFlags := []string{
+			"--auto-start=false", "--defer-secondary-keys=false",
 			"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 			"--all-cells", "--format=json",
 			"--config-overrides", mapToCSV(overrides),
@@ -228,7 +229,8 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		"vreplication-parallel-insert-workers":              "10",
 	}
-	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+	createFlags := []string{
+		"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--config-overrides", mapToCSV(overrides),
@@ -438,7 +440,8 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 
 // Create two workflows in order to confirm that listing all workflows works.
 func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
-	createFlags := []string{"--auto-start=false", "--tablet-types",
+	createFlags := []string{
+		"--auto-start=false", "--tablet-types",
 		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
 	}
 	wfNames := []string{"list1", "list2"}
@@ -548,7 +551,8 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, defaultWorkflowName, tables string,
-	createFlags, completeFlags, switchFlags []string) iMoveTables {
+	createFlags, completeFlags, switchFlags []string,
+) iMoveTables {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -575,7 +579,8 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 		"vreplication-net-read-timeout":                     "6000",
 		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 	}
-	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+	createFlags := []string{
+		"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
 		"--config-overrides", mapToCSV(overrides),
@@ -875,13 +880,7 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	require.NoError(t, err)
 	tablesFound := strings.Split(tablesResponse, "\n")
 	for _, table := range tables {
-		found := false
-		for _, tableFound := range tablesFound {
-			if tableFound == table {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(tablesFound, table)
 		if !found {
 			return false
 		}
@@ -1007,9 +1006,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(rr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.RoutingRules{}
+				wantRules := &vschemapb.RoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.RoutingRules{}
+				gotRules := &vschemapb.RoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
@@ -1026,9 +1025,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(srr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.ShardRoutingRules{}
+				wantRules := &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.ShardRoutingRules{}
+				gotRules := &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
@@ -1044,9 +1043,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(krr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.KeyspaceRoutingRules{}
+				wantRules := &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.KeyspaceRoutingRules{}
+				gotRules := &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}

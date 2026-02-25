@@ -11,6 +11,7 @@ linters:
     - govet
     - ineffassign
     - mirror
+    - modernize
     - nolintlint
     - nosprintfhostport
     - perfsprint
@@ -214,8 +215,8 @@ linters:
       - examples$
 formatters:
   enable:
-    - gofmt
     - goimports
+    - gofumpt
   settings:
     goimports:
       local-prefixes:

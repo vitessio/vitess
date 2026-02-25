@@ -172,8 +172,7 @@ func (c *fakeTMClient) AppNames() []string {
 	return c.appNames
 }
 
-type FakeTopoServer struct {
-}
+type FakeTopoServer struct{}
 
 func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
 	tabletType := topodatapb.TabletType_PRIMARY
@@ -255,6 +254,7 @@ func waitForMetricsToBeCollected(t *testing.T, ctx context.Context, throttler *T
 		}
 	}
 }
+
 func sleepTillThresholdApplies() {
 	time.Sleep(time.Second)
 }
@@ -1371,10 +1371,7 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 	wg2 := throttler.Enable()
 	assert.Nil(t, wg2)
 
-	sleepTime := 3 * time.Second
-	if timeout/2 < sleepTime {
-		sleepTime = timeout / 2
-	}
+	sleepTime := min(timeout/2, 3*time.Second)
 	if f != nil {
 		select {
 		case <-ctx.Done():

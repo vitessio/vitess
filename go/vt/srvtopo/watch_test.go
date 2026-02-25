@@ -17,7 +17,6 @@ limitations under the License.
 package srvtopo
 
 import (
-	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -44,8 +43,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Watcher outage test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -145,8 +143,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Cache expiry test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -191,8 +188,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 
 // TestWatcherShouldOnlyNotifyOnActualChanges tests that watchers are called when VSchema content changes.
 func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Change detection test", "type")
 	rs := NewResilientServer(ctx, ts, counts)

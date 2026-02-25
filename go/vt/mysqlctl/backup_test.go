@@ -684,7 +684,7 @@ func TestParseBackupName(t *testing.T) {
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
-	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.NotNil(t, *bt, time.Date(2024, 0o3, 18, 18, 9, 11, 0, time.UTC))
 	assert.Equal(t, "cell1", al.Cell)
 	assert.Equal(t, uint32(42), al.Uid)
 	assert.NoError(t, err)
@@ -693,12 +693,14 @@ func TestParseBackupName(t *testing.T) {
 func TestShouldRestore(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	b, err := ShouldRestore(env.ctx, env.restoreParams)
+	b, err := ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
 	assert.Error(t, err)
 
 	env.restoreParams.DeleteBeforeRestore = true
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.True(t, b)
 	assert.NoError(t, err)
 	env.restoreParams.DeleteBeforeRestore = false
@@ -706,14 +708,16 @@ func TestShouldRestore(t *testing.T) {
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.NoError(t, err)
 	assert.True(t, b)
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
 	assert.NoError(t, err)
 }

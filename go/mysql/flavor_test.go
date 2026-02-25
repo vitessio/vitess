@@ -102,7 +102,8 @@ func TestServerVersionCapableOf(t *testing.T) {
 			version:    "8.0.20",
 			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
-		}, {
+		},
+		{
 			version:    "5.7.38",
 			capability: capabilities.PerformanceSchemaMetadataLocksTableCapability,
 			isCapable:  false,

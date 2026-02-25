@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -384,9 +385,7 @@ func BindVariablesEqual(x, y map[string]*querypb.BindVariable) bool {
 // CopyBindVariables returns a shallow-copy of the given bindVariables map.
 func CopyBindVariables(bindVariables map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	result := make(map[string]*querypb.BindVariable, len(bindVariables))
-	for key, value := range bindVariables {
-		result[key] = value
-	}
+	maps.Copy(result, bindVariables)
 	return result
 }
 

@@ -822,8 +822,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 }
 
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)

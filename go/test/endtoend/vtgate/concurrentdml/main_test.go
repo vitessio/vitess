@@ -184,12 +184,10 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	utils.Exec(t, conn1, `UPDATE t1 SET c3 = 400 WHERE c2 = 100`)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// This will wait for other transaction to complete before throwing the duplicate key error.
 		utils.AssertContainsError(t, conn2, `insert into t1(c1, c2, c3) values (400,100,400)`, `Duplicate entry '100' for key`)
-		wg.Done()
-	}()
+	})
 
 	time.Sleep(3 * time.Second)
 	qr := utils.Exec(t, conn1, `insert ignore into t1(c1, c2, c3) values (200,100,200)`)

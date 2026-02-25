@@ -893,5 +893,27 @@
         "user.music"
       ]
     }
+  },
+  {
+    "comment": "Derived table pushdown optimization",
+    "query": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from (select col from ref where 1 != 1) as sub where 1 != 1",
+        "Query": "select col from (select distinct col from ref where col = 1 limit 10) as sub"
+      },
+      "TablesUsed": [
+        "user.ref"
+      ]
+    }
   }
 ]

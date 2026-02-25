@@ -67,7 +67,7 @@ func TestCreateAndDropDatabase(t *testing.T) {
 	}()
 
 	// run it 3 times.
-	for count := 0; count < 3; count++ {
+	for count := range 3 {
 		t.Run(fmt.Sprintf("exec:%d", count), func(t *testing.T) {
 			_ = exec(t, conn, "create database testitest")
 			_ = exec(t, conn, "use testitest")

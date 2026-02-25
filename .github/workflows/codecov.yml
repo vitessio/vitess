@@ -1,5 +1,7 @@
 name: Code Coverage
 on:
+  schedule:
+    - cron: '0 0 * * 6'  # Saturday midnight UTC
   push:
     branches:
       - "main"
@@ -8,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
+  group: format('{0}-{1}-{2}', ${{ github.ref }}, ${{ github.event_name }}, 'Code Coverage')
   cancel-in-progress: true
 
 permissions: read-all
@@ -20,17 +22,28 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
       with:
         egress-policy: audit
 
     - name: Check out code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        fetch-depth: 0
         persist-credentials: 'false'
 
+    - name: Determine run mode
+      id: mode
+      run: |
+        if [ "${{ github.event_name }}" = "schedule" ]; then
+          echo "is_full_run=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_full_run=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Check for changes in files relevant to code coverage
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+      if: steps.mode.outputs.is_full_run != 'true'
+      uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
       id: changes
       with:
         token: ''
@@ -43,70 +56,99 @@ jobs:
             - Makefile
 
     - name: Set up Go
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
 
+    - name: Detect changed Go packages
+      if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
+      id: packages
+      run: |
+        BASE_SHA="${{ github.event.pull_request.base.sha }}"
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        CHANGED_GO_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.go')
+
+        if [ -z "$CHANGED_GO_FILES" ]; then
+          echo "BASE_SHA=$BASE_SHA"
+          echo "HEAD_SHA=$HEAD_SHA"
+          echo "packages=$PACKAGES"
+
+          echo "packages=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        PACKAGE_DIRS=$(echo "$CHANGED_GO_FILES" | xargs -n1 dirname | sort -u)
+
+        # Validate as Go packages and exclude endtoend tests
+        PACKAGES=""
+        for dir in $PACKAGE_DIRS; do
+          case "$dir" in
+            */endtoend*|go/cmd/vttestserver*) continue ;;
+          esac
+          if go list "./$dir" >/dev/null 2>&1; then
+            PACKAGES="${PACKAGES:+$PACKAGES }$dir"
+          fi
+        done
+
+        echo "BASE_SHA=$BASE_SHA"
+        echo "HEAD_SHA=$HEAD_SHA"
+        echo "packages=$PACKAGES"
+
+        echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
     - name: Set up python
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Tune the OS
-      if: steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
-
-        mkdir -p dist bin
-        curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
+        sudo apt-get install -y make unzip g++ curl git wget
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
-        
-    - name: Run make tools
-      if: steps.changes.outputs.changed_files == 'true'
-      run: |
-        make tools
 
-    - name: Run unit tests and generate code coverage reports
-      if: steps.changes.outputs.changed_files == 'true'
-      timeout-minutes: 45
+    - name: Run make tools
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      run: |
+        make BUILD_JAVA=0 BUILD_PROTOC=0 tools
+
+    - name: Run coverage tests
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 60
       run: |
         set -exo pipefail
-        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
-        # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
-
         export NOVTADMINBUILD=1
+        source build.env
 
-        # Exclude endtoend tests from the coverage report.
-        # TODO: figure out how best to include our endtoend tests in the coverage report.
-        rm -rf go/test/endtoend go/*/endtoend go/vt/*/endtoend go/cmd/vttestserver
+        if [ "${{ steps.mode.outputs.is_full_run }}" = "true" ]; then
+          make unit_test_cover
+        else
+          make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
+        fi
 
-        make unit_test_cover
-
-        # Restore the files we deleted as codecov tries to fix their paths.
-        git reset --hard HEAD
-
-    - name: Upload coverage reports to codecov.io
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: codecov/codecov-action@015f24e6818733317a2da2edd6290ab26238649a # https://github.com/codecov/codecov-action/releases/tag/v5.0.7
+    - name: Upload coverage reports
+      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
       with:
+        files: coverage.out
         fail_ci_if_error: true
         verbose: true
+        flags: ${{ steps.mode.outputs.is_full_run == 'true' && '' || 'partial' }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

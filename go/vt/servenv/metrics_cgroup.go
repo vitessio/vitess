@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 /*
 Copyright 2025 The Vitess Authors.
@@ -27,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containerd/cgroups"
+	"github.com/containerd/cgroups/v3"
 	"github.com/containerd/cgroups/v3/cgroup2"
 	"github.com/shirou/gopsutil/v4/mem"
 
@@ -44,17 +43,17 @@ var (
 
 func setup() {
 	if cgroups.Mode() != cgroups.Unified {
-		log.Warning("cgroup metrics are only supported with cgroup v2, will use host metrics")
+		log.Warn("cgroup metrics are only supported with cgroup v2, will use host metrics")
 		return
 	}
 	manager, err := getCgroupManager()
 	if err != nil {
-		log.Warningf("Failed to init cgroup manager for metrics, will use host metrics: %v", err)
+		log.Warn(fmt.Sprintf("Failed to init cgroup manager for metrics, will use host metrics: %v", err))
 	}
 	cgroupManager = manager
 	lastCpu, err = getCurrentCgroupCpuUsage()
 	if err != nil {
-		log.Warningf("Failed to get initial cgroup CPU usage: %v", err)
+		log.Warn(fmt.Sprintf("Failed to get initial cgroup CPU usage: %v", err))
 	}
 	lastTime = time.Now()
 }

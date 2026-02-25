@@ -212,6 +212,14 @@ func (ev filePosFakeEvent) IsDeleteRows() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsRowsQuery() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) RowsQuery(BinlogFormat) (string, error) {
+	return "", nil
+}
+
 func (ev filePosFakeEvent) Timestamp() uint32 {
 	return ev.timestamp
 }

@@ -57,21 +57,24 @@ func TestTracker(t *testing.T) {
 			{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: ddl1,
 			},
 			{
 				Type:      binlogdatapb.VEventType_GTID,
 				Statement: "", // This event should cause an error updating schema since gtid is bad
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: ddl1,
 			},
 			{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: "",
 			},
@@ -140,7 +143,8 @@ type fakeVstreamer struct {
 }
 
 func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	for _, events := range f.events {
 		err := send(events)
 		if err != nil {

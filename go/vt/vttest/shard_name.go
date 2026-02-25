@@ -41,7 +41,7 @@ func GetShardName(shard, total int) string {
 
 // GetShardNames creates a slice of shard names for N shards
 func GetShardNames(total int) (names []string) {
-	for i := 0; i < total; i++ {
+	for i := range total {
 		names = append(names, GetShardName(i, total))
 	}
 	return

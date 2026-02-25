@@ -329,8 +329,7 @@ func TestReloadShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			defer ts.Close()
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{

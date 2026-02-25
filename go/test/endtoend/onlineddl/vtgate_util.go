@@ -39,9 +39,7 @@ const (
 	ThrottledAppsTimeout = 60 * time.Second
 )
 
-var (
-	testsStartupTime time.Time
-)
+var testsStartupTime time.Time
 
 func init() {
 	testsStartupTime = time.Now()

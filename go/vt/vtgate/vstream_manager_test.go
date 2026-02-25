@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"strings"
@@ -142,8 +143,7 @@ func TestVStreamSkew(t *testing.T) {
 }
 
 func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "aa"
 	ks := "TestVStream"
@@ -222,8 +222,7 @@ func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
 }
 
 func TestVStreamEvents(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -318,8 +317,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				}
 				defer f.Close()
 			}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := b.Context()
 			cell := "aa"
 			ks := "TestVStream"
 			_ = createSandbox(ks)
@@ -395,8 +393,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 // TestVStreamChunks ensures that a transaction that's broken
 // into chunks is sent together.
 func TestVStreamChunks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ks := "TestVStream"
 	cell := "aa"
@@ -409,7 +406,7 @@ func TestVStreamChunks(t *testing.T) {
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_DDL}}, nil)
 		sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}}}, nil)
 	}
@@ -633,8 +630,7 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 }
 
 func TestVStreamMulti(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -713,8 +709,7 @@ func TestVStreamMulti(t *testing.T) {
 }
 
 func TestVStreamsMetrics(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// Use a unique cell to avoid parallel tests interfering with each other's metrics
 	cell := "ab"
 	ks := "TestVStream"
@@ -809,8 +804,7 @@ func TestVStreamsMetrics(t *testing.T) {
 }
 
 func TestVStreamsMetricsErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Use a unique cell to avoid parallel tests interfering with each other's metrics
 	cell := "ac"
@@ -891,8 +885,7 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 }
 
 func TestVStreamErrorInCallback(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Use a unique cell to avoid parallel tests interfering with each other's metrics
 	cell := "ac"
@@ -1012,8 +1005,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			// aa will be the local cell for this test, but that tablet will have a vstream error.
 			cells := []string{"aa", "ab"}
@@ -1077,8 +1069,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -1145,8 +1136,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 }
 
 func TestVStreamJournalOneToMany(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -1271,8 +1261,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 }
 
 func TestVStreamJournalManyToOne(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Variable names are maintained like in OneToMany, but order is different.
 	ks := "TestVStream"
@@ -1400,8 +1389,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ks := "TestVStream"
 	cell := "aa"
@@ -1552,8 +1540,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 }
 
 func TestVStreamJournalPartialMatch(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Variable names are maintained like in OneToMany, but order is different.
 	ks := "TestVStream"
@@ -1636,8 +1623,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 }
 
 func TestResolveVStreamParams(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	name := "TestVStream"
 	_ = createSandbox(name)
@@ -2272,7 +2258,9 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
 	logger := logutil.NewMemoryLogger()
-	log.Warningf = logger.Warningf
+	log.Warn = func(msg string, _ ...slog.Attr) {
+		logger.Warningf("%s", msg)
+	}
 
 	cell := "aa"
 	ks := "TestVStream"

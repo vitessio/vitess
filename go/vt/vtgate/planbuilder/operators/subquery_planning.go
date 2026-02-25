@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	slices0 "slices"
 
 	"golang.org/x/exp/slices"
 
@@ -53,12 +54,7 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.
 			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-			for _, gb := range node.GroupBy.Exprs {
-				if validVindex(gb) {
-					return true
-				}
-			}
-			return false
+			return slices0.ContainsFunc(node.GroupBy.Exprs, validVindex)
 		}
 
 		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
@@ -566,12 +562,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 
 // This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
 func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
-	for _, sqArg := range updOp.SubQueriesArgOnChangedVindex {
-		if sqArg == subQuery.ArgName {
-			return true
-		}
-	}
-	return false
+	return slices0.Contains(updOp.SubQueriesArgOnChangedVindex, subQuery.ArgName)
 }
 
 func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult) {

@@ -10,7 +10,7 @@ import (
 )
 
 func BenchmarkCompilerExpressions(b *testing.B) {
-	var testCases = []struct {
+	testCases := []struct {
 		name       string
 		expression string
 		values     []sqltypes.Value

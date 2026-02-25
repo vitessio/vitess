@@ -18,6 +18,7 @@ package debug
 
 import (
 	"math/rand/v2"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,16 +41,18 @@ func TestSanitizeString(t *testing.T) {
 
 		letters := "abcdefghijklmnopqrstuvwxyz0123456789"
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			t.Run("", func(t *testing.T) {
 				t.Parallel()
 
 				length := rand.IntN(20) + 1 // [1, 21)
 				word := ""
-				for j := 0; j < length; j++ {
+				var wordSb49 strings.Builder
+				for range length {
 					k := rand.IntN(len(letters))
-					word += letters[k : k+1]
+					wordSb49.WriteString(letters[k : k+1])
 				}
+				word += wordSb49.String()
 
 				out := SanitizeString(word)
 				assert.Equal(t, sanitized, out)
@@ -61,7 +64,7 @@ func TestSanitizeString(t *testing.T) {
 func TestTimeToString(t *testing.T) {
 	t.Parallel()
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 

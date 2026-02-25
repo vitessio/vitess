@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { renderHook } from '@testing-library/react-hooks';
+import { renderHook } from '@testing-library/react';
 import { createMemoryHistory, To } from 'history';
 import { Router } from 'react-router-dom';
 import { PaginationOpts, PaginationParams, useURLPagination } from './useURLPagination';

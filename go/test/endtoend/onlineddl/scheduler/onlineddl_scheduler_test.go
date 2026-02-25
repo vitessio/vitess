@@ -47,6 +47,11 @@ import (
 
 const (
 	anyErrorIndicator = "<any-error-of-any-kind>"
+
+	// Migration metric names as exposed via /debug/vars
+	metricStartedMigrations    = "StartedMigrations"
+	metricSuccessfulMigrations = "SuccessfulMigrations"
+	metricFailedMigrations     = "FailedMigrations"
 )
 
 type testOnlineDDLStatementParams struct {
@@ -242,7 +247,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -567,6 +572,7 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
 				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
+				assert.Equal(t, int64(0), row.AsInt64("eta_seconds", -1))
 			}
 		})
 
@@ -618,6 +624,7 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
 				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
+				assert.Equal(t, int64(0), row.AsInt64("eta_seconds", -1))
 			}
 		})
 
@@ -2149,6 +2156,7 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
+
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -2341,8 +2349,8 @@ func testDeclarative(t *testing.T) {
 	}
 
 	initTable := func(t *testing.T) {
-		log.Infof("initTable begin")
-		defer log.Infof("initTable complete")
+		log.Info("initTable begin")
+		defer log.Info("initTable complete")
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2368,7 +2376,7 @@ func testDeclarative(t *testing.T) {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
-		log.Infof("%s", writeMetrics.String())
+		log.Info(writeMetrics.String())
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2380,7 +2388,7 @@ func testDeclarative(t *testing.T) {
 
 		row := rs.Named().Row()
 		require.NotNil(t, row)
-		log.Infof("testSelectTableMetrics, row: %v", row)
+		log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 		numRows := row.AsInt64("num_rows", 0)
 		sumUpdates := row.AsInt64("sum_updates", 0)
 
@@ -2756,6 +2764,16 @@ func testDeclarative(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+	t.Run("vtctldclient GetSchemaMigrations with zero date succeeds", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		output, err := clusterInstance.VtctldClientProcess.OnlineDDLShow(keyspaceName, uuid)
+		require.NoError(t, err, "vtctldclient OnlineDDL show failed")
+		require.NotEmpty(t, output, "expected output from OnlineDDL show")
+		require.Contains(t, output, uuid, "output should contain the migration UUID")
+	})
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
@@ -2869,7 +2887,7 @@ func testForeignKeys(t *testing.T) {
 		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name:             "modify parent, not allowed",
 			sql:              "alter table parent_table engine=innodb",
@@ -3232,4 +3250,165 @@ func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttable
 		transactionErrorChan <- err
 	}
 	return err
+}
+
+// TestMigrationMetrics tests that migration metrics are correctly incremented
+// when migrations are executed end-to-end. This verifies that the metrics
+// tracking works correctly in a real cluster environment.
+func TestMigrationMetrics(t *testing.T) {
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+
+	shards = clusterInstance.Keyspaces[0].Shards
+	require.Equal(t, 1, len(shards))
+
+	// Helper function to get metric value from /debug/vars
+	getMetric := func(metricName string) int64 {
+		vars := primaryTablet.VttabletProcess.GetVars()
+		if val, ok := vars[metricName]; ok {
+			switch v := val.(type) {
+			case float64:
+				return int64(v)
+			case int64:
+				return v
+			case int:
+				return int64(v)
+			}
+		}
+		return 0
+	}
+
+	// Create the stress_test table for our tests
+	t.Run("setup table", func(t *testing.T) {
+		createStatement := `
+			CREATE TABLE IF NOT EXISTS stress_test (
+				id bigint(20) not null,
+				rand_val varchar(32) null default '',
+				hint_col varchar(64) not null default 'just-created',
+				created_timestamp timestamp not null default current_timestamp,
+				updates int unsigned not null default 0,
+				PRIMARY KEY (id),
+				key created_idx(created_timestamp),
+				key updates_idx(updates)
+			) ENGINE=InnoDB
+		`
+		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{
+			ddlStatement:    createStatement,
+			ddlStrategy:     "direct",
+			executeStrategy: "vtgate",
+		})
+		// For direct strategy, uuid may be empty
+		_ = uuid
+	})
+
+	// Test 1: Successful migration increments metrics
+	t.Run("successful migration increments metrics", func(t *testing.T) {
+		// Get baseline metrics
+		startedBefore := getMetric(metricStartedMigrations)
+		successfulBefore := getMetric(metricSuccessfulMigrations)
+
+		// Execute a simple migration
+		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{
+			ddlStatement:    "ALTER TABLE stress_test ENGINE=InnoDB",
+			ddlStrategy:     "vitess",
+			executeStrategy: "vtgate",
+		})
+		require.NotEmpty(t, uuid)
+
+		// Wait for migration to complete
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid,
+			normalWaitTime, schema.OnlineDDLStatusComplete)
+
+		// Check metrics incremented correctly using assert.Eventually
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			startedAfter := getMetric(metricStartedMigrations)
+			successfulAfter := getMetric(metricSuccessfulMigrations)
+
+			assert.Equal(c, startedBefore+1, startedAfter,
+				"StartedMigrations should increment by 1")
+			assert.Equal(c, successfulBefore+1, successfulAfter,
+				"SuccessfulMigrations should increment by 1")
+		}, 10*time.Second, time.Second, "metrics did not increment correctly")
+	})
+
+	// Test 2: Failed migration increments metrics
+	t.Run("failed migration increments metrics", func(t *testing.T) {
+		failedBefore := getMetric(metricFailedMigrations)
+		startedBefore := getMetric(metricStartedMigrations)
+
+		// Execute a migration that will fail (invalid column)
+		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{
+			ddlStatement:    "ALTER TABLE stress_test DROP COLUMN nonexistent_column",
+			ddlStrategy:     "vitess",
+			executeStrategy: "vtgate",
+		})
+		require.NotEmpty(t, uuid)
+
+		// Wait for migration to fail
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid,
+			normalWaitTime, schema.OnlineDDLStatusFailed)
+
+		// Verify metrics
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			failedAfter := getMetric(metricFailedMigrations)
+			startedAfter := getMetric(metricStartedMigrations)
+
+			assert.Equal(c, failedBefore+1, failedAfter,
+				"FailedMigrations should increment by 1")
+			assert.Equal(c, startedBefore+1, startedAfter,
+				"StartedMigrations should increment by 1 even for failed migrations")
+		}, 10*time.Second, time.Second, "metrics did not increment correctly")
+	})
+
+	// Test 3: Multiple migrations increment metrics correctly
+	t.Run("multiple migrations increment metrics correctly", func(t *testing.T) {
+		startedBefore := getMetric(metricStartedMigrations)
+		successfulBefore := getMetric(metricSuccessfulMigrations)
+
+		// Run 3 migrations
+		uuids := make([]string, 3)
+		for i := range 3 {
+			uuids[i] = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{
+				ddlStatement:    "ALTER TABLE stress_test ENGINE=InnoDB",
+				ddlStrategy:     "vitess",
+				executeStrategy: "vtgate",
+			})
+			require.NotEmpty(t, uuids[i])
+		}
+
+		// Wait for all to complete
+		for _, uuid := range uuids {
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid,
+				extendedWaitTime, schema.OnlineDDLStatusComplete)
+		}
+
+		// Verify metrics
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			startedAfter := getMetric(metricStartedMigrations)
+			successfulAfter := getMetric(metricSuccessfulMigrations)
+
+			assert.Equal(c, startedBefore+3, startedAfter,
+				"StartedMigrations should increment by 3")
+			assert.Equal(c, successfulBefore+3, successfulAfter,
+				"SuccessfulMigrations should increment by 3")
+		}, 15*time.Second, time.Second, "metrics did not increment correctly")
+	})
+
+	// Test 4: Verify metrics are accessible via /debug/vars
+	t.Run("metrics are exposed via debug vars", func(t *testing.T) {
+		vars := primaryTablet.VttabletProcess.GetVars()
+		require.NotNil(t, vars)
+
+		// Verify all three metrics exist
+		assert.Contains(t, vars, metricStartedMigrations,
+			"StartedMigrations metric should be exposed")
+		assert.Contains(t, vars, metricSuccessfulMigrations,
+			"SuccessfulMigrations metric should be exposed")
+		assert.Contains(t, vars, metricFailedMigrations,
+			"FailedMigrations metric should be exposed")
+
+		// Verify metrics are non-negative
+		assert.GreaterOrEqual(t, getMetric(metricStartedMigrations), int64(0))
+		assert.GreaterOrEqual(t, getMetric(metricSuccessfulMigrations), int64(0))
+		assert.GreaterOrEqual(t, getMetric(metricFailedMigrations), int64(0))
+	})
 }

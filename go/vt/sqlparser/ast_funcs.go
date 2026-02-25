@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -337,15 +338,15 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
 				}
 				hasQueryHint = true
-				idx := strings.Index(comment, "*/")
-				if idx == -1 {
+				before, _, ok := strings.Cut(comment, "*/")
+				if !ok {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
 				}
 				if strings.Contains(comment, queryHint) {
 					newComments = append(Comments{comment}, newComments...)
 					continue
 				}
-				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(before), queryHint)
 				newComments = append(Comments{newComment}, newComments...)
 				continue
 			}
@@ -466,7 +467,7 @@ func ReplaceExpr(root, from, to Expr) Expr {
 
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression:  %s", String(tmp))
+		log.Error("Failed to rewrite expression. Rewriter returned a non-expression:  " + String(tmp))
 		return from
 	}
 
@@ -1062,12 +1063,7 @@ func (node IdentifierCI) EqualString(str string) bool {
 
 // EqualsAnyString returns true if any of these strings match
 func (node IdentifierCI) EqualsAnyString(str []string) bool {
-	for _, s := range str {
-		if node.EqualString(s) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(str, node.EqualString)
 }
 
 // MarshalJSON marshals into JSON.
@@ -2243,6 +2239,10 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Engines:
 		return EnginesStr
+	case Errors:
+		return ErrorsStr
+	case Events:
+		return EventsStr
 	case FunctionC:
 		return FunctionCStr
 	case Function:
@@ -2257,10 +2257,14 @@ func (ty ShowCommandType) ToString() string {
 		return PluginsStr
 	case Privilege:
 		return PrivilegeStr
+	case ProcessList:
+		return ProcessListStr
 	case ProcedureC:
 		return ProcedureCStr
 	case Procedure:
 		return ProcedureStr
+	case Profiles:
+		return ProfilesStr
 	case StatusGlobal:
 		return StatusGlobalStr
 	case StatusSession:
@@ -2305,6 +2309,27 @@ func (ty ShowCommandType) ToString() string {
 	}
 }
 
+// formatUserOrRoleHost extracts the host from an AT_ID token value.
+// AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
+func formatUserOrRoleHost(atID string) string {
+	host := atID
+	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
+		host = host[1 : len(host)-1]
+	}
+	return host
+}
+
+func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
+	buf.WriteString("'")
+	buf.WriteString(node.Name)
+	buf.WriteString("'")
+	if node.Host != "" {
+		buf.WriteString("@'")
+		buf.WriteString(node.Host)
+		buf.WriteString("'")
+	}
+}
+
 // ToString returns the DropKeyType as a string
 func (key DropKeyType) ToString() string {
 	switch key {
@@ -2316,6 +2341,8 @@ func (key DropKeyType) ToString() string {
 		return NormalKeyTypeStr
 	case CheckKeyType:
 		return CheckKeyTypeStr
+	case ConstraintType:
+		return ConstraintTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
@@ -2618,7 +2645,7 @@ func AndExpressions(exprs ...Expr) Expr {
 				continue outer
 			}
 
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if Equals.Expr(expr, exprs[j]) {
 					continue outer
 				}
@@ -3042,6 +3069,7 @@ func (node *Select) SetWherePredicate(expr Expr) {
 		Expr: expr,
 	}
 }
+
 func (node *Delete) GetFrom() []TableExpr {
 	return node.TableExprs
 }

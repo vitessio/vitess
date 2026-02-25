@@ -88,8 +88,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
-			vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtgateVer), "%"}
+		clusterInstance.VtGateExtraArgs = []string{
+			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
+			vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtgateVer), "%",
+		}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -66,15 +67,13 @@ func (pr *poolRefresh) startRefreshTicker() {
 	}
 	pr.refreshTicker = time.NewTicker(pr.refreshInterval)
 	pr.refreshStop = make(chan struct{})
-	pr.refreshWg.Add(1)
-	go func() {
-		defer pr.refreshWg.Done()
+	pr.refreshWg.Go(func() {
 		for {
 			select {
 			case <-pr.refreshTicker.C:
 				val, err := pr.refreshCheck()
 				if err != nil {
-					log.Info(err)
+					log.Info(fmt.Sprint(err))
 				}
 				if val {
 					go pr.pool.reopen()
@@ -84,7 +83,7 @@ func (pr *poolRefresh) startRefreshTicker() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (pr *poolRefresh) stop() {

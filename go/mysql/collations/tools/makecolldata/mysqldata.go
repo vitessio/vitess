@@ -354,8 +354,8 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 }
 
 func makemysqldata(output string, supportedOutput string, metadata AllMetadata) {
-	var unsupportedByCharset = make(map[string][]string)
-	var g = Generator{
+	unsupportedByCharset := make(map[string][]string)
+	g := Generator{
 		Generator: codegen.NewGenerator(PkgCollationsData),
 		Tables: TableGenerator{
 			Generator:         codegen.NewGenerator(PkgCollationsData),
@@ -366,7 +366,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 		},
 	}
 
-	var h = Generator{
+	h := Generator{
 		Generator: codegen.NewGenerator("vitess.io/vitess/go/mysql/collations"),
 	}
 

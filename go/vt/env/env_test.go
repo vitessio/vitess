@@ -58,9 +58,9 @@ func TestVtMysqlRoot(t *testing.T) {
 	testDir := t.TempDir() // This is automatically cleaned up
 	createExecutable := func(path string) error {
 		fullPath := testDir + path
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o755)
 		require.NoError(t, err)
-		return os.WriteFile(fullPath, []byte("test"), 0755)
+		return os.WriteFile(fullPath, []byte("test"), 0o755)
 	}
 
 	type testcase struct {

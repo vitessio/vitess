@@ -454,7 +454,8 @@ func TestDecodeStringSQL(t *testing.T) {
 		{
 			in:  "",
 			err: ": invalid SQL encoded string",
-		}, {
+		},
+		{
 			in:  "''",
 			err: "",
 		},

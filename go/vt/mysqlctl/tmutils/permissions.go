@@ -33,9 +33,7 @@ import (
 
 // This file contains helper methods to deal with Permissions.
 
-var (
-	hashTable = crc64.MakeTable(crc64.ISO)
-)
+var hashTable = crc64.MakeTable(crc64.ISO)
 
 // permissionList is an internal type to facilitate common code between the 3 permission types
 type permissionList interface {
@@ -50,9 +48,11 @@ func printPrivileges(priv map[string]string) string {
 	}
 	sort.Strings(si)
 	result := ""
+	var resultSb51 strings.Builder
 	for _, k := range si {
-		result += " " + k + "(" + priv[k] + ")"
+		resultSb51.WriteString(" " + k + "(" + priv[k] + ")")
 	}
+	result += resultSb51.String()
 	return result
 }
 
@@ -151,10 +151,12 @@ func (upl dbPermissionList) Len() int {
 
 func printPermissions(name string, permissions permissionList) string {
 	result := name + " Permissions:\n"
+	var resultSb152 strings.Builder
 	for i := 0; i < permissions.Len(); i++ {
 		pk, val := permissions.Get(i)
-		result += "  " + pk + ": " + val + "\n"
+		resultSb152.WriteString("  " + pk + ": " + val + "\n")
 	}
+	result += resultSb152.String()
 	return result
 }
 

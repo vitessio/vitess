@@ -84,7 +84,7 @@ func VtMysqlRoot() (string, error) {
 		// used by mysqld OS system packages (apt, dnf, etc).
 		fi, err := os.Stat(mysqldSbinPath)
 		if err == nil /* file exists */ && fi.Mode().IsRegular() /* not a DIR or other special file */ &&
-			fi.Mode()&0111 != 0 /* executable by anyone */ {
+			fi.Mode()&0o111 != 0 /* executable by anyone */ {
 			return getRoot(mysqldSbinPath), nil
 		}
 		return "", errMysqldNotFound

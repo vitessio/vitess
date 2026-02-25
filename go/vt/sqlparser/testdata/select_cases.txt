@@ -1772,7 +1772,7 @@ INPUT
 select definer, event_name from information_schema.events;
 END
 OUTPUT
-select `definer`, event_name from information_schema.events
+select `definer`, event_name from information_schema.`events`
 END
 INPUT
 select mbrcontains(ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"), ST_GeomFromText("point(2 4)"));
@@ -2018,7 +2018,7 @@ INPUT
 select event_name from information_schema.events where event_name = 'e1' and sql_mode = @full_mode;
 END
 OUTPUT
-select event_name from information_schema.events where event_name = 'e1' and sql_mode = @full_mode
+select event_name from information_schema.`events` where event_name = 'e1' and sql_mode = @full_mode
 END
 INPUT
 select collation(lcase(_latin2'a')), coercibility(lcase(_latin2'a'));
@@ -6008,7 +6008,7 @@ INPUT
 select event_name from information_schema.events;
 END
 OUTPUT
-select event_name from information_schema.events
+select event_name from information_schema.`events`
 END
 INPUT
 select round(std(e1/e2), 17) from bug22555;
@@ -7040,7 +7040,7 @@ INPUT
 select event_schema, event_name, definer, event_type, status from information_schema.events;
 END
 OUTPUT
-select event_schema, event_name, `definer`, event_type, `status` from information_schema.events
+select event_schema, event_name, `definer`, event_type, `status` from information_schema.`events`
 END
 INPUT
 select Fld1, max(Fld2) from t1 group by Fld1 having max(Fld2) is not null;
@@ -8630,7 +8630,7 @@ INPUT
 select event_name, event_definition, status, interval_field, interval_value from information_schema.events;
 END
 OUTPUT
-select event_name, event_definition, `status`, interval_field, interval_value from information_schema.events
+select event_name, event_definition, `status`, interval_field, interval_value from information_schema.`events`
 END
 INPUT
 select addtime("1997-12-31 23:59:59.999999", "1998-01-01 01:01:01.999999");
@@ -13028,7 +13028,7 @@ INPUT
 select event_schema, event_name, sql_mode from information_schema.events order by event_schema, event_name;
 END
 OUTPUT
-select event_schema, event_name, sql_mode from information_schema.events order by event_schema asc, event_name asc
+select event_schema, event_name, sql_mode from information_schema.`events` order by event_schema asc, event_name asc
 END
 INPUT
 select char(0xff,0x8f using utf8mb4);
@@ -13862,7 +13862,7 @@ INPUT
 select event_definition, definer, convert_tz(execute_at, 'UTC', 'SYSTEM'), on_completion from information_schema.events;
 END
 OUTPUT
-select event_definition, `definer`, convert_tz(execute_at, 'UTC', 'SYSTEM'), on_completion from information_schema.events
+select event_definition, `definer`, convert_tz(execute_at, 'UTC', 'SYSTEM'), on_completion from information_schema.`events`
 END
 INPUT
 select uncompressed_length(compress(@test_compress_string));
@@ -16460,7 +16460,7 @@ INPUT
 select event_name, event_definition, interval_value, interval_field from information_schema.events order by event_name;
 END
 OUTPUT
-select event_name, event_definition, interval_value, interval_field from information_schema.events order by event_name asc
+select event_name, event_definition, interval_value, interval_field from information_schema.`events` order by event_name asc
 END
 INPUT
 select -1 | 1, -1 ^ 1, -1 & 1;
@@ -16862,7 +16862,7 @@ INPUT
 select EVENT_NAME from information_schema.events where event_schema='test';
 END
 OUTPUT
-select EVENT_NAME from information_schema.events where event_schema = 'test'
+select EVENT_NAME from information_schema.`events` where event_schema = 'test'
 END
 INPUT
 select abs(-10), sign(-5), sign(5), sign(0);
@@ -18206,7 +18206,7 @@ INPUT
 select count(*) from information_schema.events where event_schema = database() and event_name = 'event_35981' and on_completion = 'NOT PRESERVE';
 END
 OUTPUT
-select count(*) from information_schema.events where event_schema = database() and event_name = 'event_35981' and on_completion = 'NOT PRESERVE'
+select count(*) from information_schema.`events` where event_schema = database() and event_name = 'event_35981' and on_completion = 'NOT PRESERVE'
 END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-1));
@@ -18608,7 +18608,7 @@ INPUT
 select count(*) from information_schema.events where event_schema = database() and event_name = 'event_35981' and on_completion = 'PRESERVE';
 END
 OUTPUT
-select count(*) from information_schema.events where event_schema = database() and event_name = 'event_35981' and on_completion = 'PRESERVE'
+select count(*) from information_schema.`events` where event_schema = database() and event_name = 'event_35981' and on_completion = 'PRESERVE'
 END
 INPUT
 select locate('he','hello',-2);
@@ -18632,7 +18632,7 @@ INPUT
 select event_schema, event_name, definer, event_definition from information_schema.events where event_name='white_space';
 END
 OUTPUT
-select event_schema, event_name, `definer`, event_definition from information_schema.events where event_name = 'white_space'
+select event_schema, event_name, `definer`, event_definition from information_schema.`events` where event_name = 'white_space'
 END
 INPUT
 select CASE "c" when "a" then 1 when "b" then 2 END;
@@ -20534,7 +20534,7 @@ INPUT
 select events.binlog from events;
 END
 OUTPUT
-select events.binlog from events
+select `events`.`binlog` from `events`
 END
 INPUT
 select (case 1/0 when "a" then "true" END) | 0;
@@ -22712,7 +22712,7 @@ INPUT
 select count(*) from information_schema.events;
 END
 OUTPUT
-select count(*) from information_schema.events
+select count(*) from information_schema.`events`
 END
 INPUT
 select var_samp(s) as 'null', var_pop(s) as 'null' from bug22555;

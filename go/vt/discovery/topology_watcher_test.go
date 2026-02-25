@@ -78,7 +78,7 @@ func TestStartAndCloseTopoWatcher(t *testing.T) {
 		// the actions, the test is then successful.
 		// Each action has a one-second timeout after which the test will be
 		// marked as failed.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			select {
 			case <-time.After(1 * time.Second):
 				close(result)
@@ -827,7 +827,7 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 	// the tablet in the health check, but health check has the mutex acquired
 	// already because it is calling updateHealth.
 	// updateHealth itself will be stuck trying to send on the shared channel.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// Update the port of the tablet so that when update Health asks topo watcher to
 		// refresh the tablets, it finds an update and tries to replace it.
 		_, err = ts.UpdateTabletFields(ctx, tablet1.Alias, func(t *topodatapb.Tablet) error {

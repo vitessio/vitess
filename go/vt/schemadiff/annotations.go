@@ -117,8 +117,8 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 	annotationLines := map[string]bool{} // single-line breakdown of all annotations
 	for _, annotation := range annotations.ByType(annotationType) {
 		// An annotated text could be multiline. Partition specs are such.
-		lines := strings.Split(annotation.text, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(annotation.text, "\n")
+		for line := range lines {
 			line = strings.TrimSpace(line)
 			if line != "" {
 				annotationLines[line] = true

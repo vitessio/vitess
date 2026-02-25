@@ -34,7 +34,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -260,7 +259,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		// rows for each second in the diff duration, depending on the test host vCPU count.
 		perSecondCount := int64(math.Min(float64(perVCpuCount*int64(runtime.NumCPU())), 1000000))
 		totalRowsToCreate := seconds * perSecondCount
-		log.Infof("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate)
+		log.Info(fmt.Sprintf("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate))
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			generateMoreCustomers(t, tc.sourceKs, chunkSize)
 		}
@@ -357,7 +356,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	// Confirm that VDiff queries did not use MAX_EXECUTION_TIME query hints using the logs.
-	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "vttablet*INFO*"))
+	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt"))
 	out, err := exec.Command("bash", "-c", grepCmd).Output()
 	require.NoError(t, err)
 	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
@@ -394,7 +393,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
-			AutoStart:             ptr.Of(false),
+			AutoStart:             new(false),
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -601,7 +600,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		expectedRows := rowsCompared + expectedNewRows
 
 		// Update the VDiff to simulate an ephemeral error having occurred.
-		for _, shard := range strings.Split(tc.targetShards, ",") {
+		for shard := range strings.SplitSeq(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)

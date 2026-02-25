@@ -92,7 +92,8 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			expected:          []string{"r1", "r2", "p1"},
 			expectedGTIDBased: true,
 			shouldErr:         false,
-		}, {
+		},
+		{
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
@@ -356,7 +357,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			}},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:       "success with wait for all tablets",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -426,7 +428,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			waitForAllTablets: true,
 			shouldErr:         false,
-		}, {
+		},
+		{
 			name:       "timing check with wait for all tablets",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -1222,7 +1225,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
-		}, {
+		},
+		{
 			name:       "Handle nil replication status After. No segfaulting when determining backup status, and fall back to Before status",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{

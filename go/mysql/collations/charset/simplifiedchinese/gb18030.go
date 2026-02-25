@@ -157,7 +157,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 			if c3 < 0x30 || 0x3a <= c3 {
 				return utf8.RuneError, 1
 			}
-			var r = ((rune(c0-0x81)*10+rune(c1-0x30))*126+rune(c2-0x81))*10 + rune(c3-0x30)
+			r := ((rune(c0-0x81)*10+rune(c1-0x30))*126+rune(c2-0x81))*10 + rune(c3-0x30)
 			if r < 39420 {
 				i, j := 0, len(gb18030)
 				for i < j {
