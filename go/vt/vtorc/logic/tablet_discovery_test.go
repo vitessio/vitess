@@ -333,6 +333,9 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 
+	// Init forgetAliases cache in go/vt/vtorc/inst
+	inst.InitializeForgetAliasesCache()
+
 	// Create a memory topo-server and create the keyspace and shard records
 	ctx := t.Context()
 
@@ -364,7 +367,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 
 	t.Run("call refreshTabletsInKeyspaceShard again - force refresh with ignore", func(t *testing.T) {
 		// We expect 2 tablets to be refreshed since we requested force refresh, but we are ignoring one of them.
-		verifyRefreshTabletsInKeyspaceShard(t, true, 2, tablets, []string{topoproto.TabletAliasString(tab100.Alias)})
+		verifyRefreshTabletsInKeyspaceShard(t, true, 2, tablets, []*topodatapb.TabletAlias{tab100.Alias})
 	})
 
 	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
@@ -419,7 +422,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 			})
 			tab100.MysqlPort = 100
 			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
-			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {}, false, nil)
 		}()
 		// Let's assume tab100 restarted on a different pod. This would change its tablet hostname and port
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
@@ -441,7 +444,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 			})
 			tab101.Type = topodatapb.TabletType_REPLICA
 			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
-			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {}, false, nil)
 		}()
 		// A replica tablet can be converted to drained type if it has an errant GTID.
 		_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
@@ -519,11 +522,11 @@ func TestShardPrimary(t *testing.T) {
 
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
 // the number of instances refreshed matches the parameter and all the tablets match the ones provided
-func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet, tabletsToIgnore []string) {
+func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet, tabletsToIgnore []*topodatapb.TabletAlias) {
 	var instancesRefreshed atomic.Int32
 	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
-	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(string) {
+	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(*topodatapb.TabletAlias) {
 		instancesRefreshed.Add(1)
 	}, forceRefresh, tabletsToIgnore)
 	// Verify that all the tablets are present in the database
@@ -539,13 +542,12 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 // is the same as the one provided or reading it gives the same error as expected
 func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString string) {
 	t.Helper()
-	tabletAlias := topoproto.TabletAliasString(tabletWanted.Alias)
-	tablet, err := inst.ReadTablet(tabletAlias)
+	tablet, err := inst.ReadTablet(tabletWanted.Alias)
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
 		assert.NoError(t, err)
-		assert.EqualValues(t, tabletAlias, topoproto.TabletAliasString(tablet.Alias))
+		assert.Equal(t, topoproto.TabletAliasString(tabletWanted.Alias), topoproto.TabletAliasString(tablet.Alias))
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
 	}
@@ -565,18 +567,18 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 
 func TestGetLockAction(t *testing.T) {
 	tests := []struct {
-		analysedInstance string
+		analysedInstance *topodatapb.TabletAlias
 		code             inst.AnalysisCode
 		want             string
 	}{
 		{
-			analysedInstance: "zone1-100",
+			analysedInstance: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			code:             inst.DeadPrimary,
-			want:             "VTOrc Recovery for DeadPrimary on zone1-100",
+			want:             "VTOrc Recovery for DeadPrimary on zone1-0000000100",
 		}, {
-			analysedInstance: "zone1-200",
+			analysedInstance: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
 			code:             inst.ReplicationStopped,
-			want:             "VTOrc Recovery for ReplicationStopped on zone1-200",
+			want:             "VTOrc Recovery for ReplicationStopped on zone1-0000000200",
 		},
 	}
 	for _, tt := range tests {
@@ -958,19 +960,19 @@ func TestRefreshTabletsUsingCellsToWatch(t *testing.T) {
 	cellsToWatch = []string{cell1}
 
 	var discoveredAliases []string
-	err = refreshTabletsUsing(ctx, func(tabletAlias string) {
-		discoveredAliases = append(discoveredAliases, tabletAlias)
+	err = refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {
+		discoveredAliases = append(discoveredAliases, topoproto.TabletAliasString(tabletAlias))
 	}, true)
 	require.NoError(t, err)
 
 	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
 	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
 
-	tabletFromDB, err := inst.ReadTablet(topoproto.TabletAliasString(tabCell1.Alias))
+	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
 	assert.NoError(t, err)
 	assert.NotNil(t, tabletFromDB)
 
-	_, err = inst.ReadTablet(topoproto.TabletAliasString(tabCell2.Alias))
+	_, err = inst.ReadTablet(tabCell2.Alias)
 	assert.Error(t, err)
 }
 
@@ -1032,18 +1034,18 @@ func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
 	cellsToWatch = []string{cell1}
 
 	var discoveredAliases []string
-	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {
-		discoveredAliases = append(discoveredAliases, tabletAlias)
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {
+		discoveredAliases = append(discoveredAliases, topoproto.TabletAliasString(tabletAlias))
 	}, true, nil)
 
 	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
 	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
 
-	tabletFromDB, err := inst.ReadTablet(topoproto.TabletAliasString(tabCell1.Alias))
+	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
 	assert.NoError(t, err)
 	assert.NotNil(t, tabletFromDB)
 
-	_, err = inst.ReadTablet(topoproto.TabletAliasString(tabCell2.Alias))
+	_, err = inst.ReadTablet(tabCell2.Alias)
 	assert.Error(t, err)
 }
 
@@ -1072,7 +1074,7 @@ func TestRefreshTabletsUsingCellsToWatch_InvalidCell(t *testing.T) {
 	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
 	cellsToWatch = []string{"nonexistent-cell"}
 
-	err = refreshTabletsUsing(ctx, func(tabletAlias string) {}, true)
+	err = refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {}, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not exist in the topo")
 }

@@ -230,12 +230,12 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			preFunc: func() {
-				RecordPrimaryHealthCheck("zon1-0000000100", true)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
-				RecordPrimaryHealthCheck("zon1-0000000100", true)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 			},
 			codeWanted: IncapacitatedPrimary,
 		},
@@ -262,9 +262,9 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			preFunc: func() {
-				RecordPrimaryHealthCheck("zon1-0000000100", true)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 			},
 			codeWanted: DeadPrimary,
 		},
@@ -1302,24 +1302,24 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			}()
 
 			updates := []struct {
-				tabletAlias             string
+				tabletAlias             *topodatapb.TabletAlias
 				analysisCode            AnalysisCode
 				writeCounterExpectation int64
 				wantErr                 string
 			}{
 				{
 					// Store a new analysis for the zone1-100 tablet.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Write the same analysis, no new write should happen.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Change the analysis. This should trigger an update.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicaSemiSyncMustBeSet,
 					writeCounterExpectation: 2,
 				},
@@ -1389,21 +1389,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
 				}, {
 					Analysis:              ConnectedToWrongPrimary,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
@@ -1411,21 +1411,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 				}, {
 					Analysis:              InvalidReplica,
-					AnalyzedInstanceAlias: "zone1-108",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 108},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					LastCheckValid:        false,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
@@ -1435,21 +1435,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 			want: []*DetectionAnalysis{
 				{
 					Analysis:              DeadPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
@@ -1461,13 +1461,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
@@ -1475,14 +1475,14 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
@@ -1490,7 +1490,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,

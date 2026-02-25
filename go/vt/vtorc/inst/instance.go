@@ -30,7 +30,7 @@ import (
 type Instance struct {
 	Hostname      string
 	Port          int
-	InstanceAlias string
+	InstanceAlias *topodatapb.TabletAlias
 	// TabletType is the tablet type that the instance
 	// publishes to the VtGates and believes itself to be.
 	TabletType                   topodatapb.TabletType
