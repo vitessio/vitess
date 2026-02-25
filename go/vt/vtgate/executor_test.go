@@ -1896,7 +1896,7 @@ func TestShowStatus(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
-	// Legacy syntax (SLAVE) is supported for backwards compatibility
+	// Legacy syntax (SLAVE) is supported
 	sql1 := "show slave status"
 	_, err := executorExec(ctx, executor, session, sql1, nil)
 	require.NoError(t, err)
@@ -1907,10 +1907,16 @@ func TestShowStatus(t *testing.T) {
 	}}
 	assert.Equal(t, wantQueries, sbc1.Queries)
 
-	// Modern syntax (REPLICA) is not supported through vtgate
+	// Modern syntax (REPLICA) is supported
 	sql2 := "show replica status"
 	_, err = executorExec(ctx, executor, session, sql2, nil)
-	require.ErrorContains(t, err, "VT12001: unsupported")
+	require.NoError(t, err)
+
+	wantQueries = append(wantQueries, &querypb.BoundQuery{
+		Sql:           sql2,
+		BindVariables: map[string]*querypb.BindVariable{},
+	})
+	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
