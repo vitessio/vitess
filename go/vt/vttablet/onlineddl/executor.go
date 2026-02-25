@@ -2264,6 +2264,7 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
 	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
+	failedMigrations.Add(1)
 	if withError != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}
@@ -3451,6 +3452,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		failedMigrations.Add(1)
 		defer e.triggerNextCheckInterval()
 		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
@@ -4094,6 +4096,11 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 		// with progress 87% or another value that is way off. But once we realize the migration is ready to complete,
 		// we know row copy is fully complete _and_ that vplayer is not far behind. So it's a better DX to report 100%.
 		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
+			return err
+		}
+		// We also set the ETA seconds to zero because progress is 100% and the migration is ready to complete, so ETA
+		// should also be zero.
+		if err = e.updateMigrationETASeconds(ctx, uuid, 0); err != nil {
 			return err
 		}
 	}
@@ -4770,17 +4777,20 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+			startedMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusComplete:
 		{
 			progressPct = progressPctFull
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			successfulMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusFailed:
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			failedMigrations.Add(1)
 		}
 	}
 	if err != nil {
