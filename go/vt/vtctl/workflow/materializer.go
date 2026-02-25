@@ -346,7 +346,7 @@ func (mz *materializer) deploySchema() error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
+				log.Error("Error getting DDLs of source tables: " + err.Error())
 				return err
 			}
 
@@ -447,10 +447,10 @@ func (mz *materializer) deploySchema() error {
 				env := schemadiff.NewEnv(mz.env, mz.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
-					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
 				}
 			}
 			sql := strings.Join(applyDDLs, ";\n")

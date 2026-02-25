@@ -200,8 +200,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
-	log.Infof("VDiff query on source: %v", tp.sourceQuery)
-	log.Infof("VDiff query on target: %v", tp.targetQuery)
+	log.Info(fmt.Sprintf("VDiff query on source: %v", tp.sourceQuery))
+	log.Info(fmt.Sprintf("VDiff query on target: %v", tp.targetQuery))
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp
@@ -225,7 +225,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			case *sqlparser.FuncExpr: // eg. weight_string()
 				// no-op
 			default:
-				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
+				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true

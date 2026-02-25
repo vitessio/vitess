@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 	"sync"
@@ -162,7 +163,7 @@ func (ts *Server) ResolveWildcards(ctx context.Context, cell string, paths []str
 			if err != nil {
 				mu.Lock()
 				if firstError != nil {
-					log.Infof("Multiple error: %v", err)
+					log.Info(fmt.Sprintf("Multiple error: %v", err))
 				} else {
 					firstError = err
 				}
@@ -235,7 +236,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 						if err != nil {
 							mu.Lock()
 							if firstError != nil {
-								log.Infof("Multiple error: %v", err)
+								log.Info(fmt.Sprintf("Multiple error: %v", err))
 							} else {
 								firstError = err
 							}

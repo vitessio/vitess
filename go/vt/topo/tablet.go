@@ -173,7 +173,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	conn, err := ts.ConnForCell(ctx, alias.Cell)
 	if err != nil {
-		log.Errorf("unable to get connection for cell %q: %v", alias.Cell, err)
+		log.Error(fmt.Sprintf("unable to get connection for cell %q: %v", alias.Cell, err))
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
-		log.Errorf("unable to connect to tablet %q: %v", alias, err)
+		log.Error(fmt.Sprintf("unable to connect to tablet %q: %v", alias, err))
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}
@@ -320,7 +320,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
-			log.Warningf("failed to load tablet %v", tabletAlias)
+			log.Warn(fmt.Sprintf("failed to load tablet %v", tabletAlias))
 		} else {
 			tablets = append(tablets, tabletInfo)
 		}
@@ -510,7 +510,7 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Warningf("%v: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("%v: %v", tabletAlias, err))
 				// There can be data races removing nodes - ignore them for now.
 				// We only need to set this on first error.
 				if returnErr == nil && !IsErrType(err, NoNode) {
@@ -560,7 +560,7 @@ func (ts *Server) GetTabletList(ctx context.Context, tabletAliases []*topodatapb
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Warningf("%v: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("%v: %v", tabletAlias, err))
 				// There can be data races removing nodes - ignore them for now.
 				// We only need to set this on first error.
 				if returnErr == nil && !IsErrType(err, NoNode) {

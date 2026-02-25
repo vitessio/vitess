@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { UseQueryResult } from 'react-query';
+import { UseQueryResult } from '@tanstack/react-query';
 
 interface Props {
     query: UseQueryResult;
