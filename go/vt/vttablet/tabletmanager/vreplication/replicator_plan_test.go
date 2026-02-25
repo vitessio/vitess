@@ -640,7 +640,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, * from t1",
 			}},
 		},
-		err: "failed to build table replication plan for t1 table: invalid expression: * in query: select c1, * from t1",
+		err: "failed to build table replication plan for t1 table: syntax error: unexpected '*' at position 13 in query: select c1, * from t1",
 	}, {
 		// no distinct in func
 		input: &binlogdatapb.Filter{
