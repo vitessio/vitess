@@ -175,6 +175,9 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 
 	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.GetColumns() {
+			if i >= size {
+				return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(s.GetColumns())}
+			}
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
