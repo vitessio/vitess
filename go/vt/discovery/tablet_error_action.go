@@ -62,12 +62,15 @@ func ShouldRetryTabletError(err error) TabletErrorAction {
 		return TabletErrorActionFail
 	}
 
+	// We need to parse the error to check if it's a SQL error since the original
+	// error may be wrapped in vterrors.
+	sqlErr := sqlerror.NewSQLErrorFromError(err)
+
 	// Handle binary log purging errors by trying a different tablet.
 	// This occurs when a tablet doesn't have the requested GTID because the
 	// source purged the required binary logs. Another tablet might still have
 	// the logs, so we ignore this tablet and retry.
 	if errCode == vtrpcpb.Code_UNKNOWN {
-		sqlErr := sqlerror.NewSQLErrorFromError(err)
 		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
 			switch sqlError.Number() {
 			case sqlerror.ERMasterFatalReadingBinlog, // 1236
@@ -78,9 +81,6 @@ func ShouldRetryTabletError(err error) TabletErrorAction {
 	}
 
 	// For ephemeral SQL errors (like MAX_EXECUTION_TIME), retry with the same tablet.
-	// We need to parse the error to check if it's a SQL error since the original
-	// error may be wrapped in vterrors.
-	sqlErr := sqlerror.NewSQLErrorFromError(err)
 	if sqlerror.IsEphemeralError(sqlErr) {
 		return TabletErrorActionRetry
 	}

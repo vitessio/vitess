@@ -188,7 +188,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 
 // Returns the shared prefix for log messages in the controller, includes workflow and stream ID.
 func (ct *controller) logPrefix() string {
-	return fmt.Sprintf("workflow %v, stream %v:", ct.workflow, ct.id)
+	return fmt.Sprintf("workflow %s, stream %d:", ct.workflow, ct.id)
 }
 
 func (ct *controller) run(ctx context.Context) {
@@ -215,7 +215,7 @@ func (ct *controller) run(ctx context.Context) {
 		action := discovery.ShouldRetryTabletError(err)
 		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
 			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
-			log.Info(fmt.Sprintf("%s adding tablet %v to ignore list due to error: %v",
+			log.Info(fmt.Sprintf("%s adding tablet %s to ignore list due to error: %v",
 				ct.logPrefix(), topoproto.TabletAliasString(ct.lastPickedTablet), err))
 		} else if action == discovery.TabletErrorActionFail {
 			// Retry for unrecoverable errors since some other process may change the state leading to this error.
