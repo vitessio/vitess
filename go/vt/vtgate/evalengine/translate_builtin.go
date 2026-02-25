@@ -767,7 +767,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}}, nil
 
 	case *sqlparser.JSONContainsPathExpr:
-		exprs := []sqlparser.Expr{call.JSONDoc, call.OneOrAll}
+		exprs := []sqlparser.Expr{call.JSONDoc, call.OneOrAll} //nolint:prealloc
 		exprs = append(exprs, call.PathList...)
 		args, err := ast.translateFuncArgs(exprs)
 		if err != nil {

@@ -4107,7 +4107,7 @@ func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			var row2 []sqltypes.Value
+			var row2 []sqltypes.Value //nolint:prealloc
 			row2 = append(row2, sqltypes.NewVarBinary(tabletAlias))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)

@@ -190,12 +190,12 @@ func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *traffi
 }
 
 func (dr *switcherDryRun) startReverseVReplication(ctx context.Context) error {
-	logs := make([]string, 0)
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.
 	sort.Slice(sources, func(i, j int) bool {
 		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
 	})
+	logs := make([]string, 0, len(sources))
 	for _, t := range sources {
 		logs = append(logs, fmt.Sprintf("tablet:%d", t.GetPrimary().Alias.Uid))
 	}
@@ -261,12 +261,12 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 }
 
 func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
-	logs := make([]string, 0)
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.
 	sort.Slice(sources, func(i, j int) bool {
 		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
 	})
+	logs := make([]string, 0, len(sources))
 	for _, source := range sources {
 		position, _ := dr.ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;position:%s", dr.ts.SourceKeyspaceName(), source.GetShard().ShardName(), position))
@@ -314,7 +314,7 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string, 
 }
 
 func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0)    //nolint:prealloc
 	sort.Strings(dr.ts.Tables()) // For deterministic output
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.
@@ -371,12 +371,12 @@ func (dr *switcherDryRun) validateWorkflowHasCompleted(ctx context.Context) erro
 }
 
 func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) error {
-	logs := make([]string, 0)
 	// Sort the keys and slices for deterministic output.
 	targets := maps.Values(dr.ts.Targets())
 	sort.Slice(targets, func(i, j int) bool {
 		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid
 	})
+	logs := make([]string, 0, len(targets))
 	for _, t := range targets {
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;workflow:%s;dbname:%s;tablet:%d",
 			t.GetShard().Keyspace(), t.GetShard().ShardName(), dr.ts.WorkflowName(), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
@@ -386,12 +386,12 @@ func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) err
 }
 
 func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Context) error {
-	logs := make([]string, 0)
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.
 	sort.Slice(sources, func(i, j int) bool {
 		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
 	})
+	logs := make([]string, 0, len(sources))
 	for _, t := range sources {
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;workflow:%s;dbname:%s;tablet:%d",
 			t.GetShard().Keyspace(), t.GetShard().ShardName(), ReverseWorkflowName(dr.ts.WorkflowName()), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
@@ -401,12 +401,12 @@ func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Conte
 }
 
 func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
-	logs := make([]string, 0)
 	// Sort the keys and slices for deterministic output.
 	targets := maps.Values(dr.ts.Targets())
 	sort.Slice(targets, func(i, j int) bool {
 		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid
 	})
+	logs := make([]string, 0, len(targets))
 	for _, target := range targets {
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;tablet:%d;workflow:%s;dbname:%s",
 			target.GetPrimary().Keyspace, target.GetPrimary().Shard, target.GetPrimary().Alias.Uid, dr.ts.WorkflowName(), target.GetPrimary().DbName()))
@@ -418,12 +418,12 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
-	logs := make([]string, 0)
 	// Sort the slice for deterministic output.
 	sourceShards := dr.ts.SourceShards()
 	sort.Slice(sourceShards, func(i, j int) bool {
 		return sourceShards[i].PrimaryAlias.Uid < sourceShards[j].PrimaryAlias.Uid
 	})
+	logs := make([]string, 0, len(sourceShards))
 	for _, si := range sourceShards {
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;tablet:%d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
@@ -434,12 +434,12 @@ func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) dropTargetDeniedTables(ctx context.Context) error {
-	logs := make([]string, 0)
 	// Sort the slice for deterministic output.
 	targetShards := dr.ts.TargetShards()
 	sort.Slice(targetShards, func(i, j int) bool {
 		return targetShards[i].PrimaryAlias.Uid < targetShards[j].PrimaryAlias.Uid
 	})
+	logs := make([]string, 0, len(targetShards))
 	for _, si := range targetShards {
 		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;tablet:%d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
@@ -454,7 +454,7 @@ func (dr *switcherDryRun) logs() *[]string {
 }
 
 func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0)    //nolint:prealloc
 	sort.Strings(dr.ts.Tables()) // For deterministic output
 	// Sort the keys and slices for deterministic output.
 	targets := maps.Values(dr.ts.Targets())

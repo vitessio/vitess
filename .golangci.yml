@@ -220,6 +220,9 @@ linters:
           - prealloc
         path: ^go/vt/vtgate/evalengine/testcases
       - linters:
+          - prealloc
+        path: ^go/vt/vtgate/semantics/info_schema\.go$
+      - linters:
           - prealloc # TODO: enable prealloc on go/tools/*
         path: ^go/tools
     paths:

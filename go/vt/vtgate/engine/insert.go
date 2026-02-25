@@ -349,9 +349,9 @@ func (ins *Insert) description() PrimitiveDescription {
 				panic("ins.ColVindexes and ins.VindexValueOffset do not line up")
 			}
 			vindex := ins.ColVindexes[idx]
-			var res []string
+			res := make([]string, 0, len(ints))
 			for _, exprs := range ints {
-				var this []string
+				this := make([]string, 0, len(exprs))
 				for _, expr := range exprs {
 					this = append(this, sqlparser.String(expr))
 				}
@@ -366,7 +366,7 @@ func (ins *Insert) description() PrimitiveDescription {
 	// This is a check to ensure we send the correct query to the database.
 	// "ActualQuery" should not be part of the plan output, if it does, it means the query was not rewritten correctly.
 	if ins.Mid != nil {
-		var mids []string
+		mids := make([]string, 0, len(ins.Mid))
 		for _, n := range ins.Mid {
 			mids = append(mids, sqlparser.String(n))
 		}

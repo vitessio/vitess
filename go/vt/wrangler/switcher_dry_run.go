@@ -58,8 +58,8 @@ func (dr *switcherDryRun) deleteShardRoutingRules(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
-	sourceShards := make([]string, 0)
-	targetShards := make([]string, 0)
+	sourceShards := make([]string, 0, len(dr.ts.Sources()))
+	targetShards := make([]string, 0, len(dr.ts.Targets()))
 	for _, source := range dr.ts.Sources() {
 		sourceShards = append(sourceShards, source.GetShard().ShardName())
 	}
@@ -134,7 +134,7 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 
 func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
 	dr.drLog.Log("Switch writes completed, freeze and delete vreplication streams on:")
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(ts.Targets()))
 	for _, t := range ts.Targets() {
 		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))
 	}
@@ -144,7 +144,7 @@ func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *traffi
 
 func (dr *switcherDryRun) startReverseVReplication(ctx context.Context) error {
 	dr.drLog.Log("Start reverse replication streams on:")
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.Sources()))
 	for _, t := range dr.ts.Sources() {
 		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))
 	}
@@ -196,7 +196,7 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 }
 
 func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.Sources()))
 	for _, source := range dr.ts.Sources() {
 		position, _ := dr.ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.SourceKeyspaceName(), source.GetShard().ShardName(), position))
@@ -235,7 +235,7 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 }
 
 func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0) //nolint:prealloc
 	for _, source := range dr.ts.Sources() {
 		for _, tableName := range dr.ts.Tables() {
 			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
@@ -284,7 +284,7 @@ func (dr *switcherDryRun) validateWorkflowHasCompleted(ctx context.Context) erro
 
 func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) error {
 	dr.drLog.Log("Delete vreplication streams on target:")
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.Targets()))
 	for _, t := range dr.ts.Targets() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
 			t.GetShard().Keyspace(), t.GetShard().ShardName(), dr.ts.WorkflowName(), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
@@ -295,7 +295,7 @@ func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) err
 
 func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Context) error {
 	dr.drLog.Log("Delete reverse vreplication streams on source:")
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.Sources()))
 	for _, t := range dr.ts.Sources() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
 			t.GetShard().Keyspace(), t.GetShard().ShardName(), workflow.ReverseWorkflowName(dr.ts.WorkflowName()), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
@@ -305,7 +305,7 @@ func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Conte
 }
 
 func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.Targets()))
 	for _, target := range dr.ts.Targets() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s, Tablet %d, Workflow %s, DbName %s",
 			target.GetPrimary().Keyspace, target.GetPrimary().Shard, target.GetPrimary().Alias.Uid, dr.ts.WorkflowName(), target.GetPrimary().DbName()))
@@ -318,7 +318,7 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.SourceShards()))
 	for _, si := range dr.ts.SourceShards() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
@@ -330,7 +330,7 @@ func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) dropTargetDeniedTables(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0, len(dr.ts.TargetShards()))
 	for _, si := range dr.ts.TargetShards() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
@@ -346,7 +346,7 @@ func (dr *switcherDryRun) logs() *[]string {
 }
 
 func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
-	logs := make([]string, 0)
+	logs := make([]string, 0) //nolint:prealloc
 	for _, target := range dr.ts.Targets() {
 		for _, tableName := range dr.ts.Tables() {
 			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",

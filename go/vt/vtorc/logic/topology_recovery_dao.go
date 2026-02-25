@@ -220,7 +220,7 @@ func ReadActiveClusterRecoveries(keyspace string, shard string) ([]*TopologyReco
 func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
-	var args []any
+	var args []any //nolint:prealloc
 	if len(whereConditions) > 0 {
 		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
 	}

@@ -124,7 +124,7 @@ func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sq
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			row2 = nil
+			row2 = nil //nolint:prealloc
 			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)

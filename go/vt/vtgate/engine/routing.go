@@ -649,7 +649,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 // convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
 // all combination of left and right side.
 func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
-	var allCombinations [][]sqltypes.Value
+	var allCombinations [][]sqltypes.Value //nolint:prealloc
 	for _, firstPart := range left {
 		for _, secondPart := range right {
 			allCombinations = append(allCombinations, append(firstPart, secondPart))

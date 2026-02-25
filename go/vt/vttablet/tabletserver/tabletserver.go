@@ -2059,7 +2059,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 		if sanitize {
 			fmt.Fprintf(bvBuf, "[REDACTED]")
 		} else {
-			var keys []string
+			keys := make([]string, 0, len(bindVariables))
 			for key := range bindVariables {
 				keys = append(keys, key)
 			}

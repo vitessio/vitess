@@ -1416,7 +1416,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	defer conn.Recycle()
 
 	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
-		var udfs []*querypb.UDFInfo
+		udfs := make([]*querypb.UDFInfo, 0, len(result.Rows))
 		for _, row := range result.Rows {
 			aggr := strings.EqualFold(row[2].ToString(), "aggregate")
 			udf := &querypb.UDFInfo{

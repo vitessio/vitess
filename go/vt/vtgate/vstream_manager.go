@@ -786,7 +786,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr))
 						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
-					eventss = nil
+					eventss = nil //nolint:prealloc
 					sendevents = nil
 				case binlogdatapb.VEventType_COPY_COMPLETED:
 					sendevents = append(sendevents, event)

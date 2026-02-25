@@ -151,7 +151,7 @@ func addFieldsIfNotEmpty(dml *DML, other map[string]any) {
 		other["KsidLength"] = dml.KsidLength
 	}
 	if len(dml.Values) > 0 {
-		s := []string{}
+		s := make([]string, 0, len(dml.Values))
 		for _, value := range dml.Values {
 			s = append(s, sqlparser.String(value))
 		}
