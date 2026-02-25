@@ -717,7 +717,7 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			query:    "show create database " + keyspaceName,
 			startsTx: false,
 		},
-		// ShowOther commands are sent to MySQL as-is and do not start implicit transactions.
+		// Server-state SHOW commands are sent to MySQL as-is and do not start implicit transactions.
 		{
 			name:     "SHOW PROCESSLIST does not start tx",
 			query:    "show processlist",
