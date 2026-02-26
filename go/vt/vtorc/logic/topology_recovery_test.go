@@ -25,9 +25,10 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/stretchr/testify/require"
 
@@ -678,9 +679,9 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				oldStderr := os.Stderr
 				r, w, err := os.Pipe()
 				require.NoError(t, err)
-				oldFD, err := syscall.Dup(int(os.Stderr.Fd()))
+				oldFD, err := unix.Dup(int(os.Stderr.Fd()))
 				require.NoError(t, err)
-				require.NoError(t, syscall.Dup3(int(w.Fd()), int(os.Stderr.Fd()), 0))
+				require.NoError(t, unix.Dup2(int(w.Fd()), int(os.Stderr.Fd())))
 				os.Stderr = w
 				done := make(chan struct{})
 				go func() {
@@ -692,8 +693,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					log.Flush()
 					_ = w.Close()
 					os.Stderr = oldStderr
-					_ = syscall.Dup3(oldFD, int(os.Stderr.Fd()), 0)
-					_ = syscall.Close(oldFD)
+					_ = unix.Dup2(oldFD, int(os.Stderr.Fd()))
+					_ = unix.Close(oldFD)
 					<-done
 				}
 			}
