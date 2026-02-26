@@ -476,12 +476,14 @@ func TestStalePrimary(t *testing.T) {
 	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
 
-// TestDemotePrimaryHang tests that when the `DemotePrimary` RPC hangs, VTOrc is not indefinitely blocked
-// on future recoveries.
-func TestDemotePrimaryHang(t *testing.T) {
+// TestPartialStalePrimaryRecovery tests that after a stale topo primary recovery that updates the topology but fails
+// to demote the stale primary, a follow-up recovery will clean up the rest (in this case, `ReplicaIsWritable`).
+func TestPartialStalePrimaryRecovery(t *testing.T) {
 	ctx := t.Context()
 
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 
@@ -490,10 +492,8 @@ func TestDemotePrimaryHang(t *testing.T) {
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
-	require.NotNil(t, curPrimary, "expected VTOrc to elect an initial primary")
 
 	var stalePrimary *cluster.Vttablet
-	var blockedReplica *cluster.Vttablet
 	var healthyReplica *cluster.Vttablet
 
 	for _, tablet := range shard0.Vttablets {
@@ -506,66 +506,81 @@ func TestDemotePrimaryHang(t *testing.T) {
 			continue
 		}
 
-		if blockedReplica == nil {
-			blockedReplica = tablet
-			continue
-		}
-
 		healthyReplica = tablet
 	}
 
-	require.NotNil(t, stalePrimary, "expected a candidate tablet to mark as stale topo primary")
-	require.NotNil(t, blockedReplica, "expected a second replica to inject a separate failure")
-	require.NotNil(t, healthyReplica, "expected a healthy replica to keep normal replication coverage")
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{stalePrimary, healthyReplica}, 15*time.Second)
 
-	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{stalePrimary, blockedReplica, healthyReplica}, 15*time.Second)
-
-	// Hold the stale primary candidate's action queue for a long time. This guarantees that VTOrc's
-	// DemotePrimary RPC will block on the tablet lock.
-	sleepDuration := 90 * time.Second
-	go func() {
-		clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-			"SleepTablet",
-			stalePrimary.Alias,
-			sleepDuration.String(),
-		)
-	}()
-
-	// Make the tablet a stale primary by updating its type to PRIMARY and primary term start time
-	// to an older time than the current primary. This will trigger the StaleTopoPrimary recovery.
-	err := utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, stalePrimary, "")
+	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(ctx, curPrimary.GetAlias())
 	require.NoError(t, err)
 
+	curPrimaryTermStart := protoutil.TimeFromProto(curPrimaryTopo.PrimaryTermStartTime)
+	require.False(t, curPrimaryTermStart.IsZero(), "expected current primary term start time to be set")
+
+	err = utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, stalePrimary, "")
+	require.NoError(t, err)
+	require.True(t, utils.WaitForReadOnlyValue(t, stalePrimary, 0))
+
+	// Kill the stale primary so that it can't respond to the `DemotePrimary` RPC
+	_ = stalePrimary.VttabletProcess.Kill()
+
+	// Update the tablet to have an older primary term start time.
 	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, stalePrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_PRIMARY
-		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now().Add(-1 * time.Minute))
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(curPrimaryTermStart.Add(-1 * time.Minute))
 		return nil
 	})
 	require.NoError(t, err)
 
-	// Wait until VTOrc has detected the stale topo primary.
-	utils.WaitForDetectedProblems(t, vtorc, string(inst.StaleTopoPrimary), stalePrimary.Alias, keyspace.Name, shard0.Name, 1)
-
-	// Inject a second problem on a different replica while the stale-primary recovery is still hanging.
-	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", blockedReplica.Alias)
-	require.NoError(t, err)
-
-	utils.WaitForDetectedProblems(t, vtorc, string(inst.ReplicationStopped), blockedReplica.Alias, keyspace.Name, shard0.Name, 1)
-
-	// If DemotePrimary is properly bounded by a context timeout, the stale primary recovery should
-	// fail, close the recovery row, and unblock the shard for further recoveries.
+	// The tablet's type in the topology should eventually be updated to REPLICA.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		topoTablet, topoErr := clusterInfo.Ts.GetTablet(ctx, stalePrimary.GetAlias())
+		require.NoError(c, topoErr)
+
 		vars := vtorc.GetVars()
 		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
 		require.True(c, ok, "RecoveriesCount metric not yet available")
 
-		mapKey := fmt.Sprintf("%s.%s.%s", logic.DemoteStaleTopoPrimaryRecoveryName, keyspace.Name, shard0.Name)
-		count := utils.GetIntFromValue(recoveries[mapKey])
-		assert.GreaterOrEqual(c, count, 1)
-	}, 30*time.Second, time.Second, "expected VTOrc to attempt stale primary recovery")
+		mapKey := fmt.Sprintf("%s.%s.%s", logic.ReconcileStaleTopoPrimaryRecoveryName, keyspace.Name, shard0.Name)
+		recoveryCount := utils.GetIntFromValue(recoveries[mapKey])
 
-	// The FixReplica recovery should run once the stale primary recovery unblocks the shard.
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+		assert.Equal(c, topodatapb.TabletType_REPLICA, topoTablet.Type)
+		assert.GreaterOrEqual(c, recoveryCount, 1)
+	}, time.Minute, time.Second, "expected stale topo primary recovery to succeed by updating topology while demotion is unreachable")
+
+	// Bring the stale primary back up (now a REPLICA in the topology).
+	err = stalePrimary.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	err = stalePrimary.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+	require.NoError(t, err)
+
+	// Assert that vtorc eventually detects ReplicaIsWritable.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		vars := vtorc.GetVars()
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
+
+		problemKey := strings.Join([]string{string(inst.ReplicaIsWritable), stalePrimary.Alias, keyspace.Name, shard0.Name}, ".")
+		detectedCount := utils.GetIntFromValue(problems[problemKey])
+
+		assert.GreaterOrEqual(c, detectedCount, 1)
+	}, 30*time.Second, time.Second, "expected ReplicaIsWritable to be detected once the tablet is reachable again")
+
+	// Assert that vtorc eventually fixes the replica and sets it to read only.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		vars := vtorc.GetVars()
+		successfulRecoveries, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
+
+		mapKey := fmt.Sprintf("%s.%s.%s", logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)
+		successCount := utils.GetIntFromValue(successfulRecoveries[mapKey])
+
+		assert.GreaterOrEqual(c, successCount, 1)
+	}, 30*time.Second, time.Second, "expected FixReplica to run after ReplicaIsWritable is detected")
+
+	require.True(t, utils.WaitForReadOnlyValue(t, stalePrimary, 1))
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{stalePrimary, healthyReplica}, 15*time.Second)
 }
 
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
