@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -90,8 +91,7 @@ func TestPrimaryHealthStateEviction(t *testing.T) {
 	primaryHealthMu.Unlock()
 
 	for i := range aliasCount {
-		alias := fmt.Sprintf("zone1-%010d", i)
-		_ = IsPrimaryHealthCheckUnhealthy(alias)
+		_ = IsPrimaryHealthCheckUnhealthy(&topodatapb.TabletAlias{Cell: "zone1", Uid: uint32(i)})
 	}
 
 	primaryHealthMu.Lock()

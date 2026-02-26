@@ -848,7 +848,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// Wait until VTOrc notices the failure.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
 	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
@@ -860,7 +860,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// See that VTOrc eventually reports no errors.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
 	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 
@@ -870,7 +870,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// Wait until VTOrc notices the failure.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
 	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
@@ -882,7 +882,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// See that VTOrc eventually reports no errors.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
 	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 }

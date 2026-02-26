@@ -41,7 +41,7 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 		keyspaceName           string
 		shardName              string
 		shard                  *topodatapb.Shard
-		primaryAliasWanted     string
+		primaryAliasWanted     *topodatapb.TabletAlias
 		primaryTimestampWanted time.Time
 		err                    string
 	}{
@@ -56,8 +56,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 				},
 				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse.Add(1 * time.Hour)),
 			},
+			primaryAliasWanted:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
 			primaryTimestampWanted: timeToUse.Add(1 * time.Hour).UTC(),
-			primaryAliasWanted:     "zone1-0000000301",
 		},
 		{
 			name:         "Success with empty primary alias",
@@ -66,8 +66,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			shard: &topodatapb.Shard{
 				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse),
 			},
+			primaryAliasWanted:     nil,
 			primaryTimestampWanted: timeToUse.UTC(),
-			primaryAliasWanted:     "",
 		},
 		{
 			name:         "Success with empty primary term start time",
@@ -79,8 +79,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 					Uid:  301,
 				},
 			},
+			primaryAliasWanted:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
 			primaryTimestampWanted: time.Time{},
-			primaryAliasWanted:     "zone1-0000000301",
 		},
 		{
 			name:         "No shard found",
@@ -104,7 +104,7 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.primaryAliasWanted, shardPrimaryAlias)
+			testRequireTabletAliasEqual(t, tt.primaryAliasWanted, shardPrimaryAlias)
 			require.EqualValues(t, tt.primaryTimestampWanted, primaryTimestamp)
 
 			// ReadShardNames

@@ -25,8 +25,10 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -48,30 +50,31 @@ var (
 )
 
 // RecordPrimaryHealthCheck records the outcome of a primary health check.
-func RecordPrimaryHealthCheck(tabletAlias string, success bool) {
-	recordPrimaryHealthCheckAt(tabletAlias, success, time.Now())
+func RecordPrimaryHealthCheck(tabletAlias *topodatapb.TabletAlias, success bool) {
+	recordPrimaryHealthCheckAt(topoproto.TabletAliasString(tabletAlias), success, time.Now())
 }
 
 // IsPrimaryHealthCheckUnhealthy reports whether the primary has an unhealthy healthcheck window.
 // If the alias is missing from memory, this schedules a best-effort load from the persisted
 // state and returns false so callers do not block on storage reads.
-func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
+func IsPrimaryHealthCheckUnhealthy(tabletAlias *topodatapb.TabletAlias) bool {
 	window := primaryHealthWindow()
-	if window <= 0 || tabletAlias == "" {
+	if window <= 0 || tabletAlias == nil {
 		return false
 	}
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 
 	state := func() *primaryHealthState {
 		primaryHealthMu.Lock()
 		defer primaryHealthMu.Unlock()
-		return primaryHealthByAlias[tabletAlias]
+		return primaryHealthByAlias[tabletAliasString]
 	}()
 
 	if state == nil {
 		go func() {
-			persisted, err := readPrimaryHealthState(tabletAlias)
+			persisted, err := readPrimaryHealthState(tabletAliasString)
 			if err != nil {
-				log.Warn(fmt.Sprintf("failed to read primary health state for %s: %v", tabletAlias, err))
+				log.Warn(fmt.Sprintf("failed to read primary health state for %s: %v", tabletAliasString, err))
 				return
 			}
 			if persisted == nil {
@@ -80,10 +83,10 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 			_ = func() *primaryHealthState {
 				primaryHealthMu.Lock()
 				defer primaryHealthMu.Unlock()
-				if primaryHealthByAlias[tabletAlias] == nil {
-					primaryHealthByAlias[tabletAlias] = persisted
+				if primaryHealthByAlias[tabletAliasString] == nil {
+					primaryHealthByAlias[tabletAliasString] = persisted
 				}
-				return primaryHealthByAlias[tabletAlias]
+				return primaryHealthByAlias[tabletAliasString]
 			}()
 		}()
 		return false
@@ -96,14 +99,14 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	evict, unhealthy := func() (bool, bool) {
 		primaryHealthMu.Lock()
 		defer primaryHealthMu.Unlock()
-		state = primaryHealthByAlias[tabletAlias]
+		state = primaryHealthByAlias[tabletAliasString]
 		if state == nil {
 			return false, false
 		}
 		updatePrimaryHealthWindowLocked(state, time.Now(), window)
 		evict := shouldEvictPrimaryHealthWindow(state)
 		if evict {
-			delete(primaryHealthByAlias, tabletAlias)
+			delete(primaryHealthByAlias, tabletAliasString)
 		}
 		return evict, state.unhealthy
 	}()
@@ -113,8 +116,8 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 
 	if evict {
 		go func() {
-			if err := deletePrimaryHealthState(tabletAlias); err != nil {
-				log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAlias, err))
+			if err := deletePrimaryHealthState(tabletAliasString); err != nil {
+				log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAliasString, err))
 			}
 		}()
 		return false
