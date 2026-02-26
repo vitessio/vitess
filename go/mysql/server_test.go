@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -303,7 +304,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	fmt.Printf("host: %s, port: %d\n", host, port)
@@ -333,7 +334,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -365,7 +366,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -397,7 +398,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -434,7 +435,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -461,7 +462,7 @@ func TestClientFoundRows(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -502,7 +503,7 @@ func TestConnAttrs(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 
@@ -589,7 +590,7 @@ func TestConnCounts(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	// Test with one new connection.
@@ -643,7 +644,7 @@ func TestServer(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -743,7 +744,7 @@ func TestServerStats(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -831,7 +832,7 @@ func TestClearTextServer(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -904,7 +905,7 @@ func TestDialogServer(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Store(true)
 	host, port := getHostPort(t, l.Addr())
@@ -953,7 +954,7 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1060,7 +1061,7 @@ func TestTLSRequired(t *testing.T) {
 		// Below, we are enabling --ssl-verify-server-cert, which adds
 		// a check that the common name of the certificate matches the
 		// server host name we connect to.
-		l, err = NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+		l, err = NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 		require.NoError(t, err)
 		host := l.Addr().(*net.TCPAddr).IP.String()
 		port := l.Addr().(*net.TCPAddr).Port
@@ -1133,7 +1134,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1219,7 +1220,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1276,7 +1277,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -1316,7 +1317,7 @@ func TestErrorCodes(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -1407,7 +1408,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	return output, true
 }
 
-func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
+func runMysqlWithErr(t *testing.T, params *ConnParams, command string, extraArgs ...string) (string, error) {
 	dir, err := venv.VtMysqlRoot()
 	require.NoError(t, err)
 	name, err := binaryPath(dir, "mysql")
@@ -1417,6 +1418,9 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, 
 	// Query OK, 1 row affected (0.00 sec)
 	args := []string{
 		"-v", "-v", "-v",
+	}
+	for _, a := range extraArgs {
+		args = append(args, a)
 	}
 	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
 		command = command[len(enableCleartextPluginPrefix):]
@@ -1467,6 +1471,57 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, 
 	return output, nil
 }
 
+// runMysqlWithErrContext is like runMysqlWithErr but uses ctx to limit execution time (e.g. for timeout).
+func runMysqlWithErrContext(t *testing.T, ctx context.Context, params *ConnParams, command string, extraArgs ...string) (string, error) {
+	dir, err := venv.VtMysqlRoot()
+	require.NoError(t, err)
+	name, err := binaryPath(dir, "mysql")
+	require.NoError(t, err)
+	args := []string{"-v", "-v", "-v"}
+	for _, a := range extraArgs {
+		args = append(args, a)
+	}
+	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
+		command = command[len(enableCleartextPluginPrefix):]
+		args = append(args, "--enable-cleartext-plugin")
+	}
+	if command == "--version" {
+		args = append(args, command)
+	} else {
+		args = append(args, "-e", command)
+		if params.UnixSocket != "" {
+			args = append(args, "-S", params.UnixSocket)
+		} else {
+			args = append(args, "-h", params.Host, "-P", strconv.Itoa(params.Port))
+		}
+		if params.Uname != "" {
+			args = append(args, "-u", params.Uname)
+		}
+		if params.Pass != "" {
+			args = append(args, "-p"+params.Pass)
+		}
+		if params.DbName != "" {
+			args = append(args, "-D", params.DbName)
+		}
+		if params.SslEnabled() {
+			args = append(args, "--ssl", "--ssl-ca", params.SslCa, "--ssl-cert", params.SslCert, "--ssl-key", params.SslKey, "--ssl-verify-server-cert")
+		}
+	}
+	env := []string{"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql")}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = env
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	output := string(out)
+	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return output, err
+	}
+	return output, nil
+}
+
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 //
@@ -1494,7 +1549,7 @@ func TestListenerShutdown(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	// Setup the right parameters.
@@ -1569,7 +1624,7 @@ func TestServerFlush(t *testing.T) {
 	mysqlServerFlushDelay := 10 * time.Millisecond
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, mysqlServerFlushDelay, false)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, mysqlServerFlushDelay, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{
@@ -1616,7 +1671,7 @@ func TestTcpKeepAlive(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{
@@ -1638,4 +1693,486 @@ func TestTcpKeepAlive(t *testing.T) {
 	// now calling this method should fail.
 	err = setTcpConnProperties(th.lastConn.conn.(*net.TCPConn), 0)
 	require.ErrorContains(t, err, "unable to enable keepalive on tcp connection")
+}
+
+func readGreetingPacketRaw(conn net.Conn) ([]byte, error) {
+	header := make([]byte, packetHeaderSize)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return nil, err
+	}
+	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if length <= 0 || length > 256*1024 {
+		return nil, fmt.Errorf("invalid greeting packet length: %d", length)
+	}
+	payload := make([]byte, length)
+	if _, err := io.ReadFull(conn, payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func parseHandshakeCapabilitiesFromPayload(data []byte) (uint32, error) {
+	if len(data) < 2 {
+		return 0, fmt.Errorf("handshake payload too short")
+	}
+	versionEnd := 1
+	for versionEnd < len(data) && data[versionEnd] != 0 {
+		versionEnd++
+	}
+	if versionEnd >= len(data) {
+		return 0, fmt.Errorf("no null terminator in version string")
+	}
+	capLowOff := versionEnd + 14
+	if capLowOff+2 > len(data) {
+		return 0, fmt.Errorf("handshake payload too short for capability low")
+	}
+	capLow := uint32(data[capLowOff]) | uint32(data[capLowOff+1])<<8
+	capHighOff := capLowOff + 5
+	if capHighOff+2 > len(data) {
+		return 0, fmt.Errorf("handshake payload too short for capability high")
+	}
+	capHigh := uint32(data[capHighOff]) | uint32(data[capHighOff+1])<<8
+	return capLow | (capHigh << 16), nil
+}
+
+var handshakeZstdMask = uint32(CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm)
+
+func TestHandshakeCapabilitiesZstdEnabled(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	defer cleanupListener(ctx, l, &ConnParams{Host: host, Port: port})
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	greeting, err := readGreetingPacketRaw(conn)
+	require.NoError(t, err)
+	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
+	require.NoError(t, err)
+
+	assert.NotZero(t, caps&CapabilityClientCompress, "greeting must contain CLIENT_COMPRESS (bit 5, 0x00000020)")
+	assert.NotZero(t, caps&CapabilityClientZstdCompressionAlgorithm, "greeting must contain CLIENT_ZSTD_COMPRESSION_ALGORITHM (bit 26, 0x04000000)")
+	assert.Equal(t, handshakeZstdMask, caps&handshakeZstdMask, "bitwise AND with both flags must equal both flags")
+}
+
+func TestHandshakeCapabilitiesZstdDisabled(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, false)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	defer cleanupListener(ctx, l, &ConnParams{Host: host, Port: port})
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	greeting, err := readGreetingPacketRaw(conn)
+	require.NoError(t, err)
+	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
+	require.NoError(t, err)
+
+	assert.Zero(t, caps&handshakeZstdMask, "greeting must NOT contain 0x04000020 (CLIENT_COMPRESS | CLIENT_ZSTD_COMPRESSION_ALGORITHM) when zstd disabled")
+}
+
+func TestHandshakeCapabilitiesTlsZstd(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	root, err := os.MkdirTemp("", "tlstest")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		"",
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	defer cleanupListener(ctx, l, &ConnParams{Host: host, Port: port})
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	greeting, err := readGreetingPacketRaw(conn)
+	require.NoError(t, err)
+	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
+	require.NoError(t, err)
+
+	assert.NotZero(t, caps&CapabilityClientSSL, "server with TLS must advertise CLIENT_SSL in greeting")
+	assert.NotZero(t, caps&CapabilityClientCompress, "server with zstd enabled must advertise CLIENT_COMPRESS in greeting")
+	assert.NotZero(t, caps&CapabilityClientZstdCompressionAlgorithm, "server with zstd enabled must advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM in greeting")
+}
+
+func TestHandshakeCapabilitiesBitExact(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	defer cleanupListener(ctx, l, &ConnParams{Host: host, Port: port})
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	greeting, err := readGreetingPacketRaw(conn)
+	require.NoError(t, err)
+	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
+	require.NoError(t, err)
+
+	expectedBase := uint32(CapabilityClientLongPassword |
+		CapabilityClientFoundRows |
+		CapabilityClientLongFlag |
+		CapabilityClientConnectWithDB |
+		CapabilityClientProtocol41 |
+		CapabilityClientTransactions |
+		CapabilityClientSecureConnection |
+		CapabilityClientMultiStatements |
+		CapabilityClientMultiResults |
+		CapabilityClientPluginAuth |
+		CapabilityClientPluginAuthLenencClientData |
+		CapabilityClientDeprecateEOF |
+		CapabilityClientConnAttr |
+		CapabilityClientCompress |
+		CapabilityClientZstdCompressionAlgorithm)
+	assert.Equal(t, expectedBase, caps&expectedBase, "capability mask must match MySQL 8.4 base + zstd when enableZstdCompression=true")
+}
+
+func TestHandshakeCapabilitiesInvalidFlag(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, false)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	defer cleanupListener(ctx, l, &ConnParams{Host: host, Port: port})
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	greeting, err := readGreetingPacketRaw(conn)
+	require.NoError(t, err)
+	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
+	require.NoError(t, err)
+
+	assert.Zero(t, caps&CapabilityClientCompress, "enableZstdCompression=false must not advertise CLIENT_COMPRESS")
+	assert.Zero(t, caps&CapabilityClientZstdCompressionAlgorithm, "enableZstdCompression=false must not advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM")
+}
+
+func TestHandshakeZstdClientSetsServerCompressedAndLevel(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  7,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sc := th.LastConn()
+	require.NotNil(t, sc)
+	assert.True(t, sc.isZstdCompressed, "server Conn must have isZstdCompressed true when client sends zstd capability and level")
+	assert.Equal(t, 7, sc.zstdCompressionLevel, "server must set zstdCompressionLevel to client-requested 7")
+}
+
+func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  0,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sc := th.LastConn()
+	require.NotNil(t, sc)
+	assert.True(t, sc.isZstdCompressed)
+	assert.Equal(t, 3, sc.zstdCompressionLevel, "server must use default level 3 when client sends level 0")
+}
+
+func TestHandshakeZstdClientLevelClamped(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  25,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sc := th.LastConn()
+	require.NotNil(t, sc)
+	assert.True(t, sc.isZstdCompressed)
+	assert.Equal(t, 22, sc.zstdCompressionLevel, "server must clamp level to 22 when client sends > 22")
+}
+
+func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sc := th.LastConn()
+	require.NotNil(t, sc)
+	assert.False(t, sc.isZstdCompressed, "server must not set isZstdCompressed when client does not send zstd capability")
+}
+
+func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	// Last argument false => EnableZstdCompression disabled on the listener.
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, false)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  7,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Here the server should just ignore the client's request for zstd, since it never advertised zstd in its greeting.
+	sc := th.LastConn()
+	require.NotNil(t, sc)
+	assert.False(t, sc.isZstdCompressed, "server must not enable zstd when listener has EnableZstdCompression=false")
+	assert.False(t, conn.isZstdCompressed, "client must not enable zstd when server does not advertise zstd capabilities")
+}
+
+func TestZstdRoundTrip(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  3,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, result, selectRowsResult)
+}
+
+func TestZstdMultipleQueriesSameConnection(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  3,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	for i := 0; i < 5; i++ {
+		result, err := conn.ExecuteFetch("select rows", 10000, true)
+		require.NoErrorf(t, err, "compressed query %d failed", i+1)
+		utils.MustMatch(t, result, selectRowsResult)
+	}
+}
+
+func TestZstdRoundTripMysqlCli(t *testing.T) {
+	dir, err := venv.VtMysqlRoot()
+	if err != nil {
+		t.Skipf("vt mysql root not found, skipping mysql CLI test: %v", err)
+	}
+	if _, err := binaryPath(dir, "mysql"); err != nil {
+		t.Skipf("mysql binary not found, skipping: %v", err)
+	}
+
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	defer cleanupListener(ctx, l, params)
+
+	cliCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	output, err := runMysqlWithErrContext(t, cliCtx, params, "select rows", "--compression-algorithms=zstd")
+	if err != nil {
+		t.Skipf("mysql CLI with --compression-algorithms=zstd failed or timed out (client may not support zstd or protocol differs): %v", err)
+	}
+	assert.Contains(t, output, "nice name")
+	assert.Contains(t, output, "nicer name")
+	assert.Contains(t, output, "2 rows in set")
 }

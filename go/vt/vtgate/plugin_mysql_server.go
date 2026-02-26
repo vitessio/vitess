@@ -81,6 +81,9 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
+	// mysqlEnableZstdCompression lets vtgate advertise and use zstd connection compression; when it's false (our default),
+	// we behave exactly like before: no extra capability bits and no compression on the wire.
+	mysqlEnableZstdCompression = false
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -108,6 +111,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mysqlDefaultWorkloadName, "mysql-default-workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work")
 	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+	utils.SetFlagBoolVar(fs, &mysqlEnableZstdCompression, "mysql-enable-zstd-compression", mysqlEnableZstdCompression, "Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -633,6 +637,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
 			mysqlServerMultiQuery,
+			mysqlEnableZstdCompression,
 		)
 		if err != nil {
 			log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
@@ -682,6 +687,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlKeepAlivePeriod,
 		mysqlServerFlushDelay,
 		mysqlServerMultiQuery,
+		mysqlEnableZstdCompression,
 	)
 
 	switch err := err.(type) {
@@ -716,6 +722,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
 			mysqlServerMultiQuery,
+			mysqlEnableZstdCompression,
 		)
 		return listener, listenerErr
 	default:

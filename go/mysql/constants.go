@@ -80,8 +80,9 @@ const (
 	// CLIENT_NO_SCHEMA 1 << 4
 	// Do not permit database.table.column. We do permit it.
 
-	// CLIENT_COMPRESS 1 << 5
-	// We do not support compression. CPU is usually our bottleneck.
+	// CapabilityClientCompress is CLIENT_COMPRESS.
+	// Here we're saying the compression protocol is supported, and it's what we use for zstd when compression is turned on.
+	CapabilityClientCompress = 1 << 5
 
 	// CLIENT_ODBC 1 << 6
 	// No special behavior since 3.22.
@@ -152,6 +153,10 @@ const (
 	// CapabilityClientDeprecateEOF is CLIENT_DEPRECATE_EOF
 	// Expects an OK (instead of EOF) after the resultset rows of a Text Resultset.
 	CapabilityClientDeprecateEOF = 1 << 24
+
+	// CapabilityClientZstdCompressionAlgorithm is CLIENT_ZSTD_COMPRESSION_ALGORITHM (MySQL 8.0.18+).
+	// Zstd compression method for the compression protocol.
+	CapabilityClientZstdCompressionAlgorithm = 1 << 26
 )
 
 // Status flags. They are returned by the server in a few cases.

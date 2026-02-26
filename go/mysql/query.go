@@ -57,6 +57,9 @@ const (
 func (c *Conn) WriteComQuery(query string) error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
+	if c.isZstdCompressed {
+		c.compressedSequence = 0
+	}
 
 	data, pos := c.startEphemeralPacketWithHeader(len(query) + 1)
 	data[pos] = ComQuery
