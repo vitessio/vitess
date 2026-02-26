@@ -1,0 +1,25 @@
+{
+    "clusters": {
+        "local": {
+            "name": "local",
+            "discovery": "staticfile",
+            "discovery-staticfile-path": "/app/discovery.json"
+        }
+    },
+    "vtgates": [
+        {
+            "host": {
+                "hostname": "vtgate:15999"
+            },
+            "tags": ["cell:test"]
+        }
+    ],
+    "vtctlds": [
+        {
+            "host": {
+                "hostname": "vtctld:15999"
+            },
+            "tags": ["cell:test"]
+        }
+    ]
+}

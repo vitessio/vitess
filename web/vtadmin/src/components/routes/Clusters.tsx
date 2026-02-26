@@ -25,6 +25,8 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import ClusterRow from './clusters/ClusterRow';
+import { getVTClusterMonitoringTemplate, getVitessMonitoringDashboardTitle } from '../../util/env';
+
 export const Clusters = () => {
     useDocumentTitle('Clusters');
     const clustersQuery = useClusters();
@@ -36,6 +38,11 @@ export const Clusters = () => {
     const renderRows = (rows: pb.Cluster[]) =>
         rows.map((cluster, idx) => <ClusterRow cluster={cluster} key={`cluster_${idx}`} />);
 
+    const columns = ['Name', 'Id', 'Validate'];
+    if (getVTClusterMonitoringTemplate()) {
+        columns.push(getVitessMonitoringDashboardTitle());
+    }
+
     return (
         <div>
             <WorkspaceHeader>
@@ -44,7 +51,7 @@ export const Clusters = () => {
 
             <ContentContainer>
                 <div className="max-w-screen-sm">
-                    <DataTable columns={['Name', 'Id', 'Validate']} data={rows} renderRows={renderRows} />
+                    <DataTable columns={columns} data={rows} renderRows={renderRows} />
                     <QueryLoadingPlaceholder query={clustersQuery} />
                 </div>
             </ContentContainer>

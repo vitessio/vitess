@@ -35,13 +35,26 @@ import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
 import { ShardLink } from '../links/ShardLink';
 import InfoDropdown from './tablets/InfoDropdown';
-import { isReadOnlyMode } from '../../util/env';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+import { formatDashboardUrl } from '../../util/dashboards';
+import {
+    getVitessMonitoringDashboardTitle,
+    getMysqlMonitoringDashboardTitle,
+    getMysqlMonitoringTemplate,
+    getVTTabletMonitoringTemplate,
+    isReadOnlyMode,
+} from '../../util/env';
 
 const COLUMNS = ['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname'];
 if (!isReadOnlyMode()) {
     COLUMNS.push('Actions');
+}
+if (getVTTabletMonitoringTemplate()) {
+    COLUMNS.push(getVitessMonitoringDashboardTitle());
+}
+if (getMysqlMonitoringTemplate()) {
+    COLUMNS.push(getMysqlMonitoringDashboardTitle());
 }
 
 export const Tablets = () => {
@@ -98,12 +111,57 @@ export const Tablets = () => {
                     <DataCell>
                         <ExternalTabletLink fqdn={`${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
-
                     <ReadOnlyGate>
                         <DataCell>
                             <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
                         </DataCell>
                     </ReadOnlyGate>
+
+                    {getVTTabletMonitoringTemplate() && (
+                        <DataCell>
+                            <a
+                                href={
+                                    formatDashboardUrl(getVTTabletMonitoringTemplate() || '', {
+                                        cluster: t.cluster,
+                                        keyspace: t.keyspace,
+                                        shard: t.shard,
+                                        alias: t.alias,
+                                        hostname: t.hostname,
+                                        type: t.type ? String(t.type) : undefined,
+                                        cell: t.cell,
+                                    }) || '#'
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-secondary btn-sm"
+                            >
+                                {t.alias as string}-metrics
+                            </a>
+                        </DataCell>
+                    )}
+
+                    {getMysqlMonitoringTemplate() && (
+                        <DataCell>
+                            <a
+                                href={
+                                    formatDashboardUrl(getMysqlMonitoringTemplate() || '', {
+                                        cluster: t.cluster,
+                                        keyspace: t.keyspace,
+                                        shard: t.shard,
+                                        alias: t.alias,
+                                        hostname: t.hostname,
+                                        type: t.type ? String(t.type) : undefined,
+                                        cell: t.cell,
+                                    }) || '#'
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-secondary btn-sm"
+                            >
+                                {t.alias as string}-MySQL-metrics
+                            </a>
+                        </DataCell>
+                    )}
                 </tr>
             ));
         },
@@ -151,6 +209,7 @@ export const formatRows = (
 
         return {
             alias: formatAlias(t.tablet?.alias),
+            cell: t.tablet?.alias?.cell,
             cluster: t.cluster?.name,
             hostname: t.tablet?.hostname,
             isShardServing: shard?.shard?.is_primary_serving,

@@ -1,0 +1,160 @@
+# VTAdmin Demo - Docker Compose Overrides
+# 
+# This file extends the base Vitess cluster (../compose/docker-compose.yml) with:
+# - VTAdmin web UI (port 5173)
+# - Grafana dashboards for Vitess metrics (port 3000)
+# - PMM monitoring for MySQL instances (port 8888)
+# - Prometheus metrics collection (port 9090)
+#
+# Usage:
+#   make up       # Start cluster
+#   make logs     # View logs
+#   make reset    # Full cleanup and restart
+#
+# See README.md for detailed documentation.
+
+services:
+  vtadmin-web:
+    image: node:22
+    working_dir: /app
+    volumes:
+      - ${PWD}/../../web/vtadmin:/app
+    environment:
+      VITE_VTADMIN_API_ADDRESS: http://localhost:14200
+      # VITE_VITESS_MONITORING_DASHBOARD_TITLE: Grafana
+      # VITE_MYSQL_MONITORING_DASHBOARD_TITLE: PMM
+      VITE_VITESS_MONITORING_CLUSTER_TEMPLATE: http://localhost:3000/d/vitess_summary/vitess-summary
+      VITE_VITESS_MONITORING_VTTABLET_TEMPLATE: http://localhost:3000/d/vitess_summary/vitess-summary?var-alias={alias}
+      VITE_VITESS_MONITORING_VTGATE_TEMPLATE: http://localhost:3000/d/vitess_summary/vitess-summary
+      VITE_MYSQL_MONITORING_TEMPLATE: http://localhost:8888/graph/d/mysql-instance-overview/mysql-instances-overview?var-service_name={hostname}-mysql
+    command:
+      - /bin/sh
+      - -c
+      - npm install && npm run start -- --host
+    ports:
+      - "5173:5173"
+    depends_on:
+      - vtadmin-api
+
+  vtadmin-api:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    command:
+      - vtadmin
+      - --addr=:14200
+      - --http-origin=*
+      - --http-tablet-url-tmpl=http://{{ .Tablet.Hostname }}:80
+      - --cluster-config=/app/discovery.json
+      - --no-rbac
+    volumes:
+      - ${PWD}/config/discovery.json:/app/discovery.json
+    ports:
+      - "14200:14200"
+    depends_on:
+      - vtctld
+
+  vttablet101:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  vttablet102:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  vttablet201:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  vttablet202:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  vttablet301:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  vttablet302:
+    volumes:
+      - ${PWD}/scripts/vttablet-up.sh:/script/vttablet-up.sh
+
+  cluster-init:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    command:
+      - sh
+      - -c
+      - /script/init_cluster.sh
+    volumes:
+      - ${PWD}/scripts/init_cluster.sh:/script/init_cluster.sh
+    depends_on:
+      - vtctld
+      - vttablet101
+      - vttablet102
+      - vttablet201
+      - vttablet202
+      - vttablet301
+      - vttablet302
+
+  pmm-server:
+    image: percona/pmm-server:2
+    ports:
+      - "8888:80"
+      - "8889:443"
+    volumes:
+      - pmm-data:/srv
+
+  pmm-setup:
+    image: percona/pmm-client:2
+    entrypoint: /bin/sh
+    depends_on:
+      - pmm-server
+      - vtgate
+      - vttablet101
+      - vttablet102
+      - vttablet201
+      - vttablet202
+      - vttablet301
+      - vttablet302
+    command:
+      - -c
+      - |
+        echo "Waiting for PMM Server..."
+        until curl -k -s https://admin:admin@pmm-server/v1/ready; do sleep 5; done
+        echo "PMM Server is ready."
+        
+        # Register PMM Client
+        pmm-agent setup --config-file=/usr/local/percona/pmm2/config/pmm-agent.yaml --server-address=pmm-server:443 --server-insecure-tls --server-username=admin --server-password=admin
+        
+        # Start pmm-agent in background
+        pmm-agent --config-file=/usr/local/percona/pmm2/config/pmm-agent.yaml &
+        
+        # Wait for agent to be ready
+        sleep 10
+        
+        # Add vttablet MySQLs
+        for i in 101 102 201 202 301 302; do
+          echo "Adding vttablet$$i MySQL..."
+          pmm-admin add mysql --username=pmm --password=pmm --host=vttablet$$i --port=3306 --service-name=vttablet$$i-mysql --query-source=perfschema || true
+        done
+        
+        echo "Setup complete."
+        
+        # Keep container running
+        wait
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ${PWD}/config/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ${PWD}/config/grafana-datasource-prometheus.yaml:/etc/grafana/provisioning/datasources/prometheus.yaml
+    depends_on:
+      - prometheus
+
+volumes:
+  pmm-data:

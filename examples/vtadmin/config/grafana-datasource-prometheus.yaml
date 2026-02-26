@@ -1,0 +1,15 @@
+# Grafana datasource configuration
+#
+# Automatically provisions Prometheus as a datasource for Grafana.
+# Used by the Grafana container to connect to Prometheus metrics.
+#
+# Access: http://localhost:3000 (admin/admin)
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
