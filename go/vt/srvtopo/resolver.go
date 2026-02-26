@@ -99,6 +99,9 @@ func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 // GetKeyspaceShards return all the shards in a keyspace. It is only valid for the local cell.
 // Do not use it to further resolve shards, instead use the Resolve* methods.
 func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+	if r.topoServ == nil {
+		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "resolver has no topology server")
+	}
 	srvKeyspace, err := r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.Wrapf(err, "keyspace %v fetch error", keyspace)
