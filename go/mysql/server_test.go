@@ -81,12 +81,19 @@ type testHandler struct {
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
+	queries  []string
 }
 
 func (th *testHandler) LastConn() *Conn {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	return th.lastConn
+}
+
+func (th *testHandler) Queries() []string {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.queries
 }
 
 func (th *testHandler) Result() *sqltypes.Result {
@@ -120,6 +127,10 @@ func (th *testHandler) NewConnection(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	th.mu.Lock()
+	th.queries = append(th.queries, query)
+	th.mu.Unlock()
+
 	if result := th.Result(); result != nil {
 		callback(result)
 		return nil
@@ -267,7 +278,7 @@ func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) 
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	return nil
 }
 
@@ -320,6 +331,138 @@ func TestConnectionFromListener(t *testing.T) {
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
+}
+
+// TestConnectionWithPipeInUsername tests that usernames with the format "user|target"
+// are correctly parsed - the target is extracted into schemaName and the user is stripped.
+// This is used for binlog dump connections where the target is specified in the username.
+func TestConnectionWithPipeInUsername(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["vt_repl"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	// Connect with username containing pipe-separated target
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "vt_repl|commerce:0@primary|zone1-100",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Should be able to connect to server")
+	defer c.Close()
+
+	// The schemaName should contain the target (everything after the first pipe)
+	// Note: The USE statement will be issued with this schemaName, which in vtgate
+	// sets the session's TargetString.
+	require.Equal(t, "commerce:0@primary|zone1-100", th.LastConn().schemaName, "Schema name should contain the target from username")
+	require.NotContains(t, th.Queries(), "set workload = 'olap'", "Workload should not be set without olap suffix")
+}
+
+// TestConnectionWithPipeInUsernameOLAP tests the 4-piece username format "user|target|alias|olap"
+// which issues a "set workload = 'olap'" query in addition to parsing the target.
+func TestConnectionWithPipeInUsernameOLAP(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["vt_repl"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "vt_repl|commerce:0@primary|zone1-100|olap",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Should be able to connect to server")
+	defer c.Close()
+
+	require.Equal(t, "commerce:0@primary|zone1-100", th.LastConn().schemaName, "Schema name should contain target and alias")
+	require.Contains(t, th.Queries(), "set workload = 'olap'", "Workload should be set via SET query with olap suffix")
+}
+
+// TestConnectionWithPipeInUsernameInvalidWorkload tests that a 4-piece username with an
+// invalid workload (not "olap") is rejected during handshake.
+func TestConnectionWithPipeInUsernameInvalidWorkload(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["vt_repl"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "vt_repl|commerce:0@primary|zone1-100|bogus",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	_, err = Connect(ctx, params)
+	require.Error(t, err, "Connection should fail with invalid workload")
+	require.Contains(t, err.Error(), "invalid workload")
+}
+
+// TestConnectionWithPipeInUsernameTwoPieces tests the 2-piece username format "user|target".
+func TestConnectionWithPipeInUsernameTwoPieces(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["vt_repl"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "vt_repl|commerce:0@primary",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Should be able to connect to server")
+	defer c.Close()
+
+	require.Equal(t, "commerce:0@primary", th.LastConn().schemaName, "Schema name should contain the target")
 }
 
 func TestConnectionWithoutSourceHost(t *testing.T) {

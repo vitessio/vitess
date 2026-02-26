@@ -79,6 +79,11 @@ func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
 	return bc, nil
 }
 
+// ServerID returns the server ID used by this binlog connection.
+func (bc *BinlogConnection) ServerID() uint32 {
+	return bc.serverID
+}
+
 // connectForReplication create a MySQL connection ready to use for replication.
 func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	ctx := context.Background()
@@ -122,7 +127,8 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
 	ctx, bc.cancel = context.WithCancel(ctx)
 
 	log.Info(fmt.Sprintf("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID))
-	if err := bc.SendBinlogDumpCommand(bc.serverID, binlogFilename, startPos); err != nil {
+	// VStream uses blocking mode (nonBlock=false) - it continuously streams events
+	if err := bc.SendBinlogDumpGTIDCommand(bc.serverID, binlogFilename, startPos, false); err != nil {
 		log.Error(fmt.Sprintf("couldn't send binlog dump command: %v", err))
 		return nil, nil, err
 	}
@@ -303,4 +309,8 @@ func (bc *BinlogConnection) Close() {
 		bc.Conn = nil
 		serverIDPool.Put(bc.serverID)
 	}
+}
+
+func (bc *BinlogConnection) GetServerID() uint32 {
+	return bc.serverID
 }

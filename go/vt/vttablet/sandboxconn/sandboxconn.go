@@ -117,6 +117,10 @@ type SandboxConn struct {
 	VStreamCh         chan *binlogdatapb.VEvent
 	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
 
+	// BinlogDump expectations.
+	BinlogDumpResponses []*binlogdatapb.BinlogDumpResponse
+	BinlogDumpError     error
+
 	// transaction id generator
 	TransactionID atomic.Int64
 
@@ -649,6 +653,32 @@ func (sbc *SandboxConn) VStreamTables(ctx context.Context, request *binlogdatapb
 // VStreamResults is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return errors.New("not implemented in test")
+}
+
+// BinlogDump is part of the QueryService interface.
+func (sbc *SandboxConn) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if sbc.BinlogDumpError != nil {
+		return sbc.BinlogDumpError
+	}
+	for _, response := range sbc.BinlogDumpResponses {
+		if err := send(response); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BinlogDumpGTID is part of the QueryService interface.
+func (sbc *SandboxConn) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if sbc.BinlogDumpError != nil {
+		return sbc.BinlogDumpError
+	}
+	for _, response := range sbc.BinlogDumpResponses {
+		if err := send(response); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
