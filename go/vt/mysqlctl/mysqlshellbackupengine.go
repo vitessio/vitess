@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -266,15 +267,22 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, err
 	}
 
-	// Validate that bm.BackupLocation from the MANIFEST resolves safely
-	// under mysqlShellBackupLocation (no path traversal).
-	relLocation, err := filepath.Rel(mysqlShellBackupLocation, bm.BackupLocation)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot determine relative backup location from manifest")
-	}
-	location, err := fileutil.SafePathJoin(mysqlShellBackupLocation, relLocation)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "backup location %q in manifest is outside the backup root %q", bm.BackupLocation, mysqlShellBackupLocation)
+	// Validate bm.BackupLocation from the MANIFEST. For local filesystem
+	// mode, use SafePathJoin to prevent path traversal. For object storage,
+	// trust the manifest location directly since SafePathJoin relies on
+	// OS-native path operations that don't understand cloud URIs.
+	var location string
+	if isObjectStoreFlags(mysqlShellLoadFlags) {
+		location = bm.BackupLocation
+	} else {
+		relLocation, err := filepath.Rel(mysqlShellBackupLocation, bm.BackupLocation)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "cannot determine relative backup location from manifest")
+		}
+		location, err = fileutil.SafePathJoin(mysqlShellBackupLocation, relLocation)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "backup location %q in manifest is outside the backup root %q", bm.BackupLocation, mysqlShellBackupLocation)
+		}
 	}
 
 	// mark restore as in progress
@@ -419,11 +427,27 @@ func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
 
-// backupLocation returns a safe backup location path by joining the
-// configured mysqlShellBackupLocation with the provided directory and
-// name components. It uses fileutil.SafePathJoin to prevent path
-// traversal outside the configured backup location.
+// isObjectStoreFlags returns true if the given flags JSON string contains
+// any known object store parameters, indicating cloud storage is in use.
+func isObjectStoreFlags(flags string) bool {
+	for _, objStore := range knownObjectStoreParams {
+		if strings.Contains(flags, objStore) {
+			return true
+		}
+	}
+	return false
+}
+
+// backupLocation returns a backup location path by joining the configured
+// mysqlShellBackupLocation with the provided directory and name components.
+// For local filesystem mode, it uses fileutil.SafePathJoin to prevent path
+// traversal outside the configured backup location. For object storage,
+// path.Join is used since SafePathJoin relies on OS-native path operations
+// that don't understand cloud URIs.
 func (be *MySQLShellBackupEngine) backupLocation(dir, name string) (string, error) {
+	if isObjectStoreFlags(mysqlShellDumpFlags) {
+		return path.Join(mysqlShellBackupLocation, dir, name), nil
+	}
 	return fileutil.SafePathJoin(mysqlShellBackupLocation, dir, name)
 }
 
@@ -436,17 +460,9 @@ func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
-	// make sure the targe directory exists if the target location for the backup is not an object store
+	// make sure the target directory exists if the target location for the backup is not an object store
 	// (e.g. is the local filesystem) as MySQL Shell doesn't create the entire path beforehand:
-	isObjectStorage := false
-	for _, objStore := range knownObjectStoreParams {
-		if strings.Contains(mysqlShellDumpFlags, objStore) {
-			isObjectStorage = true
-			break
-		}
-	}
-
-	if !isObjectStorage {
+	if !isObjectStoreFlags(mysqlShellDumpFlags) {
 		err := os.MkdirAll(location, 0o750)
 		if err != nil {
 			return fmt.Errorf("failure creating directory %s: %w", location, err)
