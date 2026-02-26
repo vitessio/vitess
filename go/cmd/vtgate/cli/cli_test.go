@@ -201,4 +201,3 @@ func TestCheckCellFlags_SuccessMultipleCells(t *testing.T) {
 	err := CheckCellFlags(ctx, fake, "c1", "c1,c2")
 	require.NoError(t, err)
 }
-
