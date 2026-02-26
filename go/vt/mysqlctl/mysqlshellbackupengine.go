@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -142,13 +143,15 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		return BackupUnusable, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
 	}
 
-	if !json.Valid([]byte(mysqlShellDumpFlags)) {
-		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--mysql-shell-dump-flags must be valid JSON")
+	// compact and validate the json input from mysqlShellDumpFlags.
+	var compactDumpFlags bytes.Buffer
+	if err := json.Compact(&compactDumpFlags, []byte(mysqlShellDumpFlags)); err != nil {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-dump-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.dumpInstance(%q, %s)",
 		location,
-		mysqlShellDumpFlags,
+		compactDumpFlags.String(),
 	))
 
 	// to be able to get the consistent GTID sets, we will acquire a global read lock before starting mysql shell.
@@ -350,13 +353,15 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
 	}
 
-	if !json.Valid([]byte(mysqlShellLoadFlags)) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--mysql-shell-load-flags must be valid JSON")
+	// compact and validate the json input from mysqlShellLoadFlags.
+	var compactLoadFlags bytes.Buffer
+	if err := json.Compact(&compactLoadFlags, []byte(mysqlShellLoadFlags)); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-load-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.loadDump(%q, %s)",
 		bm.BackupLocation,
-		mysqlShellLoadFlags,
+		compactLoadFlags.String(),
 	))
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
