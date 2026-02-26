@@ -396,7 +396,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "--action_timeout", timeout)
+		args = append(args, "--action-timeout", timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
@@ -575,9 +575,13 @@ func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 	require.NoError(t, err)
 	if stopDatabase {
-		err = tab.MysqlctlProcess.Stop()
-		require.NoError(t, err)
+		StopTabletMySQL(t, tab)
 	}
+}
+
+// StopTabletMySQL stops the database on a tablet.
+func StopTabletMySQL(t *testing.T, tab *cluster.Vttablet) {
+	require.NoError(t, tab.MysqlctlProcess.Stop())
 }
 
 // RestartTablet restarts the tablet

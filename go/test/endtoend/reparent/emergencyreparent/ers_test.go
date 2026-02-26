@@ -78,11 +78,11 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	// We expect this one to fail because we have an unreachable replica
 	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-	require.NotNil(t, err, out)
+	require.Error(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
 	out, err = utils.ErsIgnoreTablet(clusterInstance, nil, "60s", "30s", []*cluster.Vttablet{tablets[2]}, false)
-	require.Nil(t, err, out)
+	require.NoError(t, err, out)
 
 	// We'll bring back the replica we took down.
 	utils.RestartTablet(t, clusterInstance, tablets[2])
@@ -95,10 +95,46 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	// Check new primary has latest transaction.
 	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// bring back the old primary as a replica, check that it catches up
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+// TestReparentIgnoreMySQLDownReplica tests that reachable vttablets with mysqld crashed/down (reporting
+// vtrpcpb.Code_UNAVAILABLE error code) are ignored in EmergencyReparentShard actions (requires v24+).
+func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
+	// Skip test on vtctld versions < v24.
+	vtctldMajorVer, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+	if vtctldMajorVer < 24 {
+		t.Skip("Skipping test since `StopReplicationAndGetStatus` does not provide the required error codes on vtctld < v24")
+	}
+
+	// Setup reparent cluster.
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Make the current primary tablet and database unavailable.
+	utils.StopTablet(t, tablets[0], true)
+
+	// Take down MySQL (but not vttablet) on a replica.
+	utils.StopTabletMySQL(t, tablets[1])
+
+	// We expect this ERS to succeed because we ignored the tablet with MySQL down.
+	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
+	require.NoError(t, err, out)
+
+	// Confirm the primary alias changed.
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	require.NotEqualValues(t, tablets[0].Alias, newPrimary.Alias) // original primary
+	require.NotEqualValues(t, tablets[1].Alias, newPrimary.Alias) // replica w/mysqld down
+
+	// Check new primary has latest transaction.
+	err = utils.CheckInsertedValues(context.Background(), t, newPrimary, insertVal)
+	require.NoError(t, err)
 }
 
 func TestReparentDownPrimary(t *testing.T) {
@@ -374,7 +410,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 
 	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
 	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
-	require.NotNil(t, err, out)
+	require.Error(t, err, out)
 
 	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
 	require.NoError(t, err)

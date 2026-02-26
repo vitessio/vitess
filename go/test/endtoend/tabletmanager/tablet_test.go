@@ -68,9 +68,9 @@ func TestEnsureDB(t *testing.T) {
 	killTablets(tablet)
 }
 
-// TestGRPCErrorCode_UNAVAILABLE tests that vttablet returns correct gRPC codes,
-// in this case codes.Unavailable/vtrpcpb.Code_UNAVAILABLE when mysqld is down.
-func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
+// TestGRPCErrorCode_MySQLDown tests that vttablet returns the correct vtrpcpb error code
+// (vtrpcpb.Code_UNAVAILABLE) when mysqld is down but vttablet is still up.
+func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	defer killTablets(tablet)
@@ -85,6 +85,15 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
 	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
+
+	vttablet := getTablet(tablet.GrpcPort)
+
+	// test FullStatus before stopping mysql
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+	res, err := tmClient.FullStatus(ctx, vttablet)
+	require.NotNil(t, res)
+	require.Equal(t, vtrpcpb.Code_OK, vterrors.Code(err))
 
 	// kill the mysql process
 	err = tablet.MysqlctlProcess.Stop()

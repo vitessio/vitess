@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -118,7 +118,7 @@ func FindPositionsOfAllCandidates(
 			// Potentially bail. If any other tablet is detected to have
 			// GTID-based relay log positions, we will return the error recorded
 			// here.
-			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
+			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
 
@@ -127,7 +127,7 @@ func FindPositionsOfAllCandidates(
 	}
 
 	if isGTIDBased && isNonGTIDBased {
-		return nil, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "encountered mix of GTID-based and non GTID-based relay logs")
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "encountered mix of GTID-based and non GTID-based relay logs")
 	}
 
 	// Store the final positions in the map.
@@ -160,7 +160,7 @@ func FindPositionsOfAllCandidates(
 // error if the Before state of replication is nil.
 func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
 	if stopStatus == nil || stopStatus.Before == nil {
-		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
@@ -252,6 +252,21 @@ func stopReplicationAndBuildStatusMaps(
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
+			// If we receive a vtrpcpb.Code_UNAVAILABLE error code from the StopReplicationAndGetStatus RPC,
+			// this means the call was received by vttablet but the backend mysqld is down/unreachable. We log
+			// and skip tablets in this state because we are reasonably sure they cannot be the most advanced
+			// because mysqld is (likely) down. In some cases this may not be true and mysqld IS running + most
+			// advanced but somehow vttablet sees it as down, but this should be a very rare exception, meaning
+			// we prioritize completing the reparent (availability) for the common case. If this edge case were
+			// to occur, errant GTID(s) will be produced; if this happens often we should return UNAVAILABLE
+			// from vttablet using more detailed criteria (check the pidfile + running PID, etc).
+			if topo.IsReplicaType(tabletInfo.Tablet.Type) && vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE {
+				logger.Warningf("replica %v is reachable but mysql is unavailable: %v", alias, err)
+				mustWaitForTablet = false // used in defer
+				err = nil                 // used in defer
+				return
+			}
+
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 				var primaryStatus *replicationdatapb.PrimaryStatus
