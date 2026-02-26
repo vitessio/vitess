@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -588,6 +589,13 @@ func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.Hook
 func tmRPCTestExecuteHook(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	hr, err := client.ExecuteHook(ctx, tablet, testExecuteHookHook)
 	compareError(t, "ExecuteHook", err, hr, testExecuteHookHookResult)
+}
+
+func tmRPCTestExecuteHookInvalidName(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	for _, name := range []string{"", "../etc/passwd", "/bin/ls"} {
+		_, err := client.ExecuteHook(ctx, tablet, &hook.Hook{Name: name})
+		assert.ErrorContains(t, err, "hook name must be a basename")
+	}
 }
 
 func tmRPCTestExecuteHookPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1584,6 +1592,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestChangeType(ctx, t, client, tablet)
 	tmRPCTestSleep(ctx, t, client, tablet)
 	tmRPCTestExecuteHook(ctx, t, client, tablet)
+	tmRPCTestExecuteHookInvalidName(ctx, t, client, tablet)
 	tmRPCTestRefreshState(ctx, t, client, tablet)
 	tmRPCTestRunHealthCheck(ctx, t, client, tablet)
 	tmRPCTestReloadSchema(ctx, t, client, tablet)
