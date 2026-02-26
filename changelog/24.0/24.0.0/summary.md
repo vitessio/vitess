@@ -30,6 +30,7 @@
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
+        - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -236,4 +237,12 @@ The lack of facilities to read the snapshots created by this feature coupled wit
 **Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
 
 **Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+
+#### <a id="vtorc-replication-analysis-api-removed"/>Deprecated `/api/replication-analysis` Endpoint Removed</a>
+
+The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use `/api/detection-analysis` instead, which provides the same functionality.
+
+**Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
+
+**Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
 
