@@ -2266,7 +2266,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType, sqlparser.ConstraintType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
 				for i, constraint := range c.TableSpec.Constraints {
 					if !strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
 						continue
@@ -2280,11 +2280,45 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						if _, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition); !ok {
 							continue
 						}
-					case sqlparser.ConstraintType:
 					}
 					found = true
 					c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
 					break
+				}
+			case sqlparser.ConstraintType:
+				// ConstraintType can refer to any constraint type: foreign key, check, or named UNIQUE/PRIMARY KEY
+				// First check TableSpec.Constraints for foreign keys and check constraints
+				for i, constraint := range c.TableSpec.Constraints {
+					if strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
+						found = true
+						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
+						break
+					}
+				}
+				// If not found in Constraints, check TableSpec.Indexes for named UNIQUE/PRIMARY KEY constraints
+				if !found {
+					for i, index := range c.TableSpec.Indexes {
+						// Only match UNIQUE or PRIMARY KEY indexes
+						if index.Info.Type != sqlparser.IndexTypeUnique && index.Info.Type != sqlparser.IndexTypePrimary {
+							continue
+						}
+						// Prefer matching on ConstraintName when present
+						if index.Info.ConstraintName.String() != "" &&
+							strings.EqualFold(index.Info.ConstraintName.String(), opt.Name.String()) {
+							found = true
+							c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+							break
+						}
+						// Fallback: allow DROP CONSTRAINT <name> to target a UNIQUE KEY defined without the CONSTRAINT
+						// keyword (i.e. created via `UNIQUE KEY uk_name (...)`). In that case ConstraintName is empty
+						// and the index is identified by its Name.
+						if index.Info.ConstraintName.String() == "" &&
+							strings.EqualFold(index.Info.Name.String(), opt.Name.String()) {
+							found = true
+							c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+							break
+						}
+					}
 				}
 			default:
 				return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}

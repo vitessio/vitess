@@ -52,6 +52,28 @@ func ExtractConstraintOriginalName(tableName string, constraintName string) stri
 	return constraintName
 }
 
+// generateConstraintNameWithHash generates a new constraint name with hash suffix.
+// This is the core logic shared by newConstraintName and UNIQUE/PRIMARY KEY constraint renaming.
+func generateConstraintNameWithHash(tableName string, baseUUID string, hashExists map[string]bool, seed string, oldName string, constraintIndicator string) string {
+	oldName = ExtractConstraintOriginalName(tableName, oldName)
+	hash := textutil.UUIDv5Base36(baseUUID, tableName, seed)
+	for i := 1; hashExists[hash]; i++ {
+		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, strconv.Itoa(i))
+	}
+	hashExists[hash] = true
+	suffix := "_" + hash
+	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+	newName := oldName
+	if newName == "" {
+		newName = constraintIndicator // start with something that looks consistent with MySQL's naming
+	}
+	if len(newName) > maxAllowedNameLength {
+		newName = newName[0:maxAllowedNameLength]
+	}
+	newName = newName + suffix
+	return newName
+}
+
 // newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
 // constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
 // create completely new names for all constraints.
@@ -75,23 +97,6 @@ func ExtractConstraintOriginalName(tableName string, constraintName string) stri
 // to be auto-generated.
 func newConstraintName(tableName string, baseUUID string, constraintDefinition *sqlparser.ConstraintDefinition, hashExists map[string]bool, seed string, oldName string) string {
 	constraintType := GetConstraintType(constraintDefinition.Details)
-
 	constraintIndicator := constraintIndicatorMap[int(constraintType)]
-	oldName = ExtractConstraintOriginalName(tableName, oldName)
-	hash := textutil.UUIDv5Base36(baseUUID, tableName, seed)
-	for i := 1; hashExists[hash]; i++ {
-		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, strconv.Itoa(i))
-	}
-	hashExists[hash] = true
-	suffix := "_" + hash
-	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
-	newName := oldName
-	if newName == "" {
-		newName = constraintIndicator // start with something that looks consistent with MySQL's naming
-	}
-	if len(newName) > maxAllowedNameLength {
-		newName = newName[0:maxAllowedNameLength]
-	}
-	newName = newName + suffix
-	return newName
+	return generateConstraintNameWithHash(tableName, baseUUID, hashExists, seed, oldName, constraintIndicator)
 }
