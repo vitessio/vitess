@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -377,7 +378,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
-		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
+		err := vterrors.Wrapf(err, "error sending streaming query to binlog server")
 		log.Error(fmt.Sprint(err))
 		return err
 	}
