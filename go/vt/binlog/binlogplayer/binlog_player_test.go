@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -499,6 +500,46 @@ func TestEncodeString(t *testing.T) {
 		t.Run(tcase.in, func(t *testing.T) {
 			out := encodeString(tcase.in)
 			assert.Equal(t, tcase.out, out)
+		})
+	}
+}
+
+func TestMessageTruncate(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectTruncate bool
+	}{
+		{
+			name:           "short message unchanged",
+			input:          "short message",
+			expectTruncate: false,
+		},
+		{
+			name:           "exactly 950 bytes unchanged",
+			input:          strings.Repeat("a", 950),
+			expectTruncate: false,
+		},
+		{
+			name:           "951 bytes truncated",
+			input:          strings.Repeat("b", 951),
+			expectTruncate: true,
+		},
+		{
+			name:           "very long message truncated",
+			input:          strings.Repeat("c", 2000),
+			expectTruncate: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MessageTruncate(tc.input)
+			if tc.expectTruncate {
+				assert.LessOrEqual(t, len(result), 950, "truncated message should be at most 950 bytes")
+				assert.Contains(t, result, TruncationIndicator, "truncated message should contain truncation indicator")
+			} else {
+				assert.Equal(t, tc.input, result, "message should be unchanged")
+			}
 		})
 	}
 }
