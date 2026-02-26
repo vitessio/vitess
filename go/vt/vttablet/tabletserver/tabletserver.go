@@ -121,6 +121,7 @@ type TabletServer struct {
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
 	vstreamer    *vstreamer.Engine
+	binlogDumper *BinlogDumpEngine
 	tracker      *schema.Tracker
 	qe           *QueryEngine
 	txThrottler  txthrottler.TxThrottler
@@ -195,6 +196,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
+	tsv.binlogDumper = NewBinlogDumpEngine()
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
@@ -212,6 +214,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		se:                tsv.se,
 		rt:                tsv.rt,
 		vstreamer:         tsv.vstreamer,
+		binlogDumper:      tsv.binlogDumper,
 		tracker:           tsv.tracker,
 		qe:                tsv.qe,
 		txThrottler:       tsv.txThrottler,
@@ -1345,12 +1348,26 @@ func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.B
 		return err
 	}
 
+	// Register with the engine for graceful shutdown tracking
+	ctx, idx, err := tsv.binlogDumper.Register(ctx)
+	if err != nil {
+		return err
+	}
+	defer tsv.binlogDumper.Unregister(idx)
+
 	// Create a binlog connection to MySQL
 	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to create binlog connection")
 	}
 	defer conn.Close()
+
+	// Close the underlying MySQL connection when the context is cancelled
+	// (shutdown or client disconnect) to unblock any pending ReadOnePacket.
+	go func() {
+		<-ctx.Done()
+		conn.Conn.Close()
+	}()
 
 	// Send the binlog dump command to MySQL using file/position
 	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition); err != nil {
@@ -1369,12 +1386,26 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 		return err
 	}
 
+	// Register with the engine for graceful shutdown tracking
+	ctx, idx, err := tsv.binlogDumper.Register(ctx)
+	if err != nil {
+		return err
+	}
+	defer tsv.binlogDumper.Unregister(idx)
+
 	// Create a binlog connection to MySQL
 	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to create binlog connection")
 	}
 	defer conn.Close()
+
+	// Close the underlying MySQL connection when the context is cancelled
+	// (shutdown or client disconnect) to unblock any pending ReadOnePacket.
+	go func() {
+		<-ctx.Done()
+		conn.Conn.Close()
+	}()
 
 	// Parse the GTID set from the request
 	var startPos replication.Position
@@ -1402,8 +1433,26 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 	return tsv.streamBinlogPackets(ctx, conn, send)
 }
 
+// packetReader is satisfied by *binlog.BinlogConnection (via embedded *mysql.Conn).
+// Extracted as an interface for testability.
+type packetReader interface {
+	ReadOnePacket() ([]byte, error)
+}
+
+// sendBinlogEOF sends a constructed MySQL binlog EOF packet to the client.
+// The EOF format is: [0xFE, 0x00, 0x00, 0x00, 0x00] (EOF marker + zero warnings + zero status flags).
+func sendBinlogEOF(send func(*binlogdatapb.BinlogDumpResponse) error) {
+	// Ignore the send error — if the client already disconnected, send fails harmlessly.
+	_ = send(&binlogdatapb.BinlogDumpResponse{
+		Packet: []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00},
+	})
+}
+
 // streamBinlogPackets streams binlog packets from the connection to the client.
 // This is shared by both BinlogDump and BinlogDumpGTID.
+//
+// On context cancellation (graceful shutdown or client disconnect), it sends a
+// constructed EOF packet to the client and returns nil.
 //
 // TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
 // Currently, packet data is copied during protobuf marshaling. To eliminate this:
@@ -1414,17 +1463,20 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 // 5. Build BufferSlice with [protobuf header, packet buffer] - no copy needed
 // gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
 // See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
-func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, conn *binlog.BinlogConnection, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetReader, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		if ctx.Err() != nil {
+			sendBinlogEOF(send)
+			return nil
 		}
 
 		// Read first fragment of a message
-		packet, err := conn.ReadOnePacket()
+		packet, err := reader.ReadOnePacket()
 		if err != nil {
+			if ctx.Err() != nil {
+				sendBinlogEOF(send)
+				return nil
+			}
 			return vterrors.Wrapf(err, "failed to read binlog packet")
 		}
 
@@ -1444,13 +1496,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, conn *binlog.B
 
 		// Read remaining fragments if this is a multi-packet message
 		for len(packet) == mysql.MaxPacketSize {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			packet, err = conn.ReadOnePacket()
+			packet, err = reader.ReadOnePacket()
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to read continuation packet")
 			}
