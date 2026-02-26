@@ -3890,7 +3890,7 @@
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "VT03006: column count does not match value count with the row",
+    "plan": "syntax error: unexpected '*' at position 44",
     "skip_e2e": true
   },
   {

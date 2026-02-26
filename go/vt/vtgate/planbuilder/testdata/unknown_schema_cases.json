@@ -47,7 +47,7 @@
   {
     "comment": "ORDER BY on select multi *",
     "query": "select *, name, *, col from user order by col",
-    "plan": "VT09015: schema tracking required"
+    "plan": "syntax error: unexpected '*' at position 18"
   },
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
