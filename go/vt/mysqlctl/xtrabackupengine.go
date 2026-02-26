@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/ioutil"
@@ -306,7 +307,11 @@ func (be *XtrabackupEngine) backupFiles(
 		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
 	}
 	if xtrabackupBackupFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupBackupFlags)...)
+		backupFlags, err := shlex.Split(xtrabackupBackupFlags)
+		if err != nil {
+			return replicationPosition, vterrors.Wrap(err, "failed to parse --xtrabackup-backup-flags")
+		}
+		flagsToExec = append(flagsToExec, backupFlags...)
 	}
 
 	// Create a cancellable Context for calls to bh.AddFile().
@@ -535,7 +540,11 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		"--target-dir=" + tempDir,
 	}
 	if xtrabackupPrepareFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupPrepareFlags)...)
+		prepareFlags, err := shlex.Split(xtrabackupPrepareFlags)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to parse --xtrabackup-prepare-flags")
+		}
+		flagsToExec = append(flagsToExec, prepareFlags...)
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, err := prepareCmd.StdoutPipe()
@@ -708,7 +717,11 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if xbstreamRestoreFlags != "" {
-			flagsToExec = append(flagsToExec, strings.Fields(xbstreamRestoreFlags)...)
+			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
+			}
+			flagsToExec = append(flagsToExec, restoreFlags...)
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
