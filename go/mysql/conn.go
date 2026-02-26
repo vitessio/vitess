@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -29,6 +30,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
@@ -51,7 +54,111 @@ const (
 	// packetHeaderSize is the 4 bytes of header per MySQL packet
 	// sent over
 	packetHeaderSize = 4
+
+	// compressedPacketHeaderSize is the 7-byte header per MySQL compressed packet:
+	// 3 bytes compressed payload length (LE), 1 byte sequence id, 3 bytes uncompressed payload length (LE).
+	// If uncompressed length is 0, the payload is stored uncompressed.
+	compressedPacketHeaderSize = 7
 )
+
+// writeCompressedPacketHeader writes the MySQL compressed packet header (7 bytes) to dst.
+// Layout: 3 bytes compressed payload length (LE), 1 byte sequence id, 3 bytes uncompressed payload length (LE).
+// The sequence id is per compressed frame (not per logical packet) and must not be confused with the
+// 4-byte packet header sequence used in the decompressed stream.
+// dst must have at least compressedPacketHeaderSize bytes.
+func writeCompressedPacketHeader(dst []byte, compressedLen, uncompressedLen uint32, sequence byte) {
+	pos := 0
+	pos = writeUint24LE(dst, pos, compressedLen)
+	dst[pos] = sequence
+	pos++
+	pos = writeUint24LE(dst, pos, uncompressedLen)
+}
+
+// readCompressedPacketHeader parses the MySQL compressed packet header (7 bytes) from src.
+// The sequence byte is the frame sequence id (one per compressed frame), not the logical packet sequence.
+// Returns compressedLen, uncompressedLen, sequence, and true. If src has fewer than 7 bytes, returns ok false.
+func readCompressedPacketHeader(src []byte) (compressedLen, uncompressedLen uint32, sequence byte, ok bool) {
+	if len(src) < compressedPacketHeaderSize {
+		return 0, 0, 0, false
+	}
+	pos := 0
+	compressedLen, pos, ok = readUint24LE(src, pos)
+	if !ok {
+		return 0, 0, 0, false
+	}
+	sequence = src[pos]
+	pos++
+	uncompressedLen, _, ok = readUint24LE(src, pos)
+	if !ok {
+		return 0, 0, 0, false
+	}
+	return compressedLen, uncompressedLen, sequence, true
+}
+
+// zstdReadWrapper implements io.Reader and takes care of reading MySQL zstd-compressed frames from the underlying stream.
+//
+// Frame protocol wise, we're:
+//   - reading 7-byte compressed frames: [3B compressed_len][1B seq][3B uncompressed_len][compressed_payload]
+//   - checking and bumping compressedReadSequence once per frame
+//   - decompressing the payload into a logical MySQL packet (4-byte header + body)
+//
+// It's important that logical packet sequencing stays independent from the frame sequence, so readHeaderFrom still
+// validates the normal 4-byte header sequence while this wrapper just worries about the compressed framing.
+//
+// For buffering, we share the same underlying reader (bufferedReader or conn) as uncompressed reads, and when we've
+// drained our decompressed buffer we just pull the next 7-byte frame + payload, decompress it, and keep going.
+
+type zstdReadWrapper struct {
+	c   *Conn
+	r   io.Reader // underlying: bufferedReader if present, else conn
+	buf []byte
+	pos int
+	hdr [compressedPacketHeaderSize]byte
+}
+
+func (z *zstdReadWrapper) Read(p []byte) (int, error) {
+	if z.pos < len(z.buf) {
+		n := copy(p, z.buf[z.pos:])
+		z.pos += n
+		return n, nil
+	}
+	if _, err := io.ReadFull(z.r, z.hdr[:]); err != nil {
+		return 0, err
+	}
+	compressedLen, uncompressedLen, seq, ok := readCompressedPacketHeader(z.hdr[:])
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed packet header")
+	}
+	if seq != z.c.compressedReadSequence {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", z.c.compressedReadSequence, seq)
+	}
+	z.c.compressedReadSequence++
+
+	payload := make([]byte, compressedLen)
+	if compressedLen > 0 {
+		if _, err := io.ReadFull(z.r, payload); err != nil {
+			return 0, vterrors.Wrapf(err, "read compressed payload failed")
+		}
+	}
+	if uncompressedLen == 0 {
+		z.buf = make([]byte, len(payload))
+		copy(z.buf, payload)
+	} else {
+		decoded, err := z.c.zstdDecoder.DecodeAll(payload, nil)
+		if err != nil {
+			return 0, vterrors.Wrapf(err, "zstd decompress failed")
+		}
+		if uint32(len(decoded)) != uncompressedLen {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "decompressed length %v != expected %v", len(decoded), uncompressedLen)
+		}
+		z.buf = make([]byte, len(decoded))
+		copy(z.buf, decoded)
+	}
+	z.pos = 0
+	n := copy(p, z.buf)
+	z.pos = n
+	return n, nil
+}
 
 // Constants for how ephemeral buffers were used for reading / writing.
 const (
@@ -166,6 +273,22 @@ type Conn struct {
 	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
+	// isZstdCompressed tells us this connection is using zstd compression (MySQL 8.0+).
+	isZstdCompressed bool
+	// zstdCompressionLevel is the zstd level (1-22) we negotiated during the handshake; we only look at it when isZstdCompressed is true.
+	zstdCompressionLevel int
+	// zstdEncoder and zstdDecoder live for the lifetime of a compressed connection and should be closed when the connection goes away.
+	zstdEncoder *zstd.Encoder
+	zstdDecoder *zstd.Decoder
+	// compressedSequence is the sequence id we put into the 7-byte compressed frame header on writes.
+	// We bump it once per compressed frame and keep it independent from the logical packet sequence (sequence).
+	compressedSequence uint8
+	// compressedReadSequence is the sequence id we expect to see on incoming compressed frames.
+	// We bump it once per 7-byte frame read and, just like compressedSequence, it's independent of the logical packet sequence (sequence).
+	compressedReadSequence uint8
+	// zstdReader wraps the underlying reader and handles frame-by-frame decompression when isZstdCompressed is true; we create it lazily.
+	zstdReader *zstdReadWrapper
+
 	// closed is set to true when Close() is called on the connection.
 	closed atomic.Bool
 
@@ -195,6 +318,10 @@ type Conn struct {
 	CharacterSet collations.ID
 
 	// Packet encoding variables.
+	// sequence is the logical packet sequence id in the 4-byte MySQL packet header.
+	// Used for uncompressed connections and for the decompressed stream when using compression.
+	// When compressed, each 7-byte frame has its own sequence (compressedSequence/compressedReadSequence);
+	// the payload after decompression contains logical packets with this sequence in their 4-byte headers.
 	sequence uint8
 
 	// ExpectSemiSyncIndicator is applicable when the connection is used for replication (ComBinlogDump).
@@ -378,7 +505,20 @@ func (c *Conn) startFlushTimer() {
 
 // getReader returns reader for connection. It can be *bufio.Reader or net.Conn
 // depending on which buffer size was passed to newServerConn.
+// When isZstdCompressed, returns a wrapper that reads compressed frames from the
+// same underlying reader (bufferedReader if present, else conn), decompresses,
+// and serves logical packets so the existing packet parser is unchanged.
 func (c *Conn) getReader() io.Reader {
+	if c.isZstdCompressed {
+		if c.zstdReader == nil {
+			var underlying io.Reader = c.conn
+			if c.bufferedReader != nil {
+				underlying = c.bufferedReader
+			}
+			c.zstdReader = &zstdReadWrapper{c: c, r: underlying}
+		}
+		return c.zstdReader
+	}
 	if c.bufferedReader != nil {
 		return c.bufferedReader
 	}
@@ -603,6 +743,14 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 //
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writePacket(data []byte) error {
+	if c.isZstdCompressed {
+		return c.writePacketCompressed(data)
+	}
+	return c.writePacketUncompressed(data)
+}
+
+// writePacketUncompressed sends the packet in the normal 4-byte header format.
+func (c *Conn) writePacketUncompressed(data []byte) error {
 	index := 0
 	dataLength := len(data) - packetHeaderSize
 
@@ -670,6 +818,73 @@ func (c *Conn) writePacket(data []byte) error {
 	}
 }
 
+// writePacketCompressed builds the same logical packet(s) as uncompressed (with logical sequence in 4-byte headers),
+// compresses them into one frame, and sends one 7-byte header (with compressedSequence) + payload.
+// compressedSequence is incremented once per compressed frame; the logical packets inside use c.sequence.
+func (c *Conn) writePacketCompressed(data []byte) error {
+	var uncompressed bytes.Buffer
+	index := 0
+	dataLength := len(data) - packetHeaderSize
+	seq := c.sequence
+
+	for {
+		toBeSent := min(dataLength, MaxPacketSize)
+		// 4-byte header for this chunk
+		uncompressed.WriteByte(byte(toBeSent))
+		uncompressed.WriteByte(byte(toBeSent >> 8))
+		uncompressed.WriteByte(byte(toBeSent >> 16))
+		uncompressed.WriteByte(seq)
+		seq++
+		uncompressed.Write(data[packetHeaderSize+index : packetHeaderSize+index+toBeSent])
+
+		dataLength -= toBeSent
+		if dataLength == 0 {
+			if toBeSent == MaxPacketSize {
+				uncompressed.WriteByte(0)
+				uncompressed.WriteByte(0)
+				uncompressed.WriteByte(0)
+				uncompressed.WriteByte(seq)
+				seq++
+			}
+			break
+		}
+		index += toBeSent
+	}
+	c.sequence = seq
+
+	payload := uncompressed.Bytes()
+	compressed := c.zstdEncoder.EncodeAll(payload, nil)
+
+	compressedLen := uint32(len(compressed))
+	uncompressedLen := uint32(len(payload))
+	if compressedLen > 0xFFFFFF || uncompressedLen > 0xFFFFFF {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "compressed or uncompressed length exceeds 3-byte max")
+	}
+
+	var hdr [compressedPacketHeaderSize]byte
+	writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.compressedSequence)
+	c.compressedSequence++
+
+	c.bufMu.Lock()
+	var w io.Writer = c.conn
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+	}
+	if _, err := w.Write(hdr[:]); err != nil {
+		return vterrors.Wrapf(err, "Write(compressed header) failed")
+	}
+	if _, err := w.Write(compressed); err != nil {
+		return vterrors.Wrapf(err, "Write(compressed payload) failed")
+	}
+	return nil
+}
+
 func (c *Conn) startEphemeralPacketWithHeader(length int) ([]byte, int) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic("startEphemeralPacketWithHeader cannot be used while a packet is already started.")
@@ -719,6 +934,10 @@ func (c *Conn) recycleWritePacket() {
 func (c *Conn) writeComQuit() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
+	if c.isZstdCompressed {
+		c.compressedSequence = 0
+		c.compressedReadSequence = 0
+	}
 
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComQuit
@@ -743,10 +962,45 @@ func (c *Conn) String() string {
 	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
 }
 
+// initZstdCompression creates the zstd encoder and decoder we're going to use for this connection.
+// It should be called after the handshake is fully parsed and before we see any compressed traffic.
+// If isZstdCompressed is false, we just return early. On failure we bubble the error up so the caller can fail the connection.
+func (c *Conn) initZstdCompression() error {
+	if !c.isZstdCompressed {
+		return nil
+	}
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(c.zstdCompressionLevel)))
+	if err != nil {
+		return err
+	}
+	dec, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		_ = enc.Close()
+		return err
+	}
+	c.zstdEncoder = enc
+	c.zstdDecoder = dec
+	return nil
+}
+
+// closeZstdCompression releases any zstd encoder/decoder resources we still hold; it's safe to call this more than once.
+func (c *Conn) closeZstdCompression() {
+	if c.zstdEncoder != nil {
+		_ = c.zstdEncoder.Close()
+		c.zstdEncoder = nil
+	}
+	if c.zstdDecoder != nil {
+		c.zstdDecoder.Close()
+		c.zstdDecoder = nil
+	}
+	c.zstdReader = nil
+}
+
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
 	if c.closed.CompareAndSwap(false, true) {
+		c.closeZstdCompression()
 		c.conn.Close()
 	}
 }
@@ -892,6 +1146,9 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
+	if c.isZstdCompressed {
+		c.compressedReadSequence = 0
+	}
 	data, err := c.readEphemeralPacket()
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.

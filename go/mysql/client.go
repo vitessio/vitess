@@ -315,6 +315,24 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		return err
 	}
 
+	useZstd := params.EnableZstdCompression &&
+		(capabilities&CapabilityClientCompress != 0) &&
+		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
+	if useZstd {
+		level := params.ZstdCompressionLevel
+		if level < 1 {
+			level = 3
+		}
+		if level > 22 {
+			level = 22
+		}
+		c.isZstdCompressed = true
+		c.zstdCompressionLevel = level
+		if err := c.initZstdCompression(); err != nil {
+			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "failed to init zstd compression: %v", err)
+		}
+	}
+
 	// Read the server response.
 	if err := c.handleAuthResponse(params); err != nil {
 		return err
@@ -584,6 +602,18 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length += lenEncIntSize(uint64(attrLength)) + attrLength
 	}
 
+	// zstd_compression_level: here we're adding a 1-byte field right after the connection attributes
+	// when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set.
+	// Protocol docs for this layout live here:
+	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
+	useZstd := params.EnableZstdCompression &&
+		(capabilities&CapabilityClientCompress != 0) &&
+		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
+	if useZstd {
+		capabilityFlags |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm
+		length++
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
@@ -628,6 +658,18 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 			pos = writeLenEncString(data, pos, key)
 			pos = writeLenEncString(data, pos, value)
 		}
+	}
+
+	// Now we write the int<1> zstd_compression_level byte right after the connection attributes, as the protocol expects.
+	if useZstd {
+		level := params.ZstdCompressionLevel
+		if level < 1 {
+			level = 3
+		}
+		if level > 22 {
+			level = 22
+		}
+		pos = writeByte(data, pos, byte(level))
 	}
 
 	// Sanity-check the length.
