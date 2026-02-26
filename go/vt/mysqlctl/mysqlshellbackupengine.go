@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -265,12 +266,15 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, err
 	}
 
-	// Reconstruct the backup location from the backup handle rather than
-	// trusting bm.BackupLocation from the MANIFEST, which could contain
-	// a path traversal if the MANIFEST was tampered with.
-	location, err := be.backupLocation(bh.Directory(), bh.Name())
+	// Validate that bm.BackupLocation from the MANIFEST resolves safely
+	// under mysqlShellBackupLocation (no path traversal).
+	relLocation, err := filepath.Rel(mysqlShellBackupLocation, bm.BackupLocation)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "cannot safely determine backup location")
+		return nil, vterrors.Wrapf(err, "cannot determine relative backup location from manifest")
+	}
+	location, err := fileutil.SafePathJoin(mysqlShellBackupLocation, relLocation)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "backup location %q in manifest is outside the backup root %q", bm.BackupLocation, mysqlShellBackupLocation)
 	}
 
 	// mark restore as in progress
