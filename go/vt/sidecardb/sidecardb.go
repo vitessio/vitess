@@ -21,6 +21,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -29,6 +30,8 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -51,6 +54,7 @@ const (
 	sidecarDBExistsQuery  = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
 	showCreateTableQuery  = "show create table %s.%s"
 	sidecarCollationQuery = "select @@global.collation_server"
+	sidecarVersionQuery   = "select @@version"
 
 	maxDDLErrorHistoryLength = 100
 
@@ -202,6 +206,9 @@ type schemaInit struct {
 	exec      Exec
 	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
 	coll      collations.ID
+
+	// serverVersion is the version of the MySQL server.
+	serverVersion string
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -389,6 +396,65 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	return currentTableSchema, nil
 }
 
+// serverVersionString returns the MySQL server version reported by the
+// live sidecar connection.
+func (si *schemaInit) serverVersionString() string {
+	if si.serverVersion != "" {
+		return si.serverVersion
+	}
+
+	if si.exec == nil {
+		return si.env.MySQLVersion()
+	}
+
+	rs, err := si.exec(si.ctx, sidecarVersionQuery, 1, false)
+	if err != nil {
+		log.Warningf("Error getting MySQL version during sidecar database initialization %s", slog.Any("error", err))
+		return ""
+	}
+
+	if len(rs.Rows) != 1 || len(rs.Rows[0]) == 0 {
+		log.Warningf("Invalid results for SidecarDB version query %s %s", slog.String("query", sidecarVersionQuery), slog.Int("rows", len(rs.Rows)))
+		return ""
+	}
+
+	si.serverVersion = rs.Rows[0][0].ToString()
+	if si.serverVersion == "" {
+		log.Warning("MySQL version query returned empty result during sidecar database initialization")
+	}
+
+	return si.serverVersion
+}
+
+// alterTableAlgorithmStrategy returns the algorithm strategy to use for
+// sidecar table ALTER statements. On MySQL < 8.0.32 we force ALGORITHM=COPY
+// to work around a MySQL bug in the INSTANT DDL redo log format (8.0.29-8.0.31)
+// that could cause data corruption during crash recovery. On MySQL >= 8.0.32
+// the bug is fixed and we omit the clause, letting MySQL choose the most
+// efficient algorithm.
+func (si *schemaInit) alterTableAlgorithmStrategy() int {
+	version := si.serverVersionString()
+	if version == "" {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capableOf := mysql.ServerVersionCapableOf(version)
+	if capableOf == nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capable, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
+	if err != nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	if capable {
+		return schemadiff.AlterTableAlgorithmStrategyNone
+	}
+
+	return schemadiff.AlterTableAlgorithmStrategyCopy
+}
+
 // findTableSchemaDiff gets the diff which needs to be applied
 // to the current table schema in order to reach the desired one.
 // The result will be an empty string if they match.
@@ -397,7 +463,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreEmpty,
-		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
+		AlterTableAlgorithmStrategy: si.alterTableAlgorithmStrategy(),
 	}
 	env := schemadiff.NewEnv(si.env, si.coll)
 	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
@@ -514,6 +580,13 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlpars
 			sqlparser.String(sqlparser.NewIdentifierCS(table.name))).Query, result)
 	}
 
+	mysqlVersionResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"@@version",
+		"varchar"),
+		config.DefaultMySQLVersion,
+	)
+	db.AddQuery(sidecarVersionQuery, mysqlVersionResult)
+
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"sql_mode",
 		"varchar"),
@@ -541,6 +614,9 @@ func MatchesInitQuery(query string) bool {
 	}
 	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	if strings.EqualFold(sdbe, query) {
+		return true
+	}
+	if strings.EqualFold(sidecarVersionQuery, query) {
 		return true
 	}
 	for _, q := range sidecar.DBInitQueryPatterns {
