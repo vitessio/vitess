@@ -13,7 +13,7 @@ import (
 )
 
 func testRequireTabletAliasEqual(t *testing.T, expected, got *topodatapb.TabletAlias) {
-	require.Equal(t, topoproto.TabletAliasString(expected), topoproto.TabletAliasString(got))
+	require.True(t, topoproto.TabletAliasEqual(expected, got), "expected %v, got %v", expected, got)
 }
 
 func TestSaveAndReadTablet(t *testing.T) {

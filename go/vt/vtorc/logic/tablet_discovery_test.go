@@ -547,7 +547,7 @@ func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString s
 		assert.EqualError(t, err, errString)
 	} else {
 		assert.NoError(t, err)
-		assert.Equal(t, topoproto.TabletAliasString(tabletWanted.Alias), topoproto.TabletAliasString(tablet.Alias))
+		assert.True(t, topoproto.TabletAliasEqual(tabletWanted.Alias, tablet.Alias), "expected %v, got %v", tabletWanted.Alias, tablet.Alias)
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
 	}
