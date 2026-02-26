@@ -1453,11 +1453,6 @@ func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.Execute
 
 	span.Annotate("hook_name", req.TabletHookRequest.Name)
 
-	if strings.Contains(req.TabletHookRequest.Name, "/") {
-		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "hook name cannot contain a '/'; was %v", req.TabletHookRequest.Name)
-		return nil, err
-	}
-
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
 		return nil, err

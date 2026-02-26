@@ -5319,38 +5319,6 @@ func TestExecuteHook(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "hook with slash",
-			ts:   memorytopo.NewServer(ctx, "zone1"),
-			tmc: &testutil.TabletManagerClient{
-				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Response: &hk.HookResult{},
-					},
-				},
-			},
-			tablets: []*topodatapb.Tablet{
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-				},
-			},
-			req: &vtctldatapb.ExecuteHookRequest{
-				TabletAlias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-				TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
-					Name: "hooks/cannot/contain/slashes",
-				},
-			},
-			shouldErr: true,
-		},
-		{
 			name: "no such tablet",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
