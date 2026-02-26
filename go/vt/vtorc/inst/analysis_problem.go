@@ -63,9 +63,19 @@ type DetectionAnalysisProblem struct {
 }
 
 // RequiresOrderedExecution returns true if the problem must be executed
-// sequentially relative to other problems in the same shard.
+// sequentially relative to other problems in the same shard. This includes
+// problems that declare dependencies directly (BeforeAnalyses/AfterAnalyses)
+// as well as problems that are referenced by another problem's dependencies.
 func (dap *DetectionAnalysisProblem) RequiresOrderedExecution() bool {
-	return dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0
+	if dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0 {
+		return true
+	}
+	for _, p := range detectionAnalysisProblems {
+		if slices.Contains(p.BeforeAnalyses, dap.Meta.Analysis) || slices.Contains(p.AfterAnalyses, dap.Meta.Analysis) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetPriority returns the priority of a problem as an int.
@@ -240,6 +250,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
+		BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled
 		},
@@ -261,6 +272,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replica semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
+		AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
 		},
