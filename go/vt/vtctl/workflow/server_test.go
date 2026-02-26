@@ -196,6 +196,70 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 	}
 }
 
+func TestResolveTables(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sourceKeyspace = "sourceks"
+		internalTable  = "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"
+	)
+
+	sourceTables := map[string]*tabletmanagerdatapb.TableDefinition{
+		"table1":      nil,
+		"table2":      nil,
+		internalTable: nil,
+	}
+
+	testcases := []struct {
+		name        string
+		req         *vtctldatapb.MoveTablesCreateRequest
+		wantTables  []string
+		wantErrText string
+	}{
+		{
+			name: "all tables filters internal operation tables",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				AllTables: true,
+			},
+			wantTables: []string{"table1", "table2"},
+		},
+		{
+			name: "include and exclude tables still filter internal operation tables",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				IncludeTables: []string{"table1", "table2", internalTable},
+				ExcludeTables: []string{"table2"},
+			},
+			wantTables: []string{"table1"},
+		},
+		{
+			name: "only internal operation tables returns no tables to move",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				IncludeTables: []string{internalTable},
+			},
+			wantErrText: errNoTablesToMove.Error(),
+		},
+	}
+
+	s := &Server{}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tables, err := s.resolveTables(tc.req, sourceKeyspace, sourceTables)
+			if tc.wantErrText != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrText)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.ElementsMatch(t, tc.wantTables, tables)
+		})
+	}
+}
+
 func TestMoveTablesComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

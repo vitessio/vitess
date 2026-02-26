@@ -78,6 +78,13 @@ const (
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
+	// dropViewTemplate is the template string to drop a view after completing a MoveTables.
+	dropViewTemplate = "drop view %s.%s"
+
+	// renameViewTemplate is the template string to rename a view after completing a MoveTables.
+	// "RENAME TABLE" works for views as long as they are not renamed into a different database.
+	renameViewTemplate = "rename table %s.%s TO %s.%s"
+
 	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
 )
 
@@ -274,6 +281,7 @@ func (ts *trafficSwitcher) Tables() []string                               { ret
 func (ts *trafficSwitcher) TargetKeyspaceName() string                     { return ts.targetKeyspace }
 func (ts *trafficSwitcher) Targets() map[string]*MigrationTarget           { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
+func (ts *trafficSwitcher) Options() *vtctldatapb.WorkflowOptions          { return ts.options }
 func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
 func (ts *trafficSwitcher) TargetTimeZone() string                         { return ts.targetTimeZone }
 
@@ -585,6 +593,81 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 	}
 
 	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.SourceKeyspaceName())
+}
+
+// removeSourceViews removes the views that were moved as part of a MoveTables workflow (if any). If removalType
+// is DropTable, the views are dropped with "DROP VIEW". If removalType is RenameTable, the tables are renamed to
+// renameTableTemplate with "RENAME TABLE".
+//
+// Note: in the case of renames, the underlying definition of the view is not changed, meaning the view will
+// still reference the old table before the rename.
+func (ts *trafficSwitcher) removeSourceViews(ctx context.Context, removalType TableRemovalType) error {
+	views := ts.Options().GetViews()
+	if len(views) == 0 {
+		// No views were moved with the MoveTables.
+		ts.Logger().Infof("no views to drop")
+		return nil
+	}
+
+	// Drop/rename the views on each source of the MoveTables.
+	err := ts.ForAllSources(func(source *MigrationSource) error {
+		for _, view := range views {
+			primaryTablet := source.GetPrimary()
+
+			primaryDBName, err := sqlescape.EnsureEscaped(primaryTablet.DbName())
+			if err != nil {
+				return err
+			}
+
+			viewNameEscaped, err := sqlescape.EnsureEscaped(view)
+			if err != nil {
+				return err
+			}
+
+			var query string
+			if removalType == DropTable {
+				query = fmt.Sprintf(dropViewTemplate, primaryDBName, viewNameEscaped)
+
+				ts.Logger().Infof("%s: Dropping view %s.%s\n", topoproto.TabletAliasString(primaryTablet.GetAlias()), primaryTablet.DbName(), view)
+			} else {
+				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(view))
+				if err != nil {
+					return err
+				}
+
+				query = fmt.Sprintf(renameViewTemplate, primaryDBName, viewNameEscaped, primaryDBName, renameName)
+
+				ts.Logger().Infof("%s: Renaming view %s.%s to %s.%s\n", topoproto.TabletAliasString(primaryTablet.GetAlias()), primaryTablet.DbName(), view, primaryTablet.DbName(), renameName)
+			}
+
+			req := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
+			}
+
+			// Run the drop/rename
+			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, req)
+			if err != nil {
+				if !IsTableDidNotExistError(err) {
+					ts.Logger().Errorf("%s: Error removing view %s: %v", topoproto.TabletAliasString(primaryTablet.GetAlias()), view, err)
+					return err
+				}
+
+				ts.Logger().Warningf("%s: View %s did not exist when attempting to remove it", topoproto.TabletAliasString(primaryTablet.GetAlias()), view)
+			}
+
+			ts.Logger().Infof("%s: Removed view %s.%s\n", topoproto.TabletAliasString(primaryTablet.GetAlias()), primaryTablet.DbName(), view)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix

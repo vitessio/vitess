@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -93,6 +94,7 @@ var (
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 			{
 				Name:              "t1",
+				Type:              tmutils.TableBaseTable,
 				Columns:           []string{"id", "c2"},
 				PrimaryKeyColumns: []string{"id"},
 				Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
@@ -154,12 +156,14 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					{
 						Name:              "t1",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id", "c2"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
 					},
 					{
 						Name:              "wut",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id", "int64"),
@@ -189,18 +193,21 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					{
 						Name:              "zt",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id", "int64"),
 					},
 					{
 						Name:              "t1",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id", "c2"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
 					},
 					{
 						Name:              "wut",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id", "int64"),
@@ -229,18 +236,21 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					{
 						Name:              "zt",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id", "int64"),
 					},
 					{
 						Name:              "t1",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id", "c2"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
 					},
 					{
 						Name:              "wut",
+						Type:              tmutils.TableBaseTable,
 						Columns:           []string{"id"},
 						PrimaryKeyColumns: []string{"id"},
 						Fields:            sqltypes.MakeTestFields("id", "int64"),

@@ -44,6 +44,7 @@ type iswitcher interface {
 	switchShardReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction TrafficSwitchDirection) error
 	validateWorkflowHasCompleted(ctx context.Context) error
 	removeSourceTables(ctx context.Context, removalType TableRemovalType) error
+	removeSourceViews(ctx context.Context, removalType TableRemovalType) error
 	dropSourceShards(ctx context.Context) error
 	dropSourceDeniedTables(ctx context.Context) error
 	dropTargetDeniedTables(ctx context.Context) error
