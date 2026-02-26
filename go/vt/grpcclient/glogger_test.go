@@ -41,7 +41,7 @@ func TestGlogger(t *testing.T) {
 
 	logMessage = ""
 	gl.Warningln("warningln")
-	require.Contains(t, logMessage, "warningln\n")
+	require.Contains(t, logMessage, "warningln")
 
 	logMessage = ""
 	gl.Warningf("formatted %s", "warning")
@@ -64,7 +64,7 @@ func TestGloggerError(t *testing.T) {
 
 	logMessage = ""
 	gl.Errorln("error message line")
-	require.Contains(t, logMessage, "error message line\n")
+	require.Contains(t, logMessage, "error message line")
 
 	logMessage = ""
 	gl.Errorf("this is a %s error message", "formatted")

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,32 +26,31 @@ mysql_server_socket_path="/tmp/mysql.sock"
 
 echo "Starting vtgate..."
 # shellcheck disable=SC2086
-#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtgate \
-  $TOPOLOGY_FLAGS \
-  --log_dir $VTDATAROOT/tmp \
-  --log-queries-to-file $VTDATAROOT/tmp/vtgate_querylog.txt \
-  --port $web_port \
-  --grpc-port $grpc_port \
-  --mysql-server-port $mysql_server_port \
-  --mysql-server-socket-path $mysql_server_socket_path \
-  --cell $cell \
-  --cells-to-watch $cell \
-  --tablet-types-to-wait PRIMARY,REPLICA \
-  --service-map 'grpc-vtgateservice' \
-  --pid-file $VTDATAROOT/tmp/vtgate.pid \
-  --enable-buffer \
-  --mysql-auth-server-impl none \
-  --pprof-http \
-  > $VTDATAROOT/tmp/vtgate.out 2>&1 &
+   $TOPOLOGY_FLAGS \
+   --log-queries-to-file $VTDATAROOT/tmp/vtgate_querylog.txt \
+   --port $web_port \
+   --grpc-port $grpc_port \
+   --mysql-server-port $mysql_server_port \
+   --mysql-server-socket-path $mysql_server_socket_path \
+   --cell $cell \
+   --cells-to-watch $cell \
+   --tablet-types-to-wait PRIMARY,REPLICA \
+   --service-map 'grpc-vtgateservice' \
+   --pid-file $VTDATAROOT/tmp/vtgate.pid \
+   --enable-buffer \
+   --mysql-auth-server-impl none \
+   --pprof-http \
+   --log-format text \
+   >$VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening
 # Not the same as healthy
 
 while true; do
- curl -I "http://$hostname:$web_port/debug/status" >/dev/null 2>&1 && break
- sleep 0.1
-done;
+   curl -I "http://$hostname:$web_port/debug/status" >/dev/null 2>&1 && break
+   sleep 0.1
+done
 echo "vtgate is up!"
 
 echo "Access vtgate at http://$hostname:$web_port/debug/status"

@@ -51,16 +51,12 @@ var (
 	useEffective                    bool
 	useEffectiveGroups              bool
 	useStaticAuthenticationIdentity bool
-
-	sendSessionInStreaming bool
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 	utils.SetFlagBoolVar(fs, &useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	utils.SetFlagBoolVar(fs, &sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
-	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
 func init() {
@@ -199,15 +195,13 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 		errs = append(errs, vtgErr)
 	}
 
-	if sendSessionInStreaming {
-		// even if there is an error, session could have been modified.
-		// So, this needs to be sent back to the client. Session is sent in the last stream response.
-		lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
-			Session: session,
-		})
-		if lastErr != nil {
-			errs = append(errs, lastErr)
-		}
+	// Even if there is an error, session could have been modified.
+	// So, this needs to be sent back to the client. Session is sent in the last stream response.
+	lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+		Session: session,
+	})
+	if lastErr != nil {
+		errs = append(errs, lastErr)
 	}
 
 	return vterrors.ToGRPC(vterrors.Aggregate(errs))
@@ -260,15 +254,13 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		errs = append(errs, vtgErr)
 	}
 
-	if sendSessionInStreaming {
-		// even if there is an error, session could have been modified.
-		// So, this needs to be sent back to the client. Session is sent in the last stream response.
-		lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
-			Session: session,
-		})
-		if lastErr != nil {
-			errs = append(errs, lastErr)
-		}
+	// Even if there is an error, session could have been modified.
+	// So, this needs to be sent back to the client. Session is sent in the last stream response.
+	lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
+		Session: session,
+	})
+	if lastErr != nil {
+		errs = append(errs, lastErr)
 	}
 
 	return vterrors.ToGRPC(vterrors.Aggregate(errs))

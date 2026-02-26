@@ -54,8 +54,6 @@ var (
 // that enables structured logging. This should be removed once structured logging is
 // the only option.
 func init() {
-	// We create a JSON logger here. Alternatively, we can identify if we're running in tests
-	// and set a more human-readable format such as [slog.TextHandler] or others.
 	logger.Store(newLogger(slog.LevelInfo))
 	structured.Store(true)
 }
