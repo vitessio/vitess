@@ -4425,7 +4425,7 @@ func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Tbl vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Tbl.CachedSize(false)
@@ -4433,6 +4433,29 @@ func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	size += cached.DbName.CachedSize(false)
 	// field Filter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
 	size += cached.Filter.CachedSize(true)
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	return size
+}
+
+func (cached *ShowBinlogEvents) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field LogName string
+	size += hack.RuntimeAllocSize(int64(len(cached.LogName)))
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
 	return size
 }
 
@@ -4446,6 +4469,34 @@ func (cached *ShowCreate) CachedSize(alloc bool) int64 {
 	}
 	// field Op vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Op.CachedSize(false)
+	return size
+}
+
+func (cached *ShowCreateUser) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field User *vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	size += cached.User.CachedSize(true)
+	return size
+}
+
+func (cached *ShowEngine) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field EngineName string
+	size += hack.RuntimeAllocSize(int64(len(cached.EngineName)))
+	// field Action string
+	size += hack.RuntimeAllocSize(int64(len(cached.Action)))
 	return size
 }
 
@@ -4466,6 +4517,26 @@ func (cached *ShowFilter) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *ShowGrants) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field User *vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	size += cached.User.CachedSize(true)
+	// field UsingRole []vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.UsingRole)) * int64(32))
+		for _, elem := range cached.UsingRole {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
+
 func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4481,16 +4552,60 @@ func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	return size
 }
 
-func (cached *ShowOther) CachedSize(alloc bool) int64 {
+func (cached *ShowProfile) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
-	// field Command string
-	size += hack.RuntimeAllocSize(int64(len(cached.Command)))
+	// field Types []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Types)) * int64(16))
+		for _, elem := range cached.Types {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field ForQuery *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.ForQuery.CachedSize(true)
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	return size
+}
+
+func (cached *ShowReplicas) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
+func (cached *ShowReplicationSourceStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
+func (cached *ShowReplicationStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
 	return size
 }
 
@@ -5202,6 +5317,21 @@ func (cached *Use) CachedSize(alloc bool) int64 {
 	}
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
+	return size
+}
+
+func (cached *UserOrRole) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Host string
+	size += hack.RuntimeAllocSize(int64(len(cached.Host)))
 	return size
 }
 

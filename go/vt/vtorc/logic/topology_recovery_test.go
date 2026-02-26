@@ -25,9 +25,10 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -168,7 +168,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
 	analysisEntry := &inst.DetectionAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
+		AnalyzedInstanceAlias: tablet.Alias,
 	}
 	ctx := t.Context()
 
@@ -222,11 +222,11 @@ func TestRecoveryRegistration(t *testing.T) {
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
 	primaryAnalysisEntry := inst.DetectionAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
+		AnalyzedInstanceAlias: primary.Alias,
 		Analysis:              inst.ReplicationStopped,
 	}
 	replicaAnalysisEntry := inst.DetectionAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
+		AnalyzedInstanceAlias: replica.Alias,
 		Analysis:              inst.DeadPrimary,
 	}
 	ctx := t.Context()
@@ -475,7 +475,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -495,7 +495,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis did not change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -514,7 +514,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -524,7 +524,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:     1,
 				ReadOnly:           1,
@@ -548,11 +548,11 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
-			}, []string{"ks", "0", ""}, func(s string, b bool) {
+			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
 
@@ -572,10 +572,10 @@ func TestRecoverShardAnalyses(t *testing.T) {
 	// medium priority with no shard-wide action or before/after dependencies,
 	// so they run concurrently.
 	analyses := []*inst.DetectionAnalysis{
-		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: "replica1"},
-		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: "primary1"},
-		{Analysis: inst.ReplicaIsWritable, AnalyzedInstanceAlias: "replica2"},
-		{Analysis: inst.PrimaryHasPrimary, AnalyzedInstanceAlias: "primary2"},
+		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}},
+		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}},
+		{Analysis: inst.ReplicaIsWritable, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 3}},
+		{Analysis: inst.PrimaryHasPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 4}},
 	}
 
 	var mu sync.Mutex
@@ -611,7 +611,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			name: "reachable healthz (prs failure)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
@@ -626,7 +626,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			name: "reachable healthz (ers fallback)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 				LastCheckValid:        false,
@@ -641,7 +641,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			name: "reachable healthz (prs ok)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
@@ -655,7 +655,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			name: "unreachable healthz",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 			},
 			probeOK:     false,
 			wantAttempt: false,
@@ -709,9 +709,9 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				oldStderr := os.Stderr
 				r, w, err := os.Pipe()
 				require.NoError(t, err)
-				oldFD, err := syscall.Dup(int(os.Stderr.Fd()))
+				oldFD, err := unix.Dup(int(os.Stderr.Fd()))
 				require.NoError(t, err)
-				require.NoError(t, syscall.Dup3(int(w.Fd()), int(os.Stderr.Fd()), 0))
+				require.NoError(t, unix.Dup2(int(w.Fd()), int(os.Stderr.Fd())))
 				os.Stderr = w
 				done := make(chan struct{})
 				go func() {
@@ -723,8 +723,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					log.Flush()
 					_ = w.Close()
 					os.Stderr = oldStderr
-					_ = syscall.Dup3(oldFD, int(os.Stderr.Fd()), 0)
-					_ = syscall.Close(oldFD)
+					_ = unix.Dup2(oldFD, int(os.Stderr.Fd()))
+					_ = unix.Close(oldFD)
 					<-done
 				}
 			}

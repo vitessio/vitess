@@ -84,6 +84,9 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
 	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
+	if vtbackupVer >= 24 {
+		flags["--log-format"] = "text"
+	}
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {

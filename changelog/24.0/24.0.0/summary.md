@@ -14,6 +14,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
@@ -95,7 +96,7 @@ Note: A shard must be specified when using tablet targeting. Like shard targetin
 
 #### <a id="structured-logging"/>Structured logging</a>
 
-Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). To revert to the previous `glog` backend, pass `--log-structured=false`.
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
 
 `glog` is deprecated as of v24 and will be removed in v25.
 
@@ -116,6 +117,14 @@ vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shar
 ```
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-removed-grpc-send-session-in-streaming"/>Removed `--grpc-send-session-in-streaming` flag</a>
+
+The VTGate flag `--grpc-send-session-in-streaming` has been removed. This flag was deprecated in v22 via [#17907](https://github.com/vitessio/vitess/pull/17907) and defaulted to `true`.
+
+The session is now always sent as the last packet in the streaming response for `StreamExecute` and `StreamExecuteMulti` RPCs. This behavior is required to support transactions in streaming and cannot be disabled.
+
+**Impact**: Remove any usage of the `--grpc-send-session-in-streaming` flag from VTGate startup scripts or configuration.
 
 #### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>New default for `--legacy-replication-lag-algorithm` flag</a>
 

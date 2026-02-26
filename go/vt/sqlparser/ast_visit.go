@@ -480,14 +480,30 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowBasic:
 		return VisitRefOfShowBasic(in, f)
+	case *ShowBinaryLogs:
+		return VisitRefOfShowBinaryLogs(in, f)
+	case *ShowBinlogEvents:
+		return VisitRefOfShowBinlogEvents(in, f)
 	case *ShowCreate:
 		return VisitRefOfShowCreate(in, f)
+	case *ShowCreateUser:
+		return VisitRefOfShowCreateUser(in, f)
+	case *ShowEngine:
+		return VisitRefOfShowEngine(in, f)
 	case *ShowFilter:
 		return VisitRefOfShowFilter(in, f)
+	case *ShowGrants:
+		return VisitRefOfShowGrants(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
-	case *ShowOther:
-		return VisitRefOfShowOther(in, f)
+	case *ShowProfile:
+		return VisitRefOfShowProfile(in, f)
+	case *ShowReplicas:
+		return VisitRefOfShowReplicas(in, f)
+	case *ShowReplicationSourceStatus:
+		return VisitRefOfShowReplicationSourceStatus(in, f)
+	case *ShowReplicationStatus:
+		return VisitRefOfShowReplicationStatus(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:
@@ -4185,6 +4201,35 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowBinaryLogs(in *ShowBinaryLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowBinlogEvents(in *ShowBinlogEvents, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -4196,6 +4241,26 @@ func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Op, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowCreateUser(in *ShowCreateUser, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowEngine(in *ShowEngine, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -4214,6 +4279,16 @@ func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 	return nil
 }
 
+func VisitRefOfShowGrants(in *ShowGrants, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	if in == nil {
 		return nil
@@ -4227,7 +4302,43 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	return nil
 }
 
-func VisitRefOfShowOther(in *ShowOther, f Visit) error {
+func VisitRefOfShowProfile(in *ShowProfile, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.ForQuery, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowReplicas(in *ShowReplicas, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowReplicationSourceStatus(in *ShowReplicationSourceStatus, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowReplicationStatus(in *ShowReplicationStatus, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -5897,10 +6008,26 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 	switch in := in.(type) {
 	case *ShowBasic:
 		return VisitRefOfShowBasic(in, f)
+	case *ShowBinaryLogs:
+		return VisitRefOfShowBinaryLogs(in, f)
+	case *ShowBinlogEvents:
+		return VisitRefOfShowBinlogEvents(in, f)
 	case *ShowCreate:
 		return VisitRefOfShowCreate(in, f)
-	case *ShowOther:
-		return VisitRefOfShowOther(in, f)
+	case *ShowCreateUser:
+		return VisitRefOfShowCreateUser(in, f)
+	case *ShowEngine:
+		return VisitRefOfShowEngine(in, f)
+	case *ShowGrants:
+		return VisitRefOfShowGrants(in, f)
+	case *ShowProfile:
+		return VisitRefOfShowProfile(in, f)
+	case *ShowReplicas:
+		return VisitRefOfShowReplicas(in, f)
+	case *ShowReplicationSourceStatus:
+		return VisitRefOfShowReplicationSourceStatus(in, f)
+	case *ShowReplicationStatus:
+		return VisitRefOfShowReplicationStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
 	case Visitable:
