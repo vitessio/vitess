@@ -23,11 +23,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/fileutil"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -98,11 +99,6 @@ func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
 
 // findHook tries to locate the hook, and returns the exec.Cmd for it.
 func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
-	// Check the hook path.
-	if strings.Contains(hook.Name, "/") {
-		return nil, HOOK_INVALID_NAME, errors.New("hook cannot contain '/'")
-	}
-
 	// Find our root.
 	root, err := vtenv.VtRoot()
 	if err != nil {
@@ -110,7 +106,10 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// See if the hook exists.
-	vthook := path.Join(root, "vthook", hook.Name)
+	vthook, err := fileutil.SafePathJoin(filepath.Join(root, "vthook"), hook.Name)
+	if err != nil {
+		return nil, HOOK_INVALID_NAME, fmt.Errorf("invalid hook name %q: %v", hook.Name, err)
+	}
 	_, err = os.Stat(vthook)
 	if err != nil {
 		if os.IsNotExist(err) {

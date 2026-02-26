@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc"
@@ -35,6 +36,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // server is the gRPC implementation of the RPC server
@@ -64,6 +66,9 @@ func (s *server) Sleep(ctx context.Context, request *tabletmanagerdatapb.SleepRe
 func (s *server) ExecuteHook(ctx context.Context, request *tabletmanagerdatapb.ExecuteHookRequest) (response *tabletmanagerdatapb.ExecuteHookResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteHook", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+	if request.Name == "" || filepath.Base(request.Name) != request.Name {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "hook name must be a basename, got %q", request.Name)
+	}
 	response = &tabletmanagerdatapb.ExecuteHookResponse{}
 	hr := s.tm.ExecuteHook(ctx, &hook.Hook{
 		Name:       request.Name,

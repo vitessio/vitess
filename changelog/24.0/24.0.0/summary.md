@@ -30,9 +30,10 @@
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
-        - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
+        - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -232,6 +233,14 @@ VTOrc's `DiscoverInstance` function now includes the tablet alias in all log mes
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
 
+#### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
+
+VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+
+The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+
+See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
+
 #### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
 
 The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
@@ -250,11 +259,11 @@ The lack of facilities to read the snapshots created by this feature coupled wit
 
 **Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
 
-#### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
+#### <a id="vtorc-replication-analysis-api-removed"/>Deprecated `/api/replication-analysis` Endpoint Removed</a>
 
-VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use `/api/detection-analysis` instead, which provides the same functionality.
 
-The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+**Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
 
-See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
+**Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
 
