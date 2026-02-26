@@ -98,8 +98,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		}, nil
 	case "vexplain all select * from customers":
 		columns := []string{"VExplain"}
-		vals := [][]any{}
-		vals = append(vals, []any{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"})
+		vals := [][]any{{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"}}
 
 		return &rows{
 			cols:   columns,

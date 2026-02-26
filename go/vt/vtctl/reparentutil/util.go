@@ -91,7 +91,7 @@ func ElectNewPrimary(
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
-	candidates := []*topodatapb.Tablet{}
+	candidates := make([]*topodatapb.Tablet, 0, len(tabletMap))
 	reasonsToInvalidate := strings.Builder{}
 	for _, tablet := range tabletMap {
 		switch {
@@ -302,8 +302,8 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 
 // getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
 func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []*RelayLogPositions, error) {
-	var validTablets []*topodatapb.Tablet
-	var tabletPositions []*RelayLogPositions
+	validTablets := make([]*topodatapb.Tablet, 0, len(validCandidates))
+	tabletPositions := make([]*RelayLogPositions, 0, len(validCandidates))
 	for tabletAlias, position := range validCandidates {
 		tablet, isFound := tabletMap[tabletAlias]
 		if !isFound {

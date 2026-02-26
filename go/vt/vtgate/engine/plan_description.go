@@ -280,7 +280,7 @@ func median(nums []int) float64 {
 }
 
 func (pd PrimitiveDescription) addToGraph(g *graphviz.Graph) (*graphviz.Node, error) {
-	var nodes []*graphviz.Node
+	nodes := make([]*graphviz.Node, 0, len(pd.Inputs))
 	for _, input := range pd.Inputs {
 		n, err := input.addToGraph(g)
 		if err != nil {
@@ -328,7 +328,7 @@ func GraphViz(p Primitive) (*graphviz.Graph, error) {
 }
 
 func addMap(input map[string]any, buf *bytes.Buffer) error {
-	var mk []string
+	mk := make([]string, 0, len(input))
 	for k, v := range input {
 		if v == "" || v == nil || v == 0 || v == false {
 			continue
@@ -452,7 +452,7 @@ func (m orderedMap) MarshalJSON() ([]byte, error) {
 }
 
 func (m orderedMap) String() string {
-	var output []string
+	output := make([]string, 0, len(m))
 	for _, val := range m {
 		output = append(output, fmt.Sprintf("%s:%v", val.key, val.val))
 	}

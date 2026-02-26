@@ -84,12 +84,12 @@ func XTestSupportTables(t *testing.T) {
 		collverMariaDB100,
 	}
 
-	var envs []*Environment
+	envs := make([]*Environment, 0, len(versions))
 	for _, v := range versions {
 		envs = append(envs, makeEnv(v))
 	}
 
-	var all []ID
+	all := make([]ID, 0, len(globalVersionInfo))
 	for id := range globalVersionInfo {
 		all = append(all, id)
 	}

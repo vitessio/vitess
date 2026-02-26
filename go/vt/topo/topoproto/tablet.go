@@ -183,7 +183,7 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
 	var tabletTypes []topodatapb.TabletType
 	if param == "" {
-		return tabletTypes, nil
+		return nil, nil
 	}
 	for typeStr := range strings.SplitSeq(param, ",") {
 		t, err := ParseTabletType(typeStr)

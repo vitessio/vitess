@@ -122,7 +122,7 @@ const DefaultMySQLFlavor = "MySQL56"
 
 // GetMySQLOptions returns the set of MySQL CNF files and any errors.
 func GetMySQLOptions() ([]string, error) {
-	mycnf := []string{}
+	mycnf := []string{} //nolint:prealloc
 	mycnf = append(mycnf, "config/mycnf/test-suite.cnf")
 
 	for i, cnf := range mycnf {

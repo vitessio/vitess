@@ -430,7 +430,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		return keys[i].ks.Name < keys[j].ks.Name
 	})
 
-	var sources []engine.Primitive
+	sources := make([]engine.Primitive, 0, len(keys))
 	for _, sendDest := range keys {
 		plan := &engine.Send{
 			Keyspace:                 sendDest.ks,

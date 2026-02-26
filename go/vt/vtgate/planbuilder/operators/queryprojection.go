@@ -660,7 +660,7 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	if !qp.orderByOverlapWithSelectExpr(ctx) {
 		return false
 	}
-	var gbs []GroupBy
+	gbs := make([]GroupBy, 0, len(qp.SelectExprs))
 	for idx, selExpr := range qp.SelectExprs {
 		ae, err := selExpr.GetAliasedExpr()
 		if err != nil {

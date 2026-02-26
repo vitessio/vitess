@@ -1225,7 +1225,7 @@ func GetDatabaseState() (string, error) {
 		Rows      []sqlutils.RowMap
 	}
 
-	var dbState []tableState
+	dbState := make([]tableState, 0, len(db.TableNames))
 	for _, tableName := range db.TableNames {
 		ts := tableState{
 			TableName: tableName,

@@ -47,7 +47,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	var resultRows []sqltypes.Row
+	resultRows := make([]sqltypes.Row, 0, len(result.Rows))
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 		env.Row = row
@@ -133,7 +133,7 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 	// dependency on these fields altogether
 	env.Fields = infields
 
-	var fields []*querypb.Field
+	fields := make([]*querypb.Field, 0, len(p.Cols))
 	for i, col := range p.Cols {
 		typ, err := env.TypeOf(p.Exprs[i])
 		if err != nil {
@@ -167,7 +167,7 @@ func (p *Projection) Inputs() ([]Primitive, []map[string]any) {
 
 // description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
-	var exprs []string
+	exprs := make([]string, 0, len(p.Exprs))
 	for idx, e := range p.Exprs {
 		expr := sqlparser.String(e)
 		alias := p.Cols[idx]

@@ -503,7 +503,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
-		var colTypes []*querypb.Field
+		var colTypes []*querypb.Field //nolint:prealloc
 		var colValues [][]sqltypes.Value
 		colType := &querypb.Field{
 			Name:    "column_type",

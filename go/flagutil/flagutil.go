@@ -40,8 +40,7 @@ func (value StringListValue) Get() any {
 
 func parseListWithEscapes(v string, delimiter rune) (value []string) {
 	var escaped, lastWasDelimiter bool
-	var current []rune
-
+	current := make([]rune, 0, len(v))
 	for _, r := range v {
 		lastWasDelimiter = false
 		if !escaped {
@@ -119,7 +118,7 @@ func (value StringMapValue) Get() any {
 
 // String returns the string representation of this flag.
 func (value StringMapValue) String() string {
-	parts := make([]string, 0)
+	parts := make([]string, 0, len(value))
 	for k, v := range value {
 		parts = append(parts, k+":"+strings.ReplaceAll(v, ",", `\,`))
 	}

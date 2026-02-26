@@ -73,8 +73,8 @@ func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 
 // Inputs implements the Primitive interface
 func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
-	var inputs []Primitive
-	var inputsMap []map[string]any
+	inputs := make([]Primitive, 0, len(f.Verify))
+	inputsMap := make([]map[string]any, 0, len(f.Verify))
 	for idx, v := range f.Verify {
 		inputsMap = append(inputsMap, map[string]any{
 			inputName: fmt.Sprintf("%s-%d", v.Typ, idx+1),

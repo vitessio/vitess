@@ -343,7 +343,7 @@ func (a *Aggregator) ShortDescription() string {
 		return fmt.Sprintf("%s%s", org, strings.Join(columns, ", "))
 	}
 
-	var grouping []string
+	grouping := make([]string, 0, len(a.Grouping))
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.Inner))
 	}

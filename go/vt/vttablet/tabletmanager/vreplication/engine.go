@@ -688,7 +688,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		log.Error(fmt.Sprintf("transitionJournal: %v", err))
 		return
 	}
-	var newids []int32
+	newids := make([]int32, 0, len(shardGTIDs))
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
 		bls := vre.controllers[refid].source.CloneVT()

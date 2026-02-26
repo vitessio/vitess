@@ -174,9 +174,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 		return nil, err
 	}
 
-	var modules []Module
-	modules = append(modules, maxRateModule)
-	modules = append(modules, maxReplicationLagModule)
+	modules := []Module{maxRateModule, maxReplicationLagModule}
 
 	// Start each module (which might start own Go routines).
 	rateUpdateChan := make(chan struct{}, 10)
