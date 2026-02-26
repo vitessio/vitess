@@ -64,6 +64,8 @@ spec:
             name: example-cluster-config
             key: users.json
       replicas: 1
+      extraFlags:
+        log-format: text
       resources:
         requests:
           cpu: 100m
@@ -75,6 +77,7 @@ spec:
     - zone1
     extraFlags:
       security-policy: read-only
+      log-format: text
     replicas: 1
     resources:
       limits:
@@ -118,6 +121,7 @@ spec:
           memory: 128Mi
       extraFlags:
         instance-poll-time: 1s
+        log-format: text
     partitionings:
     - equal:
         parts: 1
@@ -133,6 +137,7 @@ spec:
               extraFlags:
                 db-charset: utf8mb4
                 wait-for-backup-interval: "0"
+                log-format: text
               resources:
                 limits:
                   memory: 1024Mi
@@ -169,6 +174,7 @@ spec:
               extraFlags:
                 db-charset: utf8mb4
                 wait-for-backup-interval: "0"
+                log-format: text
               resources:
                 limits:
                   memory: 1024Mi

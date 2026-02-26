@@ -22,8 +22,11 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"testing"
 
 	"github.com/golang/glog"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/utils"
@@ -32,6 +35,7 @@ import (
 var (
 	logStructured bool
 	logLevel      string
+	logFormat     string
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
@@ -42,6 +46,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&logStructured, "log-structured", true, "enable structured JSON logging")
 	fs.StringVar(&logLevel, "log-level", "info", "minimum log level when structured logging is enabled (debug, info, warn, error)")
+	fs.StringVar(&logFormat, "log-format", "json", "log output format: json for machine-readable JSON, text for human-readable colored output")
 }
 
 // Init configures the logging backend. By default, a slog.JSONHandler is
@@ -75,8 +80,24 @@ func Init(fs *pflag.FlagSet) error {
 	return nil
 }
 
-// newLogger creates a new logger.
+// newLogger creates a new structured logger. When the log format is "text", or we detect
+// we're running tests, logs are outputted in a human-readable format (and optionally colored).
+// Otherwise, or when the log format is "json", logs are outputted as machine-readable JSON.
 func newLogger(level slog.Level) *slog.Logger {
+	if logFormat == "text" || testing.Testing() {
+		w := os.Stderr
+		return slog.New(tint.NewHandler(w, &tint.Options{
+			AddSource:  true,
+			Level:      level,
+			TimeFormat: "3:04:05PM",
+
+			// When running tests, colored output will be disabled since it's not printed directly to the terminal
+			// (goes through the Go testing "pipeline"). So we also enable coloring if we're in tests to for
+			// improved readability.
+			NoColor: !isatty.IsTerminal(w.Fd()) && !testing.Testing(),
+		}))
+	}
+
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
 }
 
