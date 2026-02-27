@@ -141,12 +141,17 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if versionErr != nil {
 		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", orc.Binary, versionErr))
 	} else if orcVer >= 24 {
-		flags["--log-format"] = "text"
+		if supportsFlag(orc.Binary, "--log-format") {
+			flags["--log-format"] = "text"
+		}
 	}
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {
 		orc.proc.Args = append(orc.proc.Args, flag, value)
+	}
+	if versionErr == nil && orcVer >= 24 && supportsFlag(orc.Binary, "--log-structured") {
+		orc.proc.Args = append(orc.proc.Args, "--log-structured=false")
 	}
 
 	if !orc.NoOverride {

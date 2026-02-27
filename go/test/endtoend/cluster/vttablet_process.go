@@ -124,7 +124,12 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	)
 
 	if vttabletVer >= 24 {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
+		if supportsFlag(vttablet.Binary, "--log-format") {
+			vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
+		}
+		if supportsFlag(vttablet.Binary, "--log-structured") {
+			vttablet.proc.Args = append(vttablet.proc.Args, "--log-structured=false")
+		}
 	}
 
 	if *isCoverage {

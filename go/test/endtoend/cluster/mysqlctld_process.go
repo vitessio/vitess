@@ -62,7 +62,12 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	if versionErr != nil {
 		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
 	} else if mysqlctldVer >= 24 {
-		args = append(args, "--log-format", "text")
+		if supportsFlag(mysqlctld.Binary, "--log-format") {
+			args = append(args, "--log-format", "text")
+		}
+		if supportsFlag(mysqlctld.Binary, "--log-structured") {
+			args = append(args, "--log-structured=false")
+		}
 	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
@@ -89,7 +94,12 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	if versionErr != nil {
 		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
 	} else if mysqlctldVer >= 24 {
-		args = append(args, "--log-format", "text")
+		if supportsFlag(mysqlctld.Binary, "--log-format") {
+			args = append(args, "--log-format", "text")
+		}
+		if supportsFlag(mysqlctld.Binary, "--log-structured") {
+			args = append(args, "--log-structured=false")
+		}
 	}
 	if mysqlctld.SocketFile != "" {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation

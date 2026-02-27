@@ -65,7 +65,8 @@ var (
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
-	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
+	parallelInsertWorkers      = "--vreplication-parallel-insert-workers=4"
+	parallelReplicationWorkers = "--vreplication-parallel-replication-workers=4"
 
 	throttlerConfig = throttler.Config{Threshold: 15}
 )

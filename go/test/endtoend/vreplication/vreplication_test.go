@@ -282,6 +282,15 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	testBasicVreplicationWorkflow(t, "")
 }
 
+func TestVreplicationParallelApply(t *testing.T) {
+	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.4"
+	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.4"
+	extraVTTabletArgs = []string{
+		parallelReplicationWorkers,
+	}
+	testBasicVreplicationWorkflow(t, "")
+}
+
 func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	testVreplicationWorkflows(t, false, binlogRowImage)
 }

@@ -38,6 +38,7 @@ const beginStmtLen = int64(len("begin;"))
 type vdbClient struct {
 	binlogplayer.DBClient
 	stats            *binlogplayer.Stats
+	vreplicationID   int32
 	InTransaction    bool
 	startTime        time.Time
 	queries          []string
@@ -53,6 +54,12 @@ func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, rel
 		stats:            stats,
 		relayLogMaxItems: relayLogMaxItems,
 	}
+}
+
+func newVDBClientWithID(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int, vreplicationID int32) *vdbClient {
+	client := newVDBClient(dbclient, stats, relayLogMaxItems)
+	client.vreplicationID = vreplicationID
+	return client
 }
 
 func (vc *vdbClient) Begin() error {
@@ -97,6 +104,7 @@ func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	for _, err := vc.ExecuteFetchMulti(queries, -1); err != nil; {
+		log.Error(fmt.Sprintf("vreplication ExecuteFetchMulti failed: %v; query: %s", err, queries))
 		return err
 	}
 	vc.InTransaction = false
@@ -128,7 +136,12 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	} else {
 		vc.queries = append(vc.queries, query)
 	}
-	return vc.DBClient.ExecuteFetch(query, maxrows)
+	qr, err := vc.DBClient.ExecuteFetch(query, maxrows)
+	if err != nil {
+		id := vc.vreplicationID
+		log.Error(fmt.Sprintf("vreplication ExecuteFetch failed: stream=%d err=%v; query: %s", id, err, query))
+	}
+	return qr, err
 }
 
 // AddQueryToTrxBatch adds the query to the current transaction's query
@@ -157,8 +170,10 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	qrs, err := vc.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
+	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
+	qrs, err := vc.ExecuteFetchMulti(queries, -1)
 	if err != nil {
+		log.Error(fmt.Sprintf("vreplication ExecuteFetchMulti failed: %v; query: %s", err, queries))
 		return nil, err
 	}
 	vc.stats.TrxQueryBatchCount.Add("without_commit", 1)

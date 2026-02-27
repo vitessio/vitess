@@ -181,6 +181,7 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
 			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--vreplication-parallel-replication-workers=4",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			utils.GetFlagVariantForTests("--ddl-strategy"), "online",

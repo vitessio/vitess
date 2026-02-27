@@ -59,7 +59,12 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 	}
 	if mysqlctl.MajorVersion >= 24 {
-		args = append(args, "--log-format", "text")
+		if supportsFlag(mysqlctl.Binary, "--log-format") {
+			args = append(args, "--log-format", "text")
+		}
+		if supportsFlag(mysqlctl.Binary, "--log-structured") {
+			args = append(args, "--log-structured=false")
+		}
 	}
 	args = append(args, "init")
 	if mysqlctl.MajorVersion < 18 {
@@ -107,7 +112,12 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 	}
 	if mysqlctl.MajorVersion >= 24 {
-		args = append(args, "--log-format", "text")
+		if supportsFlag(mysqlctl.Binary, "--log-format") {
+			args = append(args, "--log-format", "text")
+		}
+		if supportsFlag(mysqlctl.Binary, "--log-structured") {
+			args = append(args, "--log-structured=false")
+		}
 	}
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
