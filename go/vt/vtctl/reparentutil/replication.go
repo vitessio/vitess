@@ -362,17 +362,13 @@ func stopReplicationAndBuildStatusMaps(
 	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
 	// extended when more partial-failure cases are supportable.
 	if len(errRecorder.Errors) == 1 {
-		err := errRecorder.Errors[0]
 		var tabletErr *tabletError
-		if errors.As(err, &tabletErr) {
+		if errors.As(errRecorder.Errors[0], &tabletErr) {
 			// Failure to reach the PRIMARY is expected, return early.
 			if tabletErr.Type == topodatapb.TabletType_PRIMARY {
 				return res, nil
 			}
 		}
-		return nil, vterrors.Wrapf(err, "received error from non-PRIMARY tablet type: %s (tablet alias: %s)",
-			tabletErr.Type.String(), topoproto.TabletAliasString(tabletErr.Alias),
-		)
 	}
 
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
