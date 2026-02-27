@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -206,6 +207,20 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
+// wrappedTabletError wraps an error with the tablet that produced it.
+type wrappedTabletError struct {
+	err    error
+	tablet *topodatapb.Tablet
+}
+
+func (e *wrappedTabletError) Error() string {
+	return e.err.Error()
+}
+
+func (e *wrappedTabletError) Unwrap() error {
+	return e.err
+}
+
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
@@ -243,6 +258,9 @@ func stopReplicationAndBuildStatusMaps(
 		var concurrencyErr concurrency.Error
 		var err error
 		defer func() {
+			if err != nil {
+				err = &wrappedTabletError{err: err, tablet: tabletInfo.Tablet}
+			}
 			concurrencyErr.Err = err
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
@@ -336,8 +354,20 @@ func stopReplicationAndBuildStatusMaps(
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
-	if len(errRecorder.Errors) <= 1 {
+	if len(errRecorder.Errors) == 0 {
 		return res, nil
+	}
+	if len(errRecorder.Errors) == 1 {
+		var tabletErr *wrappedTabletError
+		if errors.As(errRecorder.Errors[0], &tabletErr) {
+			if tabletErr.tablet.Type == topodatapb.TabletType_PRIMARY {
+				return res, nil
+			}
+			return nil, vterrors.Wrapf(errRecorder.Errors[0],
+				"single error not from a PRIMARY tablet, got %s tablet %s",
+				tabletErr.tablet.Type.String(), topoproto.TabletAliasString(tabletErr.tablet.Alias))
+		}
+		return nil, vterrors.Wrapf(errRecorder.Errors[0], "single error not from a PRIMARY tablet")
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)

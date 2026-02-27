@@ -430,7 +430,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:         false,
 		},
 		{
-			name:       "timing check with wait for all tablets",
+			name:       "primary timeout with wait for all tablets",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
@@ -478,7 +478,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				}, "zone1-0000000102": {
 					Tablet: &topodatapb.Tablet{
-						Type: topodatapb.TabletType_REPLICA,
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  102,
@@ -961,7 +961,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                true, // we get multiple errors, so we fail
 		},
 		{
-			name:       "stopReplicasTimeout exceeded",
+			name:       "primary timeout exceeds stopReplicasTimeout",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
@@ -988,7 +988,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
-						Type: topodatapb.TabletType_REPLICA,
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -1025,7 +1025,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name:       "one tablet fails to StopReplication",
+			name:       "replica failure to StopReplication is rejected",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
@@ -1079,7 +1079,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					Uid:  101,
 				},
 			}},
-			shouldErr: false,
+			shouldErr: true,
 		},
 		{
 			name:       "multiple tablets fail StopReplication",
