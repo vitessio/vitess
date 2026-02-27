@@ -259,9 +259,8 @@ func stopReplicationAndBuildStatusMaps(
 		var err error
 		defer func() {
 			if err != nil {
-				err = &wrappedTabletError{err: err, tablet: tabletInfo.Tablet}
+				concurrencyErr.Err = &wrappedTabletError{err: err, tablet: tabletInfo.Tablet}
 			}
-			concurrencyErr.Err = err
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
 		}()
