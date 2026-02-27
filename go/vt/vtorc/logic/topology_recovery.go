@@ -43,8 +43,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/util"
@@ -64,9 +66,9 @@ const (
 	FixReplicaRecoveryName                           string = "FixReplica"
 	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
 
-	// DemoteStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
+	// ReconcileStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
 	// in the topology but a newer primary has been elected.
-	DemoteStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
+	ReconcileStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
 )
 
 // RecoverySkipCode represents the reason for a skipped recovery.
@@ -161,9 +163,9 @@ const (
 	fixReplicaFunc
 	recoverErrantGTIDDetectedFunc
 
-	// demoteStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
-	// PRIMARY in the topology and should be demoted.
-	demoteStaleTopoPrimaryFunc
+	// reconcileStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
+	// PRIMARY in the topology and should be updated and demoted.
+	reconcileStaleTopoPrimaryFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -668,7 +670,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
 	case inst.StaleTopoPrimary:
-		recoveryFunc = demoteStaleTopoPrimaryFunc
+		recoveryFunc = reconcileStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
@@ -726,7 +728,7 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverErrantGTIDDetectedFunc:
 		return true
-	case demoteStaleTopoPrimaryFunc:
+	case reconcileStaleTopoPrimaryFunc:
 		return true
 	default:
 		return false
@@ -764,8 +766,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixReplica
 	case recoverErrantGTIDDetectedFunc:
 		return recoverErrantGTIDDetected
-	case demoteStaleTopoPrimaryFunc:
-		return demoteStaleTopoPrimary
+	case reconcileStaleTopoPrimaryFunc:
+		return reconcileStaleTopoPrimary
 	default:
 		return nil
 	}
@@ -801,8 +803,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixReplicaRecoveryName
 	case recoverErrantGTIDDetectedFunc:
 		return RecoverErrantGTIDDetectedName
-	case demoteStaleTopoPrimaryFunc:
-		return DemoteStaleTopoPrimaryRecoveryName
+	case reconcileStaleTopoPrimaryFunc:
+		return ReconcileStaleTopoPrimaryRecoveryName
 	default:
 		return ""
 	}
@@ -1311,10 +1313,21 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	return true, topologyRecovery, err
 }
 
-// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
-// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
-// to the current primary.
-func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+// reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of
+// PRIMARY. This can often happen when the demotion step during an EmergencyReparentShard fails or partially fails, and
+// the old primary remains as PRIMARY in the topology (and potentially still writable). This recovery will additionally
+// attempt to demote and set up replication on the stale primary, but only on a best-effort basis, i.e. the recovery
+// will succeed as long as the tablet's type is updated to REPLICA in the topology.
+//
+// The reason the demotion and replication setup happen on a best-effort basis is due to the fact that a stale topo
+// primary usually appears when an EmergencyReparentShard expectedly fails to reach a failed or degraded primary, and
+// therefore can't demote it completely. This means that the demotion and replication setup are likely to fail here
+// as well, as the old primary is likely still in a failed or degraded state.
+//
+// In the case that the tablet's type is updated to REPLICA and the best-effort steps fail, and the tablet does
+// recover eventually, other recoveries will complete the process, such as ReplicaIsWritable to set read-only, or
+// NotConnectedToPrimary to set up replication correctly.
+func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	alias := analysisEntry.AnalyzedInstanceAlias
 	aliasString := topoproto.TabletAliasString(alias)
 
@@ -1323,7 +1336,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	if topologyRecovery == nil {
 		logger.Warn("skipping recovery, active or recent recovery exists",
 			slog.String("tablet", aliasString),
-			slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 		)
 
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
@@ -1342,7 +1355,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
 			logger.Error(
 				"failed to resolve recovery",
-				slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+				slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 				slog.Any("error", err),
 			)
 		}
@@ -1354,45 +1367,67 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
-	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	var wg sync.WaitGroup
+
+	// Make sure the best-effort steps complete or timeout before we return.
+	defer wg.Wait()
+
+	// On a best-effort basis, attempt to demote the tablet and configure replication concurrently
+	// with the topology type update below. Failures here will not fail the overall recovery.
+	wg.Go(func() {
+		// Demote the tablet, forcing it to become read-only and drop pending transactions.
+		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
+			logger.Error("failed to demote stale primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
+
+		primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+		if err != nil {
+			logger.Error("failed to find shard primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+		if err != nil {
+			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
+
+		// Update the tablet's running type to REPLICA. This also updates the topology as a result, but we also
+		// do it independently below in case we can't reach the tablet.
+		if err := changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync); err != nil {
+			logger.Error("failed to change tablet type on tablet", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		logger.Info("successfully changed tablet type on tablet", slog.String("tablet", aliasString))
+
+		// Point the tablet's replication at the current primary.
+		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
+			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		logger.Info("successfully set replication source", slog.String("tablet", aliasString))
+	})
+
+	// Update the tablet's type directly in the topology to REPLICA.
+	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
 	if err != nil {
-		logger.Error("failed to find primary for shard",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
+		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen if
+		// we race with the goroutine above and it calls the `ChangeType` RPC before we update the topology. Any
+		// other error is considered a failure, and we'll try again next iteration.
+		if !topo.IsErrType(err, topo.NoUpdateNeeded) {
+			return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
+		}
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-	if err != nil {
-		logger.Error("failed to read durability policy",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
-	}
-
-	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = forceDemotePrimary(ctx, analyzedTablet)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
-	}
-	logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
-
-	// Set tablet to REPLICA in topology.
-	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
-	}
-
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
-	}
-
-	return true, topologyRecovery, err
+	logger.Info("successfully updated topo type to REPLICA", slog.String("tablet", aliasString))
+	return true, topologyRecovery, nil
 }
 
 // forceDemotePrimary calls the DemotePrimary RPC for the given tablet.

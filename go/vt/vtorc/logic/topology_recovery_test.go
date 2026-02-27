@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -35,7 +36,9 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -888,6 +891,170 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			if restoreStderr != nil {
 				restoreStderr()
 			}
+		})
+	}
+}
+
+// TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a
+// stale primary tablet to REPLICA, regardless of whether the best-effort demotion RPC to the tablet succeeds.
+func TestReconcileStaleTopoPrimary(t *testing.T) {
+	tests := []struct {
+		name string
+
+		// demotePrimaryErr is whether the DemotePrimary RPC should return an error.
+		demotePrimaryErr error
+
+		// demotePrimaryDelay is the delay the DemotePrimary RPC should take before returning.
+		demotePrimaryDelay time.Duration
+
+		// topoAlreadyReplica seeds the stale tablet in topo as REPLICA with no primary term.
+		topoAlreadyReplica bool
+	}{
+		{
+			name: "tablet reachable, demotion succeeds",
+		},
+		{
+			name:               "tablet unreachable, demotion times out",
+			demotePrimaryDelay: 30 * time.Second,
+		},
+		{
+			name:             "tablet reachable, demotion fails",
+			demotePrimaryErr: errors.New("injected demote error"),
+		},
+		{
+			name:               "topo already replica, no update needed",
+			demotePrimaryErr:   errors.New("injected demote error"),
+			topoAlreadyReplica: true,
+		},
+	}
+
+	orcDB, err := db.OpenVTOrc()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				// Clean tables from prior runs.
+				for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+					_, err = orcDB.Exec("delete from " + table)
+					require.NoError(t, err)
+				}
+
+				const (
+					keyspace = "ks"
+					shard    = "0"
+				)
+
+				// The real primary, has the newer PrimaryTermStartTime.
+				primaryTablet := &topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:             "primary",
+					MysqlHostname:        "primary",
+					MysqlPort:            3306,
+					Keyspace:             keyspace,
+					Shard:                shard,
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+					PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+				}
+
+				// The stale primary, has an older PrimaryTermStartTime
+				staleTablet := &topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:             "stale-primary",
+					MysqlHostname:        "stale-primary",
+					MysqlPort:            3306,
+					Keyspace:             keyspace,
+					Shard:                shard,
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{Seconds: 500},
+					PortMap:              map[string]int32{"vt": 15200, "grpc": 15201},
+				}
+
+				// Populate the VTOrc DB with the tablet records.
+				require.NoError(t, inst.SaveTablet(primaryTablet))
+				require.NoError(t, inst.SaveTablet(staleTablet))
+
+				// Store the durability policy so GetDurabilityPolicy succeeds.
+				keyspaceInfo := &topo.KeyspaceInfo{
+					Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+				}
+				keyspaceInfo.SetKeyspaceName(keyspace)
+				require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+				// Wire up memorytopo with the same tablets.
+				ctx := t.Context()
+
+				oldTS := ts
+				oldTMC := tmc
+				defer func() {
+					ts = oldTS
+					tmc = oldTMC
+				}()
+
+				ts = memorytopo.NewServer(ctx, "zone1")
+				require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+				require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+				if tt.topoAlreadyReplica {
+					staleTablet.Type = topodatapb.TabletType_REPLICA
+					staleTablet.PrimaryTermStartTime = nil
+				}
+
+				require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
+				require.NoError(t, ts.CreateTablet(ctx, staleTablet))
+
+				staleAlias := topoproto.TabletAliasString(staleTablet.Alias)
+
+				fakeTMC := &testutil.TabletManagerClient{
+					TopoServer: ts,
+					DemotePrimaryResults: map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						staleAlias: {Status: &replicationdatapb.PrimaryStatus{}, Error: tt.demotePrimaryErr},
+					},
+					ChangeTabletTypeResult: map[string]error{
+						staleAlias: nil,
+					},
+					SetReplicationSourceResults: map[string]error{
+						staleAlias: nil,
+					},
+				}
+
+				// Configure a delay so that DemotePrimary times out, if this test case has one.
+				if tt.demotePrimaryDelay > 0 {
+					fakeTMC.DemotePrimaryDelays = map[string]time.Duration{
+						staleAlias: tt.demotePrimaryDelay,
+					}
+				}
+
+				tmc = fakeTMC
+
+				analysisEntry := &inst.DetectionAnalysis{
+					Analysis:              inst.StaleTopoPrimary,
+					AnalyzedInstanceAlias: staleTablet.Alias,
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard,
+				}
+
+				logger := log.NewPrefixedLogger("test-stale-primary")
+				attempted, topologyRecovery, err := reconcileStaleTopoPrimary(ctx, analysisEntry, logger)
+
+				require.True(t, attempted, "recovery must be attempted")
+				require.NoError(t, err, "topo update must succeed")
+				require.NotNil(t, topologyRecovery, "topology recovery record must be returned")
+
+				// Verify that the stale tablet's topo record was changed to REPLICA.
+				updatedTablet, err := ts.GetTablet(ctx, staleTablet.Alias)
+				require.NoError(t, err)
+				require.Equal(t, topodatapb.TabletType_REPLICA, updatedTablet.Type, "stale primary must be updated to REPLICA in topo")
+
+				// Verify that the recovery row has been resolved.
+				activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+				require.NoError(t, err)
+				require.Empty(t, activeRecoveries, "recovery row must be resolved after reconcileStaleTopoPrimary returns")
+			})
 		})
 	}
 }
