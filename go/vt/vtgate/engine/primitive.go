@@ -178,7 +178,7 @@ type (
 		SetClientFoundRows(context.Context, bool) error
 		SetSkipQueryPlanCache(context.Context, bool) error
 		SetSQLSelectLimit(int64) error
-		SetTransactionMode(vtgatepb.TransactionMode)
+		SetTransactionMode(vtgatepb.TransactionMode) error
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
