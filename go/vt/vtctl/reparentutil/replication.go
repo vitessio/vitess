@@ -207,14 +207,14 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
-// tabletError wraps an error with the tablet that produced it.
-type tabletError struct {
-	*topodatapb.Tablet
-	err error
+// tabletAliasError wraps an error with the tablet alias that produced it.
+type tabletAliasError struct {
+	alias *topodatapb.TabletAlias
+	err   error
 }
 
 // Error returns the wrapped error.
-func (e *tabletError) Error() string {
+func (e *tabletAliasError) Error() string {
 	return e.err.Error()
 }
 
@@ -257,7 +257,10 @@ func stopReplicationAndBuildStatusMaps(
 		var err error
 		defer func() {
 			if err != nil {
-				concurrencyErr.Err = &tabletError{err: err, Tablet: tabletInfo.Tablet}
+				concurrencyErr.Err = &tabletAliasError{
+					alias: tabletInfo.GetAlias(),
+					err:   err,
+				}
 			}
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
@@ -360,10 +363,10 @@ func stopReplicationAndBuildStatusMaps(
 	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
 	// extended when more partial-failure cases are supportable.
 	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
-		var tabletErr *tabletError
+		var tabletErr *tabletAliasError
 		if errors.As(errRecorder.Errors[0], &tabletErr) {
 			// Failure to reach the PRIMARY tablet is expected, return early.
-			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.Alias) {
+			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.alias) {
 				return res, nil
 			}
 		}
