@@ -21,18 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
-	"math/rand/v2"
-=======
-	"log/slog"
 	"maps"
 	"math/rand/v2"
-	"net"
-	"net/http"
 	"slices"
-	"strconv"
 	"sync"
->>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	"sync/atomic"
 	"time"
 
@@ -1055,13 +1047,7 @@ func CheckAndRecover() {
 	})
 	for _, key := range shardKeys {
 		go func() {
-<<<<<<< HEAD
-			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-				log.Error(err)
-			}
-=======
 			recoverShardAnalyses(analysisByShard[key], executeCheckAndRecoverFunction)
->>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 		}()
 	}
 }

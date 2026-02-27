@@ -20,11 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-<<<<<<< HEAD
-=======
 	"strconv"
-	"strings"
->>>>>>> e7888dfa83 (`vtorc`: support analysis ordering, improve semi-sync rollout (#19427))
 	"testing"
 	"time"
 

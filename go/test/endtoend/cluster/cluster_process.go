@@ -60,9 +60,10 @@ import (
 
 // DefaultCell : If no cell name is passed, then use following
 const (
-	DefaultCell      = "zone1"
-	DefaultStartPort = 6700
-	DefaultVttestEnv = "VTTEST=endtoend"
+	DefaultCell         = "zone1"
+	DefaultStartPort    = 6700
+	DefaultVttestEnv    = "VTTEST=endtoend"
+	DefaultVtorcsByCell = 1
 )
 
 var (
@@ -298,7 +299,6 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 }
 
 func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
 		Name:             fmt.Sprintf("%s_routed", keyspace.Name),
@@ -806,7 +806,7 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 		// path/to/whatever exists
 		cluster.ReusingVTDATAROOT = true
 	} else {
-		err = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+		err = createDirectory(cluster.CurrentVTDATAROOT, 0o700)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1160,7 +1160,8 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 
 // StartVtbackup starts a vtbackup
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
-	keyspace string, shard string, cell string, extraArgs ...string) error {
+	keyspace string, shard string, cell string, extraArgs ...string,
+) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
@@ -1175,7 +1176,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process
@@ -1191,7 +1191,6 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
 		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
-
 		if err != nil {
 			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
 			continue
@@ -1214,7 +1213,7 @@ const portFileTimeout = 1 * time.Hour
 // If yes, then return that port, and save port + 200 in the same file
 // here, assumptions is 200 ports might be consumed for all tests in a package
 func getPort() int {
-	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0644)
+	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		panic(err)
 	}
