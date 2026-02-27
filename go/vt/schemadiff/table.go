@@ -2107,7 +2107,7 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 	optionOrder := func(opt sqlparser.AlterOption) int {
 		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			if opt.Type == sqlparser.ForeignKeyType {
+			if opt.Type == sqlparser.ForeignKeyType || opt.Type == sqlparser.ConstraintType {
 				return 1
 			}
 			return 2
@@ -2267,13 +2267,25 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType, sqlparser.ConstraintType:
 				for i, constraint := range c.TableSpec.Constraints {
-					if strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
-						found = true
-						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
-						break
+					if !strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
+						continue
 					}
+					switch opt.Type {
+					case sqlparser.ForeignKeyType:
+						if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); !ok {
+							continue
+						}
+					case sqlparser.CheckKeyType:
+						if _, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition); !ok {
+							continue
+						}
+					case sqlparser.ConstraintType:
+					}
+					found = true
+					c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
+					break
 				}
 			default:
 				return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
