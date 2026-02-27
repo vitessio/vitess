@@ -17,6 +17,11 @@ limitations under the License.
 package primaryfailure
 
 import (
+	"bufio"
+	"fmt"
+	"os"
+	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -358,8 +363,6 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	err := curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
-	recoveryStart := time.Now()
-
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -373,9 +376,14 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
-	// Verify that recovery completes within the remote-operation-timeout (10s).
-	recoveryDuration := time.Since(recoveryStart)
-	assert.Less(t, recoveryDuration.Seconds(), 9.5)
+	// assert that it takes less than `remote-operation-timeout` to recover from `DeadPrimary`
+	// use the value provided in `remote-operation-timeout` flag to compare with.
+	// We are testing against 9.5 seconds to be safe and prevent flakiness.
+	//
+	// TODO: this is really flimsy since it relies on parsing VTOrc's logs and assumes a specific
+	// log format. We should change this to something more robust.
+	d := recoveryDuration(t, vtOrcProcess, "DeadPrimary", keyspace.Name, shard0.Name)
+	assert.Less(t, d.Seconds(), 9.5)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -851,4 +859,62 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
+}
+
+// recoveryDuration returns the duration of the actual recovery execution by parsing VTOrc's log
+// for the given analysis code and shard.
+func recoveryDuration(t *testing.T, vtorcProcess *cluster.VTOrcProcess, analysisCode string, keyspace string, shard string) time.Duration {
+	t.Helper()
+
+	logPath := path.Join(vtorcProcess.LogDir, vtorcProcess.LogFileName)
+	f, err := os.Open(logPath)
+	require.NoError(t, err, "failed to open VTOrc log file %s", logPath)
+	t.Cleanup(func() { f.Close() })
+
+	recoveryPrefix := fmt.Sprintf("Recovery for %s on %s/%s", analysisCode, keyspace, shard)
+	startMarker := "proceeding with recovery on"
+	endMarker := "Recovery succeeded"
+
+	var startTime, endTime time.Time
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, recoveryPrefix) {
+			continue
+		}
+
+		ts, ok := parseLogTimestamp(line)
+		if !ok {
+			continue
+		}
+
+		if strings.Contains(line, startMarker) {
+			startTime = ts
+		} else if strings.Contains(line, endMarker) {
+			endTime = ts
+		}
+	}
+
+	require.NoError(t, scanner.Err())
+	require.False(t, startTime.IsZero(), "could not find recovery start log line for %s", analysisCode)
+	require.False(t, endTime.IsZero(), "could not find recovery succeeded log line for %s", analysisCode)
+	require.False(t, endTime.Before(startTime), "recovery end time %v is before start time %v", endTime, startTime)
+
+	return endTime.Sub(startTime)
+}
+
+// parseLogTimestamp parses the timestamp from the first three fields of a VTOrc text log line.
+// This assumes that the `--log-format` is `text`, which is the default for tests.
+func parseLogTimestamp(line string) (time.Time, bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		return time.Time{}, false
+	}
+
+	t, err := time.Parse("2006-01-02 15:04:05.000 MST", fields[0]+" "+fields[1]+" "+fields[2])
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return t, true
 }
