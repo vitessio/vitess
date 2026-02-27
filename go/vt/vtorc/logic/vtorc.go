@@ -201,8 +201,10 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoverInstanceTimings.Add("Instance", instanceLatency)
 	discoverInstanceTimings.Add("Other", otherLatency)
 
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	if err != nil {
+		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+	} else {
+		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
 	}
 
 	if instance == nil {
@@ -217,7 +219,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		}
 		_ = discoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
