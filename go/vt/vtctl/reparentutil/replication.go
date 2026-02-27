@@ -207,17 +207,17 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
-// wrappedTabletError wraps an error with the tablet that produced it.
-type wrappedTabletError struct {
-	err    error
-	tablet *topodatapb.Tablet
+// tabletError wraps an error with the tablet that produced it.
+type tabletError struct {
+	*topodatapb.Tablet
+	err error
 }
 
-func (e *wrappedTabletError) Error() string {
+func (e *tabletError) Error() string {
 	return e.err.Error()
 }
 
-func (e *wrappedTabletError) Unwrap() error {
+func (e *tabletError) Unwrap() error {
 	return e.err
 }
 
@@ -259,7 +259,7 @@ func stopReplicationAndBuildStatusMaps(
 		var err error
 		defer func() {
 			if err != nil {
-				concurrencyErr.Err = &wrappedTabletError{err: err, tablet: tabletInfo.Tablet}
+				concurrencyErr.Err = &tabletError{err: err, Tablet: tabletInfo.Tablet}
 			}
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
@@ -351,23 +351,29 @@ func stopReplicationAndBuildStatusMaps(
 		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
 		NumErrorsToWaitFor: numErrorsToWaitFor,
 	}
-
 	errRecorder := errgroup.Wait(groupCancel, errChan)
+
+	// Exit early if we encountered no errors.
 	if len(errRecorder.Errors) == 0 {
 		return res, nil
 	}
+
+	// If there are recorded errors, confirm there is a single error from the PRIMARY,
+	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
+	// extended when more partial-failure cases are supportable.
 	if len(errRecorder.Errors) == 1 {
-		var tabletErr *wrappedTabletError
-		if errors.As(errRecorder.Errors[0], &tabletErr) {
-			if tabletErr.tablet.Type == topodatapb.TabletType_PRIMARY {
+		err := errRecorder.Errors[0]
+		var tabletErr *tabletError
+		if errors.As(err, &tabletErr) {
+			if tabletErr.Type == topodatapb.TabletType_PRIMARY {
 				return res, nil
 			}
-			return nil, vterrors.Wrapf(errRecorder.Errors[0],
-				"single error not from a PRIMARY tablet, got %s tablet %s",
-				tabletErr.tablet.Type.String(), topoproto.TabletAliasString(tabletErr.tablet.Alias))
 		}
-		return nil, vterrors.Wrapf(errRecorder.Errors[0], "single error not from a PRIMARY tablet")
+		return nil, vterrors.Wrapf(err, "received error from non-PRIMARY tablet type %s, tablet %s",
+			tabletErr.Type.String(), topoproto.TabletAliasString(tabletErr.Alias),
+		)
 	}
+
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
