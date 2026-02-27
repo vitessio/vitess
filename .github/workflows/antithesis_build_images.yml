@@ -1,0 +1,55 @@
+name: Build and Push Antithesis Images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: us-central1-docker.pkg.dev
+  REPOSITORY: molten-verve-216720/vitess-repository
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log into Antithesis registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.ANTITHESIS_GAR_KEY }}
+
+      - name: Build and push config image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./test/antithesis/compose
+          file: ./test/antithesis/compose/Dockerfile.config
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:${{ github.sha }}
+
+      - name: Build and push client image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./test/antithesis/compose/antithesis-client
+          file: ./test/antithesis/compose/antithesis-client/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:${{ github.sha }}
+
+      - name: Build and push mysql image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./test/antithesis/compose/external_db/mysql
+          file: ./test/antithesis/compose/external_db/mysql/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:${{ github.sha }}
