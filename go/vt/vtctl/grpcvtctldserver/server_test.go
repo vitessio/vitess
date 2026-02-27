@@ -4799,7 +4799,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				},
 			},
 			expectEventsToOccur: true,
-			shouldErr:           false,
+			shouldErr:           true,
 		},
 		{
 			// Note: this is testing the error-handling done in
