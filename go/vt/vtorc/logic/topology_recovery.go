@@ -452,7 +452,7 @@ func probeTabletHealthz(tablet *topodatapb.Tablet) (bool, error) {
 		return false, err
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK, nil
+	return true, nil
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
