@@ -97,8 +97,7 @@ func TestMainCommandMetadata(t *testing.T) {
 func TestCheckCellFlags_NilServer(t *testing.T) {
 	ctx := context.Background()
 	err := CheckCellFlags(ctx, nil, "c1", "c1")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "topo server cannot be nil") // nil server should be rejected
+	require.ErrorContains(t, err, "topo server cannot be nil") // nil server should be rejected
 }
 
 func TestCheckCellFlags_GetTopoServerError(t *testing.T) {
@@ -107,8 +106,7 @@ func TestCheckCellFlags_GetTopoServerError(t *testing.T) {
 	passthrough.TopoServerError = errors.New("topo unreachable")
 
 	err := CheckCellFlags(ctx, passthrough, "c1", "c1")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unable to create gateway") // GetTopoServer failure should be wrapped
+	require.ErrorContains(t, err, "Unable to create gateway") // GetTopoServer failure should be wrapped
 	require.ErrorContains(t, err, "topo unreachable")
 }
 
@@ -132,8 +130,7 @@ func TestCheckCellFlags_EmptyCell(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "", "c1")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cell flag must be set") // empty cell should be rejected
+	require.ErrorContains(t, err, "cell flag must be set") // empty cell should be rejected
 }
 
 func TestCheckCellFlags_CellNotInTopo(t *testing.T) {
@@ -143,9 +140,8 @@ func TestCheckCellFlags_CellNotInTopo(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "bad", "c1")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "does not exist in topo") // cell should exist in topo
-	require.Contains(t, err.Error(), "bad")
+	require.ErrorContains(t, err, "does not exist in topo") // cell should exist in topo
+	require.ErrorContains(t, err, "bad")
 }
 
 func TestCheckCellFlags_CellsToWatchInvalidCell(t *testing.T) {
@@ -155,9 +151,8 @@ func TestCheckCellFlags_CellsToWatchInvalidCell(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", "c1,bad")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not valid") // cells_to_watch entries should be in topo
-	require.Contains(t, err.Error(), "Available cells")
+	require.ErrorContains(t, err, "is not valid") // cells_to_watch entries should be in topo
+	require.ErrorContains(t, err, "Available cells")
 }
 
 func TestCheckCellFlags_CellsToWatchEmpty(t *testing.T) {
@@ -167,8 +162,7 @@ func TestCheckCellFlags_CellsToWatchEmpty(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", "")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cells_to_watch flag cannot be empty") // empty string should fail
+	require.ErrorContains(t, err, "cells_to_watch flag cannot be empty") // empty string should fail
 }
 
 func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
@@ -178,8 +172,7 @@ func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", ",")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cells_to_watch flag cannot be empty") // comma-only should count as empty
+	require.ErrorContains(t, err, "cells_to_watch flag cannot be empty") // comma-only should count as empty
 }
 
 func TestCheckCellFlags_Success(t *testing.T) {
