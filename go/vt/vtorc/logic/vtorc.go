@@ -59,13 +59,8 @@ var (
 	discoveryWorkersGauge              = stats.NewGauge("DiscoveryWorkers", "Number of discovery workers")
 	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
 
-<<<<<<< HEAD
 	discoverInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
 	discoverInstanceTimings        = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoverInstanceTimingsActions...)
-=======
-	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
-	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
->>>>>>> 9461e7190d (`vtorc`: improve logging in `DiscoverInstance`, remove old metric (#19010))
 )
 
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
@@ -202,23 +197,14 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
-<<<<<<< HEAD
 	discoverInstanceTimings.Add("Backend", backendLatency)
 	discoverInstanceTimings.Add("Instance", instanceLatency)
 	discoverInstanceTimings.Add("Other", otherLatency)
-
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v, err - %v", instance, err)
-=======
-	discoveryInstanceTimings.Add("Backend", backendLatency)
-	discoveryInstanceTimings.Add("Instance", instanceLatency)
-	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
 		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
 	} else {
 		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
->>>>>>> 9461e7190d (`vtorc`: improve logging in `DiscoverInstance`, remove old metric (#19010))
 	}
 
 	if instance == nil {
