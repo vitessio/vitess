@@ -365,11 +365,12 @@ func stopReplicationAndBuildStatusMaps(
 		err := errRecorder.Errors[0]
 		var tabletErr *tabletError
 		if errors.As(err, &tabletErr) {
+			// Failure to reach the PRIMARY is expected, return early.
 			if tabletErr.Type == topodatapb.TabletType_PRIMARY {
 				return res, nil
 			}
 		}
-		return nil, vterrors.Wrapf(err, "received error from non-PRIMARY tablet type %s, tablet %s",
+		return nil, vterrors.Wrapf(err, "received error from non-PRIMARY tablet type: %s (tablet alias: %s)",
 			tabletErr.Type.String(), topoproto.TabletAliasString(tabletErr.Alias),
 		)
 	}
