@@ -382,6 +382,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("active_only", req.ActiveOnly)
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
+	span.Annotate("summary_only", req.SummaryOnly)
 
 	w := &workflowFetcher{
 		ts:     s.ts,
@@ -395,9 +396,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil, err
 	}
 
-	copyStatesByShardStreamId, err := w.fetchCopyStatesByShardStream(ctx, workflowsByShard)
-	if err != nil {
-		return nil, err
+	var copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState
+	if !req.SummaryOnly {
+		copyStatesByShardStreamId, err = w.fetchCopyStatesByShardStream(ctx, workflowsByShard)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	workflows, err := w.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
