@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -38,16 +39,12 @@ func TestURLPrefix(t *testing.T) {
 func TestHandleFunc(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
 	go func() {
 		err := HTTPServe(listener)
-		if err != nil {
-			t.Errorf("HTTPServe returned: %v", err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	ebd := NewExporter("", "")
