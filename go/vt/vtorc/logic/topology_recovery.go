@@ -1418,7 +1418,12 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Update the tablet's type directly in the topology to REPLICA.
 	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
 	if err != nil {
-		return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
+		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen if
+		// we race with the goroutine above and it calls the `ChangeType` RPC before we update the topology. Any
+		// other error is considered a failure, and we'll try again next iteration.
+		if !topo.IsErrType(err, topo.NoUpdateNeeded) {
+			return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
+		}
 	}
 
 	logger.Info("successfully updated topo type to REPLICA", slog.String("tablet", aliasString))

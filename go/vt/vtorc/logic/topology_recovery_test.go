@@ -906,6 +906,9 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 
 		// demotePrimaryDelay is the delay the DemotePrimary RPC should take before returning.
 		demotePrimaryDelay time.Duration
+
+		// topoAlreadyReplica seeds the stale tablet in topo as REPLICA with no primary term.
+		topoAlreadyReplica bool
 	}{
 		{
 			name: "tablet reachable, demotion succeeds",
@@ -917,6 +920,11 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 		{
 			name:             "tablet reachable, demotion fails",
 			demotePrimaryErr: errors.New("injected demote error"),
+		},
+		{
+			name:               "topo already replica, no update needed",
+			demotePrimaryErr:   errors.New("injected demote error"),
+			topoAlreadyReplica: true,
 		},
 	}
 
@@ -987,6 +995,12 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 				ts = memorytopo.NewServer(ctx, "zone1")
 				require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
 				require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+				if tt.topoAlreadyReplica {
+					staleTablet.Type = topodatapb.TabletType_REPLICA
+					staleTablet.PrimaryTermStartTime = nil
+				}
+
 				require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
 				require.NoError(t, ts.CreateTablet(ctx, staleTablet))
 
