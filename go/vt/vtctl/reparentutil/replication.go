@@ -213,12 +213,9 @@ type tabletError struct {
 	err error
 }
 
+// Error returns the wrapped error.
 func (e *tabletError) Error() string {
 	return e.err.Error()
-}
-
-func (e *tabletError) Unwrap() error {
-	return e.err
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -230,6 +227,7 @@ func stopReplicationAndBuildStatusMaps(
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	primary *topodatapb.Tablet,
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
@@ -361,11 +359,11 @@ func stopReplicationAndBuildStatusMaps(
 	// If there are recorded errors, confirm there is a single error from the PRIMARY,
 	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
 	// extended when more partial-failure cases are supportable.
-	if len(errRecorder.Errors) == 1 {
+	if primary != nil && len(errRecorder.Errors) == 1 {
 		var tabletErr *tabletError
 		if errors.As(errRecorder.Errors[0], &tabletErr) {
-			// Failure to reach the PRIMARY is expected, return early.
-			if tabletErr.Type == topodatapb.TabletType_PRIMARY {
+			// Failure to reach the PRIMARY tablet is expected, return early.
+			if topoproto.TabletAliasEqual(primary.Alias, tabletErr.Alias) {
 				return res, nil
 			}
 		}
