@@ -162,14 +162,14 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 
 func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, 0)
-	mqr, more, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
+	mqr, status, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
 	if err != nil {
 		dc.handleError(err)
 		return nil, err
 	}
 	results = append(results, mqr)
-	for more {
-		mqr, more, _, err = dc.dbConn.ReadQueryResult(maxrows, false)
+	for mysql.IsMoreResultsExists(status) {
+		mqr, status, _, err = dc.dbConn.ReadQueryResult(maxrows, false)
 		if err != nil {
 			dc.handleError(err)
 			return nil, err
