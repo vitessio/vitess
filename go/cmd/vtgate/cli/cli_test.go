@@ -95,13 +95,13 @@ func TestMainCommandMetadata(t *testing.T) {
 // GetKnownCells, and memorytopo doesn't give us that.
 
 func TestCheckCellFlags_NilServer(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	err := CheckCellFlags(ctx, nil, "c1", "c1")
 	require.ErrorContains(t, err, "topo server cannot be nil") // nil server should be rejected
 }
 
 func TestCheckCellFlags_GetTopoServerError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	passthrough := srvtopotest.NewPassthroughSrvTopoServer()
 	passthrough.TopoServerError = errors.New("topo unreachable")
 
@@ -111,7 +111,7 @@ func TestCheckCellFlags_GetTopoServerError(t *testing.T) {
 }
 
 func TestCheckCellFlags_GetKnownCellsError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -124,7 +124,7 @@ func TestCheckCellFlags_GetKnownCellsError(t *testing.T) {
 }
 
 func TestCheckCellFlags_EmptyCell(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -134,7 +134,7 @@ func TestCheckCellFlags_EmptyCell(t *testing.T) {
 }
 
 func TestCheckCellFlags_CellNotInTopo(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -145,7 +145,7 @@ func TestCheckCellFlags_CellNotInTopo(t *testing.T) {
 }
 
 func TestCheckCellFlags_CellsToWatchInvalidCell(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -156,7 +156,7 @@ func TestCheckCellFlags_CellsToWatchInvalidCell(t *testing.T) {
 }
 
 func TestCheckCellFlags_CellsToWatchEmpty(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -166,7 +166,7 @@ func TestCheckCellFlags_CellsToWatchEmpty(t *testing.T) {
 }
 
 func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -176,7 +176,7 @@ func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
 }
 
 func TestCheckCellFlags_Success(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1", "c2")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
@@ -186,7 +186,7 @@ func TestCheckCellFlags_Success(t *testing.T) {
 }
 
 func TestCheckCellFlags_SuccessMultipleCells(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c1", "c2")
 	defer ts.Close()
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
