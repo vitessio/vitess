@@ -215,7 +215,15 @@ type tabletAliasError struct {
 
 // Error returns the wrapped error.
 func (e *tabletAliasError) Error() string {
+	if e.err == nil {
+		return ""
+	}
 	return e.err.Error()
+}
+
+// GetAlias returns the tablet alias that produced the error.
+func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
+	return e.alias
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -366,7 +374,7 @@ func stopReplicationAndBuildStatusMaps(
 		var tabletErr *tabletAliasError
 		if errors.As(errRecorder.Errors[0], &tabletErr) {
 			// Failure to reach the PRIMARY tablet is expected, return early.
-			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.alias) {
+			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
 				return res, nil
 			}
 		}
