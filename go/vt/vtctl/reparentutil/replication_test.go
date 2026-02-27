@@ -1046,7 +1046,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name:       "replica failure to StopReplication is rejected",
+			name:       "replica failure to StopReplication returns an error",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
