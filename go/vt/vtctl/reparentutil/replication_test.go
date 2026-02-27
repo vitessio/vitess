@@ -277,6 +277,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		durability               string
 		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
 		tabletMap                map[string]*topo.TabletInfo
+		primary                  *topodatapb.Tablet
 		stopReplicasTimeout      time.Duration
 		ignoredTablets           sets.Set[string]
 		tabletToWaitFor          *topodatapb.TabletAlias
@@ -484,6 +485,13 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 							Uid:  102,
 						},
 					},
+				},
+			},
+			primary: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
 				},
 			},
 			ignoredTablets: sets.New[string](),
@@ -814,6 +822,13 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primary: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
@@ -889,6 +904,13 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primary: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
@@ -954,6 +976,13 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primary: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 			ignoredTablets:           sets.New[string](),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
@@ -1003,6 +1032,13 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 							Uid:  101,
 						},
 					},
+				},
+			},
+			primary: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
 				},
 			},
 			stopReplicasTimeout: time.Millisecond * 5,
@@ -1303,7 +1339,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			durability, err := policy.GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 			startTime := time.Now()
-			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, tt.waitForAllTablets, logger)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.primary, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, tt.waitForAllTablets, logger)
 			totalTimeSpent := time.Since(startTime)
 			if tt.timeSpent != 0 {
 				assert.Greater(t, totalTimeSpent, tt.timeSpent)

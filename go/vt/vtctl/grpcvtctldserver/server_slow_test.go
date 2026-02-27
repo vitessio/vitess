@@ -180,7 +180,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				},
 			},
 			expectEventsToOccur: true,
-			shouldErr:           true,
+			shouldErr:           false,
 		},
 		{
 			name: "nil WaitReplicasTimeout and request takes 31 seconds is error",
