@@ -43,8 +43,7 @@ func TestHandleFunc(t *testing.T) {
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
 	go func() {
-		err := HTTPServe(listener)
-		assert.NoError(t, err)
+		_ = HTTPServe(listener) // returns with expected error when listener closes
 	}()
 
 	ebd := NewExporter("", "")
