@@ -23,6 +23,14 @@ package replicationdata;
 
 import "topodata.proto";
 
+// Capability represents the replication functionality a tablet supports.
+enum Capability {
+  // ANY reflects a tablet with any replication capability.
+  ANY = 0;
+  // MYSQLGTID reflects a tablet with MySQL GTID-based replication.
+  MYSQLGTID = 1;
+}
+
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
 // flavor-specific command and parsed into a Position and fields.
 message Status {

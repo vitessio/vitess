@@ -190,7 +190,7 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
-	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_MYSQLGTID)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Before)
 	require.True(t, resp.Before.SemiSyncReplicaEnabled)

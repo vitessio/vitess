@@ -153,13 +153,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
+		candidateInfoMap           map[string]*CandidateInfo
 		validCandidates            map[string]*RelayLogPositions
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
 		betterCandidate            *topodatapb.Tablet
 		isIdeal                    bool
-		isGTIDBased                bool
 	)
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
@@ -216,12 +216,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// find the positions of all the valid candidates.
-	validCandidates, isGTIDBased, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
+	validCandidates, candidateInfoMap, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
 	if err != nil {
 		return err
 	}
-	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
+
+	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP, and any tablet
+	// using non-GTID replication.
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap, candidateInfoMap, erp.logger)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
@@ -233,12 +235,15 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	// For GTID based replication, we will run errant GTID detection.
-	if isGTIDBased {
+	// Run errant GTID detection only if we have non-zero relay log positions.
+	// For fresh clusters with no replication history, all positions will be zero and we skip this step.
+	if hasNonZeroRelayLogPositions(validCandidates) {
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
 		}
+	} else {
+		erp.logger.Infof("Skipping errant GTID detection because all candidates have zero relay log positions (likely a fresh cluster initialization)")
 	}
 
 	// Find the intermediate source for replication that we want other tablets to replicate from.
@@ -781,6 +786,18 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	}
 
 	return notPreferredValidTablets, nil
+}
+
+// hasNonZeroRelayLogPositions checks if any candidate has non-zero relay log positions.
+// Returns false if all candidates have zero positions, which is typical for fresh clusters
+// that have never had replication set up.
+func hasNonZeroRelayLogPositions(validCandidates map[string]*RelayLogPositions) bool {
+	for _, position := range validCandidates {
+		if !position.IsZero() {
+			return true
+		}
+	}
+	return false
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.

@@ -315,16 +315,53 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPo
 	return validTablets, tabletPositions, nil
 }
 
+// isGTIDBasedShard uses a shard PRIMARY or REPLICA to determine if the shard is using GTID-based replication.
+func isGTIDBasedShard(tabletMap map[string]*topo.TabletInfo, candidateInfoMap map[string]*CandidateInfo) bool {
+	for alias, tablet := range tabletMap {
+		switch tablet.Type {
+		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+			candidateInfo, ok := candidateInfoMap[alias]
+			if !ok {
+				continue
+			}
+			if candidateInfo.IsGTIDBased {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) (map[string]*RelayLogPositions, error) {
+func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, candidateInfoMap map[string]*CandidateInfo,
+	logger logutil.Logger,
+) (map[string]*RelayLogPositions, error) {
+	isGTIDBasedShard := isGTIDBasedShard(tabletMap, candidateInfoMap)
+	// Fail early if 100% of candidates are not GTID-based. GTIDs is a requirement of Vitess.
+	if len(tabletMap) > 0 && !isGTIDBasedShard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shards without GTID-based candidates are unsupported")
+	}
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {
-		candidateInfo, ok := tabletMap[candidate]
+		topoTabletInfo, ok := tabletMap[candidate]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this is an impossible situation", candidate)
+		}
+		candidateInfo, ok := candidateInfoMap[candidate]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the candidate info map; this is an impossible situation", candidate)
+		}
+		// We ignore file-based replicas, unless they are a semi-sync acker, in which case we are no longer certain
+		// it is safe to continue, as the file-based replica may contain the most up-to-date changes.
+		if !candidateInfo.IsGTIDBased {
+			if candidateInfo.IsSemiSyncReplica {
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v is a file-based replica with semi-sync enabled. file-based replicas with semi-sync are unsupported in a majority GTID-based shard", candidate)
+			}
+			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not have GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
+			continue
 		}
 		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
-		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
+		if topoproto.IsTypeInList(topoTabletInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
 			continue
 		}
 		restrictedValidCandidates[candidate] = position
