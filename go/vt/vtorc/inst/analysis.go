@@ -21,6 +21,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -84,12 +85,12 @@ const (
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
-type ReplicationAnalysisHints struct {
+type DetectionAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// ReplicationAnalysis notes analysis on replication chain status, per instance
-type ReplicationAnalysis struct {
+// DetectionAnalysis notes analysis on replication chain status, per instance
+type DetectionAnalysis struct {
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
 
@@ -114,11 +115,13 @@ type ReplicationAnalysis struct {
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	ReplicationStopped                        bool
 	ErrantGTID                                string
 	ReplicaNetTimeout                         int32
 	HeartbeatInterval                         float64
 	Analysis                                  AnalysisCode
+	AnalysisMatchedProblems                   []*DetectionAnalysisProblemMeta
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
@@ -147,11 +150,21 @@ type ReplicationAnalysis struct {
 	IsDiskStalled                             bool
 }
 
-func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+// hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
+}
+
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
-		ReplicationAnalysis
+		DetectionAnalysis
 	}{}
-	i.ReplicationAnalysis = *replicationAnalysis
+	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
 }

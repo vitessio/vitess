@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
@@ -105,7 +106,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.DetectionAnalysis{Analysis: tt.prevAnalysisCode}, &inst.DetectionAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -135,7 +136,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := &inst.ReplicationAnalysis{
+	analysisEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -185,11 +186,11 @@ func TestRecoveryRegistration(t *testing.T) {
 	require.NoError(t, err)
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
-	primaryAnalysisEntry := inst.ReplicationAnalysis{
+	primaryAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
 		Analysis:              inst.ReplicationStopped,
 	}
-	replicaAnalysisEntry := inst.ReplicationAnalysis{
+	replicaAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
@@ -310,4 +311,35 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 		})
 	}
+}
+
+func TestRecoverShardAnalyses(t *testing.T) {
+	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
+	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
+	// medium priority with no shard-wide action or before/after dependencies,
+	// so they run concurrently.
+	analyses := []*inst.DetectionAnalysis{
+		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: "replica1"},
+		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: "primary1"},
+		{Analysis: inst.ReplicaIsWritable, AnalyzedInstanceAlias: "replica2"},
+		{Analysis: inst.PrimaryHasPrimary, AnalyzedInstanceAlias: "primary2"},
+	}
+
+	var mu sync.Mutex
+	var order []inst.AnalysisCode
+	recoverFunc := func(entry *inst.DetectionAnalysis) error {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, entry.Analysis)
+		return nil
+	}
+
+	recoverShardAnalyses(analyses, recoverFunc)
+
+	require.Len(t, order, 4)
+	// Ordered recoveries must come first, in their original order.
+	require.Equal(t, inst.DeadPrimary, order[0])
+	require.Equal(t, inst.PrimaryHasPrimary, order[1])
+	// Concurrent recoveries come after, in any order.
+	require.ElementsMatch(t, []inst.AnalysisCode{inst.ReplicationStopped, inst.ReplicaIsWritable}, order[2:])
 }
