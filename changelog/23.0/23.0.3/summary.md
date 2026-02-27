@@ -24,6 +24,6 @@ This is a fix for the following security advisory and associated CVE
 - Advisory: <https://github.com/vitessio/vitess/security/advisories/GHSA-r492-hjgh-c9gw>
 - CVE: <https://www.cve.org/CVERecord?id=CVE-2026-27969>
 
-We now prevent a common [Path Traversal attack](https://owasp.org/www-community/attacks/Path_Traversal) that someone with write access to backup storage could use to escape the target restore directory and write files to arbitrary filesystem paths.
+We now prevent a common [Path Traversal attack](https://owasp.org/www-community/attacks/Path_Traversal) that someone with write access to backup storage could use to escape the target restore directory and write files to arbitrary filesystem paths via modifications to the `MANIFEST`.
 
 See [#19470](https://github.com/vitessio/vitess/pull/19470) for details.
