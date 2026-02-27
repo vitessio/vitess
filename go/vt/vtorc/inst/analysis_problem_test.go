@@ -76,12 +76,30 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 						Priority:    detectionAnalysisPriorityShardWideAction,
 					},
 				},
+				{
+					Meta: &DetectionAnalysisProblemMeta{
+						Analysis:    ReplicaSemiSyncMustNotBeSet,
+						Description: "should be after PrimarySemiSyncMustNotBeSet, has an after dependency",
+						Priority:    detectionAnalysisPriorityMedium,
+					},
+					AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
+				},
+				{
+					Meta: &DetectionAnalysisProblemMeta{
+						Analysis:    PrimarySemiSyncMustNotBeSet,
+						Description: "should be before ReplicaSemiSyncMustNotBeSet, has a before dependency",
+						Priority:    detectionAnalysisPriorityMedium,
+					},
+					BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
+				},
 			},
 			postSortByAnalysis: []AnalysisCode{
 				DeadPrimary,
 				PrimaryIsReadOnly,
 				ReplicaSemiSyncMustBeSet,
 				PrimarySemiSyncMustBeSet,
+				PrimarySemiSyncMustNotBeSet,
+				ReplicaSemiSyncMustNotBeSet,
 				InvalidReplica,
 				InvalidReplica,
 			},
@@ -136,6 +154,20 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			problem: &DetectionAnalysisProblem{
 				Meta:          &DetectionAnalysisProblemMeta{},
 				AfterAnalyses: []AnalysisCode{DeadPrimary},
+			},
+			expected: true,
+		},
+		{
+			name: "referenced by another problem's BeforeAnalyses",
+			problem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
+			},
+			expected: true,
+		},
+		{
+			name: "referenced by another problem's AfterAnalyses",
+			problem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
 			},
 			expected: true,
 		},
@@ -200,7 +232,7 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "before dependency",
+			name: "before dependency - MustBeSet",
 			a: &DetectionAnalysisProblem{
 				Meta:           &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustBeSet},
 				BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
@@ -209,6 +241,28 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustBeSet},
 			},
 			expected: -1,
+		},
+		{
+			name: "before dependency - MustNotBeSet",
+			a: &DetectionAnalysisProblem{
+				Meta:           &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
+				BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
+			},
+			b: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
+			},
+			expected: -1,
+		},
+		{
+			name: "after dependency - MustNotBeSet",
+			a: &DetectionAnalysisProblem{
+				Meta:          &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
+				AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
+			},
+			b: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
+			},
+			expected: 1,
 		},
 	}
 	for _, tt := range tests {
