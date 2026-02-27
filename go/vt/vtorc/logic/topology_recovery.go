@@ -519,7 +519,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	// Get all tablets in the shard
-	tablets, err := ts.GetTabletsByShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	tablets, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
@@ -579,7 +579,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			logger.Info("Restarting replication on direct replica " + tabletAliasString)
 			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
 
-			if err := tmc.StopReplication(ctx, tablet); err != nil {
+			if err := stopReplication(ctx, tablet); err != nil {
 				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -587,7 +587,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
+			if err := startReplication(ctx, tablet, semiSync); err != nil {
 				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -606,6 +606,30 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	return true, topologyRecovery, nil
+}
+
+// getShardTablets gets tablets for the given keyspace and shard with a timeout.
+func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShard(ctx, keyspace, shard)
+}
+
+// stopReplication calls StopReplication RPC for the given tablet with a timeout.
+func stopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StopReplication(ctx, tablet)
+}
+
+// startReplication calls StartReplication RPC for the given tablet with a timeout.
+func startReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StartReplication(ctx, tablet, semiSync)
 }
 
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.
