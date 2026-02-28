@@ -1,0 +1,181 @@
+#!/bin/bash
+
+# Copyright 2026 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -euo pipefail
+export VTROOT=/vt
+export VTDATAROOT=/vt/vtdataroot
+
+CELL=${CELL:-"test"}
+KEYSPACE=${KEYSPACE:-"test_keyspace"}
+SHARD=${SHARD:-"0"}
+GRPC_PORT=${GRPC_PORT:-"15999"}
+WEB_PORT=${WEB_PORT:-"8080"}
+ROLE=${ROLE:-"replica"}
+VTHOST=${VTHOST:-$(hostname -i)}
+SLEEPTIME=${SLEEPTIME:-"0"}
+SOURCE_DB=${SOURCE_DB:-0}
+DB_USER=${DB_USER:-""}
+DB_PASS=${DB_PASS:-""}
+DB_HOST=${DB_HOST:-""}
+DB_PORT=${DB_PORT:-3306}
+DB_CHARSET=${DB_CHARSET:-""}
+TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS:-""}
+
+keyspace=$KEYSPACE
+shard=$SHARD
+grpc_port=$GRPC_PORT
+web_port=$WEB_PORT
+role=$ROLE
+vthost=$VTHOST
+sleeptime=$SLEEPTIME
+uid=$1
+source_db=$SOURCE_DB
+
+# If DB is not explicitly set, we default to behaviour of prefixing with vt_
+# If there is a source db, the db_name will always match the keyspace name
+[ "$source_db" = 0 ] && db_name=${DB:-"vt_$keyspace"} ||  db_name=${DB:-"$keyspace"}
+db_charset=$DB_CHARSET
+tablet_hostname=${TABLET_HOSTNAME:-""}
+
+# Use IPs to simplify connections when testing in docker.
+# Otherwise, blank hostname means the tablet auto-detects FQDN.
+# This is now set further up
+
+printf -v alias '%s-%010d' "$CELL" "$uid"
+printf -v tablet_dir 'vt_%010d' "$uid"
+
+tablet_role=$role
+tablet_type='replica'
+
+# Make every 3rd tablet rdonly
+if (( uid % 100 % 3 == 0 )) ; then
+    tablet_type='rdonly'
+fi
+
+# Consider every tablet with %d00 as source primary
+if [ "$source_db" = 1 ] && (( uid % 100 == 0 )) ; then
+    tablet_type='replica'
+    tablet_role='sourceprimary'
+    keyspace="source_$keyspace"
+fi
+
+# Copy config directory
+cp -R /script/config $VTROOT
+init_db_sql_file="$VTROOT/config/init_db.sql"
+# Clear in-place edits of init_db_sql_file if any exist
+sed -i '/##\[CUSTOM_SQL/{:a;N;/END\]##/!ba};//d' $init_db_sql_file
+
+echo "##[CUSTOM_SQL_START]##" >> $init_db_sql_file
+
+if [ "$source_db" = "1" ]; then
+  # We need a common user for the source and target tablets else tools like orchestrator will not function correctly
+  echo "Creating matching user for target tablets..."
+  echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
+  echo "GRANT ALL ON *.* TO '$DB_USER'@'%';" >> $init_db_sql_file
+fi
+
+echo "##[CUSTOM_SQL_END]##" >> $init_db_sql_file
+
+mkdir -p "$VTDATAROOT/backups"
+
+
+export KEYSPACE=$keyspace
+export SHARD=$shard
+export TABLET_ID=$alias
+export TABLET_DIR=$tablet_dir
+export MYSQL_PORT=3306
+export TABLET_ROLE=$tablet_role
+export DB_PORT=${DB_PORT:-3306}
+export DB_HOST=${DB_HOST:-""}
+export DB_NAME=$db_name
+export DB_CHARSET=$db_charset
+export TABLET_HOSTNAME=$tablet_hostname
+
+# Delete socket files before running mysqlctld if exists.
+# This is the primary reason for unhealthy state on restart.
+# https://github.com/vitessio/vitess/pull/5115/files
+echo "Removing $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}..."
+rm -rf "$VTDATAROOT/$tablet_dir"/{mysql.sock,mysql.sock.lock}
+
+# Create mysql instances
+# Do not create mysql instance for primary if connecting to source mysql database
+if [[ $tablet_role != "sourceprimary" ]]; then
+  echo "Initing mysql for tablet: $uid role: $role source_db: $source_db.. "
+  $VTROOT/bin/mysqlctld \
+  --init_db_sql_file="$init_db_sql_file" \
+  --logtostderr=true \
+  --tablet_uid="$uid" \
+  &
+fi
+
+sleep "$sleeptime"
+
+# Create the cell
+# https://vitess.io/blog/2020-04-27-life-of-a-cluster/
+$VTROOT/bin/vtctldclient --server "vtctld:$GRPC_PORT" AddCellInfo --root "/vitess/$CELL" --server-address etcd:2379 "$CELL" || true
+
+# Populate source db conditional args
+source_db_args=()
+if [ "$tablet_role" = "sourceprimary" ]; then
+    echo "Setting source db args for primary: $DB_NAME"
+    source_db_args+=(--db_host "$DB_HOST")
+    source_db_args+=(--db_port "$DB_PORT")
+    source_db_args+=(--init_db_name_override "$DB_NAME")
+    source_db_args+=(--init_tablet_type "$tablet_type")
+    source_db_args+=(--mycnf_server_id "$uid")
+    source_db_args+=(--db_app_user "$DB_USER")
+    source_db_args+=(--db_app_password "$DB_PASS")
+    source_db_args+=(--db_allprivs_user "$DB_USER")
+    source_db_args+=(--db_allprivs_password "$DB_PASS")
+    source_db_args+=(--db_appdebug_user "$DB_USER")
+    source_db_args+=(--db_appdebug_password "$DB_PASS")
+    source_db_args+=(--db_dba_user "$DB_USER")
+    source_db_args+=(--db_dba_password "$DB_PASS")
+    source_db_args+=(--db_filtered_user "$DB_USER")
+    source_db_args+=(--db_filtered_password "$DB_PASS")
+    source_db_args+=(--db_repl_user "$DB_USER")
+    source_db_args+=(--db_repl_password "$DB_PASS")
+    source_db_args+=(--enable_replication_reporter=false)
+    source_db_args+=(--enforce_strict_trans_tables=false)
+    source_db_args+=(--track_schema_versions=true)
+    source_db_args+=(--vreplication_tablet_type=primary)
+    source_db_args+=(--watch_replication_stream=true)
+else
+    source_db_args+=(--init_db_name_override "$DB_NAME")
+    source_db_args+=(--init_tablet_type "$tablet_type")
+    source_db_args+=(--enable_replication_reporter=true)
+    source_db_args+=(--restore_from_backup)
+fi
+
+read -r -a topo_args <<< "$TOPOLOGY_FLAGS"
+
+
+echo "Starting vttablet..."
+exec "$VTROOT/bin/vttablet" \
+  "${topo_args[@]}" \
+  --logtostderr=true \
+  --tablet-path "$alias" \
+  --tablet_hostname "$vthost" \
+  --health_check_interval 5s \
+  --port "$web_port" \
+  --grpc_port "$grpc_port" \
+  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+  --init_keyspace "$keyspace" \
+  --init_shard "$shard" \
+  --backup_storage_implementation file \
+  --file_backup_storage_root "$VTDATAROOT/backups" \
+  --queryserver-config-schema-reload-time 60s \
+  "${source_db_args[@]}"

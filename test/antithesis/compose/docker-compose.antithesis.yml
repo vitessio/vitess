@@ -1,0 +1,17 @@
+services:
+  antithesis-client:
+    build:
+      context: ./antithesis-client
+      dockerfile: Dockerfile
+    depends_on:
+      - vtorc
+      - vtgate
+    environment:
+      - VTORC_ADDR=http://vtorc:8080
+      - VTGATE_ADDR=http://vtgate:8080
+      - VTCTLD_ADDR=http://vtctld:8080
+      - VTCTLD_CELL=test
+      - SETUP_TIMEOUT=10m
+      - SETUP_POLL_INTERVAL=5s
+    volumes:
+      - .:/script

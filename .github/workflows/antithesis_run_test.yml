@@ -1,0 +1,64 @@
+name: Trigger Antithesis Exploration
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Test name
+        required: false
+        default: vitess demo
+        type: string
+      config_image:
+        description: Config image
+        required: true
+        default: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-config:latest
+        type: string
+      images:
+        description: System images (separate with ;)
+        required: true
+        default: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest;us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest;vitess/lite:latest;quay.io/coreos/etcd:v3.5.16
+        type: string
+      duration:
+        description: Duration (exploration hours)
+        required: true
+        type: number
+        default: 0.5
+      description:
+        description: Description (avoid quotes, please!)
+        required: true
+        type: string
+        default: "[user] please provide description"
+      email:
+        description: Additional email notification recipient (separate with ;)
+        required: true
+        type: string
+        default: "mlord@planetscale.com"
+
+jobs:
+  antithesis:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Antithesis Tests
+        uses: antithesishq/antithesis-trigger-action@v1
+        with:
+          notebook_name: vitess
+          tenant: vitess
+          username: ${{ secrets.ANTITHESIS_USERNAME }}
+          password: ${{ secrets.ANTITHESIS_PASSWORD }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          config_image: ${{ inputs.config_image || 'us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-config:latest' }}
+          images: ${{ inputs.images || 'us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest;us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest;vitess/lite:latest;quay.io/coreos/etcd:v3.5.16' }}
+          description: ${{ inputs.description || 'automatic run' }}
+          email_recipients: ${{ inputs.email || '' }}
+          test_name: ${{ inputs.test || 'automatic run' }}
+          additional_parameters: |-
+            custom.duration = ${{ inputs.duration || 0.5 }}

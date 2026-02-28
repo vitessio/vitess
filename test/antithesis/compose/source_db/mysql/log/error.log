@@ -1,0 +1,33 @@
+2026-02-28T00:50:07.750179Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.
+2026-02-28T00:50:07.765421Z 0 [System] [MY-013169] [Server] /usr/sbin/mysqld (mysqld 8.4.8) initializing of server in progress as process 82
+2026-02-28T00:50:07.818327Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-02-28T00:50:07.827904Z 1 [ERROR] [MY-012655] [InnoDB] Failed to create check sector file, errno:13 Please confirm O_DIRECT is supported and remove the file /var/lib/check_sector_size if it exists.
+2026-02-28T00:50:08.062615Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-02-28T00:50:08.527226Z 0 [Warning] [MY-013501] [Server] Ignoring --plugin-load[_add] list as the server is running with --initialize(-insecure).
+2026-02-28T00:50:09.176136Z 0 [Warning] [MY-000067] [Server] unknown variable 'loose_rpl_semi_sync_source_timeout=1000000000000000000'.
+2026-02-28T00:50:09.176202Z 0 [Warning] [MY-000067] [Server] unknown variable 'loose_rpl_semi_sync_source_wait_no_replica=1'.
+2026-02-28T00:50:09.181131Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+2026-02-28T00:50:11.952748Z 0 [System] [MY-015018] [Server] MySQL Server Initialization - end.
+2026-02-28T00:50:12.081740Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-02-28T00:50:12.271772Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.4.8) starting as process 126
+2026-02-28T00:50:12.334592Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-02-28T00:50:12.346436Z 1 [ERROR] [MY-012655] [InnoDB] Failed to create check sector file, errno:13 Please confirm O_DIRECT is supported and remove the file /var/lib/check_sector_size if it exists.
+2026-02-28T00:50:12.576076Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-02-28T00:50:13.011247Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-02-28T00:50:13.011402Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-02-28T00:50:13.016996Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location '/var/run/mysqld' in the path is accessible to all OS users. Consider choosing a different directory.
+2026-02-28T00:50:13.053542Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.4.8'  socket: '/var/run/mysqld/mysqld.sock'  port: 0  MySQL Community Server - GPL.
+2026-02-28T00:50:16.581484Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-02-28T00:50:16.753284Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.4.8) starting as process 1
+2026-02-28T00:50:16.808542Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-02-28T00:50:16.818886Z 1 [ERROR] [MY-012655] [InnoDB] Failed to create check sector file, errno:13 Please confirm O_DIRECT is supported and remove the file /var/lib/check_sector_size if it exists.
+2026-02-28T00:50:17.688718Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-02-28T00:50:17.865941Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-02-28T00:50:17.870935Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-02-28T00:50:18.005506Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-02-28T00:50:18.005638Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-02-28T00:50:18.012164Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location '/var/run/mysqld' in the path is accessible to all OS users. Consider choosing a different directory.
+2026-02-28T00:50:18.046027Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.4.8'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server - GPL.
+2026-02-28T00:52:06.257697Z 0 [System] [MY-013172] [Server] Received SHUTDOWN from user <via user signal>. Shutting down mysqld (Version: 8.4.8).
+2026-02-28T00:52:07.590326Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.4.8)  MySQL Community Server - GPL.
+2026-02-28T00:52:07.590405Z 0 [System] [MY-015016] [Server] MySQL Server - end.
