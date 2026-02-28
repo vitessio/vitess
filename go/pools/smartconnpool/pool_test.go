@@ -857,7 +857,7 @@ func TestCreateFail(t *testing.T) {
 
 	for _, setting := range []*Setting{nil, sFoo} {
 		if _, err := p.Get(ctx, setting); err.Error() != "failed to connect: forced failure" {
-			t.Errorf("Expecting Failed, received %v", err)
+			assert.NoError(t, err)
 		}
 		stats := p.StatsJSON()
 		expected := map[string]any{

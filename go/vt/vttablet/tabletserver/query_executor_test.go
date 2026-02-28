@@ -721,9 +721,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	assert.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -740,9 +738,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.DeleteQuery(selQuery)
 	qre = newTestQueryExecutor(ctx, tsv, "select next 1 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -772,9 +768,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 2 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -804,9 +798,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 6 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -835,7 +827,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		}},
 	}
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	db := setUpQueryExecutorTest(t)
@@ -913,7 +905,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		}},
 	}
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	tsv := newTestTabletServer(ctx, noFlags, db)
@@ -921,9 +913,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
+	require.NoError(t, err)
 	if !got.Equal(want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -958,16 +948,14 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 	// without enabling Config.StrictTableAcl
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
+	require.NoError(t, err)
 	if !got.Equal(want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -1005,7 +993,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// enable Config.StrictTableAcl
@@ -1027,17 +1015,13 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	ctx = callerid.NewContext(context.Background(), nil, callerID)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute: %v, want: nil", err)
-	}
+	require.NoError(t, err)
 
 	query = "(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)"
 	ctx = callerid.NewContext(context.Background(), nil, callerID)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute: %v, want: nil", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
@@ -1072,7 +1056,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// enable Config.StrictTableAcl
@@ -1091,7 +1075,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	username = "exempt-acl"
 	f, _ := tableacl.GetCurrentACLFactory()
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
-		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
+		require.NoError(t, err)
 	}
 	callerID = &querypb.VTGateCallerID{
 		Username: username,
@@ -1136,7 +1120,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	tableACLStatsKey := strings.Join([]string{
@@ -1154,9 +1138,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	beforeCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want: nil", err)
-	}
+	require.NoError(t, err)
 	afterCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	if afterCount-beforeCount != 1 {
 		t.Fatalf("table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
@@ -1203,7 +1185,7 @@ func TestQueryExecutorDenyListQRFail(t *testing.T) {
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -1257,7 +1239,7 @@ func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)

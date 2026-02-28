@@ -32,6 +32,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -163,13 +164,13 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 
 	// Check that the drain is successful.
 	if err := <-stopped; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := <-stopped2; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := <-stopped3; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	// Failover time should have been be published.
 	durations := failoverDurationSumMs.Counts()
@@ -219,7 +220,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	fail(b, oldPrimary, keyspace, shard, now)
 
 	if err := <-stopped4; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -390,7 +391,7 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 
 	// Check that the drain is successful.
 	if err := <-stopped; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	// Drain will reset the state to "idle" eventually.
 	if err := waitForState(b, stateIdle); err != nil {
@@ -560,7 +561,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 	}
 	// First request must have been drained without an error.
 	if err := <-stopped1; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// If buffering stopped implicitly, the explicit signal will still happen
@@ -617,10 +618,10 @@ func testEviction1(t *testing.T, fail failover) {
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
 	if err := <-stopped2; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := <-stopped3; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -675,7 +676,7 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
 	if err := <-stoppedFirstFailover; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 	// Wait for the failover end to avoid races.
 	if err := waitForState(b, stateIdle); err != nil {
@@ -715,7 +716,7 @@ func testWindow1(t *testing.T, fail failover) {
 
 	// Let it go out of the buffering window and expire.
 	if err := <-stopped1; err != nil {
-		t.Fatalf("buffering should have stopped after exceeding the window without an error: %v", err)
+		require.NoError(t, err)
 	}
 	// Verify that the window was actually exceeded.
 	if err := waitForRequestsExceededWindow(1); err != nil {
@@ -770,7 +771,7 @@ func testWindow1(t *testing.T, fail failover) {
 
 	// Fourth request will exceed its window and finish early.
 	if err := <-stopped4; err != nil {
-		t.Fatalf("buffering should have stopped after 10ms without an error: %v", err)
+		require.NoError(t, err)
 	}
 	// Verify that the window was actually exceeded.
 	if err := waitForRequestsExceededWindow(2); err != nil {
@@ -814,7 +815,7 @@ func testShutdown1(t *testing.T, fail failover) {
 
 	// Request must have been drained without an error.
 	if err := <-stopped1; err != nil {
-		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {

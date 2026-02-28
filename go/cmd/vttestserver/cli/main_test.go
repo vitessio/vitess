@@ -515,9 +515,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 		"-dev",
 		"-http-port", strconv.Itoa(port))
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created consul.
 	serverAddr := fmt.Sprintf("localhost:%v", port)
@@ -537,7 +535,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+			require.NoError(t, err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

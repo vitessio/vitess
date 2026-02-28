@@ -42,12 +42,10 @@ func initResolver(t *testing.T, ctx context.Context) *Resolver {
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(sks) failed: %v", err)
+		require.NoError(t, err)
 	}
 	shardKrArray, err := key.ParseShardingSpec("-20-40-60-80-a0-c0-e0-")
-	if err != nil {
-		t.Fatalf("key.ParseShardingSpec failed: %v", err)
-	}
+	require.NoError(t, err)
 	for _, kr := range shardKrArray {
 		shard := key.KeyRangeString(kr)
 		if err := ts.CreateShard(ctx, "sks", shard); err != nil {
@@ -57,10 +55,10 @@ func initResolver(t *testing.T, ctx context.Context) *Resolver {
 
 	// Create unsharded keyspace and shard.
 	if err := ts.CreateKeyspace(ctx, "uks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(uks) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "uks", "0"); err != nil {
-		t.Fatalf("CreateShard(0) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// And rebuild both.

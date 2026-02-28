@@ -70,9 +70,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 
 	// add auth interceptors
 	opts = append(opts, grpc.StreamInterceptor(servenv.FakeAuthStreamInterceptor))
@@ -147,9 +145,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, err, "failed to set `%s=%s`", "--grpc-auth-static-client-creds", f.Name())
 
 	client, err = dial(ctx, listener.Addr().String())
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
+	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
 	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
