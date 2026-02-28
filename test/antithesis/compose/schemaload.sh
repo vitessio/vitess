@@ -24,14 +24,14 @@ TARGETTAB=${TARGETTAB:-"${CELL}-0000000101"}
 SCHEMA_FILES=${SCHEMA_FILES:-"create_messages.sql create_tokens.sql"}
 VSCHEMA_FILE=${VSCHEMA_FILE:-"default_vschema.json"}
 POST_LOAD_FILE=${POST_LOAD_FILE:-""}
-EXTERNAL_DB=${EXTERNAL_DB:-"0"}
+SOURCE_DB=${SOURCE_DB:-"0"}
 
 sleeptime=$SLEEPTIME
 targettab=$TARGETTAB
 schema_files=$SCHEMA_FILES
 vschema_file=$VSCHEMA_FILE
 load_file=$POST_LOAD_FILE
-external_db=$EXTERNAL_DB
+source_db=$SOURCE_DB
 export PATH=/vt/bin:$PATH
 
 sleep "$sleeptime"
@@ -41,7 +41,7 @@ if [ ! -f schema_run ]; then
     vtctldclient --server "vtctld:$GRPC_PORT" GetTablet "$targettab" && break
     sleep 1
   done
-  if [ "$external_db" = "0" ]; then
+  if [ "$source_db" = "0" ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
       vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql-file "/script/tables/${schema_file}" "$KEYSPACE" || \

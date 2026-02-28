@@ -47,8 +47,8 @@ jobs:
       - name: Build and push mysql image
         uses: docker/build-push-action@v5
         with:
-          context: ./test/antithesis/compose/external_db/mysql
-          file: ./test/antithesis/compose/external_db/mysql/Dockerfile
+          context: ./test/antithesis/compose/source_db/mysql
+          file: ./test/antithesis/compose/source_db/mysql/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:latest

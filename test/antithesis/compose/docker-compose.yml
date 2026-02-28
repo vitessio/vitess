@@ -16,7 +16,7 @@ services:
     ports:
       - 2379:2379
       - 2380:2380
-  external_db_host:
+  source_db_host:
     image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest
     platform: linux/amd64
     command:
@@ -28,9 +28,9 @@ services:
       - --slow_query_log=1
     environment:
       MYSQL_DATABASE: ${DB:-commerce}
-      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
+      MYSQL_PASSWORD: ${DB_PASS:-source_db_password}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
-      MYSQL_USER: ${DB_USER:-external_db_user}
+      MYSQL_USER: ${DB_USER:-source_db_user}
     healthcheck:
       retries: 10
       test: /usr/bin/mysql --user=root --execute "SHOW DATABASES;"
@@ -39,8 +39,8 @@ services:
       - "3306"
     restart: always
     volumes:
-      - ./external_db/mysql/:/docker-entrypoint-initdb.d/
-      - ./external_db/mysql/log:/var/log/mysql
+      - ./source_db/mysql/:/docker-entrypoint-initdb.d/
+      - ./source_db/mysql/log:/var/log/mysql
   schemaload_lookup_keyspace:
     command:
       - sh
@@ -61,7 +61,7 @@ services:
       - VSCHEMA_FILE=lookup_keyspace_vschema.json
       - SCHEMA_FILES=lookup_keyspace_schema_file.sql
       - POST_LOAD_FILE=
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
     image: vitess/lite:latest
     volumes:
       - .:/script
@@ -87,7 +87,7 @@ services:
       - VSCHEMA_FILE=test_keyspace_vschema.json
       - SCHEMA_FILES=test_keyspace_schema_file.sql
       - POST_LOAD_FILE=
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
     image: vitess/lite:latest
     volumes:
       - .:/script
@@ -109,13 +109,13 @@ services:
     command:
       - sh
       - -c
-      - '[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0'
+      - '[ $$SOURCE_DB -eq 1 ] && /script/source_db_vreplication.sh || exit 0'
     depends_on:
     - vtctld
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
     image: vitess/lite:latest
     volumes:
       - .:/script
@@ -128,7 +128,7 @@ services:
         --service_map ''grpc-vtctl,grpc-vtctld'' --backup_storage_implementation file --file_backup_storage_root
         /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc_port 15999 '
     depends_on:
-      external_db_host:
+      source_db_host:
         condition: service_healthy
     image: vitess/lite:latest
     ports:
@@ -166,7 +166,7 @@ services:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
       - WEB_PORT=8080
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_USER=
       - DB_PASS=
     image: vitess/lite:latest
@@ -191,7 +191,7 @@ services:
       - SHARD=-80
       - ROLE=primary
       - VTHOST=vttablet101
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=
@@ -228,7 +228,7 @@ services:
       - SHARD=-80
       - ROLE=replica
       - VTHOST=vttablet102
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=
@@ -265,7 +265,7 @@ services:
       - SHARD=80-
       - ROLE=primary
       - VTHOST=vttablet201
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=
@@ -302,7 +302,7 @@ services:
       - SHARD=80-
       - ROLE=replica
       - VTHOST=vttablet202
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=
@@ -339,7 +339,7 @@ services:
       - SHARD=-
       - ROLE=primary
       - VTHOST=vttablet301
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=
@@ -376,7 +376,7 @@ services:
       - SHARD=-
       - ROLE=replica
       - VTHOST=vttablet302
-      - EXTERNAL_DB=0
+      - SOURCE_DB=0
       - DB_PORT=
       - DB_HOST=
       - DB_USER=

@@ -26,7 +26,7 @@ WEB_PORT=${WEB_PORT:-"8080"}
 ROLE=${ROLE:-"replica"}
 VTHOST=${VTHOST:-$(hostname -i)}
 SLEEPTIME=${SLEEPTIME:-"0"}
-EXTERNAL_DB=${EXTERNAL_DB:-0}
+SOURCE_DB=${SOURCE_DB:-0}
 DB_USER=${DB_USER:-""}
 DB_PASS=${DB_PASS:-""}
 DB_HOST=${DB_HOST:-""}
@@ -42,11 +42,11 @@ role=$ROLE
 vthost=$VTHOST
 sleeptime=$SLEEPTIME
 uid=$1
-external=$EXTERNAL_DB
+source_db=$SOURCE_DB
 
 # If DB is not explicitly set, we default to behaviour of prefixing with vt_
-# If there is an external db, the db_nmae will always match the keyspace name
-[ "$external" = 0 ] && db_name=${DB:-"vt_$keyspace"} ||  db_name=${DB:-"$keyspace"}
+# If there is a source db, the db_name will always match the keyspace name
+[ "$source_db" = 0 ] && db_name=${DB:-"vt_$keyspace"} ||  db_name=${DB:-"$keyspace"}
 db_charset=$DB_CHARSET
 tablet_hostname=${TABLET_HOSTNAME:-""}
 
@@ -65,11 +65,11 @@ if (( uid % 100 % 3 == 0 )) ; then
     tablet_type='rdonly'
 fi
 
-# Consider every tablet with %d00 as external primary
-if [ "$external" = 1 ] && (( uid % 100 == 0 )) ; then
+# Consider every tablet with %d00 as source primary
+if [ "$source_db" = 1 ] && (( uid % 100 == 0 )) ; then
     tablet_type='replica'
-    tablet_role='externalprimary'
-    keyspace="ext_$keyspace"
+    tablet_role='sourceprimary'
+    keyspace="source_$keyspace"
 fi
 
 # Copy config directory
@@ -80,9 +80,9 @@ sed -i '/##\[CUSTOM_SQL/{:a;N;/END\]##/!ba};//d' $init_db_sql_file
 
 echo "##[CUSTOM_SQL_START]##" >> $init_db_sql_file
 
-if [ "$external" = "1" ]; then
-  # We need a common user for the unmanaged and managed tablets else tools like orchestrator will not function correctly
-  echo "Creating matching user for managed tablets..."
+if [ "$source_db" = "1" ]; then
+  # We need a common user for the source and target tablets else tools like orchestrator will not function correctly
+  echo "Creating matching user for target tablets..."
   echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
   echo "GRANT ALL ON *.* TO '$DB_USER'@'%';" >> $init_db_sql_file
 fi
@@ -112,9 +112,9 @@ echo "Removing $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}..."
 rm -rf "$VTDATAROOT/$tablet_dir"/{mysql.sock,mysql.sock.lock}
 
 # Create mysql instances
-# Do not create mysql instance for primary if connecting to external mysql database
-if [[ $tablet_role != "externalprimary" ]]; then
-  echo "Initing mysql for tablet: $uid role: $role external: $external.. "
+# Do not create mysql instance for primary if connecting to source mysql database
+if [[ $tablet_role != "sourceprimary" ]]; then
+  echo "Initing mysql for tablet: $uid role: $role source_db: $source_db.. "
   $VTROOT/bin/mysqlctld \
   --init_db_sql_file="$init_db_sql_file" \
   --logtostderr=true \
@@ -128,37 +128,37 @@ sleep "$sleeptime"
 # https://vitess.io/blog/2020-04-27-life-of-a-cluster/
 $VTROOT/bin/vtctldclient --server "vtctld:$GRPC_PORT" AddCellInfo --root "/vitess/$CELL" --server-address etcd:2379 "$CELL" || true
 
-#Populate external db conditional args
-external_db_args=()
-if [ "$tablet_role" = "externalprimary" ]; then
-    echo "Setting external db args for primary: $DB_NAME"
-    external_db_args+=(--db_host "$DB_HOST")
-    external_db_args+=(--db_port "$DB_PORT")
-    external_db_args+=(--init_db_name_override "$DB_NAME")
-    external_db_args+=(--init_tablet_type "$tablet_type")
-    external_db_args+=(--mycnf_server_id "$uid")
-    external_db_args+=(--db_app_user "$DB_USER")
-    external_db_args+=(--db_app_password "$DB_PASS")
-    external_db_args+=(--db_allprivs_user "$DB_USER")
-    external_db_args+=(--db_allprivs_password "$DB_PASS")
-    external_db_args+=(--db_appdebug_user "$DB_USER")
-    external_db_args+=(--db_appdebug_password "$DB_PASS")
-    external_db_args+=(--db_dba_user "$DB_USER")
-    external_db_args+=(--db_dba_password "$DB_PASS")
-    external_db_args+=(--db_filtered_user "$DB_USER")
-    external_db_args+=(--db_filtered_password "$DB_PASS")
-    external_db_args+=(--db_repl_user "$DB_USER")
-    external_db_args+=(--db_repl_password "$DB_PASS")
-    external_db_args+=(--enable_replication_reporter=false)
-    external_db_args+=(--enforce_strict_trans_tables=false)
-    external_db_args+=(--track_schema_versions=true)
-    external_db_args+=(--vreplication_tablet_type=primary)
-    external_db_args+=(--watch_replication_stream=true)
+# Populate source db conditional args
+source_db_args=()
+if [ "$tablet_role" = "sourceprimary" ]; then
+    echo "Setting source db args for primary: $DB_NAME"
+    source_db_args+=(--db_host "$DB_HOST")
+    source_db_args+=(--db_port "$DB_PORT")
+    source_db_args+=(--init_db_name_override "$DB_NAME")
+    source_db_args+=(--init_tablet_type "$tablet_type")
+    source_db_args+=(--mycnf_server_id "$uid")
+    source_db_args+=(--db_app_user "$DB_USER")
+    source_db_args+=(--db_app_password "$DB_PASS")
+    source_db_args+=(--db_allprivs_user "$DB_USER")
+    source_db_args+=(--db_allprivs_password "$DB_PASS")
+    source_db_args+=(--db_appdebug_user "$DB_USER")
+    source_db_args+=(--db_appdebug_password "$DB_PASS")
+    source_db_args+=(--db_dba_user "$DB_USER")
+    source_db_args+=(--db_dba_password "$DB_PASS")
+    source_db_args+=(--db_filtered_user "$DB_USER")
+    source_db_args+=(--db_filtered_password "$DB_PASS")
+    source_db_args+=(--db_repl_user "$DB_USER")
+    source_db_args+=(--db_repl_password "$DB_PASS")
+    source_db_args+=(--enable_replication_reporter=false)
+    source_db_args+=(--enforce_strict_trans_tables=false)
+    source_db_args+=(--track_schema_versions=true)
+    source_db_args+=(--vreplication_tablet_type=primary)
+    source_db_args+=(--watch_replication_stream=true)
 else
-    external_db_args+=(--init_db_name_override "$DB_NAME")
-    external_db_args+=(--init_tablet_type "$tablet_type")
-    external_db_args+=(--enable_replication_reporter=true)
-    external_db_args+=(--restore_from_backup)
+    source_db_args+=(--init_db_name_override "$DB_NAME")
+    source_db_args+=(--init_tablet_type "$tablet_type")
+    source_db_args+=(--enable_replication_reporter=true)
+    source_db_args+=(--restore_from_backup)
 fi
 
 read -r -a topo_args <<< "$TOPOLOGY_FLAGS"
@@ -179,4 +179,4 @@ exec "$VTROOT/bin/vttablet" \
   --backup_storage_implementation file \
   --file_backup_storage_root "$VTDATAROOT/backups" \
   --queryserver-config-schema-reload-time 60s \
-  "${external_db_args[@]}"
+  "${source_db_args[@]}"

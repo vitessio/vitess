@@ -16,18 +16,18 @@
 
 set -euo pipefail
 
-EXTERNAL_DB=${EXTERNAL_DB:-0}
+SOURCE_DB=${SOURCE_DB:-0}
 WEB_PORT=${WEB_PORT:-"8080"}
 VTORC_CONFIG=${VTORC_CONFIG:-/vt/vtorc/config.json}
 TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS:-""}
 
-external=$EXTERNAL_DB
+source_db=$SOURCE_DB
 web_port=$WEB_PORT
 config=$VTORC_CONFIG
 # Copy config directory
 cp -R /script/vtorc /vt
 # Update credentials
-if [ "$external" = 1 ] ; then
+if [ "$source_db" = 1 ] ; then
     # Terrible substitution but we don't have jq in this image
     # This can be overridden by passing VTORC_CONFIG env variable
     echo "Updating $config..."
