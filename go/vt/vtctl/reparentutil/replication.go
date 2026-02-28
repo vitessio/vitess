@@ -226,6 +226,11 @@ func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
 	return e.alias
 }
 
+// Unwrap returns the underlying error.
+func (e *tabletAliasError) Unwrap() error {
+	return e.err
+}
+
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
