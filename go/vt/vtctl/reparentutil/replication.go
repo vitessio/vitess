@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -206,6 +207,30 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
+// tabletAliasError wraps an error with the tablet alias that produced it.
+type tabletAliasError struct {
+	alias *topodatapb.TabletAlias
+	err   error
+}
+
+// Error returns the wrapped error.
+func (e *tabletAliasError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+// GetAlias returns the tablet alias that produced the error.
+func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
+	return e.alias
+}
+
+// Unwrap returns the underlying error.
+func (e *tabletAliasError) Unwrap() error {
+	return e.err
+}
+
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
@@ -215,6 +240,7 @@ func stopReplicationAndBuildStatusMaps(
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryAlias *topodatapb.TabletAlias,
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
@@ -243,7 +269,12 @@ func stopReplicationAndBuildStatusMaps(
 		var concurrencyErr concurrency.Error
 		var err error
 		defer func() {
-			concurrencyErr.Err = err
+			if err != nil {
+				concurrencyErr.Err = &tabletAliasError{
+					alias: tabletInfo.GetAlias(),
+					err:   err,
+				}
+			}
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
 		}()
@@ -334,11 +365,26 @@ func stopReplicationAndBuildStatusMaps(
 		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
 		NumErrorsToWaitFor: numErrorsToWaitFor,
 	}
-
 	errRecorder := errgroup.Wait(groupCancel, errChan)
-	if len(errRecorder.Errors) <= 1 {
+
+	// Exit early if we encountered no errors.
+	if len(errRecorder.Errors) == 0 {
 		return res, nil
 	}
+
+	// If there are recorded errors, confirm there is a single error from the PRIMARY,
+	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
+	// extended when more partial-failure cases are supportable.
+	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
+		var tabletErr *tabletAliasError
+		if errors.As(errRecorder.Errors[0], &tabletErr) {
+			// Failure to reach the PRIMARY tablet is expected, return early.
+			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
+				return res, nil
+			}
+		}
+	}
+
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
