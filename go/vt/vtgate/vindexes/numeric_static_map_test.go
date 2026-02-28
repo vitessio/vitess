@@ -146,9 +146,7 @@ func TestNumericStaticMapCreateVindex(t *testing.T) {
 
 func TestNumericStaticMapMap(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	got, err := numericStaticMap.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
@@ -184,9 +182,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 
 func TestNumericStaticMapVerify(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	got, err := numericStaticMap.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
 	want := []bool{true, false}
@@ -250,9 +246,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 			"fallback_type": "xxhash",
 		},
 	)
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Map(context.Background(), nil, []sqltypes.Value{
@@ -299,9 +293,7 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 			"fallback_type": "xxhash",
 		},
 	)
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})

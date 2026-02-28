@@ -36,6 +36,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCopySchemaShard_UseTabletAsSource(t *testing.T) {
@@ -61,7 +62,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer vp.Close()
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	sourcePrimaryDb := fakesqldb.New(t).SetName("sourcePrimaryDb")
@@ -162,7 +163,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	waitForShardPrimary(t, wr, destinationPrimary.Tablet)
 
 	if err := vp.Run([]string{"CopySchemaShard", "--include-views", source, "ks/-40"}); err != nil {
-		t.Fatalf("CopySchemaShard failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Check call count on destinationPrimaryDb

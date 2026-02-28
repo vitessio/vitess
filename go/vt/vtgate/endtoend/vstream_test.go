@@ -254,7 +254,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 			cancel()
 		default:
 			log.Error(fmt.Sprintf("Returned err %v", err))
-			t.Fatalf("remote error: %v\n", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -609,7 +609,7 @@ func TestVStreamCopyResume(t *testing.T) {
 			cancel()
 		default:
 			log.Error(fmt.Sprintf("Returned err %v", err))
-			t.Fatalf("remote error: %v\n", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -663,7 +663,7 @@ func TestVStreamCurrent(t *testing.T) {
 			cancel()
 		default:
 			log.Error(fmt.Sprintf("Returned err %v", err))
-			t.Fatalf("remote error: %v\n", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -765,7 +765,7 @@ func TestVStreamSharded(t *testing.T) {
 			cancel()
 		default:
 			log.Error(fmt.Sprintf("Returned err %v", err))
-			t.Fatalf("remote error: %v\n", err)
+			require.NoError(t, err)
 		}
 	}
 }

@@ -117,10 +117,10 @@ func TestDupEntry(t *testing.T) {
 	defer conn.Close()
 
 	if _, err := conn.ExecuteFetch("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
-		t.Fatalf("create table failed: %v", err)
+		require.NoError(t, err)
 	}
 	if _, err := conn.ExecuteFetch("insert into dup_entry(id, name) values(1, 10)", 0, false); err != nil {
-		t.Fatalf("first insert failed: %v", err)
+		require.NoError(t, err)
 	}
 	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
 	assertSQLError(t, err, sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
@@ -139,10 +139,10 @@ func TestClientFoundRows(t *testing.T) {
 	defer conn.Close()
 
 	if _, err := conn.ExecuteFetch("create table found_rows(id int, val int, primary key(id))", 0, false); err != nil {
-		t.Fatalf("create table failed: %v", err)
+		require.NoError(t, err)
 	}
 	if _, err := conn.ExecuteFetch("insert into found_rows(id, val) values(1, 10)", 0, false); err != nil {
-		t.Fatalf("insert failed: %v", err)
+		require.NoError(t, err)
 	}
 	qr, err := conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
 	require.NoError(t, err)
@@ -336,7 +336,7 @@ func TestCachingSha2Password(t *testing.T) {
 
 	// create a user using caching_sha2_password password
 	if _, err = conn.ExecuteFetch(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
-		t.Fatalf("Create user with caching_sha2_password failed: %v", err)
+		require.NoError(t, err)
 	}
 	conn.Close()
 
@@ -349,7 +349,7 @@ func TestCachingSha2Password(t *testing.T) {
 	defer conn.Close()
 
 	if qr, err = conn.ExecuteFetch(`select user()`, 1, true); err != nil {
-		t.Fatalf("select user() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if len(qr.Rows) != 1 || qr.Rows[0][0].ToString() != "sha2user@localhost" {

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLivenessHandler(t *testing.T) {
@@ -29,15 +30,11 @@ func TestLivenessHandler(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/debug/liveness")
-	if err != nil {
-		t.Fatalf("http.Get: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	// Make sure we can read the body, even though it's empty.
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("io.ReadAll: %v", err)
-	}
+	require.NoError(t, err)
 	t.Logf("body: %q", body)
 }

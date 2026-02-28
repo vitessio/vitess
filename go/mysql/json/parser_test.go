@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/hack"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseRawNumber(t *testing.T) {
@@ -119,9 +120,7 @@ func TestParseRawString(t *testing.T) {
 			t.Helper()
 
 			rs, tail, err := parseRawString(s[1:])
-			if err != nil {
-				t.Fatalf("unexpected error on parseRawString: %s", err)
-			}
+			require.NoError(t, err)
 			if rs != expectedRS {
 				t.Fatalf("unexpected string on parseRawString; got %q; want %q", rs, expectedRS)
 			}
@@ -131,9 +130,7 @@ func TestParseRawString(t *testing.T) {
 
 			// parseRawKey results must be identical to parseRawString.
 			rs, tail, _, err = parseRawKey(s[1:])
-			if err != nil {
-				t.Fatalf("unexpected error on parseRawKey: %s", err)
-			}
+			require.NoError(t, err)
 			if rs != expectedRS {
 				t.Fatalf("unexpected string on parseRawKey; got %q; want %q", rs, expectedRS)
 			}
@@ -192,9 +189,7 @@ func TestValueInvalidTypeConversion(t *testing.T) {
 	var p Parser
 
 	v, err := p.Parse(`[{},[],"",123.45,true,null]`)
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.NoError(t, err)
 	a, _ := v.Array()
 
 	// object
@@ -313,7 +308,7 @@ func TestParserParse(t *testing.T) {
 		f("-2134.453eec+43")
 
 		if _, err := p.Parse("-2134.453E+43"); err != nil {
-			t.Fatalf("unexpected error when parsing number: %s", err)
+			require.NoError(t, err)
 		}
 
 		// Incomplete object key key.
@@ -323,9 +318,7 @@ func TestParserParse(t *testing.T) {
 		f(`"{\"foo\": 123}`)
 
 		v, err := p.Parse(`"{\"foo\": 123}"`)
-		if err != nil {
-			t.Fatalf("unexpected error when parsing json string: %s", err)
-		}
+		require.NoError(t, err)
 		sb, _ := v.StringBytes()
 		if string(sb) != `{"foo": 123}` {
 			t.Fatalf("unexpected string value; got %q; want %q", sb, `{"foo": 123}`)
@@ -349,7 +342,7 @@ func TestParserParse(t *testing.T) {
 		f(`{"foo":null,"bar"}`)
 
 		if _, err := p.Parse(`{"foo":null,"bar":"baz"}`); err != nil {
-			t.Fatalf("unexpected error when parsing object: %s", err)
+			require.NoError(t, err)
 		}
 	})
 
@@ -369,7 +362,7 @@ func TestParserParse(t *testing.T) {
 		f("[123,{},]")
 
 		if _, err := p.Parse("[123,{},[]]"); err != nil {
-			t.Fatalf("unexpected error when parsing array: %s", err)
+			require.NoError(t, err)
 		}
 	})
 
@@ -389,15 +382,13 @@ func TestParserParse(t *testing.T) {
 		f(`"foo'bar'`)
 
 		if _, err := p.Parse(`"foo\\\""`); err != nil {
-			t.Fatalf("unexpected error when parsing string: %s", err)
+			require.NoError(t, err)
 		}
 	})
 
 	t.Run("empty-object", func(t *testing.T) {
 		v, err := p.Parse("{}")
-		if err != nil {
-			t.Fatalf("cannot parse empty object: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeObject || tp.String() != "object" {
 			t.Fatalf("unexpected value obtained for empty object: %#v", v)
@@ -418,9 +409,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("empty-array", func(t *testing.T) {
 		v, err := p.Parse("[]")
-		if err != nil {
-			t.Fatalf("cannot parse empty array: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeArray || tp.String() != "array" {
 			t.Fatalf("unexpected value obtained for empty array: %#v", v)
@@ -441,9 +430,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("null", func(t *testing.T) {
 		v, err := p.Parse("null")
-		if err != nil {
-			t.Fatalf("cannot parse null: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNull || tp.String() != "null" {
 			t.Fatalf("unexpected value obtained for null: %#v", v)
@@ -456,9 +443,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("true", func(t *testing.T) {
 		v, err := p.Parse("true")
-		if err != nil {
-			t.Fatalf("cannot parse true: %s", err)
-		}
+		require.NoError(t, err)
 		if v != ValueTrue {
 			t.Fatalf("unexpected value obtained for true: %#v", v)
 		}
@@ -477,9 +462,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("false", func(t *testing.T) {
 		v, err := p.Parse("false")
-		if err != nil {
-			t.Fatalf("cannot parse false: %s", err)
-		}
+		require.NoError(t, err)
 		if v != ValueFalse {
 			t.Fatalf("unexpected value obtained for false: %#v", v)
 		}
@@ -498,9 +481,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("integer", func(t *testing.T) {
 		v, err := p.Parse("12345")
-		if err != nil {
-			t.Fatalf("cannot parse integer: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
@@ -516,9 +497,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("int64", func(t *testing.T) {
 		v, err := p.Parse("-8838840643388017390")
-		if err != nil {
-			t.Fatalf("cannot parse int64: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for int64: %#v", v)
@@ -531,9 +510,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("uint", func(t *testing.T) {
 		v, err := p.Parse("18446744073709551615")
-		if err != nil {
-			t.Fatalf("cannot parse uint: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for uint: %#v", v)
@@ -546,9 +523,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("uint64", func(t *testing.T) {
 		v, err := p.Parse("18446744073709551615")
-		if err != nil {
-			t.Fatalf("cannot parse uint64: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for uint64: %#v", v)
@@ -561,9 +536,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("float", func(t *testing.T) {
 		v, err := p.Parse("-12.345")
-		if err != nil {
-			t.Fatalf("cannot parse float: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
@@ -579,9 +552,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("float with zero", func(t *testing.T) {
 		v, err := p.Parse("12.0")
-		if err != nil {
-			t.Fatalf("cannot parse float: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
@@ -597,9 +568,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("float with large exponent", func(t *testing.T) {
 		v, err := p.Parse("1e100")
-		if err != nil {
-			t.Fatalf("cannot parse float: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
@@ -615,9 +584,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("string", func(t *testing.T) {
 		v, err := p.Parse(`"foo bar"`)
-		if err != nil {
-			t.Fatalf("cannot parse string: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeString || tp.String() != "string" {
 			t.Fatalf("unexpected type obtained for string: %#v", v)
@@ -637,9 +604,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("string-escaped", func(t *testing.T) {
 		v, err := p.Parse(`"\n\t\\foo\"bar\u3423x\/\b\f\r\\"`)
-		if err != nil {
-			t.Fatalf("cannot parse string: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeString {
 			t.Fatalf("unexpected type obtained for string: %#v", v)
@@ -660,9 +625,7 @@ func TestParserParse(t *testing.T) {
 	t.Run("object-one-element", func(t *testing.T) {
 		v, err := p.Parse(`  {
 	"foo"   : "bar"  }	 `)
-		if err != nil {
-			t.Fatalf("cannot parse object: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeObject {
 			t.Fatalf("unexpected type obtained for object: %#v", v)
@@ -688,9 +651,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("object-multi-elements", func(t *testing.T) {
 		v, err := p.Parse(`{"foo": [1,2,3  ]  ,"bar":{},"baz":123.456}`)
-		if err != nil {
-			t.Fatalf("cannot parse object: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeObject {
 			t.Fatalf("unexpected type obtained for object: %#v", v)
@@ -724,9 +685,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("array-one-element", func(t *testing.T) {
 		v, err := p.Parse(`   [{"bar":[  [],[[]]   ]} ]  `)
-		if err != nil {
-			t.Fatalf("cannot parse array: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeArray {
 			t.Fatalf("unexpected type obtained for array: %#v", v)
@@ -750,9 +709,7 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("array-multi-elements", func(t *testing.T) {
 		v, err := p.Parse(`   [1,"foo",{"bar":[     ],"baz":""}    ,[  "x" ,	"y"   ]     ]   `)
-		if err != nil {
-			t.Fatalf("cannot parse array: %s", err)
-		}
+		require.NoError(t, err)
 		tp := v.Type()
 		if tp != TypeArray {
 			t.Fatalf("unexpected type obtained for array: %#v", v)
@@ -787,9 +744,7 @@ func TestParserParse(t *testing.T) {
 		s := `{"foo":[-1.345678,[[[[[]]]],{}],"bar"],"baz":{"bbb":123}}`
 		want := `{"baz": {"bbb": 123}, "foo": [-1.345678, [[[[[]]]], {}], "bar"]}`
 		v, err := p.Parse(s)
-		if err != nil {
-			t.Fatalf("cannot parse complex object: %s", err)
-		}
+		require.NoError(t, err)
 		if v.Type() != TypeObject {
 			t.Fatalf("unexpected type obtained for object: %#v", v)
 		}

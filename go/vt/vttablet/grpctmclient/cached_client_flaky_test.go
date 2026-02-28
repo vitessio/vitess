@@ -44,9 +44,7 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 	t.Helper()
 
 	lis, err := nettest.NewLocalListener("tcp")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 
 	s := grpc.NewServer()
 	grpctmserver.RegisterForTest(s, tm)

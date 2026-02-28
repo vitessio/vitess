@@ -52,9 +52,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 	configFilename := path.Join(configDir, "consul.json")
 	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0o600)
-	if err != nil {
-		t.Fatalf("cannot create tempfile: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
@@ -79,14 +77,12 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	}
 
 	data, err := json.Marshal(config)
-	if err != nil {
-		t.Fatalf("cannot json-encode config: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := configFile.Write(data); err != nil {
-		t.Fatalf("cannot write config: %v", err)
+		require.NoError(t, err)
 	}
 	if err := configFile.Close(); err != nil {
-		t.Fatalf("cannot close config: %v", err)
+		require.NoError(t, err)
 	}
 
 	cmd := exec.Command("consul",
@@ -94,9 +90,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		"-dev",
 		"-config-file", configFilename)
 	err = cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created consul.
 	serverAddr := fmt.Sprintf("localhost:%v", port+1)
@@ -119,7 +113,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+			require.NoError(t, err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -162,16 +156,14 @@ func TestConsulTopo(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
 		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -219,16 +211,14 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
 		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -256,9 +246,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
 	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
@@ -270,7 +258,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+		require.NoError(t, err)
 	}
 
 	ctx := t.Context()
@@ -281,16 +269,14 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
 		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -310,9 +296,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}()
 
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
 	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
@@ -326,7 +310,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	{
 		jsonConfig := "{}"
 		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-			t.Fatalf("couldn't write temp file: %v", err)
+			require.NoError(t, err)
 		}
 
 		// Create the server on the new root.
@@ -340,14 +324,12 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	{
 		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
 		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-			t.Fatalf("couldn't write temp file: %v", err)
+			require.NoError(t, err)
 		}
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Attempt to Create the CellInfo.
 		err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{

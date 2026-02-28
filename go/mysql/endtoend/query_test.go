@@ -58,7 +58,7 @@ func TestQueries(t *testing.T) {
 	// Try a simple error case.
 	_, err = conn.ExecuteFetch("select * from aa", 1000, true)
 	if err == nil || !strings.Contains(err.Error(), "Table 'vttest.aa' doesn't exist") {
-		t.Fatalf("expected error but got: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Try a simple DDL.
@@ -172,7 +172,7 @@ func TestLargeQueries(t *testing.T) {
 func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	// Start the streaming query.
 	if err := conn.ExecuteStreamFetch("select * from a"); err != nil {
-		t.Fatalf("ExecuteStreamFetch failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Check the fields.

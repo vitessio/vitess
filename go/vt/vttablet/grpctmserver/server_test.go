@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGRPCTMServer creates a fake server implementation, a fake client
@@ -34,9 +35,7 @@ import (
 func TestGRPCTMServer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := int32(listener.Addr().(*net.TCPAddr).Port)
 

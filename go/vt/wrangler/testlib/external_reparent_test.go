@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 // The tests in this package test the wrangler version of TabletExternallyReparented
@@ -60,9 +61,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted
@@ -77,7 +76,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	// First test: reparent to the same primary, make sure it works
 	// as expected.
 	if err := vp.Run([]string{"TabletExternallyReparented", topoproto.TabletAliasString(oldPrimary.Tablet.Alias)}); err != nil {
-		t.Fatalf("TabletExternallyReparented(same primary) should have worked: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check the old primary is still primary
@@ -98,7 +97,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	// This tests the good case, where everything works as planned
 	t.Logf("TabletExternallyReparented(new primary) expecting success")
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check the new primary is primary
@@ -153,9 +152,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted
@@ -178,7 +175,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	// This tests a bad case: the new designated primary is a replica at mysql level,
 	// but we should do what we're told anyway.
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check that newPrimary is primary
@@ -235,9 +232,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
 
@@ -273,7 +268,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// This tests the good case, where everything works as planned
 	t.Logf("TabletExternallyReparented(new primary) expecting success")
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+		require.NoError(t, err)
 	}
 	// check the new primary is primary
 	tablet, err := ts.GetTablet(ctx, newPrimary.Tablet.Alias)
@@ -328,9 +323,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
 	// that returns no primary, and the new port (as returned by mysql)
@@ -362,7 +355,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	// This tests the good case, where everything works as planned
 	t.Logf("TabletExternallyReparented(new primary) expecting success")
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+		require.NoError(t, err)
 	}
 	// check the new primary is primary
 	tablet, err := ts.GetTablet(ctx, newPrimary.Tablet.Alias)
@@ -414,9 +407,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted.
 	newPrimary.StartActionLoop(t, wr)
@@ -446,7 +437,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 
 	// The reparent should work as expected here
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check the new primary is primary
@@ -482,7 +473,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 
 	// run TER again and make sure the primary is still correct
 	if err := wr.TabletExternallyReparented(ctx, newPrimary.Tablet.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check the new primary is still primary
@@ -525,12 +516,10 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 
 	// Reparent to new primary
 	ti, err := ts.GetTablet(ctx, newPrimary.Tablet.Alias)
-	if err != nil {
-		t.Fatalf("GetTablet failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if err := wr.TabletExternallyReparented(context.Background(), ti.Alias); err != nil {
-		t.Fatalf("TabletExternallyReparented failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// We have to wait for shard sync to do its magic in the background

@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/collations/remote"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRemoteWildcardMatches(t *testing.T) {
@@ -112,7 +113,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 				localResult := local.Wildcard(pat, 0, 0, chEscape).Match(input)
 				remoteResult := remote.Wildcard(pat, 0, 0, chEscape).Match(input)
 				if err := remote.LastError(); err != nil {
-					t.Fatalf("remote collation failed: %v", err)
+					require.NoError(t, err)
 				}
 				if localResult != remoteResult {
 					t.Errorf("expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)

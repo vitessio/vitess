@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeleteShardCleanup(t *testing.T) {
@@ -46,13 +47,11 @@ func TestDeleteShardCleanup(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, primary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Delete the ShardReplication record in cell2
 	if err := ts.DeleteShardReplication(ctx, "cell2", remoteReplica.Tablet.Keyspace, remoteReplica.Tablet.Shard); err != nil {
-		t.Fatalf("DeleteShardReplication failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Now try to delete the shard without even_if_serving or
@@ -61,7 +60,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 		"DeleteShard",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
 	}); err == nil || !strings.Contains(err.Error(), "is still serving, cannot delete it") {
-		t.Fatalf("DeleteShard() returned wrong error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Now try to delete the shard with even_if_serving, but
@@ -71,7 +70,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
 	}); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
-		t.Fatalf("DeleteShard(evenIfServing=true) returned wrong error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Now try to delete the shard with even_if_serving and recursive,
@@ -82,7 +81,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
 	}); err != nil {
-		t.Fatalf("DeleteShard(recursive=true, evenIfServing=true) should have worked but returned: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Make sure all tablets are gone.

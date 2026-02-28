@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBasicCompare(t *testing.T) {
@@ -36,9 +37,7 @@ func TestBasicCompare(t *testing.T) {
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
 	err = CompareKeyspaces(ctx, fromTS, toTS)
-	if err != nil {
-		t.Fatalf("Compare keyspaces failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// check shard copy
 	err = CompareShards(ctx, fromTS, toTS)
@@ -49,9 +48,7 @@ func TestBasicCompare(t *testing.T) {
 	CopyShards(ctx, fromTS, toTS)
 
 	err = CompareShards(ctx, fromTS, toTS)
-	if err != nil {
-		t.Fatalf("Compare shards failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// check ShardReplication compare
 	err = CompareShardReplications(ctx, fromTS, toTS)
@@ -62,9 +59,7 @@ func TestBasicCompare(t *testing.T) {
 	CopyShardReplications(ctx, fromTS, toTS)
 
 	err = CompareShardReplications(ctx, fromTS, toTS)
-	if err != nil {
-		t.Fatalf("Compare shard replications failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// check tablet compare
 	err = CompareTablets(ctx, fromTS, toTS)
@@ -75,9 +70,7 @@ func TestBasicCompare(t *testing.T) {
 	CopyTablets(ctx, fromTS, toTS)
 
 	err = CompareTablets(ctx, fromTS, toTS)
-	if err != nil {
-		t.Fatalf("Compare tablets failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = CompareRoutingRules(ctx, fromTS, toTS)
 	if err == nil {
@@ -87,7 +80,5 @@ func TestBasicCompare(t *testing.T) {
 	CopyRoutingRules(ctx, fromTS, toTS)
 
 	err = CompareRoutingRules(ctx, fromTS, toTS)
-	if err != nil {
-		t.Fatalf("Compare routing rules failed: %v", err)
-	}
+	require.NoError(t, err)
 }

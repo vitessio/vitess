@@ -62,9 +62,7 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 		"-initial-cluster", initialCluster,
 		"-data-dir", dataDir)
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start etcd: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created etcd.
 	cli, err := clientv3.New(clientv3.Config{
@@ -136,14 +134,10 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start etcd: %v", err)
-	}
+	require.NoError(t, err)
 
 	tlsConfig, err := newTLSConfig(certs.ClientCert, certs.ClientKey, certs.ServerCA)
-	if err != nil {
-		t.Fatalf("failed to get tls.Config: %v", err)
-	}
+	require.NoError(t, err)
 
 	var cli *clientv3.Client
 	// Create client
@@ -202,22 +196,16 @@ func TestEtcd2TLS(t *testing.T) {
 
 	// Create the server on the new root.
 	server, err := NewServerWithOpts(clientAddr, testRoot, certs.ClientCert, certs.ClientKey, certs.ServerCA)
-	if err != nil {
-		t.Fatalf("NewServerWithOpts failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer server.Close()
 
 	testCtx := context.Background()
 	testKey := "testkey"
 	testVal := "testval"
 	_, err = server.Create(testCtx, testKey, []byte(testVal))
-	if err != nil {
-		t.Fatalf("Failed to set key value pair: %v", err)
-	}
+	require.NoError(t, err)
 	val, _, err := server.Get(testCtx, testKey)
-	if err != nil {
-		t.Fatalf("Failed to retrieve value at key we just set: %v", err)
-	}
+	require.NoError(t, err)
 	if string(val) != testVal {
 		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
 	}
@@ -235,16 +223,14 @@ func TestEtcd2Topo(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("etcd2", clientAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
 		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: clientAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -443,32 +429,26 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace: %v", err)
+		require.NoError(t, err)
 	}
 
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Long TTL, unlock before lease runs out.
 	leaseTTL = 1000
 	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "ttl")
-	if err != nil {
-		t.Fatalf("Lock failed: %v", err)
-	}
+	require.NoError(t, err)
 	if err := lockDescriptor.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Short TTL, make sure it doesn't expire.
 	leaseTTL = 1
 	lockDescriptor, err = conn.Lock(ctx, keyspacePath, "short ttl")
-	if err != nil {
-		t.Fatalf("Lock failed: %v", err)
-	}
+	require.NoError(t, err)
 	time.Sleep(2 * time.Second)
 	if err := lockDescriptor.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock failed: %v", err)
+		require.NoError(t, err)
 	}
 }

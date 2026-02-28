@@ -61,7 +61,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Fatalf("GetSrvKeyspace(not created) got unexpected error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Wait until the cached error expires.
@@ -80,9 +80,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		got, err = rs.GetSrvKeyspace(ctx, "test_cell", "test_ks")
 		cancel()
 
-		if err != nil {
-			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
-		}
+		require.NoError(t, err)
 		if proto.Equal(want, got) {
 			break
 		}
@@ -101,9 +99,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Wait a bit to give the watcher enough time to update the value.
 	time.Sleep(10 * time.Millisecond)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(want, got) {
 		t.Fatalf("GetSrvKeyspace() = %+v, want %+v", got, want)
 	}
@@ -113,17 +109,15 @@ func TestGetSrvKeyspace(t *testing.T) {
 	maps.Copy(funcs, StatusFuncs)
 	templ := template.New("").Funcs(funcs)
 	templ, err = templ.Parse(TopoTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.NoError(t, err)
 	wr := &bytes.Buffer{}
 	if err := templ.Execute(wr, rs.CacheStatus()); err != nil {
-		t.Fatalf("error executing template: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Now delete the SrvKeyspace, wait until we get the error.
 	if err := ts.DeleteSrvKeyspace(context.Background(), "test_cell", "test_ks"); err != nil {
-		t.Fatalf("DeleteSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	expiry = time.Now().Add(5 * time.Second)
 	for {
@@ -228,7 +222,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	time.Sleep(srvTopoCacheRefresh)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != nil || !proto.Equal(want, got) {
-		t.Errorf("expected value to be restored, got %v", err)
+		assert.NoError(t, err)
 	}
 
 	// Now sleep for the full TTL before setting the error again to test
@@ -241,9 +235,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	expiry = time.Now().Add(srvTopoCacheTTL / 2)
 	for {
 		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-		if err != nil {
-			t.Fatalf("value should have been cached for the full ttl, error %v", err)
-		}
+		require.NoError(t, err)
 		if time.Now().After(expiry) {
 			break
 		}
@@ -332,7 +324,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 	if err != nil || !proto.Equal(want, got) {
-		t.Errorf("expected error to clear, got %v", err)
+		assert.NoError(t, err)
 	}
 
 	// Force another error and lock the topo. Then wait for the TTL to
@@ -421,7 +413,7 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 				return
 			}
 		default:
-			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+			require.NoError(t, err)
 		}
 		if time.Now().After(expiry) {
 			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
@@ -457,7 +449,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	// WatchSrvVSchema won't return until it gets the initial value,
 	// which is not there, so we should get watchErr=topo.ErrNoNode.
 	if _, err := get(); !topo.IsErrType(err, topo.NoNode) {
-		t.Fatalf("WatchSrvVSchema didn't return topo.ErrNoNode at first, but got: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Save a value, wait for it.
@@ -467,7 +459,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 		},
 	}
 	if err := ts.UpdateSrvVSchema(ctx, "test_cell", newValue); err != nil {
-		t.Fatalf("UpdateSrvVSchema failed: %v", err)
+		require.NoError(t, err)
 	}
 	start := time.Now()
 	for {
@@ -487,7 +479,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 		},
 	}
 	if err := ts.UpdateSrvVSchema(ctx, "test_cell", updatedValue); err != nil {
-		t.Fatalf("UpdateSrvVSchema failed: %v", err)
+		require.NoError(t, err)
 	}
 	start = time.Now()
 	for {
@@ -502,7 +494,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 	// Delete the value, wait for topo.ErrNoNode
 	if err := ts.DeleteSrvVSchema(ctx, "test_cell"); err != nil {
-		t.Fatalf("DeleteSrvVSchema failed: %v", err)
+		require.NoError(t, err)
 	}
 	start = time.Now()
 	for {
@@ -540,9 +532,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks2, %s) failed", want)
 
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-	if err != nil {
-		t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
-	}
+	assert.NoError(t, err)
 	wantNames := []string{"test_ks", "test_ks2"}
 
 	if !reflect.DeepEqual(names, wantNames) {
@@ -565,9 +555,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	start := time.Now()
 	for {
 		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-		if err != nil {
-			t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
-		}
+		assert.NoError(t, err)
 
 		if !reflect.DeepEqual(names, wantNames) {
 			t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
@@ -601,9 +589,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// Now, since the TTL has expired, check that when we ask for stale
 	// info, we'll get it.
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
-	if err != nil {
-		t.Fatalf("expected no error if asking for stale cache data, got: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Now, wait long enough that with a stale ask, we'll get an error
 	time.Sleep(srvTopoCacheRefresh*2 + 2*time.Millisecond)
@@ -691,9 +677,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 
 	// Make initial successful query to cache the value
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-	if err != nil {
-		t.Fatalf("Initial GetSrvKeyspaceNames failed: %v", err)
-	}
+	require.NoError(t, err)
 	expectedNames := []string{"test_ks1", "test_ks2"}
 	require.ElementsMatch(t, names, expectedNames, "Initial GetSrvKeyspaceNames returned wrong names")
 

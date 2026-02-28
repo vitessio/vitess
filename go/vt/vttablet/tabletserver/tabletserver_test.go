@@ -544,9 +544,7 @@ func TestTabletServerRollback(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, nil, &target, nil)
 	require.NoError(t, err)
-	if err != nil {
-		t.Fatalf("call TabletServer.Begin failed: %v", err)
-	}
+	require.NoError(t, err)
 	_, err = tsv.Execute(ctx, nil, &target, executeSQL, nil, state.TransactionID, 0, nil)
 	require.NoError(t, err)
 	_, err = tsv.Rollback(ctx, &target, state.TransactionID)
@@ -1110,7 +1108,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1127,7 +1125,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		// still pending.
 		<-tx3Finished
 		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1139,7 +1137,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 		close(tx3Finished)
 	})
@@ -1244,7 +1242,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		}
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1260,7 +1258,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		}
 
 		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1276,7 +1274,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		}
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1369,7 +1367,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1380,7 +1378,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		<-tx1Started
 		_, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and `name` = 1')" {
-			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
+			assert.NoError(t, err)
 		}
 		// No commit necessary because the Begin failed.
 	})
@@ -1453,7 +1451,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		}
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1467,7 +1465,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 		_, _, err := tsv.BeginExecute(ctxTx2, nil, &target, nil, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
-			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
+			assert.NoError(t, err)
 		}
 		// No commit necessary because the Begin failed.
 	})
@@ -1485,7 +1483,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		}
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 

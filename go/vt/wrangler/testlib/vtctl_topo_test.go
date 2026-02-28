@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want string) {
@@ -56,10 +57,10 @@ func TestVtctlTopoCommands(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
@@ -75,17 +76,13 @@ keyspace_type:SNAPSHOT
 	// Test TopoCp from topo to disk.
 	ksFile := path.Join(tmp, "Keyspace")
 	_, err := vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
-	if err != nil {
-		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
-	}
+	require.NoError(t, err)
 	contents, err := os.ReadFile(ksFile)
-	if err != nil {
-		t.Fatalf("copy failed: %v", err)
-	}
+	require.NoError(t, err)
 	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
 	got := &topodatapb.Keyspace{}
 	if err = got.UnmarshalVT(contents); err != nil {
-		t.Fatalf("bad keyspace data %v", err)
+		require.NoError(t, err)
 	}
 	if !proto.Equal(got, expected) {
 		t.Fatalf("bad proto data: Got %v expected %v", got, expected)
@@ -93,13 +90,9 @@ keyspace_type:SNAPSHOT
 
 	// Test TopoCp from disk to topo.
 	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
-	if err != nil {
-		t.Fatalf("TopoCp(/keyspaces/ks3/Keyspace) failed: %v", err)
-	}
+	require.NoError(t, err)
 	ks3, err := ts.GetKeyspace(context.Background(), "ks3")
-	if err != nil {
-		t.Fatalf("copy from disk to topo failed: %v", err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(ks3.Keyspace, expected) {
 		t.Fatalf("copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
 	}

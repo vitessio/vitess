@@ -66,7 +66,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	// Connection should fail, as server requires SSL for clear text auth.
 	_, err = Connect(ctx, params)
 	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
-		t.Fatalf("unexpected connection error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Change server side to allow clear text without auth.

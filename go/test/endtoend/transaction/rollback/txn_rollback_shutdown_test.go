@@ -98,7 +98,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 
 	// Enforce a restart to enforce rollback
 	if err = clusterInstance.RestartVtgate(); err != nil {
-		t.Errorf("Fail to re-start vtgate: %v", err)
+		assert.NoError(t, err)
 	}
 
 	want := ""

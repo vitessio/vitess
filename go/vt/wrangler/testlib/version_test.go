@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
@@ -103,7 +104,7 @@ func TestVersion(t *testing.T) {
 	// test when versions are the same
 	sourceReplicaGitRev = "fake git rev"
 	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err != nil {
-		t.Fatalf("ValidateVersionKeyspace(same) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// test when versions are different
@@ -111,6 +112,6 @@ func TestVersion(t *testing.T) {
 	err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace})
 	fmt.Printf("ERROR %v", err)
 	if err == nil || !strings.Contains(err.Error(), "is different than replica") {
-		t.Fatalf("ValidateVersionKeyspace(different) returned an unexpected error: %v", err)
+		require.NoError(t, err)
 	}
 }

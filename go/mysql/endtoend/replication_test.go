@@ -50,7 +50,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	// Switch server to RBR if needed.
 	if rbr {
 		if _, err := conn.ExecuteFetch("SET GLOBAL binlog_format='ROW'", 0, false); err != nil {
-			t.Fatalf("SET GLOBAL binlog_format='ROW' failed: %v", err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -65,12 +65,12 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
 	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
-		t.Fatalf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Write ComBinlogDump packet with to start streaming events from here.
 	if err := conn.WriteComBinlogDump(1, file, position, 0); err != nil {
-		t.Fatalf("WriteComBinlogDump failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Wait for the FORMAT_DESCRIPTION_EVENT
@@ -126,7 +126,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 				// What we expect, keep going.
 			case mysql.ErrPacket:
 				err := mysql.ParseErrorPacket(data)
-				t.Errorf("ReadPacket returned an error packet: %v", err)
+				assert.NoError(t, err)
 			default:
 				// Very unexpected.
 				t.Errorf("ReadPacket returned a weird packet: %v", data)
@@ -152,7 +152,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
 	if _, err := dConn.ExecuteFetch("drop table replicationError", 0, false); err != nil {
-		t.Fatalf("drop table failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// wait for a few milliseconds.
@@ -228,9 +228,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 		case be.IsGTID():
 			// We expect one of these at least.
 			gtid, hasBegin, _, _, err := be.GTID(f)
-			if err != nil {
-				t.Fatalf("GTID event is broken: %v", err)
-			}
+			require.NoError(t, err)
 			t.Logf("Got GTID event: %v %v", gtid, hasBegin)
 			gtidCount++
 			if hasBegin {
@@ -238,9 +236,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 			}
 		case be.IsQuery():
 			q, err := be.Query(f)
-			if err != nil {
-				t.Fatalf("Query event is broken: %v", err)
-			}
+			require.NoError(t, err)
 			t.Logf("Got Query event: %v", q)
 			switch strings.ToLower(q.SQL) {
 			case createTable:
@@ -257,9 +253,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
 			var err error
 			tableMap, err = be.TableMap(f)
-			if err != nil {
-				t.Fatalf("TableMap event is broken: %v", err)
-			}
+			require.NoError(t, err)
 			t.Logf("Got Table Map event: %v %v", tableID, tableMap)
 			if tableMap.Database != "vttest" ||
 				tableMap.Name != "replication" ||
@@ -274,9 +268,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			wr, err := be.Rows(f, tableMap)
-			if err != nil {
-				t.Fatalf("Rows event is broken: %v", err)
-			}
+			require.NoError(t, err)
 
 			// Check it has 2 rows, and first value is '10', second value is 'nice name'.
 			values, _ := wr.StringValuesForTests(tableMap, 0)
@@ -291,9 +283,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 				t.Fatalf("UpdateRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			ur, err := be.Rows(f, tableMap)
-			if err != nil {
-				t.Fatalf("UpdateRows event is broken: %v", err)
-			}
+			require.NoError(t, err)
 
 			// Check it has 2 identify rows, and first value is '10', second value is 'nice name'.
 			values, _ := ur.StringIdentifiesForTests(tableMap, 0)
@@ -315,9 +305,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 				t.Fatalf("DeleteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			dr, err := be.Rows(f, tableMap)
-			if err != nil {
-				t.Fatalf("DeleteRows event is broken: %v", err)
-			}
+			require.NoError(t, err)
 
 			// Check it has 2 rows, and first value is '10', second value is 'nicer name'.
 			values, _ := dr.StringIdentifiesForTests(tableMap, 0)
@@ -950,9 +938,7 @@ func TestRowReplicationTypes(t *testing.T) {
 			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
 			var err error
 			tableMap, err = be.TableMap(f)
-			if err != nil {
-				t.Fatalf("TableMap event is broken: %v", err)
-			}
+			require.NoError(t, err)
 			t.Logf("Got Table Map event: %v %v", tableID, tableMap)
 			if tableMap.Database != "vttest" ||
 				tableMap.Name != "replicationtypes" ||
@@ -965,15 +951,11 @@ func TestRowReplicationTypes(t *testing.T) {
 				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			wr, err := be.Rows(f, tableMap)
-			if err != nil {
-				t.Fatalf("Rows event is broken: %v", err)
-			}
+			require.NoError(t, err)
 
 			// Check it has the right values
 			values, err = valuesForTests(t, &wr, tableMap, 0)
-			if err != nil {
-				t.Fatalf("valuesForTests is broken: %v", err)
-			}
+			require.NoError(t, err)
 			t.Logf("Got WriteRows event data: %v %v", wr, values)
 			if len(values) != len(testcases)+1 {
 				t.Fatalf("Got wrong length %v for values, was expecting %v", len(values), len(testcases)+1)

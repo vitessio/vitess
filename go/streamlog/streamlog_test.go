@@ -60,9 +60,7 @@ func TestHTTP(t *testing.T) {
 
 	go func() {
 		err := servenv.HTTPServe(l)
-		if err != nil {
-			t.Errorf("http serve returned unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	logger := New[*logMessage]("logger", 1)
@@ -210,9 +208,7 @@ func TestFile(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)
 	defer logger.Unsubscribe(logChan)
-	if err != nil {
-		t.Errorf("error enabling file logger: %v", err)
-	}
+	assert.NoError(t, err)
 
 	logger.Send(&logMessage{"test 1"})
 	logger.Send(&logMessage{"test 2"})
