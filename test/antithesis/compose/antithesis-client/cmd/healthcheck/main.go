@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"time"
@@ -19,24 +18,38 @@ type healthCounts struct {
 	replicas  int
 }
 
-type tabletAlias struct {
-	Cell string `json:"cell"`
-	UID  int    `json:"uid"`
+type tabletTarget struct {
+	Keyspace   string `json:"keyspace"`
+	Shard      string `json:"shard"`
+	TabletType int    `json:"tablet_type"`
 }
 
-type tabletRecord struct {
-	Keyspace string      `json:"keyspace"`
-	Shard    string      `json:"shard"`
-	Type     interface{} `json:"type"`
+type tabletInfo struct {
+	Keyspace string `json:"keyspace"`
+	Shard    string `json:"shard"`
+	Type     int    `json:"type"`
+}
+
+type tabletStats struct {
+	Tablet    tabletInfo   `json:"Tablet"`
+	Target    tabletTarget `json:"Target"`
+	Serving   bool         `json:"Serving"`
+	LastError *string      `json:"LastError"`
+}
+
+type tabletCacheStatus struct {
+	Cell         string        `json:"Cell"`
+	Target       tabletTarget  `json:"Target"`
+	TabletsStats []tabletStats `json:"TabletsStats"`
 }
 
 const defaultTimeout = 30 * time.Second
 
 func main() {
-	defaultVtctld := getenv("VTCTLD_ADDR", "http://vtctld:8080")
+	defaultVtgate := getenv("VTGATE_ADDR", "http://vtgate:8080")
 	defaultCell := getenv("VTCTLD_CELL", "test")
 	var (
-		vtctldAddr   = flag.String("vtctld", defaultVtctld, "vtctld base address")
+		vtgateAddr   = flag.String("vtgate", defaultVtgate, "vtgate base address")
 		cell         = flag.String("cell", defaultCell, "cell to query")
 		timeout      = flag.Duration("timeout", defaultTimeout, "timeout for health check")
 		pollInterval = flag.Duration("poll-interval", 2*time.Second, "poll interval for health check")
@@ -46,21 +59,21 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	if err := checkEventually(ctx, *vtctldAddr, *cell, *pollInterval); err != nil {
+	if err := checkEventually(ctx, *vtgateAddr, *cell, *pollInterval); err != nil {
 		assert.Unreachable("Vitess cluster health did not recover within timeout", map[string]any{"error": err.Error()})
 		fmt.Printf("health check failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func checkEventually(ctx context.Context, vtctldAddr string, cell string, pollInterval time.Duration) error {
+func checkEventually(ctx context.Context, vtgateAddr string, cell string, pollInterval time.Duration) error {
 	var lastErr error
 	for {
-		ok, err := checkOnce(vtctldAddr, cell)
+		ok, err := checkOnce(vtgateAddr, cell)
 		if err != nil {
 			lastErr = err
 		} else if ok {
-			assert.Always(true, "Vitess shard has primary and replica", map[string]any{"vtctld": vtctldAddr, "cell": cell})
+			assert.Always(true, "Vitess shard has primary and replica", map[string]any{"vtgate": vtgateAddr, "cell": cell})
 			return nil
 		}
 		select {
@@ -74,9 +87,9 @@ func checkEventually(ctx context.Context, vtctldAddr string, cell string, pollIn
 	}
 }
 
-func checkOnce(vtctldAddr string, cell string) (bool, error) {
+func checkOnce(vtgateAddr string, cell string) (bool, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	listURL := fmt.Sprintf("%s/api/tablets/?cell=%s", vtctldAddr, cell)
+	listURL := fmt.Sprintf("%s/api/health-check/cell/%s", vtgateAddr, cell)
 	resp, err := client.Get(listURL)
 	if err != nil {
 		return false, nil
@@ -85,39 +98,34 @@ func checkOnce(vtctldAddr string, cell string) (bool, error) {
 	if resp.StatusCode != http.StatusOK {
 		return false, nil
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	var cacheStatuses []tabletCacheStatus
+	if err := json.NewDecoder(resp.Body).Decode(&cacheStatuses); err != nil {
 		return false, err
 	}
-	var aliases []tabletAlias
-	if err := json.Unmarshal(body, &aliases); err != nil {
-		return false, err
-	}
-	if len(aliases) == 0 {
-		return false, errors.New("tablet list is empty")
+	if len(cacheStatuses) == 0 {
+		return false, errors.New("health check list is empty")
 	}
 	counts := map[string]*healthCounts{}
-	for _, alias := range aliases {
-		aliasStr := fmt.Sprintf("%s-%010d", alias.Cell, alias.UID)
-		tabletURL := fmt.Sprintf("%s/api/tablets/%s", vtctldAddr, aliasStr)
-		tr, err := fetchTabletRecord(client, tabletURL)
-		if err != nil {
-			return false, err
-		}
-		if tr.Keyspace == "" || tr.Shard == "" {
-			continue
-		}
-		key := tr.Keyspace + ":" + tr.Shard
-		entry := counts[key]
-		if entry == nil {
-			entry = &healthCounts{}
-			counts[key] = entry
-		}
-		if isPrimary(tr.Type) {
-			entry.primaries++
-		}
-		if isReplica(tr.Type) {
-			entry.replicas++
+	for _, cacheStatus := range cacheStatuses {
+		for _, tablet := range cacheStatus.TabletsStats {
+			if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
+				continue
+			}
+			if !isHealthy(tablet) {
+				continue
+			}
+			key := tablet.Tablet.Keyspace + ":" + tablet.Tablet.Shard
+			entry := counts[key]
+			if entry == nil {
+				entry = &healthCounts{}
+				counts[key] = entry
+			}
+			if isPrimary(tablet.Tablet.Type) {
+				entry.primaries++
+			}
+			if isReplica(tablet.Tablet.Type) {
+				entry.replicas++
+			}
 		}
 	}
 	if len(counts) == 0 {
@@ -131,46 +139,22 @@ func checkOnce(vtctldAddr string, cell string) (bool, error) {
 	return true, nil
 }
 
-func fetchTabletRecord(client *http.Client, url string) (*tabletRecord, error) {
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("tablet fetch failed: %s", resp.Status)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	var record tabletRecord
-	if err := json.Unmarshal(body, &record); err != nil {
-		return nil, err
-	}
-	return &record, nil
+func isPrimary(t int) bool {
+	return t == 1
 }
 
-func isPrimary(t interface{}) bool {
-	switch value := t.(type) {
-	case float64:
-		return int(value) == 1
-	case string:
-		return value == "PRIMARY"
-	default:
-		return false
-	}
+func isReplica(t int) bool {
+	return t == 2
 }
 
-func isReplica(t interface{}) bool {
-	switch value := t.(type) {
-	case float64:
-		return int(value) == 2
-	case string:
-		return value == "REPLICA"
-	default:
+func isHealthy(stats tabletStats) bool {
+	if !stats.Serving {
 		return false
 	}
+	if stats.LastError == nil {
+		return true
+	}
+	return *stats.LastError == ""
 }
 
 func getenv(key string, fallback string) string {
