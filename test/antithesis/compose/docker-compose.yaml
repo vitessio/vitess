@@ -390,7 +390,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:v22.0.4
+    image: vitess/lite:latest
     ports:
       - 15302:8080
       - "15999"
