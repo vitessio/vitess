@@ -86,7 +86,6 @@ if [ "$source_db" = "1" ]; then
   echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
   echo "GRANT ALL ON *.* TO '$DB_USER'@'%';" >> $init_db_sql_file
 fi
-echo "##[CUSTOM_SQL_END]##" >> $init_db_sql_file
 
 echo "##[CUSTOM_SQL_END]##" >> $init_db_sql_file
 
