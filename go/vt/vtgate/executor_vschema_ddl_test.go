@@ -747,14 +747,10 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	// test when all users are enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	_, err = executorExecSession(ctxRedUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 	stmt = "alter vschema create vindex test_hash2 using hash"
 	_, err = executorExecSession(ctxBlueUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 
 	// test when only one user is enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("orangeUser, blueUser, greenUser"))
@@ -763,9 +759,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executorExecSession(ctxBlueUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 
 	// restore the disallowed state
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))

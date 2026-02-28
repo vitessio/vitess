@@ -35,6 +35,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPermissions(t *testing.T) {
@@ -60,9 +61,7 @@ func TestPermissions(t *testing.T) {
 		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// primary will be asked for permissions
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -585,7 +584,7 @@ func TestPermissions(t *testing.T) {
 
 	// run ValidatePermissionsKeyspace, this should work
 	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err != nil {
-		t.Fatalf("ValidatePermissionsKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// modify one field, this should fail
@@ -596,6 +595,6 @@ func TestPermissions(t *testing.T) {
 
 	// run ValidatePermissionsKeyspace again, this should now fail
 	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
-		t.Fatalf("ValidatePermissionsKeyspace has unexpected err: %v", err)
+		require.NoError(t, err)
 	}
 }

@@ -247,9 +247,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	qr, err = f(ctx, sc, []string{"0", "1"})
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}

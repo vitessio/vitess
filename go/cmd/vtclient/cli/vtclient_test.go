@@ -70,14 +70,14 @@ func TestVtclient(t *testing.T) {
 		},
 	}
 	if err := cfg.InitSchemas("test_keyspace", schema, vschema); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
+		require.NoError(t, err)
 	}
 	defer os.RemoveAll(cfg.SchemaDir)
 	cluster := vttest.LocalCluster{
 		Config: cfg,
 	}
 	if err := cluster.Setup(); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
+		require.NoError(t, err)
 	}
 	defer cluster.TearDown()
 

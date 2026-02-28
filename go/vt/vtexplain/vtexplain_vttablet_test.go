@@ -129,9 +129,7 @@ create table test_partitioned (
 `
 	env := vtenv.NewTestEnv()
 	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false}, env.Parser())
-	if err != nil {
-		t.Fatalf("parseSchema: %v", err)
-	}
+	require.NoError(t, err)
 	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, Cell)

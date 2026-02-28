@@ -953,9 +953,7 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
 	// Do nothing if this version is already installed
 	dbVersionInUse, err := getDBTypeVersionInUse()
-	if err != nil {
-		t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
-	}
+	require.NoError(t, err)
 	if dbTypeMajorVersion == dbVersionInUse {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 		return func() {}

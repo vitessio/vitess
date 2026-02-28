@@ -138,11 +138,11 @@ func setupExtraMyCnf() error {
 	if existing != "" {
 		// Append clone.cnf to existing
 		if err := os.Setenv("EXTRA_MY_CNF", existing+":"+cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
+			assert.NoError(t, err)
 		}
 	} else {
 		if err := os.Setenv("EXTRA_MY_CNF", cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
+			assert.NoError(t, err)
 		}
 	}
 
@@ -154,9 +154,7 @@ func setupExtraMyCnf() error {
 func initClusterForClone() error {
 	// Create a combined init file that includes clone user
 	initDBWithClone, err := createInitDBWithCloneUser()
-	if err != nil {
-		return fmt.Errorf("failed to create init DB file: %v", err)
-	}
+	assert.NoError(t, err)
 	log.Info("Created combined init file at: " + initDBWithClone)
 
 	var mysqlCtlProcessList []*exec.Cmd
@@ -205,7 +203,7 @@ func initClusterForClone() error {
 	// Wait for MySQL processes to be ready
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("MySQL process failed to start: %v", err)
+			assert.NoError(t, err)
 		}
 	}
 	log.Info("MySQL processes started successfully")
@@ -225,25 +223,19 @@ func createInitDBWithCloneUser() (string, error) {
 	initClonePath := path.Join(os.Getenv("VTROOT"), "config", "init_clone.sql")
 
 	initDB, err := os.ReadFile(initDBPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read init_db.sql: %v", err)
-	}
+	assert.NoError(t, err)
 
 	initClone, err := os.ReadFile(initClonePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read init_clone.sql: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
 	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
-	if err != nil {
-		return "", fmt.Errorf("failed to inject clone SQL: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
 	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
-		return "", fmt.Errorf("failed to write combined init file: %v", err)
+		assert.NoError(t, err)
 	}
 
 	return combinedPath, nil

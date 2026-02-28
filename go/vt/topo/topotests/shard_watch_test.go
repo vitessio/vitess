@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // waitForInitialShard waits for the initial Shard to appear.
@@ -48,7 +50,7 @@ func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) 
 		case err == nil:
 			return
 		default:
-			t.Fatalf("watch failed: %v", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -63,7 +65,7 @@ func TestWatchShardNoNode(t *testing.T) {
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
+		assert.NoError(t, err)
 	}
 }
 
@@ -83,7 +85,7 @@ func TestWatchShard(t *testing.T) {
 
 	// Create initial value
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work, and return an empty
@@ -101,7 +103,7 @@ func TestWatchShard(t *testing.T) {
 		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
@@ -121,12 +123,10 @@ func TestWatchShard(t *testing.T) {
 	}
 
 	conn, err := ts.ConnForCell(ctx, "global")
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 	// Update the value with bad data, wait until error.
 	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/shards/"+shard+"/Shard", []byte("BAD PROTO DATA"), nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
@@ -151,16 +151,14 @@ func TestWatchShard(t *testing.T) {
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchShard(ctx, keyspace, shard)
 	if err == nil || !strings.Contains(err.Error(), "error unpacking initial Shard object") {
-		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
+		require.NoError(t, err)
 	}
 
 	data, err := wanted.MarshalVT()
-	if err != nil {
-		t.Fatalf("error marshalling proto data: %v", err)
-	}
+	require.NoError(t, err)
 	// Update content, wait until Watch works again
 	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/shards/"+shard+"/Shard", data, nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	start := time.Now()
 	for {
@@ -174,7 +172,7 @@ func TestWatchShard(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
-			t.Fatalf("got unexpected error while setting watch: %v", err)
+			require.NoError(t, err)
 		}
 		if !proto.Equal(current.Value, wanted) {
 			t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
@@ -184,7 +182,7 @@ func TestWatchShard(t *testing.T) {
 
 	// Delete node, wait for error (skip any duplicate).
 	if err := ts.DeleteShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("DeleteShard() failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
@@ -216,7 +214,7 @@ func TestWatchShardCancel(t *testing.T) {
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
+		assert.NoError(t, err)
 	}
 
 	// Create keyspace
@@ -226,7 +224,7 @@ func TestWatchShardCancel(t *testing.T) {
 
 	// Create initial value
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	wanted := &topodatapb.Shard{
 		IsPrimaryServing: false,
@@ -235,7 +233,7 @@ func TestWatchShardCancel(t *testing.T) {
 		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work.

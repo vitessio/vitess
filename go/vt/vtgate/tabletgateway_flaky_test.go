@@ -348,7 +348,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		// depending on whether the health check ticks before or after the buffering code, we might get different errors
 		if err.Error() != "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" &&
 			err.Error() != "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'" {
-			t.Fatalf("wrong error returned: %v", err)
+			require.NoError(t, err)
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")

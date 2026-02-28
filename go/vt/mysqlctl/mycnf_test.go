@@ -125,7 +125,7 @@ func NoTestMycnfHook(t *testing.T) {
 	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf, 0)
 	if err != nil {
-		t.Errorf("failed reading, err %v", err)
+		assert.NoError(t, err)
 	} else {
 		t.Logf("socket file %v", mycnf.SocketFile)
 	}

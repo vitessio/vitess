@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 // Test the explorer using MemoryTopo as a backend.
@@ -56,13 +57,13 @@ func TestHandlePathKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
-		t.Fatalf("CreateKeyspace error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)
@@ -107,17 +108,17 @@ func TestHandlePathShard(t *testing.T) {
 	defer ts.Close()
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
-		t.Fatalf("CreateKeyspace error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
 		// Set cells, reset other fields so printout is easier to compare.
 		si.KeyRange = nil
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)
@@ -153,7 +154,7 @@ func TestHandlePathTablet(t *testing.T) {
 	defer ts.Close()
 
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)

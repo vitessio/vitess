@@ -31,6 +31,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
+	"github.com/stretchr/testify/assert"
 )
 
 type fakeACLFactory struct{}
@@ -103,7 +104,7 @@ func TestInitFromProto(t *testing.T) {
 		}},
 	}
 	if err := tacl.Set(config); err != nil {
-		t.Fatalf("tableacl init should succeed, but got error: %v", err)
+		require.NoError(t, err)
 	}
 	if got := tacl.Config(); !proto.Equal(got, config) {
 		t.Fatalf("GetCurrentConfig() = %v, want: %v", got, config)
@@ -187,7 +188,7 @@ func TestTableACLAuthorize(t *testing.T) {
 		},
 	}
 	if err := tacl.Set(config); err != nil {
-		t.Fatalf("InitFromProto(<data>) = %v, want: nil", err)
+		require.NoError(t, err)
 	}
 
 	readerACL := tacl.Authorized("test_data_any", READER)
@@ -233,9 +234,7 @@ func TestGetCurrentAclFactory(t *testing.T) {
 	aclFactory := &simpleacl.Factory{}
 	Register(name+"-1", aclFactory)
 	f, err := GetCurrentACLFactory()
-	if err != nil {
-		t.Errorf("Fail to get current ACL Factory: %v", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(aclFactory, f) {
 		t.Fatalf("should return registered acl factory even if default acl is not set.")
 	}

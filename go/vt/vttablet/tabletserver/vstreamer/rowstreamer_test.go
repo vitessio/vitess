@@ -37,6 +37,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
@@ -636,7 +637,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 
 	// We expect context canceled error since we cancel after receiving heartbeats
 	if err != nil && err.Error() != "stream ended: context canceled" {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	// Verify we received data

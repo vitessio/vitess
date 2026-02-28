@@ -142,7 +142,7 @@ func TestTranslateSimplification(t *testing.T) {
 			converted, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.converted.err == "" {
-					t.Fatalf("failed to Convert (simplify=false): %v", err)
+					require.NoError(t, err)
 				}
 				if !strings.Contains(err.Error(), tc.converted.err) {
 					t.Fatalf("wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
@@ -155,7 +155,7 @@ func TestTranslateSimplification(t *testing.T) {
 			simplified, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.simplified.err == "" {
-					t.Fatalf("failed to Convert (simplify=true): %v", err)
+					require.NoError(t, err)
 				}
 				if !strings.Contains(err.Error(), tc.simplified.err) {
 					t.Fatalf("wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)

@@ -41,9 +41,7 @@ func TestConnPoolGet(t *testing.T) {
 	connPool.Open(params, params, params)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("should not get an error, but got: %v", err)
-	}
+	require.NoError(t, err)
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
 	}
@@ -83,9 +81,7 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	ctx = callerid.NewContext(ctx, ecid, im)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
-	if err != nil {
-		t.Fatalf("should not get an error, but got: %v", err)
-	}
+	require.NoError(t, err)
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
 	}
@@ -105,9 +101,7 @@ func TestConnPoolGetAppDebug(t *testing.T) {
 	connPool.Open(params, params, debugConn)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
-	if err != nil {
-		t.Fatalf("should not get an error, but got: %v", err)
-	}
+	require.NoError(t, err)
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
 	}

@@ -583,7 +583,7 @@ func TestTx(t *testing.T) {
 	// We actually don't have to cover this in our code.
 	err = tx.Commit()
 	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
+		assert.NoError(t, err)
 	}
 
 	// Test rollback now.
@@ -609,7 +609,7 @@ func TestTx(t *testing.T) {
 	// We actually don't have to cover this in our code.
 	err = tx.Rollback()
 	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
+		assert.NoError(t, err)
 	}
 }
 

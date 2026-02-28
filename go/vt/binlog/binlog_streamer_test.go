@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"github.com/stretchr/testify/assert"
 )
 
 // fullBinlogTransaction is a helper type for tests.
@@ -135,7 +136,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -201,7 +202,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -239,7 +240,7 @@ func TestStreamerStop(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != context.Canceled {
-			t.Errorf("wrong context interruption returned value: %v", err)
+			assert.NoError(t, err)
 		}
 	case <-time.After(1 * time.Second):
 		t.Errorf("timed out waiting for binlogConnStreamer.Stop()")
@@ -701,7 +702,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -775,7 +776,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -853,7 +854,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -917,7 +918,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -1028,7 +1029,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -1094,7 +1095,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -1140,7 +1141,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
 	if got := after - before; got != 1 {
@@ -1209,7 +1210,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
@@ -1269,7 +1270,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+		assert.NoError(t, err)
 	}
 
 	if !got.equal(want) {
