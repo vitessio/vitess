@@ -35,7 +35,7 @@ on:
         description: Additional email notification recipient (separate with ;)
         required: true
         type: string
-        default: ""
+        default: "mlord@planetscale.com"
 
 jobs:
   antithesis:
