@@ -25,6 +25,7 @@ SCHEMA_FILES=${SCHEMA_FILES:-"create_messages.sql create_tokens.sql"}
 VSCHEMA_FILE=${VSCHEMA_FILE:-"default_vschema.json"}
 POST_LOAD_FILE=${POST_LOAD_FILE:-""}
 SOURCE_DB=${SOURCE_DB:-"0"}
+SCHEMA_RUN="/vt/schema_run"
 
 sleeptime=$SLEEPTIME
 targettab=$TARGETTAB
@@ -36,7 +37,7 @@ export PATH=/vt/bin:$PATH
 
 sleep "$sleeptime"
 
-if [ ! -f schema_run ]; then
+if [ ! -f "$SCHEMA_RUN" ]; then
   while true; do
     vtctldclient --server "vtctld:$GRPC_PORT" GetTablet "$targettab" && break
     sleep 1
@@ -45,7 +46,7 @@ if [ ! -f schema_run ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
       vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql-file "/script/tables/${schema_file}" "$KEYSPACE" || \
-      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE" || true
+      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE" || echo "Failed to apply schema ${schema_file}" && exit 1
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
@@ -62,7 +63,7 @@ if [ ! -f schema_run ]; then
     mysql --port=15306 --host=vtgate < "/script/$load_file"
   fi
 
-  touch /vt/schema_run
-  echo "Time: $(date). SchemaLoad completed at $(date "+%FT%T") " >> /vt/schema_run
+  touch "$SCHEMA_RUN"
+  echo "Time: $(date). SchemaLoad completed at $(date "+%FT%T") " >> "$SCHEMA_RUN"
   echo "Done Loading Schema at $(date "+%FT%T")"
 fi
