@@ -33,7 +33,7 @@ services:
       MYSQL_USER: ${DB_USER:-source_db_user}
     healthcheck:
       retries: 10
-      test: /usr/bin/mysql --user=root --execute "SHOW DATABASES;"
+      test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute "SHOW DATABASES;"
       timeout: 10s
     ports:
       - "3306"
