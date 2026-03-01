@@ -212,6 +212,24 @@
         "minio"
       ]
     },
+    "backup_s3_microceph": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/s3",
+        "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+      ],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "21",
+      "Tags": [],
+      "Needs": [
+        "microceph"
+      ]
+    },
     "backup_only": {
       "File": "unused.go",
       "Packages": [

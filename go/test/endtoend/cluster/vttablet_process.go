@@ -69,6 +69,7 @@ type VttabletProcess struct {
 	HealthCheckInterval         int
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
+	S3BackupConfig              *S3BackupConfig
 	ServiceMap                  string
 	VtctldAddress               string
 	Directory                   string
@@ -99,9 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if err != nil {
 		return err
 	}
-	vttablet.proc = exec.Command(
-		vttablet.Binary,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	args := []string{
 		"--topo_implementation", vttablet.TopoImplementation,
 		"--topo_global_server_address", vttablet.TopoGlobalAddress,
 		"--topo_global_root", vttablet.TopoGlobalRoot,
@@ -116,12 +115,25 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
 		"--enable_replication_reporter",
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vttabletVer), vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-	)
+	}
+	if vttablet.S3BackupConfig != nil {
+		args = append(args,
+			"--s3-backup-aws-endpoint", vttablet.S3BackupConfig.Endpoint,
+			"--s3-backup-storage-bucket", vttablet.S3BackupConfig.Bucket,
+			"--s3-backup-aws-region", vttablet.S3BackupConfig.Region,
+			"--s3-backup-force-path-style", strconv.FormatBool(vttablet.S3BackupConfig.ForcePathStyle),
+		)
+		if vttablet.S3BackupConfig.Root != "" {
+			args = append(args, "--s3-backup-storage-root", vttablet.S3BackupConfig.Root)
+		}
+	} else {
+		args = append(args, vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vttabletVer), vttablet.FileBackupStorageRoot)
+	}
+	vttablet.proc = exec.Command(vttablet.Binary, args...)
 
 	if vttabletVer >= 24 {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
