@@ -1,0 +1,85 @@
+name: "Setup MicroCeph"
+description: "Install and bootstrap single-node MicroCeph with RGW (S3 API) for backup E2E tests. Provision only; tests consume via AWS_* env."
+
+outputs:
+  endpoint:
+    description: "RGW S3 endpoint URL (e.g. http://localhost:8080)"
+    value: ${{ steps.endpoint.outputs.endpoint }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Cache MicroCeph snap
+      id: cache-microceph
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+      with:
+        path: microceph-snap-cache
+        key: microceph-squid-stable-${{ runner.os }}-v2
+
+    - name: Download MicroCeph snap (on cache miss)
+      if: steps.cache-microceph.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p microceph-snap-cache
+        cd microceph-snap-cache
+        snap download microceph --channel=squid/stable
+
+    - name: Install MicroCeph
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ls microceph-snap-cache/microceph_*.snap 1> /dev/null 2>&1; then
+          sudo snap install microceph-snap-cache/microceph_*.snap --dangerous
+        else
+          sudo snap install microceph --channel=squid/stable
+        fi
+
+    - name: Bootstrap cluster
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo microceph cluster bootstrap
+        sudo microceph disk add loop,4G,1
+        sudo microceph enable rgw
+
+    - name: Wait for RGW
+      shell: bash
+      run: |
+        set -euo pipefail
+        for i in {1..30}; do
+          if sudo ss -ltnp | grep -q radosgw; then break; fi
+          sleep 2
+        done
+        RGW_PORT=$(sudo ss -ltnp | grep radosgw | awk '{print $4}' | sed 's/.*://')
+        if [ -z "$RGW_PORT" ]; then echo "Failed to detect RGW port"; exit 1; fi
+        for i in {1..30}; do
+          if curl -sf "http://localhost:$RGW_PORT" > /dev/null; then
+            echo "RGW_PORT=$RGW_PORT" >> $GITHUB_ENV
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "RGW did not become ready in time"; exit 1
+
+    - name: Create S3 user and bucket
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${RGW_PORT:-}" ]; then echo "RGW_PORT not set"; exit 1; fi
+        sudo radosgw-admin user create --uid=vitess --display-name=Vitess || true
+        sudo radosgw-admin key create --uid=vitess --key-type=s3 \
+          --access-key=ACCESS_KEY --secret-key=SECRET_KEY || true
+        sudo radosgw-admin bucket create --bucket=vitess-test --uid=vitess || true
+
+    - name: Detect RGW endpoint
+      id: endpoint
+      shell: bash
+      run: |
+        if [ -z "${RGW_PORT:-}" ]; then echo "RGW_PORT not set"; exit 1; fi
+        echo "endpoint=http://localhost:$RGW_PORT" >> $GITHUB_OUTPUT
+        echo "AWS_ACCESS_KEY_ID=ACCESS_KEY" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=SECRET_KEY" >> $GITHUB_ENV
+        echo "AWS_ENDPOINT=http://localhost:$RGW_PORT" >> $GITHUB_ENV
+        echo "AWS_BUCKET=vitess-test" >> $GITHUB_ENV
+        echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
