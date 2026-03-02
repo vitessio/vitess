@@ -18,8 +18,14 @@ package flagutil
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
+
+	"github.com/spf13/pflag"
 )
+
+// Compile-time assertion that OptionalFlag implements pflag.Value.
+var _ pflag.Value = (*OptionalFlag[string])(nil)
 
 // OptionalFlag is a generic flag type that wraps any value T and tracks
 // whether the flag was explicitly set on the command line.
@@ -41,6 +47,12 @@ type OptionalFlag[T any] struct {
 // parse must convert a raw string argument to T, returning an error on failure.
 // stringer must convert a T back to its string representation.
 func NewOptionalFlag[T any](val T, typeName string, parse func(string) (T, error), stringer func(T) string) *OptionalFlag[T] {
+	if parse == nil {
+		panic("flagutil: NewOptionalFlag requires a non-nil parse function")
+	}
+	if stringer == nil {
+		stringer = func(v T) string { return fmt.Sprint(v) }
+	}
 	return &OptionalFlag[T]{
 		val:      val,
 		typeName: typeName,

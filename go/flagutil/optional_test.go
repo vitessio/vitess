@@ -58,6 +58,17 @@ func TestNewOptionalString(t *testing.T) {
 	require.Equal(t, true, optStr.IsSet())
 }
 
+func TestNewOptionalFlag_NilParsePanics(t *testing.T) {
+	require.Panics(t, func() {
+		NewOptionalFlag(0, "int", nil, strconv.Itoa)
+	})
+}
+
+func TestNewOptionalFlag_NilStringerFallback(t *testing.T) {
+	flag := NewOptionalFlag(42, "int", strconv.Atoi, nil)
+	require.Equal(t, "42", flag.String())
+}
+
 func TestNewOptionalFlag_Generic(t *testing.T) {
 	// Test with a custom int type using NewOptionalFlag directly.
 	parseInt := func(s string) (int, error) {
