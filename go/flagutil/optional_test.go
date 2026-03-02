@@ -17,6 +17,7 @@ limitations under the License.
 package flagutil
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,4 +56,29 @@ func TestNewOptionalString(t *testing.T) {
 
 	require.Equal(t, "value", optStr.Get())
 	require.Equal(t, true, optStr.IsSet())
+}
+
+func TestNewOptionalFlag_Generic(t *testing.T) {
+	// Test with a custom int type using NewOptionalFlag directly.
+	parseInt := func(s string) (int, error) {
+		return strconv.Atoi(s)
+	}
+	printInt := func(v int) string {
+		return strconv.Itoa(v)
+	}
+
+	flag := NewOptionalFlag(42, "int", parseInt, printInt)
+	require.Equal(t, false, flag.IsSet())
+	require.Equal(t, "42", flag.String())
+	require.Equal(t, "int", flag.Type())
+	require.Equal(t, 42, flag.Get())
+
+	err := flag.Set("invalid")
+	require.Error(t, err)
+	require.Equal(t, false, flag.IsSet())
+
+	err = flag.Set("100")
+	require.NoError(t, err)
+	require.Equal(t, 100, flag.Get())
+	require.Equal(t, true, flag.IsSet())
 }
