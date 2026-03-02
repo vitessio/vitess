@@ -173,12 +173,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", vtgate.Binary, err))
 	} else if vtgateVer >= 24 {
-		if supportsFlag(vtgate.Binary, "--log-format") {
-			args = append(args, "--log-format", "text")
-		}
-		if supportsFlag(vtgate.Binary, "--log-structured") {
-			args = append(args, "--log-structured=false")
-		}
+		args = append(args, "--log-format", "text")
 	}
 
 	// If no explicit mysql_server_version has been specified then we autodetect

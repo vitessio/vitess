@@ -17,10 +17,7 @@ limitations under the License.
 package cluster
 
 import (
-	"bytes"
 	"fmt"
-	"os/exec"
-	"sync"
 )
 
 // VtProcess is a structure for holding generic vitess process info.
@@ -62,22 +59,4 @@ func VtProcessInstance(name, binary string, topoPort int, hostname string) VtPro
 		TopoRootPath:       topoRootPath,
 	}
 	return vt
-}
-
-var flagSupportCache sync.Map
-
-func supportsFlag(binary string, flag string) bool {
-	cacheKey := binary + "|" + flag
-	if cached, ok := flagSupportCache.Load(cacheKey); ok {
-		return cached.(bool)
-	}
-	cmd := exec.Command(binary, "--help")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		flagSupportCache.Store(cacheKey, false)
-		return false
-	}
-	supported := bytes.Contains(output, []byte(flag))
-	flagSupportCache.Store(cacheKey, supported)
-	return supported
 }

@@ -85,17 +85,12 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
 	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
 	if vtbackupVer >= 24 {
-		if supportsFlag(vtbackup.Binary, "--log-format") {
-			flags["--log-format"] = "text"
-		}
+		flags["--log-format"] = "text"
 	}
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, k, v)
-	}
-	if vtbackupVer >= 24 && supportsFlag(vtbackup.Binary, "--log-structured") {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, "--log-structured=false")
 	}
 
 	if vtbackup.initialBackup {

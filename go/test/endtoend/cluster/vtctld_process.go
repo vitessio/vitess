@@ -75,12 +75,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	)
 
 	if vtctldVer >= 24 {
-		if supportsFlag(vtctld.Binary, "--log-format") {
-			vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")
-		}
-		if supportsFlag(vtctld.Binary, "--log-structured") {
-			vtctld.proc.Args = append(vtctld.proc.Args, "--log-structured=false")
-		}
+		vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")
 	}
 
 	if *isCoverage {
