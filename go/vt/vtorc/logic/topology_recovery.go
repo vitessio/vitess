@@ -68,7 +68,7 @@ const (
 
 	// ReconcileStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
 	// in the topology but a newer primary has been elected.
-	ReconcileStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
+	ReconcileStaleTopoPrimaryRecoveryName string = "ReconcileStaleTopoPrimary"
 )
 
 // RecoverySkipCode represents the reason for a skipped recovery.
