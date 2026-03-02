@@ -57,9 +57,7 @@ func TestQueries(t *testing.T) {
 
 	// Try a simple error case.
 	_, err = conn.ExecuteFetch("select * from aa", 1000, true)
-	if err == nil || !strings.Contains(err.Error(), "Table 'vttest.aa' doesn't exist") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, err, "Table 'vttest.aa' doesn't exist")
 
 	// Try a simple DDL.
 	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)

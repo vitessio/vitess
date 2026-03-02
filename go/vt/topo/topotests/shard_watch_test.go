@@ -64,9 +64,7 @@ func TestWatchShardNoNode(t *testing.T) {
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		assert.NoError(t, err)
-	}
+	require.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 }
 
 func TestWatchShard(t *testing.T) {
@@ -150,8 +148,7 @@ func TestWatchShard(t *testing.T) {
 
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchShard(ctx, keyspace, shard)
-	if err == nil || !strings.Contains(err.Error(), "error unpacking initial Shard object") {
-		require.NoError(t, err)
+	require.ErrorContains(t, err, "error unpacking initial Shard object")
 	}
 
 	data, err := wanted.MarshalVT()

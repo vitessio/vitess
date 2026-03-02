@@ -544,7 +544,6 @@ func TestTabletServerRollback(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, nil, &target, nil)
 	require.NoError(t, err)
-	require.NoError(t, err)
 	_, err = tsv.Execute(ctx, nil, &target, executeSQL, nil, state.TransactionID, 0, nil)
 	require.NoError(t, err)
 	_, err = tsv.Rollback(ctx, &target, state.TransactionID)
