@@ -3164,16 +3164,15 @@ func (x *BinlogDumpGTIDRequest) GetNonBlock() bool {
 	return false
 }
 
-// BinlogDumpResponse streams raw MySQL packet payloads.
+// BinlogDumpResponse streams raw MySQL packet data.
 // Used by both BinlogDump and BinlogDumpGTID RPCs.
 type BinlogDumpResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// A single raw MySQL packet payload from the binlog stream.
-	// Packets are streamed exactly as received from MySQL, including
-	// zero-length packets that terminate multi-packet sequences.
-	// Only the first packet of a sequence contains the status byte
-	// (0x00 for event data, 0xFE for EOF, 0xFF for error).
-	Packet        []byte `protobuf:"bytes,1,opt,name=packet,proto3" json:"packet,omitempty"`
+	// Raw MySQL response stream containing one or more full packets,
+	// including MySQL headers. For long packets, the packet will be
+	// split across multiple BinlogDumpResponse messages, but MySQL
+	// packet headers will never be split.
+	Raw           []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3208,9 +3207,9 @@ func (*BinlogDumpResponse) Descriptor() ([]byte, []int) {
 	return file_binlogdata_proto_rawDescGZIP(), []int{33}
 }
 
-func (x *BinlogDumpResponse) GetPacket() []byte {
+func (x *BinlogDumpResponse) GetRaw() []byte {
 	if x != nil {
-		return x.Packet
+		return x.Raw
 	}
 	return nil
 }
@@ -3582,9 +3581,9 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x0fbinlog_filename\x18\x04 \x01(\tR\x0ebinlogFilename\x12'\n" +
 	"\x0fbinlog_position\x18\x05 \x01(\x04R\x0ebinlogPosition\x12\x19\n" +
 	"\bgtid_set\x18\x06 \x01(\tR\agtidSet\x12\x1b\n" +
-	"\tnon_block\x18\a \x01(\bR\bnonBlock\",\n" +
-	"\x12BinlogDumpResponse\x12\x16\n" +
-	"\x06packet\x18\x01 \x01(\fR\x06packet*>\n" +
+	"\tnon_block\x18\a \x01(\bR\bnonBlock\"&\n" +
+	"\x12BinlogDumpResponse\x12\x10\n" +
+	"\x03raw\x18\x01 \x01(\fR\x03raw*>\n" +
 	"\vOnDDLAction\x12\n" +
 	"\n" +
 	"\x06IGNORE\x10\x00\x12\b\n" +

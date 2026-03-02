@@ -860,7 +860,7 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 			GtidSet: gtidSet,
 		}, func(response *binlogdatapb.BinlogDumpResponse) error {
 			receivedPackets++
-			t.Logf("Received packet %d via gRPC: %d bytes", receivedPackets, len(response.Packet))
+			t.Logf("Received packet %d via gRPC: %d bytes", receivedPackets, len(response.Raw))
 			return nil
 		})
 		if err != nil {
@@ -1072,7 +1072,7 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 			BinlogPosition: binlogPos,
 		}, func(response *binlogdatapb.BinlogDumpResponse) error {
 			receivedPackets++
-			t.Logf("Received packet %d via gRPC (file/pos): %d bytes", receivedPackets, len(response.Packet))
+			t.Logf("Received packet %d via gRPC (file/pos): %d bytes", receivedPackets, len(response.Raw))
 			return nil
 		})
 		if err != nil {

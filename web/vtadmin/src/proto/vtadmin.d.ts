@@ -42569,8 +42569,8 @@ export namespace binlogdata {
     /** Properties of a BinlogDumpResponse. */
     interface IBinlogDumpResponse {
 
-        /** BinlogDumpResponse packet */
-        packet?: (Uint8Array|null);
+        /** BinlogDumpResponse raw */
+        raw?: (Uint8Array|null);
     }
 
     /** Represents a BinlogDumpResponse. */
@@ -42582,8 +42582,8 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.IBinlogDumpResponse);
 
-        /** BinlogDumpResponse packet. */
-        public packet: Uint8Array;
+        /** BinlogDumpResponse raw. */
+        public raw: Uint8Array;
 
         /**
          * Creates a new BinlogDumpResponse instance using the specified properties.

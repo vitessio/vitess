@@ -1444,7 +1444,7 @@ type packetReader interface {
 func sendBinlogEOF(send func(*binlogdatapb.BinlogDumpResponse) error) {
 	// Ignore the send error — if the client already disconnected, send fails harmlessly.
 	_ = send(&binlogdatapb.BinlogDumpResponse{
-		Packet: []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00},
+		Raw: []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00},
 	})
 }
 
@@ -1486,7 +1486,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 		}
 
 		// Send first fragment
-		if err := send(&binlogdatapb.BinlogDumpResponse{Packet: packet}); err != nil {
+		if err := send(&binlogdatapb.BinlogDumpResponse{Raw: packet}); err != nil {
 			return err
 		}
 
@@ -1501,7 +1501,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 				return vterrors.Wrapf(err, "failed to read continuation packet")
 			}
 
-			if err := send(&binlogdatapb.BinlogDumpResponse{Packet: packet}); err != nil {
+			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: packet}); err != nil {
 				return err
 			}
 		}

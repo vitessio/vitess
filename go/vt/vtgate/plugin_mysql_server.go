@@ -593,7 +593,7 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 	// Stream binlog packets from the tablet
 	err = qs.BinlogDump(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
 		streamingStarted = true
-		packet := response.Packet
+		packet := response.Raw
 
 		if err := c.WritePacketDirect(packet); err != nil {
 			return err
@@ -752,7 +752,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// Stream binlog packets from the tablet
 	err = qs.BinlogDumpGTID(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
 		streamingStarted = true
-		packet := response.Packet
+		packet := response.Raw
 
 		if err := c.WritePacketDirect(packet); err != nil {
 			return err

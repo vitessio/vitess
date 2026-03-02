@@ -108,8 +108,8 @@ func TestStreamBinlogPackets_ContextCancelBetweenEvents(t *testing.T) {
 
 	// Should have received: the event packet + an EOF packet
 	require.Len(t, *responses, 2)
-	assert.Equal(t, eventPacket, (*responses)[0].Packet)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Packet)
+	assert.Equal(t, eventPacket, (*responses)[0].Raw)
+	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Raw)
 }
 
 func TestStreamBinlogPackets_ContextCancelDuringRead(t *testing.T) {
@@ -137,7 +137,7 @@ func TestStreamBinlogPackets_ContextCancelDuringRead(t *testing.T) {
 
 	// Should have received just the EOF packet
 	require.Len(t, *responses, 1)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[0].Packet)
+	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[0].Raw)
 }
 
 func TestStreamBinlogPackets_NormalEOFFromMySQL(t *testing.T) {
@@ -159,7 +159,7 @@ func TestStreamBinlogPackets_NormalEOFFromMySQL(t *testing.T) {
 
 	// Should have received just the EOF packet from MySQL (forwarded as-is)
 	require.Len(t, *responses, 1)
-	assert.Equal(t, eofPacket, (*responses)[0].Packet)
+	assert.Equal(t, eofPacket, (*responses)[0].Raw)
 }
 
 func TestStreamBinlogPackets_ReadErrorWithoutCancel(t *testing.T) {
@@ -210,6 +210,6 @@ func TestStreamBinlogPackets_ContextCancelDuringContinuation(t *testing.T) {
 
 	// Should have received: the big packet + EOF
 	require.Len(t, *responses, 2)
-	assert.Len(t, (*responses)[0].Packet, mysql.MaxPacketSize)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Packet)
+	assert.Len(t, (*responses)[0].Raw, mysql.MaxPacketSize)
+	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Raw)
 }

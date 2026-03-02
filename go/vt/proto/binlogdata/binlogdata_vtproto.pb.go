@@ -930,10 +930,10 @@ func (m *BinlogDumpResponse) CloneVT() *BinlogDumpResponse {
 		return (*BinlogDumpResponse)(nil)
 	}
 	r := new(BinlogDumpResponse)
-	if rhs := m.Packet; rhs != nil {
+	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
-		r.Packet = tmpBytes
+		r.Raw = tmpBytes
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3580,10 +3580,10 @@ func (m *BinlogDumpResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Packet) > 0 {
-		i -= len(m.Packet)
-		copy(dAtA[i:], m.Packet)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Packet)))
+	if len(m.Raw) > 0 {
+		i -= len(m.Raw)
+		copy(dAtA[i:], m.Raw)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Raw)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -4701,7 +4701,7 @@ func (m *BinlogDumpResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Packet)
+	l = len(m.Raw)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -11931,7 +11931,7 @@ func (m *BinlogDumpResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Packet", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Raw", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -11958,9 +11958,9 @@ func (m *BinlogDumpResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Packet = append(m.Packet[:0], dAtA[iNdEx:postIndex]...)
-			if m.Packet == nil {
-				m.Packet = []byte{}
+			m.Raw = append(m.Raw[:0], dAtA[iNdEx:postIndex]...)
+			if m.Raw == nil {
+				m.Raw = []byte{}
 			}
 			iNdEx = postIndex
 		default:
