@@ -896,8 +896,8 @@ func recoveryDuration(t *testing.T, vtorcProcess *cluster.VTOrcProcess, analysis
 	}
 
 	require.NoError(t, scanner.Err())
-	require.False(t, startTime.IsZero(), "could not find recovery start log line for %s", analysisCode)
-	require.False(t, endTime.IsZero(), "could not find recovery succeeded log line for %s", analysisCode)
+	require.NotZero(t, startTime, "could not find recovery start log line for %s", analysisCode)
+	require.NotZero(t, endTime, "could not find recovery succeeded log line for %s", analysisCode)
 	require.False(t, endTime.Before(startTime), "recovery end time %v is before start time %v", endTime, startTime)
 
 	return endTime.Sub(startTime)
