@@ -924,14 +924,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	pending := make(map[int64]*applyTxn)
 	nextOrder := int64(1)
 
-	// heartbeatTicker fires periodically so that when the commitLoop is stalled
-	// waiting for the head-of-line transaction (head-of-line blocking), we still
-	// refresh time_updated in the _vt.vreplication row. Without this, Online DDL's
-	// s.Lag() — which reads time_updated — grows stale and blocks cutover even
-	// though the in-memory ReplicationLagSeconds stat stays fresh from heartbeats.
-	heartbeatTicker := time.NewTicker(idleTimeout)
-	defer heartbeatTicker.Stop()
-
 	drainPending := func() error {
 		for {
 			next := pending[nextOrder]
@@ -973,19 +965,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			pending[txn.order] = txn
 			if err := drainPending(); err != nil {
 				return err
-			}
-		case <-heartbeatTicker.C:
-			// Only refresh time_updated when we have pending out-of-order
-			// transactions, which means the head-of-line transaction is still
-			// inflight and we are genuinely stalled. When there are no pending
-			// transactions, commitTxn keeps time_updated current via updatePos.
-			if len(pending) > 0 {
-				vp.serialMu.Lock()
-				err := vp.vr.updateHeartbeatTime(time.Now().Unix())
-				vp.serialMu.Unlock()
-				if err != nil {
-					return err
-				}
 			}
 		case <-ctx.Done():
 			return ctx.Err()
