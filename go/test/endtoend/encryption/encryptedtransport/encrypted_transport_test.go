@@ -388,8 +388,9 @@ func clusterSetUp(t *testing.T) (int, error) {
 		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
 	}
 	for _, proc := range mysqlProcesses {
-		err := proc.Wait()
-		assert.NoError(t, err)
+		if err := proc.Wait(); err != nil {
+			return 0, err
+		}
 	}
 	return 0, nil
 }

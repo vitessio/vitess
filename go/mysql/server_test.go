@@ -1293,9 +1293,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, err, "No authentication methods available for authentication")
 }
 
 func checkCountForTLSVer(t *testing.T, version string, expected int64) {

@@ -75,14 +75,12 @@ func TestDeleteShardCleanup(t *testing.T) {
 
 	// Now try to delete the shard with even_if_serving and recursive,
 	// it should just work.
-	if err := vp.Run([]string{
+	require.NoError(t, vp.Run([]string{
 		"DeleteShard",
 		"--recursive",
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err != nil {
-		require.NoError(t, err)
-	}
+	}))
 
 	// Make sure all tablets are gone.
 	for _, ft := range []*FakeTablet{primary, replica, remoteReplica} {

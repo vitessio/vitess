@@ -42,9 +42,7 @@ func TestVerifyFlags(t *testing.T) {
 	defer resetFlagsForTesting()
 
 	parse([]string{"--buffer-keyspace-shards", "ks1/0"})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "also requires that") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, verifyFlags(), "also requires that")
 
 	resetFlagsForTesting()
 
@@ -52,9 +50,7 @@ func TestVerifyFlags(t *testing.T) {
 		"--enable-buffer",
 		"--enable-buffer-dry-run",
 	})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "To avoid ambiguity") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, verifyFlags(), "To avoid ambiguity")
 
 	resetFlagsForTesting()
 
@@ -62,9 +58,7 @@ func TestVerifyFlags(t *testing.T) {
 		"--enable-buffer",
 		"--buffer-keyspace-shards", "ks1//0",
 	})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "invalid shard path") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, verifyFlags(), "invalid shard path")
 
 	resetFlagsForTesting()
 
