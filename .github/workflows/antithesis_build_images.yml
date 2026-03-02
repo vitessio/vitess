@@ -29,6 +29,7 @@ jobs:
         with:
           context: ./test/antithesis/compose
           file: ./test/antithesis/compose/Dockerfile.config
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:latest
@@ -39,6 +40,7 @@ jobs:
         with:
           context: ./test/antithesis/compose/antithesis-client
           file: ./test/antithesis/compose/antithesis-client/Dockerfile
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:latest
@@ -49,6 +51,7 @@ jobs:
         with:
           context: ./test/antithesis/compose/source_db/mysql
           file: ./test/antithesis/compose/source_db/mysql/Dockerfile
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:latest

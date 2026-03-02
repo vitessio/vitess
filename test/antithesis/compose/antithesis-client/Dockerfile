@@ -7,10 +7,10 @@ RUN go mod download
 COPY cmd/entrypoint ./cmd/entrypoint
 COPY cmd/healthcheck ./cmd/healthcheck
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/antithesis-entrypoint ./cmd/entrypoint
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/antithesis-healthcheck ./cmd/healthcheck
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-entrypoint ./cmd/entrypoint
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-healthcheck ./cmd/healthcheck
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/base:nonroot
 
 COPY --from=builder /out/antithesis-entrypoint /antithesis-entrypoint
 COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eventually_vitess_health
