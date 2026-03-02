@@ -460,6 +460,7 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 		dbClient:       newVDBClient(mockDB, stats, config.RelayLogMaxItems),
 		workflowConfig: config,
 		vre:            &Engine{},
+		source:         &binlogdatapb.BinlogSource{OnDdl: binlogdatapb.OnDDLAction_IGNORE},
 	}
 
 	vp := &vplayer{
