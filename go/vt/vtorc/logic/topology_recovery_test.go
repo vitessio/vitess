@@ -601,14 +601,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 	tests := []struct {
 		name        string
 		analysis    *inst.DetectionAnalysis
-		probeOK     bool
+		pingOK      bool
 		wantAttempt bool
 		setupDB     bool
 		rows        int
 		prsFails    bool
 	}{
 		{
-			name: "reachable healthz (prs failure)",
+			name: "reachable ping (prs failure)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -616,14 +616,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 			prsFails:    true,
 		},
 		{
-			name: "reachable healthz (ers fallback)",
+			name: "reachable ping (ers fallback)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -631,14 +631,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        false,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 			prsFails:    true,
 		},
 		{
-			name: "reachable healthz (prs ok)",
+			name: "reachable ping (prs ok)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -646,18 +646,18 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 		},
 		{
-			name: "unreachable healthz",
+			name: "unreachable ping",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 			},
-			probeOK:     false,
+			pingOK:      false,
 			wantAttempt: false,
 			setupDB:     true,
 			rows:        3,
@@ -677,14 +677,6 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			analysis := *tt.analysis
 			analysis.AnalyzedKeyspace = keyspace
 			analysis.AnalyzedShard = shard
-
-			oldProbe := healthzProbe
-			healthzProbe = func(_ *topodatapb.Tablet) (bool, error) {
-				return tt.probeOK, nil
-			}
-			defer func() {
-				healthzProbe = oldProbe
-			}()
 
 			oldTs := ts
 			oldTmc := tmc
@@ -758,7 +750,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 						Seconds: 1,
 					},
 					PortMap: map[string]int32{
-						"vt": 15000,
+						"vt":   15000,
+						"grpc": 16000,
 					},
 				}
 				require.NoError(t, inst.SaveTablet(primaryTablet))
@@ -774,7 +767,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 						Seconds: 1,
 					},
 					PortMap: map[string]int32{
-						"vt": 15001,
+						"vt":   15001,
+						"grpc": 16001,
 					},
 				}))
 
@@ -795,12 +789,20 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					Shard:         shard,
 					Type:          topodatapb.TabletType_REPLICA,
 					PortMap: map[string]int32{
-						"vt": 15001,
+						"vt":   15001,
+						"grpc": 16001,
 					},
 				})
 				require.NoError(t, err)
 
 				tmc = &testutil.TabletManagerClient{}
+				pingErr := error(nil)
+				if !tt.pingOK {
+					pingErr = errors.New("ping failed")
+				}
+				tmc.(*testutil.TabletManagerClient).PingResults = map[string]error{
+					"zon1-0000000100": pingErr,
+				}
 				fullStatusPosition := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
 				tmc.(*testutil.TabletManagerClient).FullStatusResult = &replicationdatapb.FullStatus{
 					PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: fullStatusPosition},
