@@ -204,6 +204,9 @@ const tempDir = "/tmp"
 func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
 	exitCode := func() int {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

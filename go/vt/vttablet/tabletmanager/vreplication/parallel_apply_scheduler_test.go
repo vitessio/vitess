@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 )
 
 func TestApplySchedulerCommitParentOrder(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	// txn2 is enqueued first. Since it's the first hasCommitMeta transaction
@@ -52,7 +53,7 @@ func TestApplySchedulerCommitParentOrder(t *testing.T) {
 }
 
 func TestApplySchedulerAllowsIndependentWritesets(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	txn1 := &applyTxn{writeset: []string{"t1:1"}}
@@ -70,7 +71,7 @@ func TestApplySchedulerAllowsIndependentWritesets(t *testing.T) {
 }
 
 func TestApplySchedulerBlocksConflictingWritesets(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	txn1 := &applyTxn{writeset: []string{"t1:1"}}
@@ -102,7 +103,7 @@ func TestApplySchedulerBlocksConflictingWritesets(t *testing.T) {
 }
 
 func TestApplySchedulerBlocksCommitMetaDuringMissingMeta(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	missing := &applyTxn{writeset: []string{"t1:1"}}
@@ -135,7 +136,7 @@ func TestApplySchedulerBlocksCommitMetaDuringMissingMeta(t *testing.T) {
 }
 
 func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	txn1 := &applyTxn{writeset: []string{"t1:1"}, sequenceNumber: 1, commitParent: 0, hasCommitMeta: true}
@@ -168,7 +169,7 @@ func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
 }
 
 func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 	require.Equal(t, int64(0), s.lastCommittedSequence)
 
@@ -193,7 +194,7 @@ func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
 }
 
 func TestApplySchedulerSeedsCommitParentOnFirstMeta(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// The scheduler seeds lastCommittedSequence from the first hasCommitMeta
 	// transaction when the scheduler is completely idle (no pending, no inflight).
 	// Enqueue meta as the very first transaction to trigger seeding.
@@ -210,7 +211,7 @@ func TestApplySchedulerSeedsCommitParentOnFirstMeta(t *testing.T) {
 }
 
 func TestApplySchedulerWritesetBypassesCommitParent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	// Simulate COMMIT_ORDER dependency tracking: each txn's commitParent is
@@ -245,7 +246,7 @@ func TestApplySchedulerWritesetBypassesCommitParent(t *testing.T) {
 }
 
 func TestApplySchedulerWritesetConflictStillBlocks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	// Even with the commit-parent bypass, conflicting writesets must still
@@ -281,7 +282,7 @@ func TestApplySchedulerWritesetConflictStillBlocks(t *testing.T) {
 }
 
 func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
 	// When a hasCommitMeta transaction has an empty writeset (e.g., writeset
@@ -318,4 +319,163 @@ func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return len(readyCh) > 0
 	}, 200*time.Millisecond, 5*time.Millisecond)
+}
+
+func TestApplySchedulerNoConflictDoesNotBlockPending(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	// Enqueue a noConflict txn first and a normal txn second.
+	nc := &applyTxn{order: 1, noConflict: true}
+	normal := &applyTxn{order: 2, writeset: []string{"t1:1"}}
+
+	require.NoError(t, s.enqueue(nc))
+	require.NoError(t, s.enqueue(normal))
+
+	got1, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, nc, got1)
+
+	// Commit noConflict should not affect inflight counters for normal txn.
+	require.NoError(t, s.markCommitted(got1))
+
+	got2, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, normal, got2)
+}
+
+func TestApplySchedulerForceGlobalBlocksWritesets(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	global := &applyTxn{order: 1, forceGlobal: true}
+	conflict := &applyTxn{order: 2, writeset: []string{"t1:1"}}
+
+	require.NoError(t, s.enqueue(global))
+	require.NoError(t, s.enqueue(conflict))
+
+	got1, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, global, got1)
+
+	readyCh := make(chan *applyTxn, 1)
+	go func() {
+		txn, err := s.nextReady(ctx)
+		if err == nil {
+			readyCh <- txn
+		}
+	}()
+
+	assert.Never(t, func() bool {
+		return len(readyCh) > 0
+	}, 50*time.Millisecond, 5*time.Millisecond)
+
+	require.NoError(t, s.markCommitted(got1))
+
+	assert.Eventually(t, func() bool {
+		return len(readyCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+}
+
+func TestApplySchedulerAdvanceCommittedSequenceUnblocks(t *testing.T) {
+	ctx := t.Context()
+	// Use a non-empty pending queue to prevent commit-parent seeding.
+	seed := &applyTxn{order: 1, noConflict: true}
+	meta := &applyTxn{order: 2, sequenceNumber: 6, commitParent: 5, hasCommitMeta: true}
+
+	s := newApplyScheduler(ctx)
+
+	require.NoError(t, s.enqueue(seed))
+	require.NoError(t, s.enqueue(meta))
+
+	got1, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, seed, got1)
+	require.NoError(t, s.markCommitted(got1))
+
+	readyCh := make(chan *applyTxn, 1)
+	go func() {
+		txn, err := s.nextReady(ctx)
+		if err == nil {
+			readyCh <- txn
+		}
+	}()
+
+	assert.Never(t, func() bool {
+		return len(readyCh) > 0
+	}, 50*time.Millisecond, 5*time.Millisecond)
+
+	s.advanceCommittedSequence(5)
+
+	assert.Eventually(t, func() bool {
+		return len(readyCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+	require.Equal(t, meta, <-readyCh)
+}
+
+func TestApplySchedulerWaitForIdleReturnsWhenIdle(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	require.NoError(t, s.waitForIdle(ctx))
+}
+
+func TestApplySchedulerWaitForIdleReturnsOnSchedulerCancel(t *testing.T) {
+	ctx := t.Context()
+	sCtx, cancel := context.WithCancel(ctx)
+	s := newApplyScheduler(sCtx)
+
+	require.NoError(t, s.enqueue(&applyTxn{writeset: []string{"t1:1"}}))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.waitForIdle(ctx)
+	}()
+
+	assert.Never(t, func() bool {
+		return len(errCh) > 0
+	}, 50*time.Millisecond, 5*time.Millisecond)
+
+	cancel()
+
+	assert.Eventually(t, func() bool {
+		return len(errCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+	require.ErrorIs(t, <-errCh, context.Canceled)
+}
+
+func TestApplySchedulerCloseClearsPending(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	require.NoError(t, s.enqueue(&applyTxn{writeset: []string{"t1:1"}}))
+
+	err := s.close()
+	require.ErrorIs(t, err, io.EOF)
+	require.Zero(t, s.pendingCount)
+	require.Zero(t, s.pendingOff)
+	require.Len(t, s.pending, 0)
+}
+
+func TestApplySchedulerPendingCompaction(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	for i := range 4 {
+		require.NoError(t, s.enqueue(&applyTxn{order: int64(i + 1), noConflict: true}))
+	}
+
+	got1, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), got1.order)
+	require.NoError(t, s.markCommitted(got1))
+
+	got2, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), got2.order)
+	require.NoError(t, s.markCommitted(got2))
+
+	require.Zero(t, s.pendingOff)
+	require.Len(t, s.pending, 2)
+	require.Equal(t, 2, s.pendingCount)
 }

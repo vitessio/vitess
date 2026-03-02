@@ -21,9 +21,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -126,6 +129,115 @@ func TestWritesetKeysForChangeUsesMakeRowTrusted(t *testing.T) {
 		keys = append(keys, k)
 	}
 	require.Equal(t, []string{"t1:" + sqltypes.MakeRowTrusted(plan.Fields, row)[0].String()}, keys)
+}
+
+type stubDBClient struct {
+	result *sqltypes.Result
+	err    error
+}
+
+func (s *stubDBClient) DBName() string  { return "db" }
+func (s *stubDBClient) Connect() error  { return nil }
+func (s *stubDBClient) Begin() error    { return nil }
+func (s *stubDBClient) Commit() error   { return nil }
+func (s *stubDBClient) Rollback() error { return nil }
+func (s *stubDBClient) Close()          {}
+func (s *stubDBClient) IsClosed() bool  { return false }
+func (s *stubDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.result, nil
+}
+
+func (s *stubDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []*sqltypes.Result{s.result}, nil
+}
+
+func (s *stubDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
+}
+
+func TestWritesetKeysForChangePKOutOfRange(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "other", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true, true},
+	}
+	row := &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}
+	afterVals := sqltypes.MakeRowTrusted(plan.Fields[:1], row)
+	keySet := map[string]struct{}{}
+	var buf strings.Builder
+	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet, &buf)
+	require.Error(t, err)
+}
+
+func TestQueryFKRefs(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	qr := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"TABLE_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|ORDINAL_POSITION",
+			"varchar|varchar|varchar|int64",
+		),
+		"child|parent_id|parent|1",
+		"child|parent_id2|parent|2",
+		"other|parent_id|parent|1",
+	)
+	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
+	refs, err := queryFKRefs(client, "db")
+	require.NoError(t, err)
+	require.Len(t, refs, 2)
+	require.Len(t, refs["child"], 1)
+	require.Equal(t, "parent", refs["child"][0].ParentTable)
+	require.Equal(t, []string{"parent_id", "parent_id2"}, refs["child"][0].ChildColumnNames)
+}
+
+func TestQueryFKRefsError(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	client := newVDBClient(&stubDBClient{err: assert.AnError}, stats, 100)
+	refs, err := queryFKRefs(client, "db")
+	require.Error(t, err)
+	require.Nil(t, refs)
+}
+
+func TestBuildTxnWritesetMissingTablePlan(t *testing.T) {
+	rowEvent := &binlogdatapb.RowEvent{
+		TableName: "missing",
+		RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+		}},
+	}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Nil(t, keys)
+}
+
+func TestBuildTxnWritesetNoRows(t *testing.T) {
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_BEGIN}
+	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, []*binlogdatapb.VEvent{vevent})
+	require.NoError(t, err)
+	require.Nil(t, keys)
+}
+
+func TestWritesetKeysForFKRefMissingColumn(t *testing.T) {
+	ref := &fkConstraintRef{ParentTable: "parent", ChildColumnNames: []string{"missing"}}
+	fieldIdx := map[string]int{"id": 0}
+	vals := []sqltypes.Value{sqltypes.NewInt64(1)}
+	keySet := map[string]struct{}{}
+	var buf strings.Builder
+	writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet, &buf)
+	require.Empty(t, keySet)
 }
 
 func TestWritesetKeysForFKRef(t *testing.T) {
