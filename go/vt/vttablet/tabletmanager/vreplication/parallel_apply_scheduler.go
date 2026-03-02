@@ -88,6 +88,7 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -98,9 +99,6 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 		txn := s.popReadyLocked()
 		if txn != nil {
 			s.markInflightLocked(txn)
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("nextReady POPPED: order=%d forceGlobal=%t events=%d pending=%d inflightGlobal=%d inflightMissing=%d inflightCommit=%d writesetKeys=%d", txn.order, txn.forceGlobal, len(txn.payload.events), len(s.pending), s.inflightGlobal, s.inflightMissingMeta, s.inflightCommitMeta, len(s.inflightWriteset)))
-			// }
 			return txn, nil
 		}
 		s.cond.Wait()

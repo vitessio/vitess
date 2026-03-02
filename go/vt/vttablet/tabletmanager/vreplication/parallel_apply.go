@@ -114,14 +114,6 @@ func parallelDebugLog(msg string) {
 	fmt.Fprintf(f, "%s [pid=%d] %s\n", time.Now().Format("15:04:05.000"), os.Getpid(), msg)
 }
 
-// func pendingOrderKeys(m map[int64]*applyTxn) []int64 {
-// 	keys := make([]int64, 0, len(m))
-// 	for k := range m {
-// 		keys = append(keys, k)
-// 	}
-// 	return keys
-// }
-
 func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) error {
 	workerCount := vp.vr.workflowConfig.ParallelReplicationWorkers
 	// parallelDebugLog(fmt.Sprintf("applyEventsParallel ENTRY: stream=%d workflow=%s workers=%d copy_state=%d", vp.vr.id, vp.vr.WorkflowName, workerCount, len(vp.copyState)))
@@ -612,12 +604,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				txn.commitParent = event.CommitParent
 				txn.hasCommitMeta = event.SequenceNumber != 0 || event.CommitParent != 0
 				txn.forceGlobal = true
+				// OTHER events and DDL events with OnDdl=IGNORE only update the
+				// replication position — they never touch user table data. Marking
+				// them noConflict lets workers pick them up immediately without
+				// waiting for all inflight row transactions to drain first. The
+				// commitLoop still enforces strict ordering, so the position write
+				// happens after all prior commits. This eliminates the forceGlobal
+				// serialization stall that occurs during Online DDL cutover when the
+				// RENAME TABLE DDL event arrives while workers are still applying rows.
+				txn.noConflict = event.Type == binlogdatapb.VEventType_OTHER ||
+					(event.Type == binlogdatapb.VEventType_DDL && vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_IGNORE)
 				txn.payload = payload
-				// done is nil for commitOnly transactions; workers send them
-				// directly to commitCh without waiting for completion.
-				// if parallelDebugEnabled() {
-				// 	log.Warn(fmt.Sprintf("parallel apply schedule commit-only: stream=%d workflow=%s order=%d type=%v hasMeta=%t pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, event.Type, txn.hasCommitMeta, payload.pos))
-				// }
 				if err := scheduler.enqueue(txn); err != nil {
 					return err
 				}
@@ -787,13 +784,7 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		vp2 := *vp
 		vp2.foreignKeyChecksStateInitialized = false
 		for _, event := range payload.events {
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("workerLoop APPLY event: stream=%d workflow=%s order=%d type=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, event.Type))
-			// }
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("workerLoop APPLY ERROR: stream=%d workflow=%s order=%d type=%v err=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, event.Type, err))
-				// }
 				worker.rollback()
 				return err
 			}
@@ -877,9 +868,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 					return err
 				}
 				if shouldStop && posReached {
-					// if parallelDebugEnabled() {
-					// 	parallelDebugLog(fmt.Sprintf("commitLoop EOF: commitOnly=true updatePosOnly=true stream=%d workflow=%s stopPos=%v pos=%v", vp.vr.id, vp.vr.WorkflowName, vp.stopPos, vp.pos))
-					// }
 					return io.EOF
 				}
 			} else {
@@ -897,9 +885,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 					return err
 				}
 				if shouldStop && posReached {
-					// if parallelDebugEnabled() {
-					// 	parallelDebugLog(fmt.Sprintf("commitLoop EOF: commitOnly=true updatePosOnly=false stream=%d workflow=%s stopPos=%v pos=%v eventType=%v", vp.vr.id, vp.vr.WorkflowName, vp.stopPos, vp.pos, payload.events[0].Type))
-					// }
 					return io.EOF
 				}
 			}
@@ -935,21 +920,10 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 
 	pending := make(map[int64]*applyTxn)
 	nextOrder := int64(1)
-	// if parallelDebugEnabled() {
-	// 	parallelDebugLog(fmt.Sprintf("commitLoop START: stream=%d workflow=%s nextOrder=%d", vp.vr.id, vp.vr.WorkflowName, nextOrder))
-	// }
 	for txn := range commitCh {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// if parallelDebugEnabled() {
-		// 	payload := txn.payload
-		// 	commitOnly := false
-		// 	if payload != nil {
-		// 		commitOnly = payload.commitOnly
-		// 	}
-		// 	parallelDebugLog(fmt.Sprintf("commitLoop RECV: stream=%d workflow=%s order=%d nextOrder=%d commitOnly=%t forceGlobal=%t pending=%d", vp.vr.id, vp.vr.WorkflowName, txn.order, nextOrder, commitOnly, txn.forceGlobal, len(pending)))
-		// }
 		if txn.order == 0 {
 			if err := commitTxn(txn); err != nil {
 				return err
@@ -961,15 +935,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		for {
 			next := pending[nextOrder]
 			if next == nil {
-				// if parallelDebugEnabled() && len(pending) > 0 {
-				// 	parallelDebugLog(fmt.Sprintf("commitLoop WAITING: stream=%d workflow=%s nextOrder=%d pending=%d pendingOrders=%v", vp.vr.id, vp.vr.WorkflowName, nextOrder, len(pending), pendingOrderKeys(pending)))
-				// }
 				break
 			}
 			delete(pending, nextOrder)
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("commitLoop COMMITTING: stream=%d workflow=%s order=%d nextOrder=%d", vp.vr.id, vp.vr.WorkflowName, next.order, nextOrder))
-			// }
 			if err := commitTxn(next); err != nil {
 				return err
 			}

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -176,12 +177,16 @@ func TestMain(m *testing.M) {
 			"--schema-change-check-interval", "1s",
 		}
 
+		parallelWorkers := 4
+		txPoolSize := max(parallelWorkers, 100)
 		clusterInstance.VtTabletExtraArgs = []string{
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
 			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			"--vreplication-parallel-replication-workers=4",
+			"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+			"--transaction-limit-per-user", "0.9",
+			"--vreplication-parallel-replication-workers", strconv.Itoa(parallelWorkers),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
