@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -120,9 +121,11 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	if workerCount <= 1 {
 		return vp.applyEvents(ctx, relay)
 	}
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply start: stream=%d workflow=%s copy_state=%d", vp.vr.id, vp.vr.WorkflowName, len(vp.copyState)))
-	// }
+
+	// Mirror the serial applier: reset lag stats to MaxInt64 when we exit,
+	// signalling that replication is no longer running.
+	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
+	defer vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, math.MaxInt64)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -920,18 +923,16 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 
 	pending := make(map[int64]*applyTxn)
 	nextOrder := int64(1)
-	for txn := range commitCh {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if txn.order == 0 {
-			if err := commitTxn(txn); err != nil {
-				return err
-			}
-			releaseApplyTxn(txn)
-			continue
-		}
-		pending[txn.order] = txn
+
+	// heartbeatTicker fires periodically so that when the commitLoop is stalled
+	// waiting for the head-of-line transaction (head-of-line blocking), we still
+	// refresh time_updated in the _vt.vreplication row. Without this, Online DDL's
+	// s.Lag() — which reads time_updated — grows stale and blocks cutover even
+	// though the in-memory ReplicationLagSeconds stat stays fresh from heartbeats.
+	heartbeatTicker := time.NewTicker(idleTimeout)
+	defer heartbeatTicker.Stop()
+
+	drainPending := func() error {
 		for {
 			next := pending[nextOrder]
 			if next == nil {
@@ -944,23 +945,52 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			releaseApplyTxn(next)
 			nextOrder++
 		}
+		return nil
 	}
+
 	for {
-		next := pending[nextOrder]
-		if next == nil {
-			break
+		select {
+		case txn, ok := <-commitCh:
+			if !ok {
+				if err := drainPending(); err != nil {
+					return err
+				}
+				if len(pending) > 0 {
+					return fmt.Errorf("parallel apply commit missing order: pending=%d next=%d", len(pending), nextOrder)
+				}
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if txn.order == 0 {
+				if err := commitTxn(txn); err != nil {
+					return err
+				}
+				releaseApplyTxn(txn)
+				continue
+			}
+			pending[txn.order] = txn
+			if err := drainPending(); err != nil {
+				return err
+			}
+		case <-heartbeatTicker.C:
+			// Only refresh time_updated when we have pending out-of-order
+			// transactions, which means the head-of-line transaction is still
+			// inflight and we are genuinely stalled. When there are no pending
+			// transactions, commitTxn keeps time_updated current via updatePos.
+			if len(pending) > 0 {
+				vp.serialMu.Lock()
+				err := vp.vr.updateHeartbeatTime(time.Now().Unix())
+				vp.serialMu.Unlock()
+				if err != nil {
+					return err
+				}
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		delete(pending, nextOrder)
-		if err := commitTxn(next); err != nil {
-			return err
-		}
-		releaseApplyTxn(next)
-		nextOrder++
 	}
-	if len(pending) > 0 {
-		return fmt.Errorf("parallel apply commit missing order: pending=%d next=%d", len(pending), nextOrder)
-	}
-	return nil
 }
 
 func (vp *vplayer) commitTxn(ctx context.Context, payload *applyTxnPayload) (bool, error) {
