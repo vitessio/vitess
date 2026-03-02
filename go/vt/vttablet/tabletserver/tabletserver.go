@@ -1436,6 +1436,8 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 // packetReader is satisfied by *binlog.BinlogConnection (via embedded *mysql.Conn).
 // Extracted as an interface for testability.
 type packetReader interface {
+	ReadHeaderInto([]byte) (int, error)
+	ReadDataInto([]byte) error
 	ReadOnePacket() ([]byte, error)
 }
 
@@ -1464,50 +1466,122 @@ func sendBinlogEOF(send func(*binlogdatapb.BinlogDumpResponse) error) {
 // gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
 // See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
 func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetReader, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
+	bufOffset := 0
+
 	for {
-		if ctx.Err() != nil {
-			sendBinlogEOF(send)
-			return nil
-		}
-
-		// Read first fragment of a message
-		packet, err := reader.ReadOnePacket()
-		if err != nil {
-			if ctx.Err() != nil {
-				sendBinlogEOF(send)
-				return nil
-			}
-			return vterrors.Wrapf(err, "failed to read binlog packet")
-		}
-
-		// First fragment must have content
-		if len(packet) == 0 {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet at start of message")
-		}
-
-		// Send first fragment
-		if err := send(&binlogdatapb.BinlogDumpResponse{Raw: packet}); err != nil {
-			return err
-		}
-
-		// Check status byte on first fragment
-		isEOF := packet[0] == mysql.EOFPacket
-		isError := packet[0] == mysql.ErrPacket
-
-		// Read remaining fragments if this is a multi-packet message
-		for len(packet) == mysql.MaxPacketSize {
-			packet, err = reader.ReadOnePacket()
-			if err != nil {
-				return vterrors.Wrapf(err, "failed to read continuation packet")
-			}
-
-			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: packet}); err != nil {
+		if bufOffset+mysql.PacketHeaderSize > len(buf) {
+			// Flush the buffer if we don't have enough space for the next packet header.
+			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
 				return err
 			}
+			bufOffset = 0
 		}
 
-		// Message complete - check if we should stop
-		if isEOF || isError {
+		firstFragment := true
+		isTerminal := false
+
+		packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read binlog packet header")
+		}
+
+		bufOffset += mysql.PacketHeaderSize
+
+		// First packet of a message can't be zero length
+		if packetLength == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet header")
+		}
+
+		// Are we at the end of the buffer? If so, flush it before we start reading the packet body.
+		if bufOffset+packetLength > len(buf) {
+			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+				return err
+			}
+			bufOffset = 0
+		}
+
+		// Is this a fragmented message? If yes, this will be potentially followed by multiple max-packet-size packets.
+		for packetLength == mysql.MaxPacketSize {
+			if firstFragment {
+				// Read the first byte of the first packet to check whether this is a terminal message or not.
+				if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
+					return vterrors.Wrapf(err, "failed to read first byte of packet")
+				}
+
+				bufOffset += 1
+				packetLength -= 1
+
+				isTerminal = buf[bufOffset-1] == mysql.EOFPacket || buf[bufOffset-1] == mysql.ErrPacket
+				firstFragment = false
+			}
+
+			for packetLength > 0 {
+				chunkSize := min(packetLength, len(buf)-bufOffset)
+				if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+					return vterrors.Wrapf(err, "failed to read binlog packet body")
+				}
+				packetLength -= chunkSize
+				bufOffset += chunkSize
+
+				// Flush the buffer if we've reached the end
+				if bufOffset == len(buf) {
+					if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+						return err
+					}
+					bufOffset = 0
+				}
+			}
+
+			if bufOffset+mysql.PacketHeaderSize > len(buf) {
+				// Flush the buffer if we don't have enough space for the next packet header.
+				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+					return err
+				}
+				bufOffset = 0
+			}
+
+			packetLength, err = reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to read binlog packet header")
+			}
+			bufOffset += mysql.PacketHeaderSize
+		}
+
+		// Read the first byte of the packet to check whether this is a terminal message or not.
+		if firstFragment {
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
+				return vterrors.Wrapf(err, "failed to read first byte of packet")
+			}
+
+			bufOffset += 1
+			packetLength -= 1
+
+			isTerminal = buf[bufOffset-1] == mysql.EOFPacket || buf[bufOffset-1] == mysql.ErrPacket
+		}
+
+		for packetLength > 0 {
+			chunkSize := min(packetLength, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return vterrors.Wrapf(err, "failed to read binlog packet body")
+			}
+			packetLength -= chunkSize
+			bufOffset += chunkSize
+
+			// Flush the buffer if we've reached the end
+			if bufOffset == len(buf) {
+				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+					return err
+				}
+				bufOffset = 0
+			}
+		}
+
+		if isTerminal {
+			// If this is a terminal message (EOF or ERR), flush it immediately and stop streaming.
+			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+				return err
+			}
 			return nil
 		}
 	}

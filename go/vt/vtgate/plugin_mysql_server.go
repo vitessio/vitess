@@ -590,17 +590,74 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 	var inProgressMessage bool
 	var streamingStarted bool
 
+	// Spanning-packet state: collect sub-slice references instead of
+	// allocating a contiguous buffer and copying into it.
+	chunks := make([][]byte, 0, 8)
+	var packetLength int // total expected payload length of the spanning packet
+	var chunksLength int // bytes collected so far across chunks
+
 	// Stream binlog packets from the tablet
 	err = qs.BinlogDump(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
 		streamingStarted = true
-		packet := response.Raw
 
-		if err := c.WritePacketDirect(packet); err != nil {
-			return err
+		buf := response.Raw
+		bufOffset := 0
+
+		if packetLength > 0 {
+			// We're in the middle of streaming a packet that spans multiple responses.
+			remaining := packetLength - chunksLength
+			if len(buf) < remaining {
+				// This response doesn't have enough data to complete the packet.
+				chunks = append(chunks, buf)
+				chunksLength += len(buf)
+				return nil
+			}
+
+			// This response completes the spanning packet.
+			chunks = append(chunks, buf[:remaining])
+			bufOffset = remaining
+
+			if err := c.WritePacketChunks(chunks); err != nil {
+				return err
+			}
+
+			// Reset spanning state.
+			chunks = chunks[:0]
+			packetLength = 0
+			chunksLength = 0
+
+			if bufOffset == len(buf) {
+				return nil
+			}
 		}
 
-		// A packet of exactly MaxPacketSize indicates more fragments follow
-		inProgressMessage = len(packet) == mysql.MaxPacketSize
+		for len(buf)-bufOffset > 0 {
+			if len(buf[bufOffset:]) < mysql.PacketHeaderSize {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "binlog dump: packet too small: %d bytes", len(buf))
+			}
+
+			header := buf[bufOffset : bufOffset+mysql.PacketHeaderSize]
+			bufOffset += mysql.PacketHeaderSize
+
+			pktLen := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+
+			inProgressMessage = pktLen == mysql.MaxPacketSize
+
+			if pktLen <= len(buf[bufOffset:]) {
+				// Common case: full packet fits in this response.
+				if err := c.WritePacketDirect(buf[bufOffset : bufOffset+pktLen]); err != nil {
+					return err
+				}
+				bufOffset += pktLen
+			} else {
+				// Packet spans multiple responses — start collecting chunks.
+				packetLength = pktLen
+				chunks = append(chunks, buf[bufOffset:])
+				chunksLength = len(buf[bufOffset:])
+				bufOffset = len(buf)
+			}
+		}
+
 		return nil
 	})
 	if err != nil {

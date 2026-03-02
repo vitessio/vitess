@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 
@@ -31,113 +32,94 @@ import (
 )
 
 // mockPacketReader simulates a MySQL connection for testing streamBinlogPackets.
-// Packets can be enqueued via the packets channel, and Close() unblocks any
-// pending ReadOnePacket with an error — mirroring real mysql.Conn.Close() behavior.
+// Packets are written via WritePacket (which builds proper MySQL headers) and
+// consumed by ReadHeaderInto/ReadDataInto. Close() unblocks any pending reads.
 type mockPacketReader struct {
-	packets chan readResult
-	closeCh chan struct{}
-	once    sync.Once
-}
-
-type readResult struct {
-	data []byte
-	err  error
+	pr   *io.PipeReader
+	pw   *io.PipeWriter
+	seq  uint8
+	once sync.Once
 }
 
 func newMockPacketReader() *mockPacketReader {
-	return &mockPacketReader{
-		packets: make(chan readResult),
-		closeCh: make(chan struct{}),
+	pr, pw := io.Pipe()
+	return &mockPacketReader{pr: pr, pw: pw, seq: 1}
+}
+
+// WritePacket writes a MySQL packet (4-byte header + payload) to the mock connection.
+// The header is constructed with the correct length and an incrementing sequence number.
+func (m *mockPacketReader) WritePacket(payload []byte) {
+	length := len(payload)
+	var header [mysql.PacketHeaderSize]byte
+	header[0] = byte(length)
+	header[1] = byte(length >> 8)
+	header[2] = byte(length >> 16)
+	header[3] = m.seq
+	m.seq++
+	m.pw.Write(header[:])
+	if length > 0 {
+		m.pw.Write(payload)
 	}
+}
+
+func (m *mockPacketReader) ReadHeaderInto(buf []byte) (int, error) {
+	if _, err := io.ReadFull(m.pr, buf[:mysql.PacketHeaderSize]); err != nil {
+		return 0, err
+	}
+	return int(uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16), nil
+}
+
+func (m *mockPacketReader) ReadDataInto(buf []byte) error {
+	_, err := io.ReadFull(m.pr, buf)
+	return err
 }
 
 func (m *mockPacketReader) ReadOnePacket() ([]byte, error) {
-	select {
-	case r := <-m.packets:
-		return r.data, r.err
-	case <-m.closeCh:
-		return nil, errors.New("connection closed")
-	}
+	return nil, errors.New("not implemented")
 }
 
-// Close unblocks any pending ReadOnePacket calls with a "connection closed" error.
+// Close unblocks any pending reads with a "connection closed" error.
 func (m *mockPacketReader) Close() {
-	m.once.Do(func() { close(m.closeCh) })
+	m.once.Do(func() {
+		m.pw.CloseWithError(errors.New("connection closed"))
+	})
 }
 
 // collectSender returns a send function that collects all sent responses.
+// Raw bytes are copied since streamBinlogPackets reuses its internal buffer.
 func collectSender() (func(*binlogdatapb.BinlogDumpResponse) error, *[]*binlogdatapb.BinlogDumpResponse) {
 	var mu sync.Mutex
 	var responses []*binlogdatapb.BinlogDumpResponse
 	send := func(resp *binlogdatapb.BinlogDumpResponse) error {
 		mu.Lock()
 		defer mu.Unlock()
-		responses = append(responses, resp)
+		raw := make([]byte, len(resp.Raw))
+		copy(raw, resp.Raw)
+		responses = append(responses, &binlogdatapb.BinlogDumpResponse{Raw: raw})
 		return nil
 	}
 	return send, &responses
 }
 
-func TestStreamBinlogPackets_ContextCancelBetweenEvents(t *testing.T) {
-	tsv := &TabletServer{}
-	reader := newMockPacketReader()
-	send, responses := collectSender()
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Simulate the conn-close goroutine from BinlogDump handler
-	go func() {
-		<-ctx.Done()
-		reader.Close()
-	}()
-
-	done := make(chan error, 1)
-	go func() {
-		done <- tsv.streamBinlogPackets(ctx, reader, send)
-	}()
-
-	// Deliver one normal binlog event packet (status byte 0x00 = OK, length < MaxPacketSize)
-	eventPacket := []byte{0x00, 0x01, 0x02, 0x03}
-	reader.packets <- readResult{data: eventPacket}
-
-	// Cancel the context to simulate shutdown.
-	// The conn-close goroutine will close the reader, unblocking any pending read.
-	cancel()
-
-	err := <-done
-	require.NoError(t, err)
-
-	// Should have received: the event packet + an EOF packet
-	require.Len(t, *responses, 2)
-	assert.Equal(t, eventPacket, (*responses)[0].Raw)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Raw)
+// makePacket builds a raw MySQL packet (header + payload) for expected value comparison.
+func makePacket(seq uint8, payload []byte) []byte {
+	length := len(payload)
+	packet := make([]byte, mysql.PacketHeaderSize+length)
+	packet[0] = byte(length)
+	packet[1] = byte(length >> 8)
+	packet[2] = byte(length >> 16)
+	packet[3] = seq
+	copy(packet[mysql.PacketHeaderSize:], payload)
+	return packet
 }
 
-func TestStreamBinlogPackets_ContextCancelDuringRead(t *testing.T) {
-	tsv := &TabletServer{}
-	reader := newMockPacketReader()
-	send, responses := collectSender()
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Simulate the conn-close goroutine from BinlogDump handler
-	go func() {
-		<-ctx.Done()
-		reader.Close()
-	}()
-
-	done := make(chan error, 1)
-	go func() {
-		done <- tsv.streamBinlogPackets(ctx, reader, send)
-	}()
-
-	// Cancel context immediately — the reader will be closed, unblocking the read
-	cancel()
-
-	err := <-done
-	require.NoError(t, err)
-
-	// Should have received just the EOF packet
-	require.Len(t, *responses, 1)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[0].Raw)
+// concatRaw concatenates all Raw bytes from responses into a single slice.
+func concatRaw(responses []*binlogdatapb.BinlogDumpResponse) []byte {
+	var result []byte
+	for _, r := range responses {
+		result = append(result, r.Raw...)
+	}
+	return result
 }
 
 func TestStreamBinlogPackets_NormalEOFFromMySQL(t *testing.T) {
@@ -150,19 +132,118 @@ func TestStreamBinlogPackets_NormalEOFFromMySQL(t *testing.T) {
 		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
 	}()
 
-	// MySQL sends an EOF packet
-	eofPacket := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
-	reader.packets <- readResult{data: eofPacket}
+	// MySQL sends an EOF packet — this is a terminal packet.
+	eofPayload := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
+	reader.WritePacket(eofPayload)
 
 	err := <-done
 	require.NoError(t, err)
 
-	// Should have received just the EOF packet from MySQL (forwarded as-is)
-	require.Len(t, *responses, 1)
-	assert.Equal(t, eofPacket, (*responses)[0].Raw)
+	// EOF is terminal — buffer flushed immediately with header + payload.
+	raw := concatRaw(*responses)
+	assert.Equal(t, makePacket(1, eofPayload), raw)
 }
 
-func TestStreamBinlogPackets_ReadErrorWithoutCancel(t *testing.T) {
+func TestStreamBinlogPackets_NormalEventAndEOF(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+	}()
+
+	// Send a normal binlog event (status byte 0x00 = OK)
+	eventPayload := []byte{0x00, 0x01, 0x02, 0x03}
+	eofPayload := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
+	reader.WritePacket(eventPayload)
+	reader.WritePacket(eofPayload)
+
+	err := <-done
+	require.NoError(t, err)
+
+	// Both packets batched into response(s), flushed on EOF.
+	raw := concatRaw(*responses)
+	expected := append(makePacket(1, eventPayload), makePacket(2, eofPayload)...)
+	assert.Equal(t, expected, raw)
+}
+
+func TestStreamBinlogPackets_MultipleEventsAndEOF(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+	}()
+
+	// Send several events followed by EOF.
+	event1 := []byte{0x00, 0xAA}
+	event2 := []byte{0x00, 0xBB, 0xCC}
+	event3 := []byte{0x00, 0xDD, 0xEE, 0xFF}
+	eofPayload := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
+	reader.WritePacket(event1)
+	reader.WritePacket(event2)
+	reader.WritePacket(event3)
+	reader.WritePacket(eofPayload)
+
+	err := <-done
+	require.NoError(t, err)
+
+	// All packets batched together (well under 256KB).
+	raw := concatRaw(*responses)
+	var expected []byte
+	expected = append(expected, makePacket(1, event1)...)
+	expected = append(expected, makePacket(2, event2)...)
+	expected = append(expected, makePacket(3, event3)...)
+	expected = append(expected, makePacket(4, eofPayload)...)
+	assert.Equal(t, expected, raw)
+}
+
+func TestStreamBinlogPackets_ConnectionCloseDuringRead(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+	}()
+
+	// Close immediately — first ReadHeaderInto fails.
+	reader.Close()
+
+	err := <-done
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "connection closed")
+	assert.Empty(t, *responses)
+}
+
+func TestStreamBinlogPackets_ConnectionCloseBetweenEvents(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+	}()
+
+	// Deliver one event, then close.
+	reader.WritePacket([]byte{0x00, 0x01, 0x02, 0x03})
+	reader.Close()
+
+	err := <-done
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "connection closed")
+
+	// The event was buffered but never flushed (no terminal packet).
+	assert.Empty(t, *responses)
+}
+
+func TestStreamBinlogPackets_ReadError(t *testing.T) {
 	tsv := &TabletServer{}
 	reader := newMockPacketReader()
 	send, _ := collectSender()
@@ -172,44 +253,40 @@ func TestStreamBinlogPackets_ReadErrorWithoutCancel(t *testing.T) {
 		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
 	}()
 
-	// Deliver a real read error (not from shutdown)
-	reader.packets <- readResult{err: errors.New("unexpected network error")}
+	// Inject a custom error.
+	reader.pw.CloseWithError(errors.New("unexpected network error"))
 
 	err := <-done
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected network error")
 }
 
-func TestStreamBinlogPackets_ContextCancelDuringContinuation(t *testing.T) {
+func TestStreamBinlogPackets_MaxPacketSizeMessage(t *testing.T) {
 	tsv := &TabletServer{}
 	reader := newMockPacketReader()
 	send, responses := collectSender()
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Simulate the conn-close goroutine from BinlogDump handler
-	go func() {
-		<-ctx.Done()
-		reader.Close()
-	}()
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(ctx, reader, send)
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
 	}()
 
-	// Send a MaxPacketSize packet to trigger continuation loop
-	bigPacket := make([]byte, mysql.MaxPacketSize)
-	bigPacket[0] = 0x00 // OK status byte
-	reader.packets <- readResult{data: bigPacket}
-
-	// Now in continuation loop, cancel — reader.Close() unblocks the read
-	cancel()
+	// Send a multi-packet message: MaxPacketSize payload + zero-length continuation + EOF.
+	bigPayload := make([]byte, mysql.MaxPacketSize)
+	bigPayload[0] = 0x00 // OK status byte
+	reader.WritePacket(bigPayload)
+	reader.WritePacket(nil) // zero-length continuation terminates the multi-packet message
+	eofPayload := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
+	reader.WritePacket(eofPayload)
 
 	err := <-done
 	require.NoError(t, err)
 
-	// Should have received: the big packet + EOF
-	require.Len(t, *responses, 2)
-	assert.Len(t, (*responses)[0].Raw, mysql.MaxPacketSize)
-	assert.Equal(t, []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}, (*responses)[1].Raw)
+	// Verify total raw bytes:
+	// header(4) + MaxPacketSize + header(4) + header(4) + 5(EOF) = MaxPacketSize + 17
+	raw := concatRaw(*responses)
+	assert.Len(t, raw, mysql.MaxPacketSize+17)
+
+	// Multiple responses expected (256KB buffer flushes many times for 16MB payload).
+	assert.Greater(t, len(*responses), 1)
 }

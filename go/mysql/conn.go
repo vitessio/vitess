@@ -51,6 +51,7 @@ const (
 	// packetHeaderSize is the 4 bytes of header per MySQL packet
 	// sent over
 	packetHeaderSize = 4
+	PacketHeaderSize = packetHeaderSize
 )
 
 // Constants for how ephemeral buffers were used for reading / writing.
@@ -265,6 +266,12 @@ func newConn(conn net.Conn, flushDelay time.Duration, truncateErrLen int) *Conn 
 	}
 }
 
+// NewConnForTest creates a Conn wrapping the given net.Conn with default
+// settings. Exported for use in cross-package benchmarks.
+func NewConnForTest(nc net.Conn) *Conn {
+	return newConn(nc, DefaultFlushDelay, 0)
+}
+
 // newServerConn should be used to create server connections.
 //
 // It stashes a reference to the listener to be able to determine if
@@ -388,33 +395,7 @@ func (c *Conn) getReader() io.Reader {
 }
 
 func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
-	// Note io.ReadFull will return two different types of errors:
-	// 1. if the socket is already closed, and the go runtime knows it,
-	//   then ReadFull will return an error (different than EOF),
-	//   something like 'read: connection reset by peer'.
-	// 2. if the socket is not closed while we start the read,
-	//   but gets closed after the read is started, we'll get io.EOF.
-	if _, err := io.ReadFull(r, c.header[:]); err != nil {
-		// The special casing of propagating io.EOF up
-		// is used by the server side only, to suppress an error
-		// message if a client just disconnects.
-		if err == io.EOF {
-			return 0, err
-		}
-		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
-			return 0, io.EOF
-		}
-		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
-	}
-
-	sequence := c.header[3]
-	if sequence != c.sequence {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-	}
-
-	c.sequence++
-
-	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
+	return c.ReadHeaderInto(c.header[:])
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
@@ -600,6 +581,59 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 
 func (c *Conn) WritePacket(data []byte) error {
 	return c.writePacket(data)
+}
+
+// ReadHeaderInto reads the header of a packet into the provided buffer.
+// The buffer must be at least 4 bytes long.
+// This is used for streaming binlog packets, where we want to read the header
+// first to determine the packet size, and then read the rest of the packet.
+//
+// Returns the length of the packet data that follows the header (not including the header),
+// or an error if any.
+func (c *Conn) ReadHeaderInto(buf []byte) (int, error) {
+	if len(buf) < packetHeaderSize {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "buffer too small for packet header: %v < %v", len(buf), packetHeaderSize)
+	}
+
+	r := c.getReader()
+
+	// Note io.ReadFull will return two different types of errors:
+	// 1. if the socket is already closed, and the go runtime knows it,
+	//   then ReadFull will return an error (different than EOF),
+	//   something like 'read: connection reset by peer'.
+	// 2. if the socket is not closed while we start the read,
+	//   but gets closed after the read is started, we'll get io.EOF.
+	if _, err := io.ReadFull(r, buf); err != nil {
+		// The special casing of propagating io.EOF up
+		// is used by the server side only, to suppress an error
+		// message if a client just disconnects.
+		if err == io.EOF {
+			return 0, err
+		}
+		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
+			return 0, io.EOF
+		}
+		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
+	}
+
+	sequence := buf[3]
+	if sequence != c.sequence {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+
+	c.sequence++
+
+	return int(uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16), nil
+}
+
+func (c *Conn) ReadDataInto(buf []byte) error {
+	r := c.getReader()
+
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", len(buf))
+	}
+
+	return nil
 }
 
 // ReadOnePacket reads a single packet from the underlying connection without
