@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -683,6 +684,10 @@ func TestScheduleLoopThrottledUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
+
+	if globalStats.ThrottledCount == nil {
+		globalStats.ThrottledCount = stats.NewCounter("", "")
+	}
 
 	mockDB.AddInvariant("rollback", &sqltypes.Result{})
 	mockDB.AddInvariant("time_throttled", &sqltypes.Result{})
