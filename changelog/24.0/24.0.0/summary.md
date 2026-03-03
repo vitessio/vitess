@@ -19,10 +19,9 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
-    - **[Query Parsing](#minor-changes-query-parsing)**
-        - [Improve MySQL-compatibility of Aggregator names](#query-parsing-aggr-name-capitalization)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
+        - [Improve MySQL-compatibility of Aggregator names](#query-parsing-aggr-name-capitalization)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
@@ -160,14 +159,6 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
-### <a id="minor-changes-query-parsing"/>Query Parsing</a>
-
-#### <a id="query-parsing-aggr-name-capitalization"/>Improve MySQL-compatibility of Aggregator names</a>
-
-The SQL parser now preserves the original capitalization of aggregate function names (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`, `GROUP_CONCAT`, etc.) as written in the query. Previously, aggregate names were always lowercased in the formatted output, which broke MySQL compatibility — MySQL preserves the user's original capitalization in result column names (e.g. `SELECT MIN(k)` returns a column named `MIN(k)`, not `min(k)`).
-
-See [#19543](https://github.com/vitessio/vitess/pull/19543) for details.
-
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
@@ -177,6 +168,12 @@ The `JSON_EXTRACT` function now supports dynamic path arguments like bind variab
 Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
 
 Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
+
+#### <a id="query-parsing-aggr-name-capitalization"/>Improve MySQL-compatibility of Aggregator names</a>
+
+The SQL parser now preserves the original capitalization of aggregate function names (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`, `GROUP_CONCAT`, etc.) as written in the query. Previously, aggregate names were always lowercased in the formatted output, which broke MySQL compatibility — MySQL preserves the user's original capitalization in result column names (e.g. `SELECT MIN(k)` returns a column named `MIN(k)`, not `min(k)`).
+
+See [#19543](https://github.com/vitessio/vitess/pull/19543) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
