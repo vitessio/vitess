@@ -1,7 +1,7 @@
-//go:build !windows
+//go:build windows
 
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,17 +16,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package syscallutil
+package cluster
 
-import (
-	"syscall"
-)
+import "os/exec"
 
-func Kill(pid int, signum syscall.Signal) (err error) {
-	return syscall.Kill(pid, signum)
-}
-
-// KillProcessGroup sends a signal to an entire process group (negative PID).
-func KillProcessGroup(pid int, signum syscall.Signal) error {
-	return syscall.Kill(-pid, signum)
-}
+// setProcessGroup is a no-op on windows.
+func setProcessGroup(cmd *exec.Cmd) {}

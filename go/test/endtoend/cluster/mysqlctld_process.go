@@ -125,6 +125,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stderr = os.Stderr
 	mysqlctld.ErrorLog = errFile.Name()
 
+	setProcessGroup(tempProcess)
 	log.Info(strings.Join(tempProcess.Args, " "))
 
 	err = tempProcess.Start()
@@ -167,11 +168,9 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", mysqlctld.Name, mysqlctld.Stop())
 }
 
-// Stop executes mysqlctld command to stop mysql instance
+// Stop executes mysqlctld command to stop mysql instance with a 30-second
+// timeout, falling back to force-killing the process group.
 func (mysqlctld *MysqlctldProcess) Stop() error {
-	// if mysqlctld.process == nil || mysqlctld.exit == nil {
-	// 	return nil
-	// }
 	mysqlctld.exitSignalReceived = true
 	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -189,7 +188,26 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
-	return tmpProcess.Run()
+
+	if err := tmpProcess.Start(); err != nil {
+		return fmt.Errorf("failed to start mysqlctl shutdown: %w", err)
+	}
+
+	exit := make(chan error, 1)
+	go func() {
+		exit <- tmpProcess.Wait()
+	}()
+	select {
+	case err := <-exit:
+		if err == nil {
+			return nil
+		}
+		log.Warn(fmt.Sprintf("mysqlctl shutdown failed for tablet %d: %v, attempting force kill", mysqlctld.TabletUID, err))
+	case <-time.After(30 * time.Second):
+		log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", mysqlctld.TabletUID))
+	}
+
+	return mysqlForceShutdown(mysqlctld.TabletUID)
 }
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again

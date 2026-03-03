@@ -24,13 +24,11 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -175,6 +173,7 @@ ssl_key={{.ServerKey}}
 	}
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
+	setProcessGroup(tmpProcess)
 	log.Info(fmt.Sprintf("Starting mysqlctl with command: %v", tmpProcess.Args))
 	return tmpProcess, tmpProcess.Start()
 }
@@ -205,33 +204,8 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		}
 		break
 	}
-	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", mysqlctl.TabletUID))
-	pidBytes, err := os.ReadFile(pidFile)
-	if err != nil {
-		// We can't read the file which means the PID file does not exist
-		// The server must have stopped
-		return nil
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	if err != nil {
-		return err
-	}
-	// We first need to try and kill any associated mysqld_safe process or
-	// else it will immediately restart the mysqld process when we kill it.
-	mspidb, err := exec.Command("sh", "-c",
-		fmt.Sprintf("ps auxww | grep -E 'mysqld_safe|mariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
-	if err != nil {
-		return err
-	}
-	mysqldSafePID, err := strconv.Atoi(strings.TrimSpace(string(mspidb)))
-	// If we found a valid associated mysqld_safe process then let's kill
-	// it first.
-	if err == nil && mysqldSafePID > 0 {
-		if err = syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
-			return err
-		}
-	}
-	return syscallutil.Kill(pid, syscall.SIGKILL)
+	// Process group kill handles mysqld_safe and all children automatically.
+	return mysqlForceShutdown(mysqlctl.TabletUID)
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
