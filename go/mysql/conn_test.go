@@ -246,7 +246,7 @@ func TestZstdReadWrapperReuseBufferAndValidateLengths(t *testing.T) {
 	logical[3] = 0
 	copy(logical[packetHeaderSize:], payload)
 
-	compressed := sConn.zstdEncoder.EncodeAll(logical, nil)
+	compressed := sConn.zstd.encoder.EncodeAll(logical, nil)
 	compressedLen := uint32(len(compressed))
 	uncompressedLen := uint32(len(logical))
 
@@ -322,11 +322,11 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
-	// Reuse the same decoder via sConn.zstdDecoder and ensure multiple DecodeAll calls work.
+	// Reuse the same decoder via sConn.zstd.decoder and ensure multiple DecodeAll calls work.
 	payload := []byte("repeated-decode-payload")
 	for range 10 {
-		compressed := sConn.zstdEncoder.EncodeAll(payload, nil)
-		decoded, err := sConn.zstdDecoder.DecodeAll(compressed, nil)
+		compressed := sConn.zstd.encoder.EncodeAll(payload, nil)
+		decoded, err := sConn.zstd.decoder.DecodeAll(compressed, nil)
 		require.NoError(t, err)
 		require.Equal(t, payload, decoded)
 	}
@@ -335,7 +335,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 	frameBuf := &bytes.Buffer{}
 	for i := range 3 {
 		seq := byte(i)
-		compressed := sConn.zstdEncoder.EncodeAll(payload, nil)
+		compressed := sConn.zstd.encoder.EncodeAll(payload, nil)
 		var hdr [compressedPacketHeaderSize]byte
 		writeCompressedPacketHeader(hdr[:], uint32(len(compressed)), uint32(len(payload)), seq)
 		_, err := frameBuf.Write(hdr[:])
@@ -348,7 +348,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 		c: sConn,
 		r: bytes.NewReader(frameBuf.Bytes()),
 	}
-	sConn.compressedReadSequence = 0
+	sConn.zstd.readSequence = 0
 
 	buf := make([]byte, len(payload))
 	for range 3 {
@@ -367,7 +367,7 @@ func TestZstdReadWrapperInvalidSequence(t *testing.T) {
 
 	// Build a single frame with an unexpected sequence id.
 	payload := []byte("bad-seq")
-	compressed := sConn.zstdEncoder.EncodeAll(payload, nil)
+	compressed := sConn.zstd.encoder.EncodeAll(payload, nil)
 
 	var hdr [compressedPacketHeaderSize]byte
 	writeCompressedPacketHeader(hdr[:], uint32(len(compressed)), uint32(len(payload)), 5)
@@ -377,7 +377,7 @@ func TestZstdReadWrapperInvalidSequence(t *testing.T) {
 		c: sConn,
 		r: bytes.NewReader(frame),
 	}
-	sConn.compressedReadSequence = 0
+	sConn.zstd.readSequence = 0
 
 	buf := make([]byte, len(payload))
 	_, err := wrapper.Read(buf)
@@ -402,6 +402,48 @@ func TestZstdReadWrapperInvalidLengths(t *testing.T) {
 	buf := make([]byte, 10)
 	_, err := wrapper.Read(buf)
 	require.ErrorContains(t, err, "invalid compressed lengths")
+}
+
+func TestInitZstdCompression(t *testing.T) {
+	t.Run("not compressed is no-op", func(t *testing.T) {
+		c := &Conn{}
+		require.NoError(t, c.initZstdCompression())
+		require.Nil(t, c.zstd, "zstd state should be nil when isZstdCompressed is false")
+	})
+
+	t.Run("creates encoder and decoder", func(t *testing.T) {
+		c := &Conn{
+			isZstdCompressed:     true,
+			zstdCompressionLevel: zstdCompressionLevelDefault,
+		}
+		require.NoError(t, c.initZstdCompression())
+		require.NotNil(t, c.zstd)
+		require.NotNil(t, c.zstd.encoder)
+		require.NotNil(t, c.zstd.decoder)
+
+		// Verify encoder and decoder work.
+		payload := []byte("hello, zstd")
+		compressed := c.zstd.encoder.EncodeAll(payload, nil)
+		decoded, err := c.zstd.decoder.DecodeAll(compressed, nil)
+		require.NoError(t, err)
+		require.Equal(t, payload, decoded)
+
+		c.closeZstdCompression()
+		require.Nil(t, c.zstd)
+	})
+
+	t.Run("closeZstdCompression is idempotent", func(t *testing.T) {
+		c := &Conn{
+			isZstdCompressed:     true,
+			zstdCompressionLevel: zstdCompressionLevelDefault,
+		}
+		require.NoError(t, c.initZstdCompression())
+		c.closeZstdCompression()
+		require.Nil(t, c.zstd)
+		// Calling again should not panic.
+		c.closeZstdCompression()
+		require.Nil(t, c.zstd)
+	})
 }
 
 func TestBasicPackets(t *testing.T) {

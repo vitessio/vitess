@@ -1908,9 +1908,28 @@ func TestHandshakeCapabilitiesInvalidFlag(t *testing.T) {
 	assert.Zero(t, caps&CapabilityClientZstdCompressionAlgorithm, "enableZstdCompression=false must not advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM")
 }
 
+// zstdTestHandler wraps testHandler and signals when the server-side
+// handshake (including zstd init) is fully complete, so tests can safely
+// inspect Conn fields without a data race.
+type zstdTestHandler struct {
+	testHandler
+	ready chan struct{}
+}
+
+func newZstdTestHandler() *zstdTestHandler {
+	return &zstdTestHandler{ready: make(chan struct{}, 1)}
+}
+
+func (h *zstdTestHandler) ConnectionReady(c *Conn) {
+	select {
+	case h.ready <- struct{}{}:
+	default:
+	}
+}
+
 func TestHandshakeZstdClientSetsServerCompressedAndLevel(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	th := &testHandler{}
+	th := newZstdTestHandler()
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
 	defer authServer.close()
@@ -1935,6 +1954,7 @@ func TestHandshakeZstdClientSetsServerCompressedAndLevel(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	<-th.ready
 	sc := th.LastConn()
 	require.NotNil(t, sc)
 	assert.True(t, sc.isZstdCompressed, "server Conn must have isZstdCompressed true when client sends zstd capability and level")
@@ -1943,7 +1963,7 @@ func TestHandshakeZstdClientSetsServerCompressedAndLevel(t *testing.T) {
 
 func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	th := &testHandler{}
+	th := newZstdTestHandler()
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
 	defer authServer.close()
@@ -1968,6 +1988,7 @@ func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	<-th.ready
 	sc := th.LastConn()
 	require.NotNil(t, sc)
 	assert.True(t, sc.isZstdCompressed)
@@ -1976,7 +1997,7 @@ func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
 
 func TestHandshakeZstdClientLevelClamped(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	th := &testHandler{}
+	th := newZstdTestHandler()
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
 	defer authServer.close()
@@ -2001,6 +2022,7 @@ func TestHandshakeZstdClientLevelClamped(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	<-th.ready
 	sc := th.LastConn()
 	require.NotNil(t, sc)
 	assert.True(t, sc.isZstdCompressed)
@@ -2009,7 +2031,7 @@ func TestHandshakeZstdClientLevelClamped(t *testing.T) {
 
 func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	th := &testHandler{}
+	th := newZstdTestHandler()
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
 	defer authServer.close()
@@ -2032,6 +2054,7 @@ func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	<-th.ready
 	sc := th.LastConn()
 	require.NotNil(t, sc)
 	assert.False(t, sc.isZstdCompressed, "server must not set isZstdCompressed when client does not send zstd capability")
@@ -2039,7 +2062,7 @@ func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
 
 func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	th := &testHandler{}
+	th := newZstdTestHandler()
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
 	defer authServer.close()
@@ -2066,6 +2089,7 @@ func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
 	defer conn.Close()
 
 	// Here the server should just ignore the client's request for zstd, since it never advertised zstd in its greeting.
+	<-th.ready
 	sc := th.LastConn()
 	require.NotNil(t, sc)
 	assert.False(t, sc.isZstdCompressed, "server must not enable zstd when listener has EnableZstdCompression=false")

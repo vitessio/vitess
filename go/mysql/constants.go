@@ -101,7 +101,9 @@ const (
 	// Do not permit database.table.column. We do permit it.
 
 	// CapabilityClientCompress is CLIENT_COMPRESS.
-	// Here we're saying the compression protocol is supported, and it's what we use for zstd when compression is turned on.
+	// This enables the MySQL compressed-packet protocol (7-byte frame headers).
+	// It must be combined with CapabilityClientZstdCompressionAlgorithm to negotiate zstd;
+	// bit 5 activates the compressed framing, bit 26 selects the zstd algorithm.
 	CapabilityClientCompress = 1 << 5
 
 	// CLIENT_ODBC 1 << 6

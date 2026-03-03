@@ -572,8 +572,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Now that the handshake and auth OK are fully sent in cleartext, we can turn zstd on for this connection if it was negotiated.
 	if c.wantZstdCompression {
-		c.compressedSequence = 0
-		c.compressedReadSequence = 0
 		c.isZstdCompressed = true
 		if err := c.initZstdCompression(); err != nil {
 			log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))

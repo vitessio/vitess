@@ -82,3 +82,26 @@ func TestIsConnLostDuringQuery(t *testing.T) {
 		assert.Equal(t, tcase.want, got, "IsConnLostDuringQuery(%#v): %v, want %v", tcase.in, got, tcase.want)
 	}
 }
+
+func TestClampZstdLevel(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   int
+		want int
+	}{
+		{name: "below min uses default", in: 0, want: zstdCompressionLevelDefault},
+		{name: "negative uses default", in: -5, want: zstdCompressionLevelDefault},
+		{name: "min boundary", in: 1, want: 1},
+		{name: "mid range", in: 10, want: 10},
+		{name: "max boundary", in: 22, want: 22},
+		{name: "above max clamped", in: 23, want: zstdCompressionLevelMax},
+		{name: "far above max clamped", in: 100, want: zstdCompressionLevelMax},
+		{name: "default value", in: 3, want: 3},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := clampZstdLevel(tc.in)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

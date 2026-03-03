@@ -71,7 +71,7 @@ func writeCompressedPacketHeader(dst []byte, compressedLen, uncompressedLen uint
 	pos = writeUint24LE(dst, pos, compressedLen)
 	dst[pos] = sequence
 	pos++
-	writeUint24LE(dst, pos, uncompressedLen)
+	_ = writeUint24LE(dst, pos, uncompressedLen)
 }
 
 // readCompressedPacketHeader parses the MySQL compressed packet header (7 bytes) from src.
@@ -99,7 +99,7 @@ func readCompressedPacketHeader(src []byte) (compressedLen, uncompressedLen uint
 //
 // Frame protocol wise, we're:
 //   - reading 7-byte compressed frames: [3B compressed_len][1B seq][3B uncompressed_len][compressed_payload]
-//   - checking and bumping compressedReadSequence once per frame
+//   - checking and bumping zstd.readSequence once per frame
 //   - decompressing the payload into a logical MySQL packet (4-byte header + body)
 //
 // It's important that logical packet sequencing stays independent from the frame sequence, so readHeaderFrom still
@@ -107,6 +107,24 @@ func readCompressedPacketHeader(src []byte) (compressedLen, uncompressedLen uint
 //
 // For buffering, we share the same underlying reader (bufferedReader or conn) as uncompressed reads, and when we've
 // drained our decompressed buffer we just pull the next 7-byte frame + payload, decompress it, and keep going.
+
+// zstdState groups all runtime zstd-compression state for a compressed connection.
+// A nil *zstdState on Conn means compression is not active.
+type zstdState struct {
+	// encoder and decoder live for the lifetime of a compressed connection and should be closed when the connection goes away.
+	encoder *zstd.Encoder
+	decoder *zstd.Decoder
+	// writeSequence is the sequence id we put into the 7-byte compressed frame header on writes.
+	// We bump it once per compressed frame and keep it independent from the logical packet sequence (sequence).
+	writeSequence uint8
+	// readSequence is the sequence id we expect to see on incoming compressed frames.
+	// We bump it once per 7-byte frame read and, just like writeSequence, it's independent of the logical packet sequence (sequence).
+	readSequence uint8
+	// reader wraps the underlying reader and handles frame-by-frame decompression; we create it lazily.
+	reader *zstdReadWrapper
+	// writeScratch is a reusable buffer for encoder.EncodeAll output to reduce allocations on the write path.
+	writeScratch []byte
+}
 
 type zstdReadWrapper struct {
 	c           *Conn
@@ -134,18 +152,17 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed lengths, compressed=0 uncompressed=%v", uncompressedLen)
 	}
 	// Guard against unreasonable frame sizes from the wire. The MySQL compressed protocol
-	// limits each of the 3-byte length fields to 0xFFFFFF (16 MiB − 1).
-	const maxFrameLen = 0xFFFFFF
-	if compressedLen > maxFrameLen {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "compressed frame length %v exceeds protocol maximum %v", compressedLen, maxFrameLen)
+	// limits each of the 3-byte length fields to MaxPacketSize (0xFFFFFF, 16 MiB − 1).
+	if compressedLen > MaxPacketSize {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "compressed frame length %v exceeds protocol maximum %v", compressedLen, MaxPacketSize)
 	}
-	if uncompressedLen > maxFrameLen {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncompressed frame length %v exceeds protocol maximum %v", uncompressedLen, maxFrameLen)
+	if uncompressedLen > MaxPacketSize {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncompressed frame length %v exceeds protocol maximum %v", uncompressedLen, MaxPacketSize)
 	}
-	if seq != z.c.compressedReadSequence {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", z.c.compressedReadSequence, seq)
+	if seq != z.c.zstd.readSequence {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", z.c.zstd.readSequence, seq)
 	}
-	z.c.compressedReadSequence++
+	z.c.zstd.readSequence++
 
 	// Reuse the read scratch buffer to avoid per-frame allocations.
 	if uint32(cap(z.readScratch)) < compressedLen {
@@ -166,7 +183,7 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 		z.buf = z.buf[:len(payload)]
 		copy(z.buf, payload)
 	} else {
-		decoded, err := z.c.zstdDecoder.DecodeAll(payload, z.buf[:0])
+		decoded, err := z.c.zstd.decoder.DecodeAll(payload, z.buf[:0])
 		if err != nil {
 			return 0, vterrors.Wrapf(err, "zstd decompress failed")
 		}
@@ -295,25 +312,16 @@ type Conn struct {
 	Capabilities uint32
 
 	// isZstdCompressed tells us this connection is using zstd compression (MySQL 8.0+).
+	// Prefer checking c.zstd != nil for runtime checks; this field is kept for backward compatibility
+	// with code that sets it during the handshake before the zstdState is allocated.
 	isZstdCompressed bool
 	// wantZstdCompression is set during the server-side handshake when the client asked for zstd and the listener has it enabled.
 	// We only flip isZstdCompressed to true and initialize encoders/decoders after we've sent the OK packet so the handshake stays uncompressed.
 	wantZstdCompression bool
-	// zstdCompressionLevel is the zstd level (1-22) we negotiated during the handshake; we only look at it when isZstdCompressed is true.
+	// zstdCompressionLevel is the zstd level (1-22) we negotiated during the handshake; used when creating the encoder.
 	zstdCompressionLevel int
-	// zstdEncoder and zstdDecoder live for the lifetime of a compressed connection and should be closed when the connection goes away.
-	zstdEncoder *zstd.Encoder
-	zstdDecoder *zstd.Decoder
-	// compressedSequence is the sequence id we put into the 7-byte compressed frame header on writes.
-	// We bump it once per compressed frame and keep it independent from the logical packet sequence (sequence).
-	compressedSequence uint8
-	// compressedReadSequence is the sequence id we expect to see on incoming compressed frames.
-	// We bump it once per 7-byte frame read and, just like compressedSequence, it's independent of the logical packet sequence (sequence).
-	compressedReadSequence uint8
-	// zstdReader wraps the underlying reader and handles frame-by-frame decompression when isZstdCompressed is true; we create it lazily.
-	zstdReader *zstdReadWrapper
-	// compressedWriteScratch is a reusable buffer for zstdEncoder.EncodeAll output to reduce allocations on the write path.
-	compressedWriteScratch []byte
+	// zstd holds all runtime compression state. nil when compression is not active.
+	zstd *zstdState
 
 	// closed is set to true when Close() is called on the connection.
 	closed atomic.Bool
@@ -346,7 +354,7 @@ type Conn struct {
 	// Packet encoding variables.
 	// sequence is the logical packet sequence id in the 4-byte MySQL packet header.
 	// Used for uncompressed connections and for the decompressed stream when using compression.
-	// When compressed, each 7-byte frame has its own sequence (compressedSequence/compressedReadSequence);
+	// When compressed, each 7-byte frame has its own sequence (zstd.writeSequence/zstd.readSequence);
 	// the payload after decompression contains logical packets with this sequence in their 4-byte headers.
 	sequence uint8
 
@@ -403,10 +411,6 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
 var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, connBufferSize) }}
-
-// compressedBufPool pools bytes.Buffer objects used by writePacketCompressed to assemble
-// the uncompressed logical-packet stream before compression.
-var compressedBufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -535,19 +539,20 @@ func (c *Conn) startFlushTimer() {
 
 // getReader returns reader for connection. It can be *bufio.Reader or net.Conn
 // depending on which buffer size was passed to newServerConn.
-// When isZstdCompressed, returns a wrapper that reads compressed frames from the
-// same underlying reader (bufferedReader if present, else conn), decompresses,
-// and serves logical packets so the existing packet parser is unchanged.
+// When zstd compression is active (c.zstd != nil), returns a wrapper that reads
+// compressed frames from the same underlying reader (bufferedReader if present,
+// else conn), decompresses, and serves logical packets so the existing packet
+// parser is unchanged.
 func (c *Conn) getReader() io.Reader {
-	if c.isZstdCompressed {
-		if c.zstdReader == nil {
+	if c.zstd != nil {
+		if c.zstd.reader == nil {
 			var underlying io.Reader = c.conn
 			if c.bufferedReader != nil {
 				underlying = c.bufferedReader
 			}
-			c.zstdReader = &zstdReadWrapper{c: c, r: underlying}
+			c.zstd.reader = &zstdReadWrapper{c: c, r: underlying}
 		}
-		return c.zstdReader
+		return c.zstd.reader
 	}
 	if c.bufferedReader != nil {
 		return c.bufferedReader
@@ -773,7 +778,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 //
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writePacket(data []byte) error {
-	if c.isZstdCompressed {
+	if c.zstd != nil {
 		return c.writePacketCompressed(data)
 	}
 	return c.writePacketUncompressed(data)
@@ -849,15 +854,13 @@ func (c *Conn) writePacketUncompressed(data []byte) error {
 }
 
 // writePacketCompressed builds the same logical packet(s) as uncompressed (with logical sequence in 4-byte headers),
-// compresses them into one or more frames, and sends a 7-byte header (with compressedSequence) + payload per frame.
-// compressedSequence is incremented once per compressed frame; the logical packets inside use c.sequence.
+// compresses them into one or more frames, and sends a 7-byte header (with zstd.writeSequence) + payload per frame.
+// zstd.writeSequence is incremented once per compressed frame; the logical packets inside use c.sequence.
 //
 // When compression would expand the data (common for small packets), we send the payload uncompressed
 // (uncompressedLen=0 in the frame header) as the MySQL compressed protocol allows.
 func (c *Conn) writePacketCompressed(data []byte) error {
-	uncompressed := compressedBufPool.Get().(*bytes.Buffer)
-	uncompressed.Reset()
-	defer compressedBufPool.Put(uncompressed)
+	var uncompressed bytes.Buffer
 
 	index := 0
 	dataLength := len(data) - packetHeaderSize
@@ -898,21 +901,20 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 	}
 
 	payload := uncompressed.Bytes()
-	const maxFrameLen = 0xFFFFFF
 	var hdr [compressedPacketHeaderSize]byte
 
 	for offset := 0; offset < len(payload); {
 		remaining := len(payload) - offset
 		chunkSize := remaining
-		if chunkSize > maxFrameLen {
-			chunkSize = maxFrameLen
+		if chunkSize > MaxPacketSize {
+			chunkSize = MaxPacketSize
 		}
 		chunk := payload[offset : offset+chunkSize]
 
 		// Reuse the per-connection scratch buffer as the destination for EncodeAll to avoid allocating per frame.
-		c.compressedWriteScratch = c.zstdEncoder.EncodeAll(chunk, c.compressedWriteScratch[:0])
+		c.zstd.writeScratch = c.zstd.encoder.EncodeAll(chunk, c.zstd.writeScratch[:0])
 
-		compressedLen := uint32(len(c.compressedWriteScratch))
+		compressedLen := uint32(len(c.zstd.writeScratch))
 		uncompressedLen := uint32(len(chunk))
 
 		// When compression expands the data (common for small packets), send an uncompressed frame instead.
@@ -924,20 +926,23 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 			compressedLen = uncompressedLen
 			uncompressedLen = 0
 		} else {
-			framePayload = c.compressedWriteScratch
+			framePayload = c.zstd.writeScratch
 		}
 
-		if compressedLen > maxFrameLen {
+		if compressedLen > MaxPacketSize {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "frame payload length exceeds 3-byte max")
 		}
 
-		writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.compressedSequence)
-		c.compressedSequence++
+		writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.zstd.writeSequence)
+		c.zstd.writeSequence++
 
 		if _, err := w.Write(hdr[:]); err != nil {
+			// A partial write desynchronizes the compressed framing; the connection is no longer usable.
+			c.Close()
 			return vterrors.Wrapf(err, "Write(compressed header) failed")
 		}
 		if _, err := w.Write(framePayload); err != nil {
+			c.Close()
 			return vterrors.Wrapf(err, "Write(compressed payload) failed")
 		}
 
@@ -995,9 +1000,9 @@ func (c *Conn) recycleWritePacket() {
 func (c *Conn) writeComQuit() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
-	if c.isZstdCompressed {
-		c.compressedSequence = 0
-		c.compressedReadSequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
 	}
 
 	data, pos := c.startEphemeralPacketWithHeader(1)
@@ -1023,7 +1028,7 @@ func (c *Conn) String() string {
 	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
 }
 
-// initZstdCompression creates the zstd encoder and decoder we're going to use for this connection.
+// initZstdCompression creates the zstd encoder and decoder and allocates the zstdState for this connection.
 // It should be called after the handshake is fully parsed and before we see any compressed traffic.
 // If isZstdCompressed is false, we just return early. On failure we bubble the error up so the caller can fail the connection.
 func (c *Conn) initZstdCompression() error {
@@ -1039,22 +1044,25 @@ func (c *Conn) initZstdCompression() error {
 		_ = enc.Close()
 		return err
 	}
-	c.zstdEncoder = enc
-	c.zstdDecoder = dec
+	c.zstd = &zstdState{
+		encoder: enc,
+		decoder: dec,
+	}
 	return nil
 }
 
 // closeZstdCompression releases any zstd encoder/decoder resources we still hold; it's safe to call this more than once.
 func (c *Conn) closeZstdCompression() {
-	if c.zstdEncoder != nil {
-		_ = c.zstdEncoder.Close()
-		c.zstdEncoder = nil
+	if c.zstd == nil {
+		return
 	}
-	if c.zstdDecoder != nil {
-		c.zstdDecoder.Close()
-		c.zstdDecoder = nil
+	if c.zstd.encoder != nil {
+		_ = c.zstd.encoder.Close()
 	}
-	c.zstdReader = nil
+	if c.zstd.decoder != nil {
+		c.zstd.decoder.Close()
+	}
+	c.zstd = nil
 }
 
 // Close closes the connection. It can be called from a different go
@@ -1207,9 +1215,9 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
-	if c.isZstdCompressed {
-		c.compressedSequence = 0
-		c.compressedReadSequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
 	}
 	data, err := c.readEphemeralPacket()
 	if err != nil {
