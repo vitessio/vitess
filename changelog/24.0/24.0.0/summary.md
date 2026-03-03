@@ -19,6 +19,8 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+    - **[Query Parsing](#minor-changes-query-parsing)**
+        - [Improve MySQL-compatibility of Aggregator names](#query-parsing-aggr-name-capitalization)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -157,6 +159,14 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+### <a id="minor-changes-query-parsing"/>Query Parsing</a>
+
+#### <a id="query-parsing-aggr-name-capitalization"/>Improve MySQL-compatibility of Aggregator names</a>
+
+The SQL parser now preserves the original capitalization of aggregate function names (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`, `GROUP_CONCAT`, etc.) as written in the query. Previously, aggregate names were always lowercased in the formatted output, which broke MySQL compatibility — MySQL preserves the user's original capitalization in result column names (e.g. `SELECT MIN(k)` returns a column named `MIN(k)`, not `min(k)`).
+
+See [#19543](https://github.com/vitessio/vitess/pull/19543) for details.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
