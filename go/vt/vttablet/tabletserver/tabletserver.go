@@ -1462,7 +1462,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	}
 	headerReadChan := make(chan headerResult, 1)
 	header := make([]byte, mysql.PacketHeaderSize)
-	timer := time.NewTimer(0)
+	timer := time.NewTimer(0) // Reset (Go 1.23+) drains the channel, so the initial fire is harmless.
 	defer timer.Stop()
 
 	readHeader := func() (int, error) {
