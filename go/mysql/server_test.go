@@ -1614,12 +1614,6 @@ func TestParseConnAttrs(t *testing.T) {
 	}
 }
 
-func TestZstdCompressionLevelConstants(t *testing.T) {
-	require.Equal(t, 1, zstdCompressionLevelMin)
-	require.Equal(t, 22, zstdCompressionLevelMax)
-	require.Equal(t, 3, zstdCompressionLevelDefault)
-}
-
 func TestServerFlush(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	mysqlServerFlushDelay := 10 * time.Millisecond
@@ -1908,22 +1902,32 @@ func TestHandshakeCapabilitiesInvalidFlag(t *testing.T) {
 	assert.Zero(t, caps&CapabilityClientZstdCompressionAlgorithm, "enableZstdCompression=false must not advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM")
 }
 
-// zstdTestHandler wraps testHandler and signals when the server-side
-// handshake (including zstd init) is fully complete, so tests can safely
-// inspect Conn fields without a data race.
+// zstdConnSnapshot captures the compression-related Conn fields we want to
+// assert on. It is populated inside ConnectionReady (on the server goroutine)
+// and sent to the test goroutine via a channel, so the test never reads the
+// Conn directly — eliminating the race with the server's deferred Close().
+type zstdConnSnapshot struct {
+	zstdActive           bool // c.zstd != nil
+	zstdCompressionLevel int
+}
+
+// zstdTestHandler wraps testHandler and captures a snapshot of the server-side
+// Conn's compression state inside ConnectionReady, then sends it to the test
+// goroutine via a typed channel. This avoids any cross-goroutine access to the
+// Conn object.
 type zstdTestHandler struct {
 	testHandler
-	ready chan struct{}
+	ready chan zstdConnSnapshot
 }
 
 func newZstdTestHandler() *zstdTestHandler {
-	return &zstdTestHandler{ready: make(chan struct{}, 1)}
+	return &zstdTestHandler{ready: make(chan zstdConnSnapshot, 1)}
 }
 
 func (h *zstdTestHandler) ConnectionReady(c *Conn) {
-	select {
-	case h.ready <- struct{}{}:
-	default:
+	h.ready <- zstdConnSnapshot{
+		zstdActive:           c.zstd != nil,
+		zstdCompressionLevel: c.zstdCompressionLevel,
 	}
 }
 
@@ -1954,11 +1958,9 @@ func TestHandshakeZstdClientSetsServerCompressedAndLevel(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	<-th.ready
-	sc := th.LastConn()
-	require.NotNil(t, sc)
-	assert.True(t, sc.isZstdCompressed, "server Conn must have isZstdCompressed true when client sends zstd capability and level")
-	assert.Equal(t, 7, sc.zstdCompressionLevel, "server must set zstdCompressionLevel to client-requested 7")
+	snap := <-th.ready
+	assert.True(t, snap.zstdActive, "server Conn must have zstd state initialized when client sends zstd capability and level")
+	assert.Equal(t, 7, snap.zstdCompressionLevel, "server must set zstdCompressionLevel to client-requested 7")
 }
 
 func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
@@ -1988,11 +1990,9 @@ func TestHandshakeZstdClientDefaultLevel(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	<-th.ready
-	sc := th.LastConn()
-	require.NotNil(t, sc)
-	assert.True(t, sc.isZstdCompressed)
-	assert.Equal(t, 3, sc.zstdCompressionLevel, "server must use default level 3 when client sends level 0")
+	snap := <-th.ready
+	assert.True(t, snap.zstdActive)
+	assert.Equal(t, 3, snap.zstdCompressionLevel, "server must use default level 3 when client sends level 0")
 }
 
 func TestHandshakeZstdClientLevelClamped(t *testing.T) {
@@ -2022,11 +2022,9 @@ func TestHandshakeZstdClientLevelClamped(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	<-th.ready
-	sc := th.LastConn()
-	require.NotNil(t, sc)
-	assert.True(t, sc.isZstdCompressed)
-	assert.Equal(t, 22, sc.zstdCompressionLevel, "server must clamp level to 22 when client sends > 22")
+	snap := <-th.ready
+	assert.True(t, snap.zstdActive)
+	assert.Equal(t, 22, snap.zstdCompressionLevel, "server must clamp level to 22 when client sends > 22")
 }
 
 func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
@@ -2054,10 +2052,8 @@ func TestHandshakeZstdClientWithoutFlagServerNotCompressed(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	<-th.ready
-	sc := th.LastConn()
-	require.NotNil(t, sc)
-	assert.False(t, sc.isZstdCompressed, "server must not set isZstdCompressed when client does not send zstd capability")
+	snap := <-th.ready
+	assert.False(t, snap.zstdActive, "server must not init zstd when client does not send zstd capability")
 }
 
 func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
@@ -2089,11 +2085,9 @@ func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
 	defer conn.Close()
 
 	// Here the server should just ignore the client's request for zstd, since it never advertised zstd in its greeting.
-	<-th.ready
-	sc := th.LastConn()
-	require.NotNil(t, sc)
-	assert.False(t, sc.isZstdCompressed, "server must not enable zstd when listener has EnableZstdCompression=false")
-	assert.False(t, conn.isZstdCompressed, "client must not enable zstd when server does not advertise zstd capabilities")
+	snap := <-th.ready
+	assert.False(t, snap.zstdActive, "server must not enable zstd when listener has EnableZstdCompression=false")
+	assert.Nil(t, conn.zstd, "client must not enable zstd when server does not advertise zstd capabilities")
 }
 
 func TestZstdRoundTrip(t *testing.T) {

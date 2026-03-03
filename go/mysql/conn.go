@@ -311,12 +311,11 @@ type Conn struct {
 	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
-	// isZstdCompressed tells us this connection is using zstd compression (MySQL 8.0+).
-	// Prefer checking c.zstd != nil for runtime checks; this field is kept for backward compatibility
-	// with code that sets it during the handshake before the zstdState is allocated.
-	isZstdCompressed bool
-	// wantZstdCompression is set during the server-side handshake when the client asked for zstd and the listener has it enabled.
-	// We only flip isZstdCompressed to true and initialize encoders/decoders after we've sent the OK packet so the handshake stays uncompressed.
+	// wantZstdCompression is set during the handshake when zstd was negotiated.
+	// On the server side it's set when the client asked for zstd and the listener has it enabled;
+	// on the client side it's set when the server advertised zstd capabilities.
+	// After the handshake OK is sent, initZstdCompression() checks this flag, creates the
+	// encoder/decoder, and sets c.zstd (the runtime truth). All runtime code checks c.zstd != nil.
 	wantZstdCompression bool
 	// zstdCompressionLevel is the zstd level (1-22) we negotiated during the handshake; used when creating the encoder.
 	zstdCompressionLevel int
@@ -892,12 +891,17 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 	c.sequence = seq
 
 	c.bufMu.Lock()
-	defer c.bufMu.Unlock()
 
 	var w io.Writer = c.conn
 	if c.bufferedWriter != nil {
 		w = c.bufferedWriter
-		c.startFlushTimer()
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
 	}
 
 	payload := uncompressed.Bytes()
@@ -937,12 +941,9 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 		c.zstd.writeSequence++
 
 		if _, err := w.Write(hdr[:]); err != nil {
-			// A partial write desynchronizes the compressed framing; the connection is no longer usable.
-			c.Close()
 			return vterrors.Wrapf(err, "Write(compressed header) failed")
 		}
 		if _, err := w.Write(framePayload); err != nil {
-			c.Close()
 			return vterrors.Wrapf(err, "Write(compressed payload) failed")
 		}
 
@@ -1030,9 +1031,9 @@ func (c *Conn) String() string {
 
 // initZstdCompression creates the zstd encoder and decoder and allocates the zstdState for this connection.
 // It should be called after the handshake is fully parsed and before we see any compressed traffic.
-// If isZstdCompressed is false, we just return early. On failure we bubble the error up so the caller can fail the connection.
+// If wantZstdCompression is false, we just return early. On failure we bubble the error up so the caller can fail the connection.
 func (c *Conn) initZstdCompression() error {
-	if !c.isZstdCompressed {
+	if !c.wantZstdCompression {
 		return nil
 	}
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(c.zstdCompressionLevel)))

@@ -572,7 +572,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Now that the handshake and auth OK are fully sent in cleartext, we can turn zstd on for this connection if it was negotiated.
 	if c.wantZstdCompression {
-		c.isZstdCompressed = true
 		if err := c.initZstdCompression(); err != nil {
 			log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))
 			c.writeErrorPacketFromError(vterrors.Wrap(err, "failed to init zstd compression"))
@@ -868,9 +867,9 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// The layout is documented here:
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
 	// "if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM { int<1> zstd_compression_level }"
-	// Historically MySQL required CLIENT_COMPRESS as well, but modern clients may only send CLIENT_ZSTD_COMPRESSION_ALGORITHM.
-	// We treat the zstd capability bit as the primary signal and ignore CLIENT_COMPRESS if it's missing, as long as the listener advertised zstd.
-	// We always consume this byte when the flag is set so our parser stays in sync with the packet layout.
+	// We always consume this byte when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set so our parser stays in sync with the packet layout.
+	// Compression is only activated when the client sends BOTH CLIENT_COMPRESS and CLIENT_ZSTD_COMPRESSION_ALGORITHM,
+	// matching the MySQL 8.0 protocol requirement.
 	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
 		level := zstdCompressionLevelDefault
 		if pos < len(data) {
@@ -878,8 +877,8 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 				level = clampZstdLevel(int(levelByte))
 			}
 		}
-		// We only consider zstd when this listener has it enabled; when it's off (the default), the connection should stay uncompressed.
-		if l.EnableZstdCompression {
+		// Require both capability bits and listener opt-in before activating compression.
+		if l.EnableZstdCompression && clientFlags&CapabilityClientCompress != 0 {
 			c.zstdCompressionLevel = level
 			c.wantZstdCompression = true
 		}

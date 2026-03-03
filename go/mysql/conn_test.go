@@ -228,11 +228,11 @@ func TestZstdReadWrapperReuseBufferAndValidateLengths(t *testing.T) {
 		cConn.Close()
 	}()
 
-	sConn.isZstdCompressed = true
+	sConn.wantZstdCompression = true
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
-	cConn.isZstdCompressed = true
+	cConn.wantZstdCompression = true
 	cConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, cConn.initZstdCompression())
 
@@ -281,11 +281,11 @@ func TestZstdCompressedSplitLargeFrames(t *testing.T) {
 		cConn.Close()
 	}()
 
-	sConn.isZstdCompressed = true
+	sConn.wantZstdCompression = true
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
-	cConn.isZstdCompressed = true
+	cConn.wantZstdCompression = true
 	cConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, cConn.initZstdCompression())
 
@@ -318,7 +318,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 		cConn.Close()
 	}()
 
-	sConn.isZstdCompressed = true
+	sConn.wantZstdCompression = true
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
@@ -361,7 +361,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 
 func TestZstdReadWrapperInvalidSequence(t *testing.T) {
 	sConn := GetTestServerConn(&Listener{})
-	sConn.isZstdCompressed = true
+	sConn.wantZstdCompression = true
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
@@ -386,7 +386,7 @@ func TestZstdReadWrapperInvalidSequence(t *testing.T) {
 
 func TestZstdReadWrapperInvalidLengths(t *testing.T) {
 	sConn := GetTestServerConn(&Listener{})
-	sConn.isZstdCompressed = true
+	sConn.wantZstdCompression = true
 	sConn.zstdCompressionLevel = zstdCompressionLevelDefault
 	require.NoError(t, sConn.initZstdCompression())
 
@@ -408,12 +408,12 @@ func TestInitZstdCompression(t *testing.T) {
 	t.Run("not compressed is no-op", func(t *testing.T) {
 		c := &Conn{}
 		require.NoError(t, c.initZstdCompression())
-		require.Nil(t, c.zstd, "zstd state should be nil when isZstdCompressed is false")
+		require.Nil(t, c.zstd, "zstd state should be nil when wantZstdCompression is false")
 	})
 
 	t.Run("creates encoder and decoder", func(t *testing.T) {
 		c := &Conn{
-			isZstdCompressed:     true,
+			wantZstdCompression:     true,
 			zstdCompressionLevel: zstdCompressionLevelDefault,
 		}
 		require.NoError(t, c.initZstdCompression())
@@ -434,7 +434,7 @@ func TestInitZstdCompression(t *testing.T) {
 
 	t.Run("closeZstdCompression is idempotent", func(t *testing.T) {
 		c := &Conn{
-			isZstdCompressed:     true,
+			wantZstdCompression:     true,
 			zstdCompressionLevel: zstdCompressionLevelDefault,
 		}
 		require.NoError(t, c.initZstdCompression())

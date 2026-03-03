@@ -324,7 +324,7 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
 		level := clampZstdLevel(params.ZstdCompressionLevel)
-		c.isZstdCompressed = true
+		c.wantZstdCompression = true
 		c.zstdCompressionLevel = level
 		if err := c.initZstdCompression(); err != nil {
 			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "failed to init zstd compression: %v", err)
