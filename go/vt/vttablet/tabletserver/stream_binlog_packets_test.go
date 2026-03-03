@@ -74,10 +74,6 @@ func (m *mockPacketReader) ReadDataInto(buf []byte) error {
 	return err
 }
 
-func (m *mockPacketReader) ReadOnePacket() ([]byte, error) {
-	return nil, errors.New("not implemented")
-}
-
 func (m *mockPacketReader) Buffered() int {
 	return 0
 }

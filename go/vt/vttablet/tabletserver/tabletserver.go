@@ -1444,7 +1444,6 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 type packetReader interface {
 	ReadHeaderInto([]byte) (int, error)
 	ReadDataInto([]byte) error
-	ReadOnePacket() ([]byte, error)
 	Buffered() int
 }
 
@@ -1453,16 +1452,6 @@ type packetReader interface {
 //
 // On context cancellation (graceful shutdown or client disconnect), it returns
 // the context error. The caller is responsible for closing the connection.
-//
-// TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
-// Currently, packet data is copied during protobuf marshaling. To eliminate this:
-// 1. Use mem.BufferPool to allocate read buffers (ReadOnePacketPooled)
-// 2. Return mem.Buffer with reference counting
-// 3. Implement BufferSliceMarshaler interface for BinlogDumpResponse
-// 4. Update grpc_codec.go to check for BufferSliceMarshaler before vtprotoMessage
-// 5. Build BufferSlice with [protobuf header, packet buffer] - no copy needed
-// gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
-// See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
 func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetReader, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
 	bufOffset := 0
