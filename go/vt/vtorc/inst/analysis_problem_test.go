@@ -144,7 +144,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 		{
 			name: "has BeforeAnalyses",
 			problem: &DetectionAnalysisProblem{
-				Meta:           &DetectionAnalysisProblemMeta{},
+				Meta:           &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
 				BeforeAnalyses: []AnalysisCode{DeadPrimary},
 			},
 			expected: true,
@@ -152,7 +152,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 		{
 			name: "has AfterAnalyses",
 			problem: &DetectionAnalysisProblem{
-				Meta:          &DetectionAnalysisProblemMeta{},
+				Meta:          &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
 				AfterAnalyses: []AnalysisCode{DeadPrimary},
 			},
 			expected: true,
@@ -160,14 +160,14 @@ func TestRequiresOrderedExecution(t *testing.T) {
 		{
 			name: "referenced by another problem's BeforeAnalyses",
 			problem: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
+				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
 			},
 			expected: true,
 		},
 		{
 			name: "referenced by another problem's AfterAnalyses",
 			problem: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
+				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
 			},
 			expected: true,
 		},
