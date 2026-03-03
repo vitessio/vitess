@@ -93,6 +93,7 @@ type CompressionDetails struct {
 	ExternalCompressorCmd           string
 	ExternalCompressorExt           string
 	ExternalDecompressorCmd         string
+	ExternalDecompressorUseManifest bool
 	ManifestExternalDecompressorCmd string
 }
 
@@ -305,6 +306,9 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 	if cDetails.ExternalDecompressorCmd != "" {
 		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
+	}
+	if cDetails.ExternalDecompressorUseManifest {
+		args = append(args, "--external-decompressor-use-manifest")
 	}
 	if cDetails.ManifestExternalDecompressorCmd != "" {
 		args = append(args, fmt.Sprintf("--manifest-external-decompressor=%s", cDetails.ManifestExternalDecompressorCmd))
