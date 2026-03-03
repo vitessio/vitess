@@ -505,6 +505,7 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	c.UpdateCancelCtx(cancel)
 
 	// Add call info for observability
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -584,109 +585,10 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 		request.Target = target
 	}
 
-	// Track streaming state for proper error handling.
-	// If an error occurs mid-message (after sending a max-size packet fragment),
-	// we can't send a clean error packet - we must just close the connection.
-	var inProgressMessage bool
-	var streamingStarted bool
-
-	// Spanning-packet state: collect sub-slice references instead of
-	// allocating a contiguous buffer and copying into it.
-	chunks := make([][]byte, 0, 8)
-	var packetLength int // total expected payload length of the spanning packet
-	var chunksLength int // bytes collected so far across chunks
-
-	// Stream binlog packets from the tablet
-	err = qs.BinlogDump(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
-		streamingStarted = true
-
-		buf := response.Raw
-		bufOffset := 0
-
-		if packetLength > 0 {
-			// We're in the middle of streaming a packet that spans multiple responses.
-			remaining := packetLength - chunksLength
-			if len(buf) < remaining {
-				// This response doesn't have enough data to complete the packet.
-				chunks = append(chunks, buf)
-				chunksLength += len(buf)
-				return nil
-			}
-
-			// This response completes the spanning packet.
-			chunks = append(chunks, buf[:remaining])
-			bufOffset = remaining
-
-			if err := c.WritePacketChunks(chunks); err != nil {
-				return err
-			}
-
-			// Reset spanning state.
-			chunks = chunks[:0]
-			packetLength = 0
-			chunksLength = 0
-
-			if bufOffset == len(buf) {
-				return nil
-			}
-		}
-
-		for len(buf)-bufOffset > 0 {
-			if len(buf[bufOffset:]) < mysql.PacketHeaderSize {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "binlog dump: packet too small: %d bytes", len(buf))
-			}
-
-			header := buf[bufOffset : bufOffset+mysql.PacketHeaderSize]
-			bufOffset += mysql.PacketHeaderSize
-
-			pktLen := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-
-			inProgressMessage = pktLen == mysql.MaxPacketSize
-
-			if pktLen <= len(buf[bufOffset:]) {
-				// Common case: full packet fits in this response.
-				if err := c.WritePacketDirect(buf[bufOffset : bufOffset+pktLen]); err != nil {
-					return err
-				}
-				bufOffset += pktLen
-			} else {
-				// Packet spans multiple responses — start collecting chunks.
-				packetLength = pktLen
-				chunks = append(chunks, buf[bufOffset:])
-				chunksLength = len(buf[bufOffset:])
-				bufOffset = len(buf)
-			}
-		}
-
-		return nil
+	var state binlogStreamState
+	return vh.streamBinlogDumpResponse(c, "ComBinlogDump", &state, func() error {
+		return qs.BinlogDump(ctx, request, vh.binlogStreamCallback(c, &state))
 	})
-	if err != nil {
-		// If streaming never started, return the error normally so the
-		// handler framework can send a proper error packet to the client.
-		if !streamingStarted {
-			return vterrors.Wrapf(err, "binlog dump failed")
-		}
-
-		// Streaming started. We need to handle the error carefully.
-		if inProgressMessage {
-			// We're mid-message (sent a max-size fragment). We can't send
-			// a clean error packet since the client is expecting more data.
-			// Just close the connection.
-			c.MarkForClose()
-			log.Error(fmt.Sprintf("ComBinlogDump: error mid-packet, closing connection: %v", err))
-			return nil
-		}
-
-		// At a message boundary - we can send a proper error packet.
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("ComBinlogDump: failed to write error packet: %v", writeErr))
-		}
-		c.MarkForClose()
-		log.Error(fmt.Sprintf("ComBinlogDump: %v", err))
-		return nil
-	}
-
-	return nil
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
@@ -708,6 +610,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	c.UpdateCancelCtx(cancel)
 
 	// Add call info for observability
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -800,51 +703,131 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// 3. Apply variables in vttablet's BinlogDump before sending COM_BINLOG_DUMP_GTID
 	// See: https://dev.mysql.com/doc/refman/8.0/en/replication-options-replica.html
 
-	// Track streaming state for proper error handling.
-	// If an error occurs mid-message (after sending a max-size packet fragment),
-	// we can't send a clean error packet - we must just close the connection.
-	var inProgressMessage bool
-	var streamingStarted bool
-
-	// Stream binlog packets from the tablet
-	err = qs.BinlogDumpGTID(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
-		streamingStarted = true
-		packet := response.Raw
-
-		if err := c.WritePacketDirect(packet); err != nil {
-			return err
-		}
-
-		// A packet of exactly MaxPacketSize indicates more fragments follow
-		inProgressMessage = len(packet) == mysql.MaxPacketSize
-		return nil
+	var state binlogStreamState
+	return vh.streamBinlogDumpResponse(c, "ComBinlogDumpGTID", &state, func() error {
+		return qs.BinlogDumpGTID(ctx, request, vh.binlogStreamCallback(c, &state))
 	})
-	if err != nil {
-		// If streaming never started, return the error normally so the
-		// handler framework can send a proper error packet to the client.
-		if !streamingStarted {
-			return vterrors.Wrapf(err, "binlog dump failed")
+}
+
+// binlogStreamState tracks the state of a binlog dump stream for error handling.
+type binlogStreamState struct {
+	// streamingStarted is true once the first callback has been invoked.
+	streamingStarted bool
+	// inProgressMessage is true when the last packet written was exactly MaxPacketSize,
+	// meaning a multi-packet message is in progress and the client expects more data.
+	inProgressMessage bool
+}
+
+// binlogStreamCallback returns a streaming callback for binlog dump responses that handles
+// chunk reassembly. The tablet-side streamBinlogPackets packs data into 256KB chunks, so
+// individual MySQL packets may span multiple gRPC responses. This callback reassembles
+// spanning packets before writing them to the client connection.
+func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStreamState) func(*binlogdatapb.BinlogDumpResponse) error {
+	// Spanning-packet state: collect sub-slice references instead of
+	// allocating a contiguous buffer and copying into it.
+	chunks := make([][]byte, 0, 8)
+	var packetLength int // total expected payload length of the spanning packet
+	var chunksLength int // bytes collected so far across chunks
+
+	return func(response *binlogdatapb.BinlogDumpResponse) error {
+		state.streamingStarted = true
+
+		buf := response.Raw
+		bufOffset := 0
+
+		if packetLength > 0 {
+			// We're in the middle of streaming a packet that spans multiple responses.
+			remaining := packetLength - chunksLength
+			if len(buf) < remaining {
+				// This response doesn't have enough data to complete the packet.
+				chunks = append(chunks, buf)
+				chunksLength += len(buf)
+				return nil
+			}
+
+			// This response completes the spanning packet.
+			chunks = append(chunks, buf[:remaining])
+			bufOffset = remaining
+
+			if err := c.WritePacketChunks(chunks); err != nil {
+				return err
+			}
+
+			// Reset spanning state.
+			chunks = chunks[:0]
+			packetLength = 0
+			chunksLength = 0
+
+			if bufOffset == len(buf) {
+				return nil
+			}
 		}
 
-		// Streaming started. We need to handle the error carefully.
-		if inProgressMessage {
-			// We're mid-message (sent a max-size fragment). We can't send
-			// a clean error packet since the client is expecting more data.
-			// Just close the connection.
-			c.MarkForClose()
-			log.Error(fmt.Sprintf("ComBinlogDumpGTID: error mid-packet, closing connection: %v", err))
-			return nil
+		for len(buf)-bufOffset > 0 {
+			if len(buf[bufOffset:]) < mysql.PacketHeaderSize {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "binlog dump: packet too small: %d bytes", len(buf))
+			}
+
+			header := buf[bufOffset : bufOffset+mysql.PacketHeaderSize]
+			bufOffset += mysql.PacketHeaderSize
+
+			pktLen := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+
+			state.inProgressMessage = pktLen == mysql.MaxPacketSize
+
+			if pktLen <= len(buf[bufOffset:]) {
+				// Common case: full packet fits in this response.
+				if err := c.WritePacketDirect(buf[bufOffset : bufOffset+pktLen]); err != nil {
+					return err
+				}
+				bufOffset += pktLen
+			} else {
+				// Packet spans multiple responses — start collecting chunks.
+				packetLength = pktLen
+				chunks = append(chunks, buf[bufOffset:])
+				chunksLength = len(buf[bufOffset:])
+				bufOffset = len(buf)
+			}
 		}
 
-		// At a message boundary - we can send a proper error packet.
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("ComBinlogDumpGTID: failed to write error packet: %v", writeErr))
-		}
-		c.MarkForClose()
-		log.Error(fmt.Sprintf("ComBinlogDumpGTID: %v", err))
+		return nil
+	}
+}
+
+// streamBinlogDumpResponse runs a binlog dump stream and handles error reporting.
+// The streamFn should invoke the appropriate BinlogDump or BinlogDumpGTID RPC with
+// a callback created by binlogStreamCallback that shares the given state.
+// If an error occurs before streaming starts, it is returned to the handler framework.
+// If an error occurs mid-message (after sending a max-size packet fragment),
+// the connection is closed since we can't send a clean error packet.
+func (vh *vtgateHandler) streamBinlogDumpResponse(c *mysql.Conn, caller string, state *binlogStreamState, streamFn func() error) error {
+	err := streamFn()
+	if err == nil {
 		return nil
 	}
 
+	// If streaming never started, return the error normally so the
+	// handler framework can send a proper error packet to the client.
+	if !state.streamingStarted {
+		return vterrors.Wrapf(err, "binlog dump failed")
+	}
+
+	// Streaming started. We need to handle the error carefully.
+	if state.inProgressMessage {
+		// We're mid-message (sent a max-size fragment). We can't send
+		// a clean error packet since the client is expecting more data.
+		// Just close the connection.
+		c.MarkForClose()
+		log.Error(fmt.Sprintf("%s: error mid-packet, closing connection: %v", caller, err))
+		return nil
+	}
+
+	// At a message boundary - we can send a proper error packet.
+	if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+		log.Error(fmt.Sprintf("%s: failed to write error packet: %v", caller, writeErr))
+	}
+	c.MarkForClose()
+	log.Error(fmt.Sprintf("%s: %v", caller, err))
 	return nil
 }
 
