@@ -1362,12 +1362,12 @@ func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.B
 	}
 	defer conn.Close()
 
-	// Close the underlying MySQL connection when the context is cancelled
-	// (shutdown or client disconnect) to unblock any pending ReadOnePacket.
-	go func() {
-		<-ctx.Done()
-		conn.Conn.Close()
-	}()
+	// Close the connection when the context is cancelled (shutdown or client
+	// disconnect) to unblock any pending read. context.AfterFunc avoids a
+	// goroutine leak when the stream ends normally (e.g. non-block EOF),
+	// since the returned stop func deregisters the callback.
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
 
 	// Send the binlog dump command to MySQL using file/position
 	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition); err != nil {
@@ -1400,12 +1400,12 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 	}
 	defer conn.Close()
 
-	// Close the underlying MySQL connection when the context is cancelled
-	// (shutdown or client disconnect) to unblock any pending ReadOnePacket.
-	go func() {
-		<-ctx.Done()
-		conn.Conn.Close()
-	}()
+	// Close the connection when the context is cancelled (shutdown or client
+	// disconnect) to unblock any pending read. context.AfterFunc avoids a
+	// goroutine leak when the stream ends normally (e.g. non-block EOF),
+	// since the returned stop func deregisters the callback.
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
 
 	// Parse the GTID set from the request
 	var startPos replication.Position

@@ -120,6 +120,9 @@ func (e *BinlogDumpEngine) Unregister(idx int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if s, ok := e.streams[idx]; ok {
+		s.cancel()
+	}
 	delete(e.streams, idx)
 	e.wg.Done()
 

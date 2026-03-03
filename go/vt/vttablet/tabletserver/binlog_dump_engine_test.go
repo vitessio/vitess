@@ -104,6 +104,67 @@ func TestBinlogDumpEngine_CloseWaitsForStreams(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond)
 }
 
+func TestBinlogDumpEngine_UnregisterCancelsContext(t *testing.T) {
+	e := NewBinlogDumpEngine()
+	e.Open()
+	defer e.Close()
+
+	ctx, idx, err := e.Register(context.Background())
+	require.NoError(t, err)
+	require.NoError(t, ctx.Err())
+
+	// Simulate what BinlogDump/BinlogDumpGTID do: register an AfterFunc
+	// callback that closes a resource when the context is cancelled.
+	callbackFired := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		close(callbackFired)
+	})
+
+	// In the real code, stop() runs first (deferred), then Unregister
+	// (deferred earlier, so runs after). Replicate that order.
+	stop()
+	e.Unregister(idx)
+
+	// The context must be cancelled after Unregister.
+	require.Error(t, ctx.Err())
+
+	// AfterFunc callback must NOT have fired because stop() deregistered
+	// it before Unregister cancelled the context.
+	select {
+	case <-callbackFired:
+		t.Fatal("AfterFunc callback should not fire after stop() was called")
+	default:
+	}
+}
+
+func TestBinlogDumpEngine_UnregisterFiresAfterFuncIfNotStopped(t *testing.T) {
+	e := NewBinlogDumpEngine()
+	e.Open()
+	defer e.Close()
+
+	ctx, idx, err := e.Register(context.Background())
+	require.NoError(t, err)
+
+	// Register an AfterFunc but do NOT call stop — simulates the case
+	// where the function exits abnormally without running its defers.
+	callbackFired := make(chan struct{})
+	context.AfterFunc(ctx, func() {
+		close(callbackFired)
+	})
+
+	e.Unregister(idx)
+
+	// Without stop(), the AfterFunc fires when Unregister cancels the context.
+	require.Eventually(t, func() bool {
+		select {
+		case <-callbackFired:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
 func TestBinlogDumpEngine_RejectAfterClose(t *testing.T) {
 	e := NewBinlogDumpEngine()
 	e.Open()
