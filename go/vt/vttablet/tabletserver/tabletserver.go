@@ -1445,8 +1445,8 @@ type packetReader interface {
 // streamBinlogPackets streams binlog packets from the connection to the client.
 // This is shared by both BinlogDump and BinlogDumpGTID.
 //
-// On context cancellation (graceful shutdown or client disconnect), it sends a
-// constructed EOF packet to the client and returns nil.
+// On context cancellation (graceful shutdown or client disconnect), it returns
+// the context error. The caller is responsible for closing the connection.
 //
 // TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
 // Currently, packet data is copied during protobuf marshaling. To eliminate this:
