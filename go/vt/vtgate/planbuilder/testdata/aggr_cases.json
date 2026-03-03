@@ -3860,13 +3860,13 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "1 ASC",
+        "OrderBy": "(1|2) ASC",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count(`user`.intcol)",
+            "Aggregates": "sum_count(1|2) AS COUNT(`user`.intcol)",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -3876,9 +3876,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.intcol, count(`user`.intcol) from `user` where 1 != 1 group by `user`.intcol",
+                "FieldQuery": "select dt.c0 as intcol, dt.c1 as `COUNT(``user``.intcol)`, weight_string(dt.c1) from (select `user`.intcol, COUNT(`user`.intcol) from `user` where 1 != 1 group by `user`.intcol) as dt(c0, c1) where 1 != 1",
                 "OrderBy": "0 ASC",
-                "Query": "select `user`.intcol, count(`user`.intcol) from `user` group by `user`.intcol order by `user`.intcol asc"
+                "Query": "select dt.c0 as intcol, dt.c1 as `COUNT(``user``.intcol)`, weight_string(dt.c1) from (select `user`.intcol, COUNT(`user`.intcol) from `user` group by `user`.intcol order by `user`.intcol asc) as dt(c0, c1)"
               }
             ]
           }
@@ -6539,23 +6539,29 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Ordered",
-                    "GroupBy": "0 COLLATE utf8mb4_0900_ai_ci",
+                    "GroupBy": "(0|1)",
                     "Inputs": [
                       {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Scalar",
-                        "Aggregates": "min(0|2) AS min_id, max(1|3) AS max_id",
+                        "OperatorType": "SimpleProjection",
+                        "Columns": "0,2",
                         "Inputs": [
                           {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb where 1 != 1",
-                            "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
-                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb order by min(bb.id) asc"
+                            "OperatorType": "Aggregate",
+                            "Variant": "Scalar",
+                            "Aggregates": "min(0|2) AS min_id, max(1|3) AS max_id",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select MIN(bb.id) as min_id, MAX(bb.id) as max_id, weight_string(MIN(bb.id)), weight_string(MAX(bb.id)) from `user` as bb where 1 != 1",
+                                "OrderBy": "(0|2) ASC",
+                                "Query": "select MIN(bb.id) as min_id, MAX(bb.id) as max_id, weight_string(MIN(bb.id)), weight_string(MAX(bb.id)) from `user` as bb order by MIN(bb.id) asc"
+                              }
+                            ]
                           }
                         ]
                       }
@@ -7270,7 +7276,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS COUNT(*)",
         "Inputs": [
           {
             "OperatorType": "Projection",

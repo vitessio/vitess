@@ -372,7 +372,7 @@
   {
     "comment": "count and sum distinct on different columns",
     "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
-    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
+    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: SUM(distinct id)"
   },
   {
     "comment": "Over clause isn't supported in sharded cases",
