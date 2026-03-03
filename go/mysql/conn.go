@@ -909,10 +909,7 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 
 	for offset := 0; offset < len(payload); {
 		remaining := len(payload) - offset
-		chunkSize := remaining
-		if chunkSize > MaxPacketSize {
-			chunkSize = MaxPacketSize
-		}
+		chunkSize := min(remaining, MaxPacketSize)
 		chunk := payload[offset : offset+chunkSize]
 
 		// Reuse the per-connection scratch buffer as the destination for EncodeAll to avoid allocating per frame.

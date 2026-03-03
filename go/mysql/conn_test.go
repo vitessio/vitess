@@ -413,7 +413,7 @@ func TestInitZstdCompression(t *testing.T) {
 
 	t.Run("creates encoder and decoder", func(t *testing.T) {
 		c := &Conn{
-			wantZstdCompression:     true,
+			wantZstdCompression:  true,
 			zstdCompressionLevel: zstdCompressionLevelDefault,
 		}
 		require.NoError(t, c.initZstdCompression())
@@ -434,7 +434,7 @@ func TestInitZstdCompression(t *testing.T) {
 
 	t.Run("closeZstdCompression is idempotent", func(t *testing.T) {
 		c := &Conn{
-			wantZstdCompression:     true,
+			wantZstdCompression:  true,
 			zstdCompressionLevel: zstdCompressionLevelDefault,
 		}
 		require.NoError(t, c.initZstdCompression())
