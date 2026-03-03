@@ -1079,20 +1079,18 @@ func (cluster *LocalProcessCluster) Teardown() {
 		cluster.CancelFunc()
 	}
 
-	var teardownErrors []error
-
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
-		teardownErrors = append(teardownErrors, fmt.Errorf("vtgate: %w", err))
+		log.Error(fmt.Sprintf("Error in vtgate teardown: %v", err))
 	}
 
 	for _, vtorcProcess := range cluster.VTOrcProcesses {
 		if err := vtorcProcess.TearDown(); err != nil {
-			teardownErrors = append(teardownErrors, fmt.Errorf("vtorc: %w", err))
+			log.Error(fmt.Sprintf("Error in vtorc teardown: %v", err))
 		}
 	}
 
 	if err := cluster.VtadminProcess.TearDown(); err != nil {
-		teardownErrors = append(teardownErrors, fmt.Errorf("vtadmin: %w", err))
+		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
@@ -1102,7 +1100,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
 					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-						teardownErrors = append(teardownErrors, fmt.Errorf("mysqlctl stop (tablet %d): %w", tablet.MysqlctlProcess.TabletUID, err))
+						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 						mysqlctlTabletUIDs = append(mysqlctlTabletUIDs, tablet.MysqlctlProcess.TabletUID)
@@ -1110,12 +1108,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
 					if err := tablet.MysqlctldProcess.Stop(); err != nil {
-						teardownErrors = append(teardownErrors, fmt.Errorf("mysqlctld stop (tablet %d): %w", tablet.MysqlctldProcess.TabletUID, err))
+						log.Error(fmt.Sprintf("Error in mysqlctld teardown: %v", err))
 					}
 				}
 
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
-					teardownErrors = append(teardownErrors, fmt.Errorf("vttablet (tablet %d): %w", tablet.TabletUID, err))
+					log.Error(fmt.Sprintf("Error in vttablet teardown: %v", err))
 				}
 			}
 		}
@@ -1125,21 +1123,14 @@ func (cluster *LocalProcessCluster) Teardown() {
 	// on local investigation it was waiting on SEMI_SYNC acks for an internal command
 	// of Vitess even after closing the socket file.
 	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
-	teardownErrors = append(teardownErrors, cluster.waitForMySQLProcessToExit(mysqlctlProcessList, mysqlctlTabletUIDs)...)
+	cluster.waitForMySQLProcessToExit(mysqlctlProcessList, mysqlctlTabletUIDs)
 
 	if err := cluster.VtctldProcess.TearDown(); err != nil {
-		teardownErrors = append(teardownErrors, fmt.Errorf("vtctld: %w", err))
+		log.Error(fmt.Sprintf("Error in vtctld teardown: %v", err))
 	}
 
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
-		teardownErrors = append(teardownErrors, fmt.Errorf("topo: %w", err))
-	}
-
-	if len(teardownErrors) > 0 {
-		log.Error(fmt.Sprintf("Teardown completed with %d error(s):", len(teardownErrors)))
-		for _, err := range teardownErrors {
-			log.Error(fmt.Sprintf("  - %v", err))
-		}
+		log.Error(fmt.Sprintf("Error in topo server teardown: %v", err))
 	}
 
 	// reset the VTDATAROOT path.
@@ -1148,12 +1139,8 @@ func (cluster *LocalProcessCluster) Teardown() {
 	cluster.teardownCompleted = true
 }
 
-func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*exec.Cmd, mysqlctlTabletUIDs []int) []error {
-	var (
-		mu   sync.Mutex
-		errs []error
-		wg   sync.WaitGroup
-	)
+func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*exec.Cmd, mysqlctlTabletUIDs []int) {
+	wg := sync.WaitGroup{}
 	for i, cmd := range mysqlctlProcessList {
 		wg.Add(1)
 		go func(cmd *exec.Cmd, tabletUID int) {
@@ -1172,14 +1159,11 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", tabletUID))
 			}
 			if err := mysqlForceShutdown(tabletUID); err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("force shutdown (tablet %d): %w", tabletUID, err))
-				mu.Unlock()
+				log.Error(fmt.Sprintf("Error in mysqlctl force shutdown for tablet %d: %v", tabletUID, err))
 			}
 		}(cmd, mysqlctlTabletUIDs[i])
 	}
 	wg.Wait()
-	return errs
 }
 
 // StartVtbackup starts a vtbackup
