@@ -39,7 +39,7 @@ func TestVerifyProcessDead_AlreadyDead(t *testing.T) {
 func TestVerifyProcessDead_LiveProcess(t *testing.T) {
 	cmd := exec.Command("sleep", "60")
 	require.NoError(t, cmd.Start())
-	defer cmd.Process.Kill() //nolint:errcheck
+	defer cmd.Process.Kill()
 
 	err := verifyProcessDead(cmd.Process.Pid, 500*time.Millisecond)
 	assert.ErrorContains(t, err, "still alive")
@@ -74,14 +74,14 @@ func TestMysqlForceShutdown_ProcessAlreadyDead(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	pid := cmd.Process.Pid
 	require.NoError(t, cmd.Process.Kill())
-	cmd.Wait() //nolint:errcheck
+	cmd.Wait()
 
 	tabletUID := 77777777
 	pidDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID))
 	require.NoError(t, os.MkdirAll(pidDir, 0o755))
 
 	pidFile := path.Join(pidDir, "mysql.pid")
-	require.NoError(t, os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", pid)), 0o644))
+	require.NoError(t, os.WriteFile(pidFile, fmt.Appendf(nil, "%d\n", pid), 0o644))
 
 	err := mysqlForceShutdown(tabletUID)
 	assert.NoError(t, err)
