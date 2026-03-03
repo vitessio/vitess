@@ -265,6 +265,41 @@ func TestStreamBinlogPackets_ReadError(t *testing.T) {
 	assert.Contains(t, err.Error(), "unexpected network error")
 }
 
+func TestStreamBinlogPackets_ContextCancelledBeforeAnyData(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately before any data is written.
+
+	err := tsv.streamBinlogPackets(ctx, reader, send)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, *responses)
+}
+
+func TestStreamBinlogPackets_ContextCancelledBetweenEvents(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, _ := collectSender()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(ctx, reader, send)
+	}()
+
+	// Deliver one event, then cancel the context.
+	reader.WritePacket([]byte{0x00, 0x01, 0x02, 0x03})
+	cancel()
+	// Close the reader so any blocked ReadHeaderInto returns.
+	reader.Close()
+
+	err := <-done
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestStreamBinlogPackets_MaxPacketSizeMessage(t *testing.T) {
 	tsv := &TabletServer{}
 	reader := newMockPacketReader()

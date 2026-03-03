@@ -1470,13 +1470,12 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
 	bufOffset := 0
 
-	header := make([]byte, mysql.PacketHeaderSize)
-
 	type headerResult struct {
 		packetLength int
 		err          error
 	}
 	headerReadChan := make(chan headerResult, 1)
+	header := make([]byte, mysql.PacketHeaderSize)
 
 	readHeader := func() (int, error) {
 		var result headerResult
@@ -1484,6 +1483,9 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 		if bufOffset == 0 || reader.Buffered() >= mysql.PacketHeaderSize {
 			// Fast path: either nothing to flush, or the next header is already
 			// buffered and won't block. Read synchronously.
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, cause
+			}
 			packetLength, err := reader.ReadHeaderInto(header)
 			result = headerResult{packetLength: packetLength, err: err}
 		} else {
@@ -1501,6 +1503,8 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 			}()
 
 			select {
+			case <-ctx.Done():
+				return 0, context.Cause(ctx)
 			case <-timer.C:
 				// If we hit the timer, it means we're likely blocked on ReadHeaderInto.
 				// Flush the data we have in the buffer (if we have anything),
@@ -1513,7 +1517,11 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 				// Reset the buffer offset after flushing
 				bufOffset = 0
 
-				result = <-headerReadChan
+				select {
+				case <-ctx.Done():
+					return 0, context.Cause(ctx)
+				case result = <-headerReadChan:
+				}
 
 			case result = <-headerReadChan:
 			}
@@ -1541,6 +1549,11 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 		packetLength, err := readHeader()
 		if err != nil {
+			// Check if the error is due to context cancellation,
+			// and if it is, return the error without wrapping
+			if cause := context.Cause(ctx); cause == err {
+				return err
+			}
 			return vterrors.Wrapf(err, "failed to read binlog packet header")
 		}
 
@@ -1601,6 +1614,11 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 			packetLength, err = readHeader()
 			if err != nil {
+				// Check if the error is due to context cancellation,
+				// and if it is, return the error without wrapping
+				if cause := context.Cause(ctx); cause == err {
+					return err
+				}
 				return vterrors.Wrapf(err, "failed to read binlog packet header")
 			}
 			bufOffset += mysql.PacketHeaderSize
