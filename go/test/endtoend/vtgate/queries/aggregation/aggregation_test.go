@@ -671,7 +671,7 @@ func TestDistinctAggregation(t *testing.T) {
 		minVersion  int
 	}{{
 		query:       `SELECT COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
-		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
+		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: SUM(distinct shardkey) (errno 1235) (sqlstate 42000)",
 	}, {
 		query: `SELECT a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
 	}, {
