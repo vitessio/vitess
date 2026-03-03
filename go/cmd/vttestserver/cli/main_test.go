@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	"net"
 	"os/exec"
 	"path"
 	"strconv"
@@ -45,6 +45,8 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+var allocatedPorts = make(map[int]struct{})
 
 type columnVindex struct {
 	keyspace   string
@@ -460,8 +462,18 @@ func resetConfig(conf vttest.Config) {
 }
 
 func randomPort() int {
-	v := rand.Int32N(20000)
-	return int(v + 10000)
+	for {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			panic(err)
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		l.Close()
+		if _, ok := allocatedPorts[port]; !ok {
+			allocatedPorts[port] = struct{}{}
+			return port
+		}
+	}
 }
 
 func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
