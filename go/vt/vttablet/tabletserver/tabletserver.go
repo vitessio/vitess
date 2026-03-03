@@ -1489,6 +1489,12 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 			// then wait for the header read to complete.
 			timer.Reset(1 * time.Millisecond)
 
+			// This goroutine is safe to "abandon" on context cancellation:
+			// the caller (BinlogDump/BinlogDumpGTID) closes the underlying
+			// MySQL connection when the context is done, which unblocks
+			// ReadHeaderInto. And since readHeader returning an error causes
+			// streamBinlogPackets to exit, no subsequent call to readHeader
+			// can race with a still-running goroutine.
 			go func() {
 				packetLength, err := reader.ReadHeaderInto(header)
 				headerReadChan <- headerResult{packetLength: packetLength, err: err}
