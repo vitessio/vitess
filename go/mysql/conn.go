@@ -385,6 +385,15 @@ func (c *Conn) startFlushTimer() {
 	}
 }
 
+// Buffered returns the number of bytes that can be read from the buffered reader
+// without blocking on the underlying connection.
+func (c *Conn) Buffered() int {
+	if c.bufferedReader != nil {
+		return c.bufferedReader.Buffered()
+	}
+	return 0
+}
+
 // getReader returns reader for connection. It can be *bufio.Reader or net.Conn
 // depending on which buffer size was passed to newServerConn.
 func (c *Conn) getReader() io.Reader {

@@ -1439,6 +1439,7 @@ type packetReader interface {
 	ReadHeaderInto([]byte) (int, error)
 	ReadDataInto([]byte) error
 	ReadOnePacket() ([]byte, error)
+	Buffered() int
 }
 
 // sendBinlogEOF sends a constructed MySQL binlog EOF packet to the client.
@@ -1469,6 +1470,63 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
 	bufOffset := 0
 
+	header := make([]byte, mysql.PacketHeaderSize)
+
+	type headerResult struct {
+		packetLength int
+		err          error
+	}
+	headerReadChan := make(chan headerResult, 1)
+
+	readHeader := func() (int, error) {
+		var result headerResult
+
+		if bufOffset == 0 || reader.Buffered() >= mysql.PacketHeaderSize {
+			// Fast path: either nothing to flush, or the next header is already
+			// buffered and won't block. Read synchronously.
+			packetLength, err := reader.ReadHeaderInto(header)
+			result = headerResult{packetLength: packetLength, err: err}
+		} else {
+			// Slow path: We have complete but unflushed packets in the buffer.
+			// If we can immediately read the next header, we want to keep buffering
+			// to maximize batch sizes. But if the next header isn't buffered yet, we
+			// want to flush what we have to the client to free up buffer space and
+			// then wait for the header read to complete.
+			timer := time.NewTimer(1 * time.Millisecond)
+			defer timer.Stop()
+
+			go func() {
+				packetLength, err := reader.ReadHeaderInto(header)
+				headerReadChan <- headerResult{packetLength: packetLength, err: err}
+			}()
+
+			select {
+			case <-timer.C:
+				// If we hit the timer, it means we're likely blocked on ReadHeaderInto.
+				// Flush the data we have in the buffer (if we have anything),
+				// and then wait for the header read to complete.
+
+				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+					return 0, err
+				}
+
+				// Reset the buffer offset after flushing
+				bufOffset = 0
+
+				result = <-headerReadChan
+
+			case result = <-headerReadChan:
+			}
+		}
+
+		if result.err != nil {
+			return 0, result.err
+		}
+
+		copy(buf[bufOffset:], header)
+		return result.packetLength, nil
+	}
+
 	for {
 		if bufOffset+mysql.PacketHeaderSize > len(buf) {
 			// Flush the buffer if we don't have enough space for the next packet header.
@@ -1481,7 +1539,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 		firstFragment := true
 		isTerminal := false
 
-		packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+		packetLength, err := readHeader()
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to read binlog packet header")
 		}
@@ -1541,7 +1599,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 				bufOffset = 0
 			}
 
-			packetLength, err = reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+			packetLength, err = readHeader()
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to read binlog packet header")
 			}

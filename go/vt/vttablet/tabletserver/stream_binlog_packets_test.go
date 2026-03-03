@@ -78,6 +78,10 @@ func (m *mockPacketReader) ReadOnePacket() ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockPacketReader) Buffered() int {
+	return 0
+}
+
 // Close unblocks any pending reads with a "connection closed" error.
 func (m *mockPacketReader) Close() {
 	m.once.Do(func() {
