@@ -311,6 +311,3 @@ func (bc *BinlogConnection) Close() {
 	}
 }
 
-func (bc *BinlogConnection) GetServerID() uint32 {
-	return bc.serverID
-}
