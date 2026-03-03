@@ -835,7 +835,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		}
 	}
 
-	// Decode connection attributes send by the client
+	// Decode connection attributes sent by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
 		var err error
 		c.Attributes, pos, err = parseConnAttrs(data, pos)
@@ -850,17 +850,11 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// "if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM { int<1> zstd_compression_level }"
 	// We always consume this byte when the flag is set so our parser stays in sync with the packet layout.
 	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
-		level := 3
+		level := zstdCompressionLevelDefault
 		if pos < len(data) {
-			if levelByte, newPos, ok := readByte(data, pos); ok {
-				pos = newPos
+			if levelByte, _, ok := readByte(data, pos); ok {
 				level = int(levelByte)
-				if level < 1 {
-					level = 1
-				}
-				if level > 22 {
-					level = 22
-				}
+				level = max(zstdCompressionLevelMin, min(level, zstdCompressionLevelMax))
 			}
 		}
 		// We only flip compression on when this listener has zstd enabled; when it's off (the default), the connection should stay uncompressed.

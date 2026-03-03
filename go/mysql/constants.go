@@ -25,6 +25,13 @@ const (
 	// the server supports.
 	MaxPacketSize = (1 << 24) - 1
 
+	// zstdCompressionLevelMin and zstdCompressionLevelMax bound the zstd levels we accept on the wire (MySQL 8.0+).
+	// The protocol allows 1-22; anything outside that range gets clamped.
+	zstdCompressionLevelMin = 1
+	zstdCompressionLevelMax = 22
+	// zstdCompressionLevelDefault is what we fall back to when clients send 0 or omit the level.
+	zstdCompressionLevelDefault = 3
+
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10

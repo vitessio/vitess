@@ -320,11 +320,11 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
 		level := params.ZstdCompressionLevel
-		if level < 1 {
-			level = 3
+		if level < zstdCompressionLevelMin {
+			level = zstdCompressionLevelDefault
 		}
-		if level > 22 {
-			level = 22
+		if level > zstdCompressionLevelMax {
+			level = zstdCompressionLevelMax
 		}
 		c.isZstdCompressed = true
 		c.zstdCompressionLevel = level
@@ -663,11 +663,11 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// Now we write the int<1> zstd_compression_level byte right after the connection attributes, as the protocol expects.
 	if useZstd {
 		level := params.ZstdCompressionLevel
-		if level < 1 {
-			level = 3
+		if level < zstdCompressionLevelMin {
+			level = zstdCompressionLevelDefault
 		}
-		if level > 22 {
-			level = 22
+		if level > zstdCompressionLevelMax {
+			level = zstdCompressionLevelMax
 		}
 		pos = writeByte(data, pos, byte(level))
 	}

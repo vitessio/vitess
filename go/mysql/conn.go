@@ -71,7 +71,7 @@ func writeCompressedPacketHeader(dst []byte, compressedLen, uncompressedLen uint
 	pos = writeUint24LE(dst, pos, compressedLen)
 	dst[pos] = sequence
 	pos++
-	pos = writeUint24LE(dst, pos, uncompressedLen)
+	writeUint24LE(dst, pos, uncompressedLen)
 }
 
 // readCompressedPacketHeader parses the MySQL compressed packet header (7 bytes) from src.

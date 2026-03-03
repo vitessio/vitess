@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1416,12 +1417,8 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string, extraArgs
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
-	args := []string{
-		"-v", "-v", "-v",
-	}
-	for _, a := range extraArgs {
-		args = append(args, a)
-	}
+	args := []string{"-v", "-v", "-v"}
+	args = append(args, extraArgs...)
 	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
 		command = command[len(enableCleartextPluginPrefix):]
 		args = append(args, "--enable-cleartext-plugin")
@@ -1478,9 +1475,7 @@ func runMysqlWithErrContext(t *testing.T, ctx context.Context, params *ConnParam
 	name, err := binaryPath(dir, "mysql")
 	require.NoError(t, err)
 	args := []string{"-v", "-v", "-v"}
-	for _, a := range extraArgs {
-		args = append(args, a)
-	}
+	args = append(args, extraArgs...)
 	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
 		command = command[len(enableCleartextPluginPrefix):]
 		args = append(args, "--enable-cleartext-plugin")
@@ -1713,23 +1708,23 @@ func readGreetingPacketRaw(conn net.Conn) ([]byte, error) {
 
 func parseHandshakeCapabilitiesFromPayload(data []byte) (uint32, error) {
 	if len(data) < 2 {
-		return 0, fmt.Errorf("handshake payload too short")
+		return 0, errors.New("handshake payload too short")
 	}
 	versionEnd := 1
 	for versionEnd < len(data) && data[versionEnd] != 0 {
 		versionEnd++
 	}
 	if versionEnd >= len(data) {
-		return 0, fmt.Errorf("no null terminator in version string")
+		return 0, errors.New("no null terminator in version string")
 	}
 	capLowOff := versionEnd + 14
 	if capLowOff+2 > len(data) {
-		return 0, fmt.Errorf("handshake payload too short for capability low")
+		return 0, errors.New("handshake payload too short for capability low")
 	}
 	capLow := uint32(data[capLowOff]) | uint32(data[capLowOff+1])<<8
 	capHighOff := capLowOff + 5
 	if capHighOff+2 > len(data) {
-		return 0, fmt.Errorf("handshake payload too short for capability high")
+		return 0, errors.New("handshake payload too short for capability high")
 	}
 	capHigh := uint32(data[capHighOff]) | uint32(data[capHighOff+1])<<8
 	return capLow | (capHigh << 16), nil
@@ -2130,7 +2125,7 @@ func TestZstdMultipleQueriesSameConnection(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		result, err := conn.ExecuteFetch("select rows", 10000, true)
 		require.NoErrorf(t, err, "compressed query %d failed", i+1)
 		utils.MustMatch(t, result, selectRowsResult)
