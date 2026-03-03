@@ -1476,6 +1476,8 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	}
 	headerReadChan := make(chan headerResult, 1)
 	header := make([]byte, mysql.PacketHeaderSize)
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 
 	readHeader := func() (int, error) {
 		var result headerResult
@@ -1494,8 +1496,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 			// to maximize batch sizes. But if the next header isn't buffered yet, we
 			// want to flush what we have to the client to free up buffer space and
 			// then wait for the header read to complete.
-			timer := time.NewTimer(1 * time.Millisecond)
-			defer timer.Stop()
+			timer.Reset(1 * time.Millisecond)
 
 			go func() {
 				packetLength, err := reader.ReadHeaderInto(header)
