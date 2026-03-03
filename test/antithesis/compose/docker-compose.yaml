@@ -221,7 +221,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: vitess/lite:latest
+    image: docker.io/vitess/lite:latest
     ports:
       - 15101:8080
       - "15999"
