@@ -75,6 +75,10 @@ var (
 		}
 		return connCount.Get() - totalUsers
 	})
+
+	// Compression metrics
+	connCountZstd  = stats.NewGauge("MysqlServerConnCountZstd", "Active MySQL server connections using zstd compression")
+	connAcceptZstd = stats.NewCounter("MysqlServerConnAcceptedZstd", "Total MySQL server connections accepted with zstd compression")
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -232,7 +236,10 @@ type Listener struct {
 	EnableZstdCompression bool
 }
 
-// NewFromListener creates a new mysql listener from an existing net.Listener
+// NewFromListener creates a new mysql listener from an existing net.Listener.
+//
+// Deprecated: Use NewListenerWithConfig with a ListenerConfig struct instead.
+// This function has a long positional parameter list that is fragile and hard to read.
 func NewFromListener(
 	l net.Listener,
 	authServer AuthServer,
@@ -268,6 +275,9 @@ func NewFromListener(
 }
 
 // NewListener creates a new Listener.
+//
+// Deprecated: Use NewListenerWithConfig with a ListenerConfig struct instead.
+// This function has a long positional parameter list that is fragile and hard to read.
 func NewListener(
 	protocol, address string,
 	authServer AuthServer,
@@ -397,13 +407,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// startWriterBuffering is called
 		c.endWriterBuffering()
 
-		c.closeZstdCompression()
-
 		if l.connBufferPooling {
 			c.returnReader()
 		}
 
-		conn.Close()
+		c.Close()
 	}()
 
 	// Tell the handler about the connection coming and going.
@@ -540,12 +548,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountPerUser.Add(c.User, -1)
 	}
 
-	if err := c.initZstdCompression(); err != nil {
-		log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))
-		c.writeErrorPacketFromError(vterrors.Wrap(err, "failed to init zstd compression"))
-		return
-	}
-
 	// Set initial db name.
 	if c.schemaName != "" {
 		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
@@ -561,6 +563,21 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 		log.Error(fmt.Sprintf("Cannot write OK packet to %s: %v", c, err))
 		return
+	}
+
+	// Now that the handshake and auth OK are fully sent in cleartext, we can turn zstd on for this connection if it was negotiated.
+	if c.wantZstdCompression {
+		c.compressedSequence = 0
+		c.compressedReadSequence = 0
+		c.isZstdCompressed = true
+		if err := c.initZstdCompression(); err != nil {
+			log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))
+			c.writeErrorPacketFromError(vterrors.Wrap(err, "failed to init zstd compression"))
+			return
+		}
+		connAcceptZstd.Add(1)
+		connCountZstd.Add(1)
+		defer connCountZstd.Add(-1)
 	}
 
 	// Record how long we took to establish the connection
@@ -848,19 +865,20 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// The layout is documented here:
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
 	// "if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM { int<1> zstd_compression_level }"
+	// Historically MySQL required CLIENT_COMPRESS as well, but modern clients may only send CLIENT_ZSTD_COMPRESSION_ALGORITHM.
+	// We treat the zstd capability bit as the primary signal and ignore CLIENT_COMPRESS if it's missing, as long as the listener advertised zstd.
 	// We always consume this byte when the flag is set so our parser stays in sync with the packet layout.
 	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
 		level := zstdCompressionLevelDefault
 		if pos < len(data) {
 			if levelByte, _, ok := readByte(data, pos); ok {
-				level = int(levelByte)
-				level = max(zstdCompressionLevelMin, min(level, zstdCompressionLevelMax))
+				level = clampZstdLevel(int(levelByte))
 			}
 		}
-		// We only flip compression on when this listener has zstd enabled; when it's off (the default), the connection should stay uncompressed.
-		if clientFlags&CapabilityClientCompress != 0 && l.EnableZstdCompression {
-			c.isZstdCompressed = true
+		// We only consider zstd when this listener has it enabled; when it's off (the default), the connection should stay uncompressed.
+		if l.EnableZstdCompression {
 			c.zstdCompressionLevel = level
+			c.wantZstdCompression = true
 		}
 	}
 

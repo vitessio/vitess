@@ -109,11 +109,12 @@ func readCompressedPacketHeader(src []byte) (compressedLen, uncompressedLen uint
 // drained our decompressed buffer we just pull the next 7-byte frame + payload, decompress it, and keep going.
 
 type zstdReadWrapper struct {
-	c   *Conn
-	r   io.Reader // underlying: bufferedReader if present, else conn
-	buf []byte
-	pos int
-	hdr [compressedPacketHeaderSize]byte
+	c           *Conn
+	r           io.Reader // underlying: bufferedReader if present, else conn
+	buf         []byte
+	pos         int
+	hdr         [compressedPacketHeaderSize]byte
+	readScratch []byte // reusable buffer for reading compressed payloads to reduce allocations
 }
 
 func (z *zstdReadWrapper) Read(p []byte) (int, error) {
@@ -129,30 +130,50 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed packet header")
 	}
+	if compressedLen == 0 && uncompressedLen != 0 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed lengths, compressed=0 uncompressed=%v", uncompressedLen)
+	}
+	// Guard against unreasonable frame sizes from the wire. The MySQL compressed protocol
+	// limits each of the 3-byte length fields to 0xFFFFFF (16 MiB − 1).
+	const maxFrameLen = 0xFFFFFF
+	if compressedLen > maxFrameLen {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "compressed frame length %v exceeds protocol maximum %v", compressedLen, maxFrameLen)
+	}
+	if uncompressedLen > maxFrameLen {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncompressed frame length %v exceeds protocol maximum %v", uncompressedLen, maxFrameLen)
+	}
 	if seq != z.c.compressedReadSequence {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", z.c.compressedReadSequence, seq)
 	}
 	z.c.compressedReadSequence++
 
-	payload := make([]byte, compressedLen)
+	// Reuse the read scratch buffer to avoid per-frame allocations.
+	if uint32(cap(z.readScratch)) < compressedLen {
+		z.readScratch = make([]byte, compressedLen)
+	}
+	payload := z.readScratch[:compressedLen]
 	if compressedLen > 0 {
 		if _, err := io.ReadFull(z.r, payload); err != nil {
 			return 0, vterrors.Wrapf(err, "read compressed payload failed")
 		}
 	}
 	if uncompressedLen == 0 {
-		z.buf = make([]byte, len(payload))
+		// When uncompressedLen is zero the payload is stored raw (passthrough frame).
+		// We must copy because payload aliases readScratch which will be overwritten on the next Read.
+		if cap(z.buf) < len(payload) {
+			z.buf = make([]byte, len(payload))
+		}
+		z.buf = z.buf[:len(payload)]
 		copy(z.buf, payload)
 	} else {
-		decoded, err := z.c.zstdDecoder.DecodeAll(payload, nil)
+		decoded, err := z.c.zstdDecoder.DecodeAll(payload, z.buf[:0])
 		if err != nil {
 			return 0, vterrors.Wrapf(err, "zstd decompress failed")
 		}
 		if uint32(len(decoded)) != uncompressedLen {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "decompressed length %v != expected %v", len(decoded), uncompressedLen)
 		}
-		z.buf = make([]byte, len(decoded))
-		copy(z.buf, decoded)
+		z.buf = decoded
 	}
 	z.pos = 0
 	n := copy(p, z.buf)
@@ -275,6 +296,9 @@ type Conn struct {
 
 	// isZstdCompressed tells us this connection is using zstd compression (MySQL 8.0+).
 	isZstdCompressed bool
+	// wantZstdCompression is set during the server-side handshake when the client asked for zstd and the listener has it enabled.
+	// We only flip isZstdCompressed to true and initialize encoders/decoders after we've sent the OK packet so the handshake stays uncompressed.
+	wantZstdCompression bool
 	// zstdCompressionLevel is the zstd level (1-22) we negotiated during the handshake; we only look at it when isZstdCompressed is true.
 	zstdCompressionLevel int
 	// zstdEncoder and zstdDecoder live for the lifetime of a compressed connection and should be closed when the connection goes away.
@@ -288,6 +312,8 @@ type Conn struct {
 	compressedReadSequence uint8
 	// zstdReader wraps the underlying reader and handles frame-by-frame decompression when isZstdCompressed is true; we create it lazily.
 	zstdReader *zstdReadWrapper
+	// compressedWriteScratch is a reusable buffer for zstdEncoder.EncodeAll output to reduce allocations on the write path.
+	compressedWriteScratch []byte
 
 	// closed is set to true when Close() is called on the connection.
 	closed atomic.Bool
@@ -377,6 +403,10 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
 var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, connBufferSize) }}
+
+// compressedBufPool pools bytes.Buffer objects used by writePacketCompressed to assemble
+// the uncompressed logical-packet stream before compression.
+var compressedBufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -819,10 +849,16 @@ func (c *Conn) writePacketUncompressed(data []byte) error {
 }
 
 // writePacketCompressed builds the same logical packet(s) as uncompressed (with logical sequence in 4-byte headers),
-// compresses them into one frame, and sends one 7-byte header (with compressedSequence) + payload.
+// compresses them into one or more frames, and sends a 7-byte header (with compressedSequence) + payload per frame.
 // compressedSequence is incremented once per compressed frame; the logical packets inside use c.sequence.
+//
+// When compression would expand the data (common for small packets), we send the payload uncompressed
+// (uncompressedLen=0 in the frame header) as the MySQL compressed protocol allows.
 func (c *Conn) writePacketCompressed(data []byte) error {
-	var uncompressed bytes.Buffer
+	uncompressed := compressedBufPool.Get().(*bytes.Buffer)
+	uncompressed.Reset()
+	defer compressedBufPool.Put(uncompressed)
+
 	index := 0
 	dataLength := len(data) - packetHeaderSize
 	seq := c.sequence
@@ -852,35 +888,60 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 	}
 	c.sequence = seq
 
-	payload := uncompressed.Bytes()
-	compressed := c.zstdEncoder.EncodeAll(payload, nil)
-
-	compressedLen := uint32(len(compressed))
-	uncompressedLen := uint32(len(payload))
-	if compressedLen > 0xFFFFFF || uncompressedLen > 0xFFFFFF {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "compressed or uncompressed length exceeds 3-byte max")
-	}
-
-	var hdr [compressedPacketHeaderSize]byte
-	writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.compressedSequence)
-	c.compressedSequence++
-
 	c.bufMu.Lock()
+	defer c.bufMu.Unlock()
+
 	var w io.Writer = c.conn
 	if c.bufferedWriter != nil {
 		w = c.bufferedWriter
-		defer func() {
-			c.startFlushTimer()
-			c.bufMu.Unlock()
-		}()
-	} else {
-		c.bufMu.Unlock()
+		c.startFlushTimer()
 	}
-	if _, err := w.Write(hdr[:]); err != nil {
-		return vterrors.Wrapf(err, "Write(compressed header) failed")
-	}
-	if _, err := w.Write(compressed); err != nil {
-		return vterrors.Wrapf(err, "Write(compressed payload) failed")
+
+	payload := uncompressed.Bytes()
+	const maxFrameLen = 0xFFFFFF
+	var hdr [compressedPacketHeaderSize]byte
+
+	for offset := 0; offset < len(payload); {
+		remaining := len(payload) - offset
+		chunkSize := remaining
+		if chunkSize > maxFrameLen {
+			chunkSize = maxFrameLen
+		}
+		chunk := payload[offset : offset+chunkSize]
+
+		// Reuse the per-connection scratch buffer as the destination for EncodeAll to avoid allocating per frame.
+		c.compressedWriteScratch = c.zstdEncoder.EncodeAll(chunk, c.compressedWriteScratch[:0])
+
+		compressedLen := uint32(len(c.compressedWriteScratch))
+		uncompressedLen := uint32(len(chunk))
+
+		// When compression expands the data (common for small packets), send an uncompressed frame instead.
+		// The MySQL protocol signals this with uncompressedLen=0 in the header, payload stored raw.
+		var framePayload []byte
+		if compressedLen >= uncompressedLen {
+			// Passthrough: store raw, set uncompressedLen to 0.
+			framePayload = chunk
+			compressedLen = uncompressedLen
+			uncompressedLen = 0
+		} else {
+			framePayload = c.compressedWriteScratch
+		}
+
+		if compressedLen > maxFrameLen {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "frame payload length exceeds 3-byte max")
+		}
+
+		writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.compressedSequence)
+		c.compressedSequence++
+
+		if _, err := w.Write(hdr[:]); err != nil {
+			return vterrors.Wrapf(err, "Write(compressed header) failed")
+		}
+		if _, err := w.Write(framePayload); err != nil {
+			return vterrors.Wrapf(err, "Write(compressed payload) failed")
+		}
+
+		offset += chunkSize
 	}
 	return nil
 }
@@ -973,7 +1034,7 @@ func (c *Conn) initZstdCompression() error {
 	if err != nil {
 		return err
 	}
-	dec, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1))
+	dec, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
 	if err != nil {
 		_ = enc.Close()
 		return err
@@ -1147,6 +1208,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
 	if c.isZstdCompressed {
+		c.compressedSequence = 0
 		c.compressedReadSequence = 0
 	}
 	data, err := c.readEphemeralPacket()

@@ -315,27 +315,20 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		return err
 	}
 
+	if err := c.handleAuthResponse(params); err != nil {
+		return err
+	}
+
 	useZstd := params.EnableZstdCompression &&
 		(capabilities&CapabilityClientCompress != 0) &&
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
-		level := params.ZstdCompressionLevel
-		if level < zstdCompressionLevelMin {
-			level = zstdCompressionLevelDefault
-		}
-		if level > zstdCompressionLevelMax {
-			level = zstdCompressionLevelMax
-		}
+		level := clampZstdLevel(params.ZstdCompressionLevel)
 		c.isZstdCompressed = true
 		c.zstdCompressionLevel = level
 		if err := c.initZstdCompression(); err != nil {
 			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "failed to init zstd compression: %v", err)
 		}
-	}
-
-	// Read the server response.
-	if err := c.handleAuthResponse(params); err != nil {
-		return err
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -662,14 +655,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Now we write the int<1> zstd_compression_level byte right after the connection attributes, as the protocol expects.
 	if useZstd {
-		level := params.ZstdCompressionLevel
-		if level < zstdCompressionLevelMin {
-			level = zstdCompressionLevelDefault
-		}
-		if level > zstdCompressionLevelMax {
-			level = zstdCompressionLevelMax
-		}
-		pos = writeByte(data, pos, byte(level))
+		pos = writeByte(data, pos, byte(clampZstdLevel(params.ZstdCompressionLevel)))
 	}
 
 	// Sanity-check the length.

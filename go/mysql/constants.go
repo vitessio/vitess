@@ -40,6 +40,19 @@ const (
 	MaxIdentifierLength = 64
 )
 
+// clampZstdLevel normalizes a zstd compression level to the valid range [1, 22].
+// Levels below the minimum (including 0, which means "unset") are replaced with the default (3).
+// Levels above the maximum are capped at 22.
+func clampZstdLevel(level int) int {
+	if level < zstdCompressionLevelMin {
+		return zstdCompressionLevelDefault
+	}
+	if level > zstdCompressionLevelMax {
+		return zstdCompressionLevelMax
+	}
+	return level
+}
+
 // AuthMethodDescription is the type for different supported and
 // implemented authentication methods.
 type AuthMethodDescription string

@@ -1614,6 +1614,12 @@ func TestParseConnAttrs(t *testing.T) {
 	}
 }
 
+func TestZstdCompressionLevelConstants(t *testing.T) {
+	require.Equal(t, 1, zstdCompressionLevelMin)
+	require.Equal(t, 22, zstdCompressionLevelMax)
+	require.Equal(t, 3, zstdCompressionLevelDefault)
+}
+
 func TestServerFlush(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	mysqlServerFlushDelay := 10 * time.Millisecond

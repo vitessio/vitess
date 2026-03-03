@@ -112,7 +112,6 @@ Flags:
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
-      --log-format string                                                log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -138,7 +137,7 @@ Flags:
       --mysql-auth-vault-ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
       --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
-      --mysql-enable-zstd-compression                                   Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.
+      --mysql-enable-zstd-compression                                    Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.
       --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
       --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
       --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
