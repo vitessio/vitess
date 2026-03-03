@@ -23,7 +23,7 @@
     "path-to-regexp": "^8.3.0",
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-preset-env": "^11.2.0",
-    "protobufjs": "^7.5.4",
+    "protobufjs": "^8.0.0",
     "query-string": "^9.3.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
