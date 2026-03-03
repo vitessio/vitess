@@ -1,0 +1,293 @@
+name: Rerun Failed Jobs
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      ignore-workflows:
+        description: "Comma-separated workflow name substrings to ignore"
+        required: false
+        type: string
+        default: ""
+
+permissions: read-all
+
+concurrency:
+  group: rerun-failed-jobs
+  cancel-in-progress: false
+
+env:
+  BASE_BRANCHES: "main, release-*"
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Rerun failed workflows
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          IGNORE_WORKFLOWS: ${{ github.event.inputs.ignore-workflows || '' }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            // -----------------------------------------------------------
+            // Configuration
+            // -----------------------------------------------------------
+
+            const MAX_RETRIES = 5;
+            const MAX_PR_AGE_DAYS = 5;
+            const MAX_ALLOWED_FAILURES = 10;
+            const MAX_PRS = 20;
+
+            // Parse base branch patterns from env. Supports exact names
+            // and trailing wildcards (e.g. "release-*").
+            const baseBranchPatterns = (process.env.BASE_BRANCHES || 'main')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+              .map(p => p.endsWith('*')
+                ? new RegExp(`^${p.slice(0, -1)}`)
+                : new RegExp(`^${p}$`)
+              );
+
+            const ignoreWorkflows = (process.env.IGNORE_WORKFLOWS || '')
+              .split(',')
+              .map(s => s.trim().toLowerCase())
+              .filter(Boolean);
+
+            const { owner, repo } = context.repo;
+
+            // -----------------------------------------------------------
+            // Colors
+            // -----------------------------------------------------------
+
+            const RED = '\x1b[0;31m';
+            const GREEN = '\x1b[0;32m';
+            const YELLOW = '\x1b[0;33m';
+            const CYAN = '\x1b[0;36m';
+            const DIM = '\x1b[2m';
+            const BOLD = '\x1b[1m';
+            const RESET = '\x1b[0m';
+
+            const info  = (msg) => console.log(`${CYAN}[INFO]${RESET}  ${msg}`);
+            const debug = (msg) => console.log(`${DIM}[DEBUG] ${msg}${RESET}`);
+            const warn  = (msg) => console.log(`${YELLOW}[WARN]${RESET}  ${msg}`);
+            const ok    = (msg) => console.log(`${GREEN}[OK]${RESET}    ${msg}`);
+            const err   = (msg) => console.log(`${RED}[ERR]${RESET}   ${msg}`);
+            const bold  = (msg) => console.log(`${BOLD}${msg}${RESET}`);
+            const rule  = ()    => console.log(`${DIM}${'─'.repeat(72)}${RESET}`);
+
+            // -----------------------------------------------------------
+            // Helpers
+            // -----------------------------------------------------------
+
+            function shouldIgnore(name) {
+              const lower = name.toLowerCase();
+              return ignoreWorkflows.some(p => lower.includes(p));
+            }
+
+            // -----------------------------------------------------------
+            // Print configuration
+            // -----------------------------------------------------------
+
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - MAX_PR_AGE_DAYS);
+
+            rule();
+            bold('Rerun Failed Jobs');
+            rule();
+            console.log('');
+            info(`Repository:           ${BOLD}${owner}/${repo}${RESET}`);
+            info(`Base branches:        ${BOLD}${process.env.BASE_BRANCHES}${RESET}`);
+            info(`Max retries:          ${BOLD}${MAX_RETRIES}${RESET}`);
+            info(`Max PR age:           ${BOLD}${MAX_PR_AGE_DAYS} days${RESET}`);
+            info(`Max allowed failures: ${BOLD}${MAX_ALLOWED_FAILURES}${RESET}`);
+            info(`Max PRs:              ${BOLD}${MAX_PRS}${RESET}`);
+            info(`Ignore workflows:     ${BOLD}${ignoreWorkflows.length ? ignoreWorkflows.join(', ') : '<none>'}${RESET}`);
+            info(`Cutoff date:          ${BOLD}${cutoff.toISOString()}${RESET}`);
+            console.log('');
+
+            // -----------------------------------------------------------
+            // Fetch open PRs
+            // -----------------------------------------------------------
+
+            debug('Fetching open PRs');
+
+            const { data: allPRs } = await github.rest.pulls.list({
+              owner, repo,
+              state: 'open',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 100,
+            });
+
+            debug(`${allPRs.length} open PR(s) fetched`);
+
+            const prs = allPRs
+              .filter(pr => baseBranchPatterns.some(p => p.test(pr.base.ref)))
+              .filter(pr => new Date(pr.updated_at) >= cutoff)
+              .slice(0, MAX_PRS);
+
+            info(`Found ${BOLD}${prs.length}${RESET} eligible open PR(s)`);
+            debug(`PR numbers: ${prs.map(pr => pr.number).join(', ')}`);
+            debug(`Skipped ${allPRs.length - prs.length} PR(s) (wrong base branch or too old)`);
+            console.log('');
+
+            // -----------------------------------------------------------
+            // Process each PR
+            // -----------------------------------------------------------
+
+            let totalRestarted = 0;
+            let prsProcessed = 0;
+
+            for (const pr of prs) {
+              const prNumber = pr.number;
+              const headSha = pr.head.sha;
+              const branch = pr.head.ref;
+              const shortSha = headSha.slice(0, 8);
+
+              rule();
+              bold(`PR #${prNumber}  ${DIM}branch=${branch}  sha=${shortSha}${RESET}`);
+              debug(`Full SHA: ${headSha}`);
+              debug(`Updated:  ${pr.updated_at}`);
+
+              // ---------------------------------------------------------
+              // Count failed check runs
+              // ---------------------------------------------------------
+
+              debug(`Fetching completed check runs for ${shortSha}`);
+
+              const checkRuns = await github.paginate(
+                github.rest.checks.listForRef,
+                { owner, repo, ref: headSha, status: 'completed', per_page: 100 },
+                (response) => response.data,
+              );
+
+              const failedChecks = checkRuns.filter(cr => cr.conclusion === 'failure');
+
+              debug(`${checkRuns.length} completed check run(s), ${failedChecks.length} failed`);
+
+              if (failedChecks.length === 0) {
+                ok('No failures');
+                continue;
+              }
+
+              debug('Failed check runs:');
+              for (const cr of failedChecks) {
+                debug(`  ${RED}✗${RESET}${DIM} ${cr.name}`);
+              }
+
+              if (failedChecks.length > MAX_ALLOWED_FAILURES) {
+                warn(`Too many failures (${failedChecks.length} > ${MAX_ALLOWED_FAILURES}), skipping PR`);
+                continue;
+              }
+
+              info(`${failedChecks.length} failed check run(s)`);
+
+              // ---------------------------------------------------------
+              // Fetch failed workflow runs
+              // ---------------------------------------------------------
+
+              debug(`Fetching failed workflow runs for branch ${branch}`);
+
+              const { data: { workflow_runs: allRuns } } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner, repo,
+                branch,
+                status: 'failure',
+                per_page: 100,
+              });
+
+              debug(`${allRuns.length} total failed run(s) on branch ${branch}`);
+
+              const matchedRuns = allRuns.filter(r => r.head_sha === headSha);
+
+              debug(`${matchedRuns.length} failed run(s) matching SHA ${shortSha}`);
+
+              if (matchedRuns.length === 0) {
+                warn(`No failed workflow runs found for SHA ${shortSha}`);
+                continue;
+              }
+
+              debug('Matched failed runs:');
+              for (const run of matchedRuns) {
+                debug(`  ${YELLOW}↻${RESET}${DIM} ${run.name} (id: ${run.id}, attempt: ${run.run_attempt})`);
+              }
+
+              // ---------------------------------------------------------
+              // Rerun eligible failed runs
+              // ---------------------------------------------------------
+
+              const seen = new Set();
+              let prRestarted = 0;
+
+              for (const run of matchedRuns) {
+                const { id: runId, name: runName, run_attempt: runAttempt } = run;
+
+                debug(`Evaluating: ${runName} (id: ${runId}, attempt: ${runAttempt})`);
+
+                // Deduplicate: results are newest-first, so the first
+                // occurrence of each workflow name is the most recent run.
+                if (seen.has(runName)) {
+                  debug('  Skipped: duplicate (already processed)');
+                  continue;
+                }
+                seen.add(runName);
+
+                if (shouldIgnore(runName)) {
+                  info(`  Skipped: ${runName} ${DIM}(matches ignore pattern)${RESET}`);
+                  continue;
+                }
+
+                if (runAttempt > MAX_RETRIES) {
+                  warn(`  Skipped: ${runName} -- attempt ${runAttempt} > max ${MAX_RETRIES}`);
+                  continue;
+                }
+
+                info(`  Rerunning ${BOLD}${runName}${RESET} ${DIM}(attempt ${runAttempt}, id ${runId})${RESET}`);
+
+                try {
+                  await github.rest.actions.reRunWorkflowFailedJobs({
+                    owner, repo,
+                    run_id: runId,
+                  });
+                  ok(`  Triggered rerun for ${runName}`);
+                  prRestarted++;
+                  totalRestarted++;
+                } catch (e) {
+                  err(`  Failed to rerun ${runName} (id ${runId}): ${e.message}`);
+                }
+              }
+
+              if (prRestarted > 0) {
+                prsProcessed++;
+              }
+
+              info(`Restarted ${BOLD}${prRestarted}${RESET} workflow(s) for PR #${prNumber}`);
+            }
+
+            // -----------------------------------------------------------
+            // Summary
+            // -----------------------------------------------------------
+
+            console.log('');
+            rule();
+            bold('Summary');
+            rule();
+            info(`Workflows restarted: ${BOLD}${totalRestarted}${RESET}`);
+            info(`PRs touched:         ${BOLD}${prsProcessed}${RESET}`);
+
+            if (totalRestarted > 0) {
+              ok('Done');
+            } else {
+              info('Nothing to rerun');
+            }
