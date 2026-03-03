@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -551,10 +552,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// Set initial db name (or target string for binlog replication).
-	// Note: We use the raw schemaName without escaping because it may contain
-	// a target string with special characters (e.g., "keyspace:shard@type|alias").
 	if c.schemaName != "" {
-		err = l.handler.ComQuery(c, "use `"+c.schemaName+"`", func(result *sqltypes.Result) error {
+		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
 			return nil
 		})
 		if err != nil {
