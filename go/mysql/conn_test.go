@@ -324,7 +324,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 
 	// Reuse the same decoder via sConn.zstdDecoder and ensure multiple DecodeAll calls work.
 	payload := []byte("repeated-decode-payload")
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		compressed := sConn.zstdEncoder.EncodeAll(payload, nil)
 		decoded, err := sConn.zstdDecoder.DecodeAll(compressed, nil)
 		require.NoError(t, err)
@@ -333,7 +333,8 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 
 	// Also exercise the reader path repeatedly with the same decoder.
 	frameBuf := &bytes.Buffer{}
-	for seq := byte(0); seq < 3; seq++ {
+	for i := range 3 {
+		seq := byte(i)
 		compressed := sConn.zstdEncoder.EncodeAll(payload, nil)
 		var hdr [compressedPacketHeaderSize]byte
 		writeCompressedPacketHeader(hdr[:], uint32(len(compressed)), uint32(len(payload)), seq)
@@ -350,7 +351,7 @@ func TestZstdDecoderRepeatedDecodeAll(t *testing.T) {
 	sConn.compressedReadSequence = 0
 
 	buf := make([]byte, len(payload))
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		n, err := wrapper.Read(buf)
 		require.NoError(t, err)
 		require.Equal(t, len(payload), n)

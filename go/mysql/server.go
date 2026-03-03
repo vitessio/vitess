@@ -313,6 +313,7 @@ type ListenerConfig struct {
 	ConnBufferPooling     bool
 	ConnKeepAlivePeriod   time.Duration
 	FlushDelay            time.Duration
+	ProxyProtocol         bool
 	MultiQuery            bool
 	EnableZstdCompression bool
 }
@@ -329,6 +330,10 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 			return nil, err
 		}
 		l = listener
+	}
+
+	if cfg.ProxyProtocol {
+		l = &proxyproto.Listener{Listener: l}
 	}
 
 	return &Listener{

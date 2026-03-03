@@ -198,7 +198,12 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0, false, false)
+	db.listener, err = mysql.NewListenerWithConfig(mysql.ListenerConfig{
+		Protocol:   "unix",
+		Address:    socketFile,
+		AuthServer: authServer,
+		Handler:    db,
+	})
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
