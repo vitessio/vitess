@@ -1442,15 +1442,6 @@ type packetReader interface {
 	Buffered() int
 }
 
-// sendBinlogEOF sends a constructed MySQL binlog EOF packet to the client.
-// The EOF format is: [0xFE, 0x00, 0x00, 0x00, 0x00] (EOF marker + zero warnings + zero status flags).
-func sendBinlogEOF(send func(*binlogdatapb.BinlogDumpResponse) error) {
-	// Ignore the send error — if the client already disconnected, send fails harmlessly.
-	_ = send(&binlogdatapb.BinlogDumpResponse{
-		Raw: []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00},
-	})
-}
-
 // streamBinlogPackets streams binlog packets from the connection to the client.
 // This is shared by both BinlogDump and BinlogDumpGTID.
 //
