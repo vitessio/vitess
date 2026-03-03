@@ -3364,7 +3364,7 @@ type (
 	}
 
 	CountStar struct {
-		_ bool
+		_    bool
 		Name string
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
