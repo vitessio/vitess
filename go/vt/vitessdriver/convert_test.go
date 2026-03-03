@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestToNative(t *testing.T) {
@@ -199,5 +200,55 @@ func TestToNative(t *testing.T) {
 		if !reflect.DeepEqual(v, tcase.out) {
 			t.Errorf("%v.ToNativeEx = %#v, want %#v", tcase.in, v, tcase.out)
 		}
+	}
+}
+
+func TestBuildBindVariable(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   any
+		out  *querypb.BindVariable
+	}{
+		{
+			name: "json bytes become varchar",
+			in:   []byte("[]"),
+			out:  sqltypes.StringBindVariable("[]"),
+		},
+		{
+			name: "binary bytes become varchar",
+			in:   []byte{0x00, 0xff},
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte{0x00, 0xff},
+			},
+		},
+		{
+			name: "nil bytes become null",
+			in:   []byte(nil),
+			out:  sqltypes.NullBindVariable,
+		},
+		{
+			name: "empty bytes become empty varchar",
+			in:   []byte{},
+			out:  sqltypes.StringBindVariable(""),
+		},
+		{
+			name: "time becomes datetime",
+			in:   time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
+			out:  sqltypes.ValueBindVariable(sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43")),
+		},
+	}
+
+	convert := &converter{location: time.UTC}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			bv, err := convert.BuildBindVariable(tcase.in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(bv, tcase.out) {
+				t.Fatalf("BuildBindVariable(%v) = %#v, want %#v", tcase.in, bv, tcase.out)
+			}
+		})
 	}
 }
