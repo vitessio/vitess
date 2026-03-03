@@ -20815,7 +20815,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6684
 		{
-			yyLOCAL = &CountStar{OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &CountStar{Name: yyDollar[1].str, OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1292:
@@ -20823,7 +20823,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6688
 		{
-			yyLOCAL = &Count{Distinct: yyDollar[3].booleanUnion(), Args: yyDollar[4].exprsUnion(), OverClause: yyDollar[6].overClauseUnion()}
+			yyLOCAL = &Count{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Args: yyDollar[4].exprsUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1293:
@@ -20831,7 +20831,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6692
 		{
-			yyLOCAL = &Max{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
+			yyLOCAL = &Max{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1294:
@@ -20839,7 +20839,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6696
 		{
-			yyLOCAL = &Min{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
+			yyLOCAL = &Min{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1295:
@@ -20847,7 +20847,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6700
 		{
-			yyLOCAL = &Sum{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
+			yyLOCAL = &Sum{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1296:
@@ -20855,7 +20855,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6704
 		{
-			yyLOCAL = &Avg{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
+			yyLOCAL = &Avg{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1297:
@@ -20863,7 +20863,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6708
 		{
-			yyLOCAL = &BitAnd{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &BitAnd{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1298:
@@ -20871,7 +20871,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6712
 		{
-			yyLOCAL = &BitOr{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &BitOr{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1299:
@@ -20879,7 +20879,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6716
 		{
-			yyLOCAL = &BitXor{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &BitXor{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1300:
@@ -20887,7 +20887,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6720
 		{
-			yyLOCAL = &Std{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &Std{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1301:
@@ -20895,7 +20895,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6724
 		{
-			yyLOCAL = &StdDev{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &StdDev{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1302:
@@ -20903,7 +20903,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6728
 		{
-			yyLOCAL = &StdPop{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &StdPop{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1303:
@@ -20911,7 +20911,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6732
 		{
-			yyLOCAL = &StdSamp{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &StdSamp{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1304:
@@ -20919,7 +20919,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6736
 		{
-			yyLOCAL = &VarPop{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &VarPop{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1305:
@@ -20927,7 +20927,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6740
 		{
-			yyLOCAL = &VarSamp{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &VarSamp{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1306:
@@ -20935,7 +20935,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6744
 		{
-			yyLOCAL = &Variance{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &Variance{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1307:
@@ -20943,7 +20943,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6748
 		{
-			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = &GroupConcatExpr{Name: yyDollar[1].str, Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1308:
@@ -20951,7 +20951,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6752
 		{
-			yyLOCAL = &AnyValue{Arg: yyDollar[3].exprUnion()}
+			yyLOCAL = &AnyValue{Name: yyDollar[1].str, Arg: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1309:
@@ -21015,7 +21015,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6784
 		{
-			yyLOCAL = &JSONArrayAgg{Expr: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &JSONArrayAgg{Name: yyDollar[1].str, Expr: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1317:
@@ -21023,7 +21023,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6788
 		{
-			yyLOCAL = &JSONObjectAgg{Key: yyDollar[3].exprUnion(), Value: yyDollar[5].exprUnion(), OverClause: yyDollar[7].overClauseUnion()}
+			yyLOCAL = &JSONObjectAgg{Name: yyDollar[1].str, Key: yyDollar[3].exprUnion(), Value: yyDollar[5].exprUnion(), OverClause: yyDollar[7].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1318:

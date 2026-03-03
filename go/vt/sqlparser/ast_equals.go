@@ -2045,7 +2045,8 @@ func (cmp *Comparator) RefOfAnyValue(a, b *AnyValue) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg)
 }
 
 // RefOfArgument does deep equals between the two objects.
@@ -2106,7 +2107,8 @@ func (cmp *Comparator) RefOfAvg(a, b *Avg) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -2169,7 +2171,8 @@ func (cmp *Comparator) RefOfBitAnd(a, b *BitAnd) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -2181,7 +2184,8 @@ func (cmp *Comparator) RefOfBitOr(a, b *BitOr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -2193,7 +2197,8 @@ func (cmp *Comparator) RefOfBitXor(a, b *BitXor) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -2462,7 +2467,8 @@ func (cmp *Comparator) RefOfCount(a, b *Count) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		cmp.SliceOfExpr(a.Args, b.Args) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -2475,7 +2481,8 @@ func (cmp *Comparator) RefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.RefOfOverClause(a.OverClause, b.OverClause)
+	return a.Name == b.Name &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfCreateDatabase does deep equals between the two objects.
@@ -3102,7 +3109,8 @@ func (cmp *Comparator) RefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
 		cmp.SliceOfExpr(a.Exprs, b.Exprs) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
@@ -3343,7 +3351,8 @@ func (cmp *Comparator) RefOfJSONArrayAgg(a, b *JSONArrayAgg) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Expr, b.Expr) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Expr, b.Expr) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -3429,7 +3438,8 @@ func (cmp *Comparator) RefOfJSONObjectAgg(a, b *JSONObjectAgg) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Key, b.Key) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Key, b.Key) &&
 		cmp.Expr(a.Value, b.Value) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -3848,7 +3858,8 @@ func (cmp *Comparator) RefOfMax(a, b *Max) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -3873,7 +3884,8 @@ func (cmp *Comparator) RefOfMin(a, b *Min) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -4900,7 +4912,8 @@ func (cmp *Comparator) RefOfStd(a, b *Std) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -4912,7 +4925,8 @@ func (cmp *Comparator) RefOfStdDev(a, b *StdDev) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -4924,7 +4938,8 @@ func (cmp *Comparator) RefOfStdPop(a, b *StdPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -4936,7 +4951,8 @@ func (cmp *Comparator) RefOfStdSamp(a, b *StdSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -5043,7 +5059,8 @@ func (cmp *Comparator) RefOfSum(a, b *Sum) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
+	return a.Name == b.Name &&
+		a.Distinct == b.Distinct &&
 		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
@@ -5365,7 +5382,8 @@ func (cmp *Comparator) RefOfVarPop(a, b *VarPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -5377,7 +5395,8 @@ func (cmp *Comparator) RefOfVarSamp(a, b *VarSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -5401,7 +5420,8 @@ func (cmp *Comparator) RefOfVariance(a, b *Variance) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg) &&
+	return a.Name == b.Name &&
+		cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 

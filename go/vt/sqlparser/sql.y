@@ -6682,75 +6682,75 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb '*' closeb over_clause_opt
   {
-    $$ = &CountStar{OverClause: $5}
+    $$ = &CountStar{Name: $1, OverClause: $5}
   }
 | COUNT openb distinct_opt expression_list closeb over_clause_opt
   {
-    $$ = &Count{Distinct:$3, Args:$4, OverClause: $6}
+    $$ = &Count{Name: $1, Distinct:$3, Args:$4, OverClause: $6}
   }
 | MAX openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Max{Distinct:$3, Arg:$4, OverClause: $6}
+    $$ = &Max{Name: $1, Distinct:$3, Arg:$4, OverClause: $6}
   }
 | MIN openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Min{Distinct:$3, Arg:$4, OverClause: $6}
+    $$ = &Min{Name: $1, Distinct:$3, Arg:$4, OverClause: $6}
   }
 | SUM openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Sum{Distinct:$3, Arg:$4, OverClause: $6}
+    $$ = &Sum{Name: $1, Distinct:$3, Arg:$4, OverClause: $6}
   }
 | AVG openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Avg{Distinct:$3, Arg:$4, OverClause: $6}
+    $$ = &Avg{Name: $1, Distinct:$3, Arg:$4, OverClause: $6}
   }
 | BIT_AND openb expression closeb over_clause_opt
   {
-    $$ = &BitAnd{Arg:$3, OverClause: $5}
+    $$ = &BitAnd{Name: $1, Arg:$3, OverClause: $5}
   }
 | BIT_OR openb expression closeb over_clause_opt
   {
-    $$ = &BitOr{Arg:$3, OverClause: $5}
+    $$ = &BitOr{Name: $1, Arg:$3, OverClause: $5}
   }
 | BIT_XOR openb expression closeb over_clause_opt
    {
-    $$ = &BitXor{Arg:$3, OverClause: $5}
+    $$ = &BitXor{Name: $1, Arg:$3, OverClause: $5}
    }
 | STD openb expression closeb over_clause_opt
     {
-    $$ = &Std{Arg:$3, OverClause: $5}
+    $$ = &Std{Name: $1, Arg:$3, OverClause: $5}
     }
 | STDDEV openb expression closeb over_clause_opt
     {
-    $$ = &StdDev{Arg:$3, OverClause: $5}
+    $$ = &StdDev{Name: $1, Arg:$3, OverClause: $5}
     }
 | STDDEV_POP openb expression closeb over_clause_opt
     {
-    $$ = &StdPop{Arg:$3, OverClause: $5}
+    $$ = &StdPop{Name: $1, Arg:$3, OverClause: $5}
     }
 | STDDEV_SAMP openb expression closeb over_clause_opt
     {
-    $$ = &StdSamp{Arg:$3, OverClause: $5}
+    $$ = &StdSamp{Name: $1, Arg:$3, OverClause: $5}
     }
 | VAR_POP openb expression closeb over_clause_opt
      {
-    $$ = &VarPop{Arg:$3, OverClause: $5}
+    $$ = &VarPop{Name: $1, Arg:$3, OverClause: $5}
      }
 | VAR_SAMP openb expression closeb over_clause_opt
      {
-    $$ = &VarSamp{Arg:$3, OverClause: $5}
+    $$ = &VarSamp{Name: $1, Arg:$3, OverClause: $5}
      }
 | VARIANCE openb expression closeb over_clause_opt
      {
-    $$ = &Variance{Arg:$3, OverClause: $5}
+    $$ = &Variance{Name: $1, Arg:$3, OverClause: $5}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
+    $$ = &GroupConcatExpr{Name: $1, Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | ANY_VALUE openb expression closeb
   {
-    $$ = &AnyValue{Arg:$3}
+    $$ = &AnyValue{Name: $1, Arg:$3}
   }
 | TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
@@ -6782,11 +6782,11 @@ UTC_DATE func_paren_opt
   }
 | JSON_ARRAYAGG openb expression closeb over_clause_opt
   {
-    $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
+    $$ = &JSONArrayAgg{Name: $1, Expr: $3, OverClause: $5}
   }
 | JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
   {
-    $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
+    $$ = &JSONObjectAgg{Name: $1, Key: $3, Value: $5, OverClause: $7}
   }
 | LTRIM openb expression closeb
   {

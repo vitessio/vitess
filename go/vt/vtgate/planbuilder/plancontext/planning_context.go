@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -202,7 +203,7 @@ func (ctx *PlanningContext) replaceAggrWithArg(e sqlparser.Expr, cfg *evalengine
 		if !ok {
 			return
 		}
-		code, ok := opcode.SupportedAggregates[agg.AggrName()]
+		code, ok := opcode.SupportedAggregates[strings.ToLower(agg.AggrName())]
 		if !ok {
 			// We don't know the type of this aggregate function
 			// The type calculation will be set to unknown
