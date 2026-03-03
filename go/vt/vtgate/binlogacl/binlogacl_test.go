@@ -95,6 +95,30 @@ func TestNewAuthorizedBinlogUsers(t *testing.T) {
 			allowAll: false,
 			expected: map[string]struct{}{"user1": {}, "user2": {}},
 		},
+		{
+			name:     "trailing comma",
+			input:    "user1,",
+			allowAll: false,
+			expected: map[string]struct{}{"user1": {}},
+		},
+		{
+			name:     "leading comma",
+			input:    ",user1",
+			allowAll: false,
+			expected: map[string]struct{}{"user1": {}},
+		},
+		{
+			name:     "consecutive commas",
+			input:    "user1,,user2",
+			allowAll: false,
+			expected: map[string]struct{}{"user1": {}, "user2": {}},
+		},
+		{
+			name:     "only commas",
+			input:    ",,,",
+			allowAll: false,
+			expected: map[string]struct{}{},
+		},
 	}
 
 	for _, tc := range tests {

@@ -50,6 +50,9 @@ func NewAuthorizedBinlogUsers(users string) *authorizedBinlogUsers {
 	default:
 		for user := range strings.SplitSeq(users, ",") {
 			user = strings.TrimSpace(user)
+			if user == "" {
+				continue
+			}
 			acl[user] = struct{}{}
 		}
 	}
