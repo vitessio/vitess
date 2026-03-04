@@ -1022,9 +1022,6 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					}{
 						staleAlias: {Status: &replicationdatapb.PrimaryStatus{}, Error: tt.demotePrimaryErr},
 					},
-					ChangeTabletTypeResult: map[string]error{
-						staleAlias: nil,
-					},
 					SetReplicationSourceResults: map[string]error{
 						staleAlias: nil,
 					},

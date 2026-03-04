@@ -1420,16 +1420,8 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 
 		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
 
-		// Update the tablet's running type to REPLICA. This also updates the topology as a result, but we also
-		// do it independently below in case we can't reach the tablet.
-		if err := changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync); err != nil {
-			logger.Error("failed to change tablet type on tablet", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		logger.Info("successfully changed tablet type on tablet", slog.String("tablet", aliasString))
-
-		// Point the tablet's replication at the current primary.
+		// Point the tablet's replication at the current primary. This also changes the tablet's type
+		// to REPLICA and attempts to update the topology.
 		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
 			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
@@ -1441,9 +1433,9 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Update the tablet's type directly in the topology to REPLICA.
 	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
 	if err != nil {
-		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen if
-		// we race with the goroutine above and it calls the `ChangeType` RPC before we update the topology. Any
-		// other error is considered a failure, and we'll try again next iteration.
+		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen
+		// if we race with the goroutine above and `SetReplicationSource` already changed the type to REPLICA
+		// before we update the topology. Any other error is considered a failure, and we'll try again next iteration.
 		if !topo.IsErrType(err, topo.NoUpdateNeeded) {
 			return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
 		}
