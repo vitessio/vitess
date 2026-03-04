@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -195,17 +194,6 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 func (tm *TabletManager) convertBoolToSemiSyncAction(ctx context.Context, semiSync bool) (SemiSyncAction, error) {
 	semiSyncExtensionLoaded, err := tm.MysqlDaemon.SemiSyncExtensionLoaded(ctx)
 	if err != nil {
-		if tm.MysqlDaemon.IsMySQLLocal() {
-			down, checkErr := tm.MysqlDaemon.IsLocalMySQLDown(ctx)
-			if checkErr != nil {
-				log.Warn(fmt.Sprintf("convertBoolToSemiSyncAction: cannot determine MySQL state (%v), returning SemiSyncActionNone", checkErr))
-				return SemiSyncActionNone, nil
-			}
-			if down {
-				log.Warn(fmt.Sprintf("convertBoolToSemiSyncAction: MySQL is down (%v), returning SemiSyncActionNone", err))
-				return SemiSyncActionNone, nil
-			}
-		}
 		return SemiSyncActionNone, err
 	}
 

@@ -111,9 +111,8 @@ func TestDownPrimary(t *testing.T) {
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
 
-	// Simulate what happens in production (e.g. Kubernetes) where the failed
-	// primary's mysqld and vttablet pods get restarted automatically because
-	// their healthchecks fail.
+	// simulate case where the primary's mysqld and vttablet pods/services get restarted automatically
+	// because they (or the healthchecks) fail.
 	err = curPrimary.MysqlctlProcess.StartProvideInit(false)
 	require.NoError(t, err)
 	err = curPrimary.VttabletProcess.Setup()
@@ -122,7 +121,7 @@ func TestDownPrimary(t *testing.T) {
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 	}()
 
-	// Verify the old primary rejoins as a replica with replication working.
+	// verify the old primary rejoins as a replica with replication working
 	err = curPrimary.VttabletProcess.WaitForTabletTypes([]string{"replica"})
 	require.NoError(t, err)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, crossCellReplica}, 15*time.Second)
