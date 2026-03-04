@@ -102,7 +102,7 @@ func readCompressedPacketHeader(src []byte) (compressedLen, uncompressedLen uint
 // we only care about the compressed frame sequence here.
 
 // zstdState holds everything we need at runtime for a zstd-compressed connection.
-// If c.zstd is nil, compression isn't active — that's the single source of truth.
+// If c.zstd is nil, compression isn't active and that's the single source of truth.
 type zstdState struct {
 	// encoder and decoder are created once when compression kicks in and we close them when the connection goes away.
 	encoder *zstd.Encoder
@@ -111,7 +111,7 @@ type zstdState struct {
 	// per frame and it's completely independent from the logical packet sequence.
 	writeSequence uint8
 	// readSequence is what we expect to see in the next incoming frame header.
-	// Same deal as writeSequence — independent from the logical packet sequence.
+	// Same deal as writeSequence (independent from the logical packet sequence).
 	readSequence uint8
 	// reader is our zstdReadWrapper; we create it lazily on the first compressed read.
 	reader *zstdReadWrapper
