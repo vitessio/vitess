@@ -1,5 +1,6 @@
 services:
   antithesis-client:
+    container_name: antithesis-client
     image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest
     depends_on:
       vtorc:
@@ -22,6 +23,7 @@ services:
     volumes:
       - .:/script
   etcd:
+    container_name: etcd
     image: quay.io/coreos/etcd:v3.5.16
     command:
       - /usr/local/bin/etcd
@@ -39,6 +41,7 @@ services:
       - 2379:2379
       - 2380:2380
   source_db_host:
+    container_name: source_db_host
     image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest
     platform: linux/amd64
     command:
@@ -65,6 +68,7 @@ services:
       - ./source_db/mysql/:/docker-entrypoint-initdb.d/
       - ./source_db/mysql/log:/var/log/mysql
   schemaload_lookup_keyspace:
+    container_name: schemaload_lookup_keyspace
     command:
       - sh
       - -c
@@ -89,6 +93,7 @@ services:
     volumes:
       - .:/script
   schemaload_test_keyspace:
+    container_name: schemaload_test_keyspace
     command:
       - sh
       - -c
@@ -115,6 +120,7 @@ services:
     volumes:
       - .:/script
   set_keyspace_durability_policy:
+    container_name: set_keyspace_durability_policy
     command:
       - sh
       - -c
@@ -129,6 +135,7 @@ services:
     volumes:
       - .:/script
   vreplication:
+    container_name: vreplication
     command:
       - sh
       - -c
@@ -143,6 +150,7 @@ services:
     volumes:
       - .:/script
   vtctld:
+    container_name: vtctld
     command:
       - sh
       - -c
@@ -160,6 +168,7 @@ services:
     volumes:
       - .:/script
   vtgate:
+    container_name: vtgate
     command:
       - sh
       - -c
@@ -178,6 +187,7 @@ services:
     volumes:
       - .:/script
   vtorc:
+    container_name: vtorc
     command:
       - sh
       - -c
@@ -198,6 +208,7 @@ services:
     volumes:
       - .:/script
   vttablet101:
+    container_name: vttablet101
     command:
       - sh
       - -c
@@ -235,6 +246,7 @@ services:
     volumes:
       - .:/script
   vttablet102:
+    container_name: vttablet102
     command:
       - sh
       - -c
@@ -272,6 +284,7 @@ services:
     volumes:
       - .:/script
   vttablet201:
+    container_name: vttablet201
     command:
       - sh
       - -c
@@ -309,6 +322,7 @@ services:
     volumes:
       - .:/script
   vttablet202:
+    container_name: vttablet202
     command:
       - sh
       - -c
@@ -346,6 +360,7 @@ services:
     volumes:
       - .:/script
   vttablet301:
+    container_name: vttablet301
     command:
       - sh
       - -c
@@ -383,6 +398,7 @@ services:
     volumes:
       - .:/script
   vttablet302:
+    container_name: vttablet302
     command:
       - sh
       - -c
