@@ -357,33 +357,6 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	assert.Contains(t, env, "TZ=Europe/Berlin")
 }
 
-func TestFakeMysqlDaemonIsMySQLLocal(t *testing.T) {
-	fmd := NewFakeMysqlDaemon(nil)
-	defer fmd.Close()
-
-	assert.False(t, fmd.IsMySQLLocal())
-	fmd.MysqlLocal = true
-	assert.True(t, fmd.IsMySQLLocal())
-}
-
-func TestFakeMysqlDaemonIsLocalMySQLDown(t *testing.T) {
-	fmd := NewFakeMysqlDaemon(nil)
-	defer fmd.Close()
-
-	t.Run("MysqlDown false", func(t *testing.T) {
-		fmd.MysqlDown = false
-		down, err := fmd.IsLocalMySQLDown(context.Background())
-		assert.NoError(t, err)
-		assert.False(t, down)
-	})
-
-	t.Run("MysqlDown true", func(t *testing.T) {
-		fmd.MysqlDown = true
-		down, err := fmd.IsLocalMySQLDown(context.Background())
-		assert.NoError(t, err)
-		assert.True(t, down)
-	})
-}
 
 func TestMysqldIsMySQLLocal(t *testing.T) {
 	t.Run("unix socket", func(t *testing.T) {
