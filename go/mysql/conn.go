@@ -671,17 +671,6 @@ func (c *Conn) ReadDataInto(buf []byte) error {
 	return nil
 }
 
-// ReadOnePacket reads a single packet from the underlying connection without
-// reassembling multi-packet messages. This is useful for streaming raw packets.
-// Returns nil, nil for a zero-length packet (which follows a max-size packet).
-func (c *Conn) ReadOnePacket() ([]byte, error) {
-	result, err := c.readOnePacket()
-	if err != nil {
-		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
-	}
-	return result, err
-}
-
 // writePacket writes a packet, possibly cutting it into multiple
 // chunks.  Note this is not very efficient, as the client probably
 // has to build the []byte and that makes a memory copy.
