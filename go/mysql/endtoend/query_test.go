@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

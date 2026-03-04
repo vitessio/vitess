@@ -138,11 +138,11 @@ func setupExtraMyCnf() error {
 	if existing != "" {
 		// Append clone.cnf to existing
 		if err := os.Setenv("EXTRA_MY_CNF", existing+":"+cloneCnfPath); err != nil {
-			assert.NoError(t, err)
+			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
 		}
 	} else {
 		if err := os.Setenv("EXTRA_MY_CNF", cloneCnfPath); err != nil {
-			assert.NoError(t, err)
+			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
 		}
 	}
 
@@ -154,7 +154,9 @@ func setupExtraMyCnf() error {
 func initClusterForClone() error {
 	// Create a combined init file that includes clone user
 	initDBWithClone, err := createInitDBWithCloneUser()
-	assert.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("failed to create init DB with clone user: %v", err)
+	}
 	log.Info("Created combined init file at: " + initDBWithClone)
 
 	var mysqlCtlProcessList []*exec.Cmd
@@ -203,7 +205,7 @@ func initClusterForClone() error {
 	// Wait for MySQL processes to be ready
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			assert.NoError(t, err)
+			return fmt.Errorf("failed waiting for MySQL process: %v", err)
 		}
 	}
 	log.Info("MySQL processes started successfully")
@@ -223,19 +225,25 @@ func createInitDBWithCloneUser() (string, error) {
 	initClonePath := path.Join(os.Getenv("VTROOT"), "config", "init_clone.sql")
 
 	initDB, err := os.ReadFile(initDBPath)
-	assert.NoError(t, err)
+	if err != nil {
+		return "", fmt.Errorf("failed to read init_db.sql: %v", err)
+	}
 
 	initClone, err := os.ReadFile(initClonePath)
-	assert.NoError(t, err)
+	if err != nil {
+		return "", fmt.Errorf("failed to read init_clone.sql: %v", err)
+	}
 
 	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
 	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
-	assert.NoError(t, err)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate combined init SQL: %v", err)
+	}
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
 	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
-		assert.NoError(t, err)
+		return "", fmt.Errorf("failed to write combined init SQL: %v", err)
 	}
 
 	return combinedPath, nil

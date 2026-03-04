@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -249,7 +248,9 @@ func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
 func setupExtraMyConfig() error {
 	// Get the absolute path to the config file in the same directory as this test
 	wd, err := os.Getwd()
-	assert.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %v", err)
+	}
 
 	// The config file is in the same directory as this test file
 	configPath := wd + "/extra_my.cnf"
@@ -260,8 +261,9 @@ func setupExtraMyConfig() error {
 	}
 
 	// Set the environment variable
-	err = os.Setenv("EXTRA_MY_CNF", configPath)
-	assert.NoError(t, err)
+	if err = os.Setenv("EXTRA_MY_CNF", configPath); err != nil {
+		return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
+	}
 
 	log.Info("Set EXTRA_MY_CNF to: " + configPath)
 	return nil

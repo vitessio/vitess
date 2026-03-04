@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -77,7 +76,7 @@ func init() {
 }`
 	var kspb vschemapb.Keyspace
 	if err := json2.UnmarshalPB([]byte(input), &kspb); err != nil {
-		assert.NoError(t, err)
+		panic(err)
 	}
 	srvVSchema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
