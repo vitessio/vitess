@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -60,8 +60,8 @@ func TestMain(m *testing.M) {
 		// Set gRPC max message size to 64MB for both vttablet and vtgate
 		// This is needed to stream large binlog events (>16MB default)
 		grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, grpcMaxMsgSize)
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, grpcMaxMsgSize, "--pprof-http")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http")
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
