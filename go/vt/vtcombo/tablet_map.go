@@ -759,16 +759,6 @@ func (itc *internalTabletConn) VStreamResults(
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
-// BinlogDump is part of the QueryService interface.
-func (itc *internalTabletConn) BinlogDump(
-	ctx context.Context,
-	request *binlogdatapb.BinlogDumpRequest,
-	send func(*binlogdatapb.BinlogDumpResponse) error,
-) error {
-	err := itc.tablet.qsc.QueryService().BinlogDump(ctx, request, send)
-	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-}
-
 // BinlogDumpGTID is part of the QueryService interface.
 func (itc *internalTabletConn) BinlogDumpGTID(
 	ctx context.Context,

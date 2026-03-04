@@ -1339,47 +1339,6 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 	return tsv.vstreamer.StreamResults(ctx, query, send)
 }
 
-// BinlogDump streams raw binlog packets from MySQL using COM_BINLOG_DUMP (file/position-based).
-// It reads MySQL packets directly and forwards them to the client without parsing.
-// Each packet is streamed individually, including zero-length packets that terminate
-// multi-packet sequences. This provides true streaming with bounded memory usage.
-func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
-	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
-		return err
-	}
-
-	// Register with the engine for graceful shutdown tracking
-	ctx, idx, err := tsv.binlogDumper.Register(ctx)
-	if err != nil {
-		return err
-	}
-	defer tsv.binlogDumper.Unregister(idx)
-
-	// Create a binlog connection to MySQL
-	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to create binlog connection")
-	}
-	defer conn.Close()
-
-	// Close the underlying socket when the context is cancelled (shutdown or
-	// client disconnect) to unblock any pending read. We capture the mysql.Conn
-	// reference here because BinlogConnection.Close() nils it out, and we must
-	// only call mysql.Conn.Close() (which is idempotent via CompareAndSwap) —
-	// not BinlogConnection.Close() — to avoid a double serverIDPool.Put() panic
-	// if the AfterFunc races with the deferred conn.Close() above.
-	mysqlConn := conn.Conn
-	stop := context.AfterFunc(ctx, func() { mysqlConn.Close() })
-	defer stop()
-
-	// Send the binlog dump command to MySQL using file/position
-	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition); err != nil {
-		return vterrors.Wrapf(err, "failed to send binlog dump command")
-	}
-
-	return tsv.streamBinlogPackets(ctx, conn, send)
-}
-
 // BinlogDumpGTID streams raw binlog packets from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
 // It reads MySQL packets directly and forwards them to the client without parsing.
 // Each packet is streamed individually, including zero-length packets that terminate

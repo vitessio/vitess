@@ -341,14 +341,6 @@ func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Ta
 	})
 }
 
-func (ws *wrappedService) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
-	opts := WrapOpts{InTransaction: false}
-	return ws.wrapper(ctx, request.Target, ws.impl, "BinlogDump", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.BinlogDump(ctx, request, send)
-		return false, innerErr
-	})
-}
-
 func (ws *wrappedService) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	opts := WrapOpts{InTransaction: false}
 	return ws.wrapper(ctx, request.Target, ws.impl, "BinlogDumpGTID", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {

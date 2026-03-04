@@ -655,19 +655,6 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 	return errors.New("not implemented in test")
 }
 
-// BinlogDump is part of the QueryService interface.
-func (sbc *SandboxConn) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
-	if sbc.BinlogDumpError != nil {
-		return sbc.BinlogDumpError
-	}
-	for _, response := range sbc.BinlogDumpResponses {
-		if err := send(response); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // BinlogDumpGTID is part of the QueryService interface.
 func (sbc *SandboxConn) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	if sbc.BinlogDumpError != nil {

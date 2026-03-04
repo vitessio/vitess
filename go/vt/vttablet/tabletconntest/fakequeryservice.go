@@ -731,11 +731,6 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 	panic("not implemented")
 }
 
-// BinlogDump is part of the QueryService interface.
-func (f *FakeQueryService) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
-	panic("not implemented")
-}
-
 // BinlogDumpGTID is part of the QueryService interface.
 func (f *FakeQueryService) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	panic("not implemented")

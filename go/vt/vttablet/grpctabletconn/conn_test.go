@@ -179,11 +179,6 @@ func (m *mockQueryClient) GetSchema(ctx context.Context, in *querypb.GetSchemaRe
 	return nil, errors.New("A general error")
 }
 
-func (m *mockQueryClient) BinlogDump(ctx context.Context, in *binlogdatapb.BinlogDumpRequest, opts ...grpc.CallOption) (queryservicepb.Query_BinlogDumpClient, error) {
-	m.lastCallCtx = ctx
-	return nil, errors.New("A general error")
-}
-
 func (m *mockQueryClient) BinlogDumpGTID(ctx context.Context, in *binlogdatapb.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (queryservicepb.Query_BinlogDumpGTIDClient, error) {
 	m.lastCallCtx = ctx
 	return nil, errors.New("A general error")

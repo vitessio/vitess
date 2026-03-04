@@ -1140,12 +1140,10 @@ func TestBinlogDumpACL(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("ComBinlogDump also respects ACL", func(t *testing.T) {
-		enableBinlogDump.Set(false)
-
+	t.Run("ComBinlogDump returns unimplemented error", func(t *testing.T) {
 		err := vh.ComBinlogDump(mysqlConn, "binlog.000001", 4)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "binlog dump is disabled")
+		assert.Contains(t, err.Error(), "COM_BINLOG_DUMP is not supported")
 	})
 }
 
