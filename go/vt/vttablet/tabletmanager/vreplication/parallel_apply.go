@@ -155,13 +155,9 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	workerErr := make(chan error, workerCount)
 
 	workers := make([]*applyWorker, 0, workerCount)
-	for range workerCount {
-		worker, err := newApplyWorker(ctx, vp.vr)
-		if err != nil {
-			return err
-		}
-		workers = append(workers, worker)
-	}
+	// Register the defer BEFORE the creation loop so that if creating
+	// worker N fails, workers 0..N-1 are still closed. Without this,
+	// a partial creation failure would leak DB connections.
 	defer func() {
 		for _, worker := range workers {
 			// if parallelDebugEnabled() && worker.client != nil && worker.client.InTransaction {
@@ -170,6 +166,13 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 			worker.close()
 		}
 	}()
+	for range workerCount {
+		worker, err := newApplyWorker(ctx, vp.vr)
+		if err != nil {
+			return err
+		}
+		workers = append(workers, worker)
+	}
 
 	// Query FK constraints from the target database so that we can
 	// generate writeset keys that create conflicts between child and
@@ -252,23 +255,24 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	select {
 	case err := <-applyErr:
 		finalErr = err
-		// if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply returning applyErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// 	parallelDebugLog(fmt.Sprintf("applyEventsParallel RETURN applyErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// }
 	default:
-		select {
-		case err := <-workerErr:
-			finalErr = err
-			// if parallelDebugEnabled() {
-			// 	log.Warn(fmt.Sprintf("parallel apply returning workerErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-			// 	parallelDebugLog(fmt.Sprintf("applyEventsParallel RETURN workerErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-			// }
-		default:
-			// if parallelDebugEnabled() {
-			// 	log.Warn(fmt.Sprintf("parallel apply returning default nil: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-			// 	parallelDebugLog(fmt.Sprintf("applyEventsParallel RETURN default nil: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-			// }
+		// Drain all worker errors and join them so that no diagnostic
+		// information is silently dropped. The first error triggers
+		// cancel() so subsequent workers usually exit with
+		// context.Canceled, but collecting all errors helps debugging
+		// cases where multiple workers hit independent failures.
+		var workerErrs []error
+	drainWorkerErrs:
+		for {
+			select {
+			case err := <-workerErr:
+				workerErrs = append(workerErrs, err)
+			default:
+				break drainWorkerErrs
+			}
+		}
+		if len(workerErrs) > 0 {
+			finalErr = errors.Join(workerErrs...)
 		}
 	}
 	// Convert io.EOF (stop position reached) and context.Canceled (shutdown)
@@ -931,10 +935,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				}
 			}
 			updateLag()
-			// commitOnly txns aren't waited on by workers, so skip signaling.
-			if !payload.commitOnly {
-				txn.done <- struct{}{}
-			}
 			if err := scheduler.markCommitted(txn); err != nil {
 				return err
 			}
@@ -964,6 +964,21 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	pending := make(map[int64]*applyTxn)
 	nextOrder := int64(1)
 
+	// On error exit, signal done and release all remaining pending entries
+	// to prevent worker goroutines from blocking on txn.done and to return
+	// pool objects that would otherwise be leaked.
+	defer func() {
+		for _, txn := range pending {
+			if txn.payload != nil && !txn.payload.commitOnly {
+				select {
+				case txn.done <- struct{}{}:
+				default:
+				}
+			}
+			releaseApplyTxn(txn)
+		}
+	}()
+
 	drainPending := func() error {
 		for {
 			next := pending[nextOrder]
@@ -972,6 +987,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			delete(pending, nextOrder)
 			if err := commitTxn(next); err != nil {
+				// Re-add the failed txn so the defer cleanup can
+				// signal its done channel and release it to the pool.
+				pending[nextOrder] = next
 				return err
 			}
 			releaseApplyTxn(next)

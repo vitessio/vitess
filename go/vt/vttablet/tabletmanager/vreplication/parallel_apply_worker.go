@@ -41,14 +41,19 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
+	// Close the connection if any subsequent setup step fails, to avoid
+	// leaking the MySQL connection opened by Connect() above.
 	if err := setDBClientSettings(dbClient, vr.workflowConfig); err != nil {
+		dbClient.Close()
 		return nil, err
 	}
 	vdbc := newVDBClientWithID(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
 	if err := vr.clearFKCheck(vdbc); err != nil {
+		dbClient.Close()
 		return nil, err
 	}
 	if err := vr.clearFKRestrict(vdbc); err != nil {
+		dbClient.Close()
 		return nil, err
 	}
 

@@ -53,6 +53,11 @@ type applyScheduler struct {
 	inflightGlobal      int
 	inflightMissingMeta int
 	inflightCommitMeta  int
+
+	// closed is set by close() to signal that no more transactions will
+	// be enqueued. nextReady checks this to return io.EOF instead of
+	// blocking forever on cond.Wait after the scheduler is shut down.
+	closed bool
 }
 
 func newApplyScheduler(ctx context.Context) *applyScheduler {
@@ -76,6 +81,9 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	if err := s.ctx.Err(); err != nil {
 		return err
 	}
+	if s.closed {
+		return io.EOF
+	}
 	if txn.hasCommitMeta && s.lastCommittedSequence == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && s.pendingCount == 0 && txn.commitParent > 0 {
 		s.lastCommittedSequence = txn.commitParent
 	}
@@ -98,6 +106,12 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 		}
 		if err := s.ctx.Err(); err != nil {
 			return nil, err
+		}
+		// Check closed AFTER context checks so that workers exit
+		// cleanly when close() is called without context cancellation
+		// (e.g., scheduleLoop returns io.EOF for a relay log EOF).
+		if s.closed {
+			return nil, io.EOF
 		}
 		txn := s.popReadyLocked()
 		if txn != nil {
@@ -390,6 +404,7 @@ func (s *applyScheduler) close() error {
 	if err := s.ctx.Err(); err != nil {
 		return err
 	}
+	s.closed = true
 	s.pending = nil
 	s.pendingOff = 0
 	s.pendingCount = 0
