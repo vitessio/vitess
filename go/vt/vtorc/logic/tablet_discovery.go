@@ -306,8 +306,13 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	}, false, nil)
 }
 
+<<<<<<< HEAD
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+=======
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
+	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, cellsToWatch)
+>>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
@@ -317,7 +322,19 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
+<<<<<<< HEAD
 func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
+=======
+// getShardTabletsByCell gets tablets for the given keyspace/shard and cells with a timeout.
+func getShardTabletsByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
+}
+
+func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
+>>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
 	// Discover new tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
