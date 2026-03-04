@@ -27,12 +27,17 @@ import (
 
 type applyWorker struct {
 	ctx context.Context
-
-	vr *vreplicator
-
+	vr  *vreplicator
+	// client is this worker's private MySQL connection, created at startup.
+	// Each worker has its own connection so transactions can be applied in
+	// parallel without contention on a shared connection.
 	client *vdbClient
-
-	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	// query executes a SQL statement on this worker's connection with retry.
+	// Swapped onto the vplayer copy during applyEvent so the existing
+	// serial applier code path uses this worker's connection transparently.
+	query func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	// commit commits the current transaction on this worker's connection.
+	// Swapped onto the vplayer copy alongside query.
 	commit func() error
 }
 

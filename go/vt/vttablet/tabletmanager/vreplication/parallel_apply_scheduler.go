@@ -23,36 +23,86 @@ import (
 )
 
 type applyTxn struct {
-	order          int64
+	// order is a monotonically increasing sequence number assigned by
+	// scheduleLoop. The commitLoop commits transactions in strict order
+	// so that the position saved to _vt.vreplication only moves forward.
+	order int64
+	// sequenceNumber is the source MySQL binlog sequence number from the
+	// GTID event. Used to advance lastCommittedSequence after commit.
 	sequenceNumber int64
-	commitParent   int64
-	hasCommitMeta  bool
-	forceGlobal    bool
-	noConflict     bool
+	// commitParent is the source MySQL commit parent from the GTID event.
+	// When the writeset is empty, the scheduler falls back to commit-parent
+	// ordering: the transaction is ready only when commitParent <=
+	// lastCommittedSequence.
+	commitParent int64
+	// hasCommitMeta is true when the GTID event carried non-zero
+	// sequenceNumber or commitParent. Transactions with and without
+	// commit metadata are never run concurrently (safety boundary).
+	hasCommitMeta bool
+	// forceGlobal is true for transactions that must serialize with
+	// everything: non-row-only transactions (DDL, FIELD, OTHER, JOURNAL),
+	// copy-phase transactions, or transactions whose writeset build failed.
+	forceGlobal bool
+	// noConflict is true for position-only saves and certain pass-through
+	// events (OTHER, ignored DDL). These bypass all conflict checking and
+	// are always ready, preventing deadlocks where an earlier-order
+	// position save is blocked by later-order inflight data transactions.
+	noConflict bool
 	// writeset holds FNV-1a hashes of PK-based keys (e.g. hash of "table:pk1,pk2").
 	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
 	// in the scheduler hot path, reducing GC pressure at high TPS.
 	writeset []uint64
-	payload  *applyTxnPayload
-	done     chan struct{}
+	// payload carries the transaction's events and DB connection info.
+	// Pooled via applyTxnPayloadPool to reduce allocations.
+	payload *applyTxnPayload
+	// done is a buffered channel (cap 1) used to synchronize the commitLoop
+	// with the worker that applied this transaction. The commitLoop sends on
+	// done after committing, unblocking the worker to reuse its DB connection.
+	// Pooled across sync.Pool cycles to avoid per-txn allocation.
+	// Nil for commitOnly transactions (workers don't wait on them).
+	done chan struct{}
 }
 
 type applyScheduler struct {
+	// ctx is the parent context for the parallel applier. When cancelled,
+	// all blocked nextReady/waitForIdle calls return immediately.
 	ctx context.Context
 
 	mu   sync.Mutex
 	cond *sync.Cond
 
-	pending               []*applyTxn
-	pendingOff            int // offset into pending slice; entries before this index are consumed
-	pendingCount          int // number of live (non-nil) entries in pending
+	// pending is the queue of transactions waiting to be dispatched to
+	// workers. Entries are set to nil when consumed; pendingOff tracks
+	// how far into the slice consumed entries extend, and the slice is
+	// compacted when half its capacity is nil entries.
+	pending      []*applyTxn
+	pendingOff   int // offset into pending slice; entries before this index are consumed
+	pendingCount int // number of live (non-nil) entries in pending
+	// lastCommittedSequence is the highest source MySQL sequence number
+	// that has been committed. Used for commit-parent ordering: a
+	// transaction whose writeset is empty is ready only when its
+	// commitParent <= lastCommittedSequence.
 	lastCommittedSequence int64
-	lastCommittedOrder    int64
+	// lastCommittedOrder is the highest transaction order number that
+	// has been committed, used for diagnostics.
+	lastCommittedOrder int64
 
-	inflightWriteset    map[uint64]int
-	inflightGlobal      int
+	// inflightWriteset maps writeset key hashes to reference counts.
+	// A transaction is blocked if any of its writeset keys are present
+	// in this map with count > 0.
+	inflightWriteset map[uint64]int
+	// inflightGlobal counts inflight forceGlobal transactions and
+	// no-metadata-no-writeset transactions. When > 0, all non-noConflict
+	// transactions are blocked.
+	inflightGlobal int
+	// inflightMissingMeta counts inflight transactions that lack commit
+	// metadata. When > 0, hasCommitMeta transactions are blocked to
+	// maintain the safety boundary between metadata modes.
 	inflightMissingMeta int
-	inflightCommitMeta  int
+	// inflightCommitMeta counts inflight transactions that have commit
+	// metadata. When > 0, no-metadata transactions with writesets must
+	// wait to prevent mixing metadata modes.
+	inflightCommitMeta int
 
 	// closed is set by close() to signal that no more transactions will
 	// be enqueued. nextReady checks this to return io.EOF instead of

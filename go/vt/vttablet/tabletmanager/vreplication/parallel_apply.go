@@ -35,16 +35,36 @@ import (
 )
 
 type applyTxnPayload struct {
-	pos           replication.Position
-	timestamp     int64
-	mustSave      bool
-	events        []*binlogdatapb.VEvent
-	rowOnly       bool
-	commitOnly    bool
+	// pos is the GTID position to record when committing this transaction.
+	pos replication.Position
+	// timestamp is the source binlog timestamp, used for lag calculation
+	// and the time_updated column in _vt.vreplication.
+	timestamp int64
+	// mustSave forces an immediate position save (e.g., stop position reached
+	// or time-based flush bound exceeded).
+	mustSave bool
+	// events holds the VEvents that make up this transaction's data.
+	// For row transactions these are ROW/FIELD events; for commitOnly
+	// transactions this is typically a single DDL, OTHER, or COMMIT event.
+	events []*binlogdatapb.VEvent
+	// rowOnly is true when the transaction contains only ROW events (no DDL,
+	// FIELD, OTHER, or JOURNAL). Row-only transactions can have writesets
+	// computed for parallel conflict detection.
+	rowOnly bool
+	// commitOnly is true for transactions that are applied by the commitLoop
+	// on the main connection rather than by a worker (DDL, OTHER, JOURNAL,
+	// position-only saves). Workers forward these directly to commitCh
+	// without applying events or waiting on txn.done.
+	commitOnly bool
+	// updatePosOnly is true for position-only saves (idle timeout flush).
+	// The commitLoop calls updatePos without applying any events.
 	updatePosOnly bool
-	query         func(ctx context.Context, sql string) (*sqltypes.Result, error)
-	commit        func() error
-	client        *vdbClient
+	// query/commit/client are the DB connection functions for this transaction.
+	// For worker transactions, these are set by the worker after applying events.
+	// For commitOnly transactions, these point to the main vplayer connection.
+	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commit func() error
+	client *vdbClient
 	// Pre-computed during scheduling so commitLoop doesn't need to scan
 	// all events to find the last qualifying timestamp for lag calculation.
 	// Zero means no qualifying event was found.
@@ -349,19 +369,49 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 }
 
 type parallelScheduleState struct {
-	curEvents            []*binlogdatapb.VEvent
-	curRowOnly           bool
-	curRowOnlySet        bool
-	curTimestamp         int64
-	curMustSave          bool
-	curPos               replication.Position
-	curCommitParent      int64
-	curSequence          int64
-	curHasCommitMeta     bool
-	lastFlushTime        time.Time
+	// curEvents accumulates VEvents for the current transaction being built.
+	// Reset after each flush (COMMIT or DDL boundary).
+	curEvents []*binlogdatapb.VEvent
+	// curRowOnly tracks whether the current transaction contains only ROW
+	// events. Set to true on the first ROW event, false on FIELD/DDL/OTHER/
+	// JOURNAL events. Only meaningful when curRowOnlySet is true.
+	curRowOnly bool
+	// curRowOnlySet indicates whether curRowOnly has been determined for the
+	// current transaction. False at the start of each transaction; set to
+	// true on the first event that classifies it. This distinguishes
+	// "not yet classified" from "classified as not row-only".
+	curRowOnlySet bool
+	// curTimestamp is the most recent non-zero event timestamp seen in the
+	// current transaction, used for the time_updated column on flush.
+	curTimestamp int64
+	// curMustSave forces the next flush to save the position immediately
+	// (set when stop position is reached or time-based batch bound fires).
+	curMustSave bool
+	// curPos is the GTID position from the most recent GTID event,
+	// recorded in _vt.vreplication when the transaction is committed.
+	curPos replication.Position
+	// curCommitParent is the source MySQL commit parent from the GTID event,
+	// used for commit-parent ordering when writeset is unavailable.
+	curCommitParent int64
+	// curSequence is the source MySQL sequence number from the GTID event,
+	// used to track lastCommittedSequence in the scheduler.
+	curSequence int64
+	// curHasCommitMeta is true when the current transaction's GTID event
+	// carried non-zero sequenceNumber or commitParent metadata.
+	curHasCommitMeta bool
+	// lastFlushTime tracks when the last transaction was flushed, used to
+	// enforce the 500ms time-based batch bound during catch-up replay.
+	lastFlushTime time.Time
+	// lastHeartbeatRefresh tracks when time_updated was last refreshed via
+	// SQL for empty transaction streams, independent of lastFlushTime so
+	// that the idle timeout position save still fires normally.
 	lastHeartbeatRefresh time.Time
-	cachedPlanSnapshot   map[string]*TablePlan
-	cachedPlanVersion    int64
+	// cachedPlanSnapshot is a copy-on-write snapshot of vplayer.tablePlans,
+	// refreshed only when tablePlansVersion changes (new FIELD events).
+	cachedPlanSnapshot map[string]*TablePlan
+	// cachedPlanVersion tracks which tablePlansVersion the snapshot
+	// corresponds to, so we know when to re-snapshot.
+	cachedPlanVersion int64
 	// fieldIdxCache caches the field-name→index map per table to avoid
 	// rebuilding it on every transaction. Most transactions touch the same
 	// tables so this eliminates redundant map construction. Invalidated
