@@ -186,6 +186,9 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 	return keys, nil
 }
 
+// snapshotTablePlans returns a copy-on-write snapshot of tablePlans. It only
+// copies the map when the version has changed since the last snapshot, avoiding
+// the read-lock hold time of building writesets directly against the live map.
 func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, version *int64, cachedVersion *int64, cached map[string]*TablePlan) map[string]*TablePlan {
 	if tablePlans == nil {
 		return nil

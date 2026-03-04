@@ -407,10 +407,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		}
 	}
-	// throttledEvents can be read just like you would read from events
+	// throttledEvents can be read just like you would read from events.
 	// throttledEvents pulls data from events, but throttles pulling data,
-	// which in turn blocks the BinlogConnection from pushing events to the channel
-	throttledEvents := make(chan mysql.BinlogEvent)
+	// which in turn blocks the BinlogConnection from pushing events to the channel.
+	// Buffered to decouple the throttle goroutine from the parseEvents
+	// consumer — an unbuffered channel forces a context switch per event
+	// and becomes a throughput bottleneck at high event rates.
+	throttledEvents := make(chan mysql.BinlogEvent, 128)
 	go throttleEvents(throttledEvents)
 
 	for {
@@ -551,7 +554,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				SequenceNumber: sequenceNumber,
 			})
 		}
-		vs.pos = replication.AppendGTID(vs.pos, gtid)
+		// Use AppendGTIDInPlace to mutate the GTIDSet in place instead of
+		// copying the entire set on every GTID event. The vstreamer owns
+		// vs.pos exclusively, so in-place mutation is safe and avoids a
+		// full map copy per transaction.
+		vs.pos = replication.AppendGTIDInPlace(vs.pos, gtid)
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
@@ -1121,7 +1128,7 @@ func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *s
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterValues, _, _, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
+		afterValues, _, _, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues, nil, nil)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "failed to extract journal from binlog event and apply filters")
 		}
@@ -1162,12 +1169,22 @@ nextrow:
 //   - if the target is not sharded, pass both images if either after or before passes
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
+	// Pre-allocate reusable buffers for getValues and mapValues to avoid
+	// per-row slice allocations. Each row needs a before and after image
+	// simultaneously, so we maintain two separate buffer pairs for getValues.
+	// mapValues only needs one buffer since RowToProto3 copies data out
+	// before the buffer is reused.
+	var beforeValBuf, afterValBuf []sqltypes.Value
+	var beforeCharBuf, afterCharBuf []collations.ID
+	var mappedBuf []sqltypes.Value
 	for _, row := range rows.Rows {
 		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
-		beforeRawValues, beforeCharsets, _, err := vs.getValues(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
+		beforeRawValues, beforeCharsets, _, err := vs.getValues(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{}, beforeValBuf, beforeCharBuf)
 		if err != nil {
 			return nil, err
 		}
+		beforeValBuf = beforeRawValues
+		beforeCharBuf = beforeCharsets
 		beforeOK, beforeHasVindex, err := plan.shouldFilter(beforeRawValues, beforeCharsets)
 		if err != nil {
 			return nil, err
@@ -1175,10 +1192,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 
 		// The AFTER image is where we may have partial JSON values, as reflected in the
 		// row's JSONPartialValues bitmap.
-		afterRawValues, afterCharsets, partial, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
+		afterRawValues, afterCharsets, partial, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues, afterValBuf, afterCharBuf)
 		if err != nil {
 			return nil, err
 		}
+		afterValBuf = afterRawValues
+		afterCharBuf = afterCharsets
 		afterOK, afterHasVindex, err := plan.shouldFilter(afterRawValues, afterCharsets)
 		if err != nil {
 			return nil, err
@@ -1200,20 +1219,22 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		rowChange := &binlogdatapb.RowChange{}
 		if beforeOK {
 			if len(beforeRawValues) > 0 {
-				beforeValues, err := plan.mapValues(beforeRawValues)
+				beforeValues, err := plan.mapValues(beforeRawValues, mappedBuf)
 				if err != nil {
 					return nil, err
 				}
 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
+				mappedBuf = beforeValues
 			}
 		}
 		if afterOK {
 			if len(afterRawValues) > 0 {
-				afterValues, err := plan.mapValues(afterRawValues)
+				afterValues, err := plan.mapValues(afterRawValues, mappedBuf)
 				if err != nil {
 					return nil, err
 				}
 				rowChange.After = sqltypes.RowToProto3(afterValues)
+				mappedBuf = afterValues
 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
 					(row.JSONPartialValues.Count() > 0) {
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
@@ -1271,12 +1292,26 @@ func (vs *vstreamer) rebuildPlans() error {
 
 func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap,
+	valuesBuf []sqltypes.Value, charsetsBuf []collations.ID,
 ) ([]sqltypes.Value, []collations.ID, bool, error) {
 	if len(data) == 0 {
 		return nil, nil, false, nil
 	}
-	values := make([]sqltypes.Value, dataColumns.Count())
-	charsets := make([]collations.ID, len(values))
+	n := dataColumns.Count()
+	values := valuesBuf
+	if cap(values) < n {
+		values = make([]sqltypes.Value, n)
+	} else {
+		values = values[:n]
+		clear(values)
+	}
+	charsets := charsetsBuf
+	if cap(charsets) < n {
+		charsets = make([]collations.ID, n)
+	} else {
+		charsets = charsets[:n]
+		clear(charsets)
+	}
 	valueIndex := 0
 	jsonIndex := 0
 	pos := 0

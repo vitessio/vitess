@@ -56,6 +56,9 @@ func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, rel
 	}
 }
 
+// newVDBClientWithID creates a vdbClient with a pre-set vreplicationID.
+// Used by parallel apply workers so each worker's connection is associated
+// with the correct vreplication stream for relay log batching.
 func newVDBClientWithID(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int, vreplicationID int32) *vdbClient {
 	client := newVDBClient(dbclient, stats, relayLogMaxItems)
 	client.vreplicationID = vreplicationID

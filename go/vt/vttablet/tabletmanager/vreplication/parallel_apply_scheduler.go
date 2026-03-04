@@ -110,6 +110,9 @@ type applyScheduler struct {
 	closed bool
 }
 
+// newApplyScheduler creates a scheduler and starts a background goroutine
+// that broadcasts on cond when ctx is cancelled, unblocking any workers
+// waiting in nextReady.
 func newApplyScheduler(ctx context.Context) *applyScheduler {
 	s := &applyScheduler{
 		ctx:              ctx,
@@ -125,6 +128,9 @@ func newApplyScheduler(ctx context.Context) *applyScheduler {
 	return s
 }
 
+// enqueue adds a transaction to the pending queue and signals one waiting
+// worker. On the first hasCommitMeta transaction, it seeds lastCommittedSequence
+// from commitParent so that subsequent commit-parent checks have a baseline.
 func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,6 +152,9 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	return nil
 }
 
+// nextReady blocks until a transaction in the pending queue passes the
+// readiness check, marks it inflight, removes it from the queue, and returns
+// it to the calling worker. Returns io.EOF when the scheduler is closed.
 func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,6 +181,9 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 	}
 }
 
+// markCommitted releases the transaction's inflight state and advances
+// lastCommittedSequence. Uses Broadcast when a global/missingMeta counter
+// drops to zero (multiple txns may unblock), Signal otherwise.
 func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -206,6 +218,10 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	return nil
 }
 
+// popReadyLocked scans the pending queue for the first ready transaction.
+// It skips noConflict transactions (always ready) but stops at the first
+// non-ready non-noConflict transaction to prevent head-of-line deadlocks
+// with the commitLoop's strict ordering.
 func (s *applyScheduler) popReadyLocked() *applyTxn {
 	for i := s.pendingOff; i < len(s.pending); i++ {
 		txn := s.pending[i]
@@ -269,6 +285,9 @@ func (s *applyScheduler) removePendingLocked(i int) {
 	}
 }
 
+// isReadyLocked checks whether a transaction can be dispatched to a worker
+// based on its classification (noConflict, forceGlobal, hasCommitMeta) and
+// the current inflight state. See the ready-check hierarchy in the PR docs.
 func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 	// noConflict transactions (e.g., position-only saves) are always ready.
 	// They have no data conflicts and must not block or be blocked by other
@@ -342,6 +361,8 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 	return true
 }
 
+// markInflightLocked increments the appropriate inflight counters and adds
+// writeset keys to inflightWriteset. Must be called under s.mu.
 func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
 		return
@@ -368,6 +389,8 @@ func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 	}
 }
 
+// releaseInflightLocked decrements the inflight counters and removes
+// writeset keys. The inverse of markInflightLocked. Must be called under s.mu.
 func (s *applyScheduler) releaseInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
 		return
@@ -431,6 +454,8 @@ func (s *applyScheduler) advanceCommittedSequence(seq int64) {
 	}
 }
 
+// waitForIdle blocks until there are no pending or inflight transactions.
+// Used in tests to synchronize after enqueuing work.
 func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -448,6 +473,8 @@ func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 	}
 }
 
+// close marks the scheduler as closed, clears the pending queue, and
+// broadcasts to wake all blocked workers so they exit with io.EOF.
 func (s *applyScheduler) close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

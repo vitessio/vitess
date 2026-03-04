@@ -81,6 +81,8 @@ var (
 	}
 )
 
+// acquireApplyTxn gets an applyTxn from the pool, reusing the buffered
+// done channel from a previous cycle to avoid a heap allocation per txn.
 func acquireApplyTxn() *applyTxn {
 	txn := applyTxnPool.Get().(*applyTxn)
 	// Reuse the buffered done channel from a previous pool cycle to avoid
@@ -91,6 +93,7 @@ func acquireApplyTxn() *applyTxn {
 	return txn
 }
 
+// acquireApplyTxnPayload gets an applyTxnPayload from the pool.
 func acquireApplyTxnPayload() *applyTxnPayload {
 	return applyTxnPayloadPool.Get().(*applyTxnPayload)
 }
@@ -135,12 +138,15 @@ func computeLastEventTimestamp(events []*binlogdatapb.VEvent) (timestamp, curren
 	return 0, 0
 }
 
+// parallelDebugEnabled returns true when VREPLICATION_PARALLEL_DEBUG=1
+// is set, enabling verbose file-based debug logging for development.
 func parallelDebugEnabled() bool {
 	return os.Getenv("VREPLICATION_PARALLEL_DEBUG") == "1"
 }
 
 var parallelDebugLogMu sync.Mutex
 
+// parallelDebugLog appends a timestamped message to /tmp/parallel_apply_debug.log.
 func parallelDebugLog(msg string) {
 	parallelDebugLogMu.Lock()
 	defer parallelDebugLogMu.Unlock()
@@ -152,6 +158,10 @@ func parallelDebugLog(msg string) {
 	fmt.Fprintf(f, "%s [pid=%d] %s\n", time.Now().Format("15:04:05.000"), os.Getpid(), msg)
 }
 
+// applyEventsParallel is the top-level orchestrator for the parallel applier.
+// It creates N worker goroutines and a commitLoop goroutine, then runs
+// scheduleLoop on the calling goroutine. On exit, it tears down the pipeline
+// in order: close scheduler → wait workers → close commitCh → wait commitLoop.
 func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) error {
 	workerCount := vp.vr.workflowConfig.ParallelReplicationWorkers
 	// parallelDebugLog(fmt.Sprintf("applyEventsParallel ENTRY: stream=%d workflow=%s workers=%d copy_state=%d", vp.vr.id, vp.vr.WorkflowName, workerCount, len(vp.copyState)))
@@ -305,6 +315,9 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	return finalErr
 }
 
+// scheduleLoop reads event batches from the relay log and dispatches them
+// through scheduleItems. It also handles idle-timeout position saves and
+// throttle-lag estimation. Runs on the main goroutine of applyEventsParallel.
 func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler *applyScheduler) error {
 	defer vp.vr.dbClient.Rollback()
 	// lastFetchPos := ""
@@ -420,6 +433,11 @@ type parallelScheduleState struct {
 	fieldIdxCacheVersion int64
 }
 
+// scheduleItems processes one relay log fetch worth of event batches. It tracks
+// transaction boundaries (GTID → events → COMMIT), classifies transactions,
+// builds writesets, handles batching of consecutive commits, and enqueues
+// applyTxn structs into the scheduler. Empty transactions bypass the scheduler
+// and are saved via unsavedEvent / idle timeout.
 func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, items [][]*binlogdatapb.VEvent) error {
 	flush := func(commitOnly bool) error {
 		if len(state.curEvents) == 0 && !commitOnly {
@@ -787,6 +805,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	return nil
 }
 
+// enqueueCommitOnly creates a commitOnly transaction and enqueues it into the
+// scheduler. Used for DDL, OTHER, JOURNAL events, and position-only saves
+// (idle timeout). These transactions are applied by the commitLoop on the main
+// connection, not by workers.
 func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applyScheduler, event *binlogdatapb.VEvent, mustSave bool, updatePosOnly bool) error {
 	var order int64
 	var pos replication.Position
@@ -830,6 +852,10 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	return scheduler.enqueue(txn)
 }
 
+// workerLoop runs on each of the N worker goroutines. It blocks on
+// scheduler.nextReady() until a transaction is dispatched, applies the row
+// events using the worker's private MySQL connection, then sends the txn
+// to commitCh and waits on txn.done for the commitLoop to finish committing.
 func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
 	// Shallow-copy vplayer once per worker lifetime instead of per
 	// transaction. This eliminates a ~200-300 byte struct copy on every
@@ -906,6 +932,11 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 	}
 }
 
+// commitLoop receives completed transactions from workers via commitCh and
+// commits them in strict order (by the order field). For worker transactions,
+// it swaps the worker's DB connection onto vp, calls updatePos + commit, then
+// signals the worker via txn.done. For commitOnly transactions, it applies
+// events and updates position on the main connection.
 func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, commitCh <-chan *applyTxn) error {
 	commitTxn := func(txn *applyTxn) error {
 		if ctx.Err() != nil {
@@ -1052,6 +1083,8 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		select {
 		case txn, ok := <-commitCh:
 			if !ok {
+				// The commit channel has been closed so we cannot add anyting else.
+				// We ony need to drain any already pending transactions.
 				if err := drainPending(); err != nil {
 					return err
 				}
@@ -1070,6 +1103,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				releaseApplyTxn(txn)
 				continue
 			}
+			// Add the new transaction to be committed and then drain all pending ones.
 			pending[txn.order] = txn
 			if err := drainPending(); err != nil {
 				return err
@@ -1080,6 +1114,12 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	}
 }
 
+// commitTxn commits a worker's transaction. It calls updatePos (which writes
+// to _vt.vreplication within the worker's open transaction), then commits.
+// To avoid self-deadlock when the stop position is reached, it temporarily
+// disables saveStop so updatePos doesn't call setState on the main connection
+// while the worker's connection holds the row lock. After commit releases the
+// lock, setState is called on the main connection if needed.
 func (vp *vplayer) commitTxn(ctx context.Context, payload *applyTxnPayload) (bool, error) {
 	// if parallelDebugEnabled() {
 	// 	hasCustomer := false

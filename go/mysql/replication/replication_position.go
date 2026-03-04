@@ -18,7 +18,6 @@ package replication
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -160,11 +159,15 @@ func MustParsePosition(flavor, value string) Position {
 // EncodePosition returns a string that contains both the flavor
 // and value of the Position, so that the correct parser can be
 // selected when that string is passed to DecodePosition.
+// Uses string concatenation instead of fmt.Sprintf to avoid the
+// reflection and interface boxing overhead of the format package.
+// This function is called on every committed transaction in the
+// vstreamer hot path.
 func EncodePosition(rp Position) string {
 	if rp.GTIDSet == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), rp.GTIDSet.String())
+	return rp.GTIDSet.Flavor() + "/" + rp.GTIDSet.String()
 }
 
 // DecodePosition converts a string in the format returned by

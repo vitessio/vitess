@@ -404,10 +404,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}()
 
 	var (
-		response binlogdatapb.VStreamRowsResponse
-		rows     []*querypb.Row
-		rowCount int
-		mysqlrow []sqltypes.Value
+		response  binlogdatapb.VStreamRowsResponse
+		rows      []*querypb.Row
+		rowCount  int
+		mysqlrow  []sqltypes.Value
+		mappedBuf []sqltypes.Value // reusable buffer for mapValues to avoid per-row allocations
 	)
 
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
@@ -450,10 +451,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			return err
 		}
 		if ok {
-			filtered, err := rs.plan.mapValues(mysqlrow)
+			filtered, err := rs.plan.mapValues(mysqlrow, mappedBuf)
 			if err != nil {
 				return err
 			}
+			mappedBuf = filtered
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}

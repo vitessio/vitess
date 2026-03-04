@@ -202,6 +202,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 }
 
+// activeDBClient returns the vplayer's current DB connection. In the parallel
+// applier, workers swap vp.dbClient to their own connection before applying
+// events, so this returns whichever connection is currently active. Falls back
+// to vr.dbClient (the main connection) when vp.dbClient is nil.
 func (vp *vplayer) activeDBClient() *vdbClient {
 	if vp.dbClient != nil {
 		return vp.dbClient
