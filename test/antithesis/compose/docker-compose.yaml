@@ -4,6 +4,9 @@ services:
     depends_on:
       - vtorc
       - vtgate
+      - schemaload_test_keyspace
+      - set_keyspace_durability_policy
+      - schemaload_lookup_keyspace
     environment:
       - VTORC_ADDR=http://vtorc:8080
       - VTGATE_ADDR=http://vtgate:8080
