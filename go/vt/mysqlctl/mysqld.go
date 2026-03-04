@@ -371,6 +371,8 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
 	}
 
 	// File-descriptor exhaustion is client-side; it is not a good signal of MySQL's state.
+	// It is unfortunately possible for file-descriptor exhaustion to be the cause of the
+	// CRConnectionError (errno 2002) error.
 	if isFileDescriptorExhaustedProbe() {
 		return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "file descriptor exhaustion detected, cannot determine MySQL state: %v", err)
 	}
