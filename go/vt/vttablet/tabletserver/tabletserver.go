@@ -1372,23 +1372,13 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 	stop := context.AfterFunc(ctx, func() { mysqlConn.Close() })
 	defer stop()
 
-	// Parse the GTID set from the request
-	var startPos replication.Position
-	if request.GtidSet != "" {
-		gtidSet, err := replication.ParseMysql56GTIDSet(request.GtidSet)
-		if err != nil {
-			return vterrors.Wrapf(err, "failed to parse GTID set: %s", request.GtidSet)
-		}
-		startPos = replication.Position{GTIDSet: gtidSet}
-	} else {
-		// If no GTID set is provided, get the current position from MySQL.
-		// This means we'll stream events starting from "now".
-		currentPos, err := conn.PrimaryPosition()
-		if err != nil {
-			return vterrors.Wrapf(err, "failed to get current position")
-		}
-		startPos = currentPos
+	// Parse the GTID set from the request. An empty string parses to an empty
+	// set, which tells MySQL "I have no transactions — send everything."
+	gtidSet, err := replication.ParseMysql56GTIDSet(request.GtidSet)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse GTID set: %s", request.GtidSet)
 	}
+	startPos := replication.Position{GTIDSet: gtidSet}
 
 	// Send the binlog dump command to MySQL using GTID
 	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, startPos, request.NonBlock); err != nil {

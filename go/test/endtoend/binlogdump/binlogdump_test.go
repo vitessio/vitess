@@ -900,3 +900,89 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 	t.Logf("Successfully received %d packets via direct gRPC to vttablet", receivedPackets)
 }
 
+// TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning verifies that an empty GTID set causes
+// the binlog dump to start from the very beginning of the binlog (getting all historical events),
+// rather than from the current position. This is tested by comparing the packet count of an
+// empty-GTID nonBlock dump against a current-GTID nonBlock dump: the empty-GTID dump should
+// receive strictly more packets because it includes all pre-existing events.
+func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
+	ctx := t.Context()
+
+	// Insert some data to ensure binlog has events before we record the GTID position.
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	for i := range 5 {
+		_, err := dataConn.ExecuteFetch(
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('empty_gtid_test_%d')", i), 1, false)
+		require.NoError(t, err)
+	}
+
+	// Record the current GTID position (after inserts).
+	currentGTID := getCurrentGTID(t, dataConn)
+	t.Logf("Current GTID (after inserts): %s", currentGTID)
+
+	// Helper: connect and do a nonBlock binlog dump, return the number of OK packets received before EOF.
+	countPackets := func(t *testing.T, sidBlock []byte, label string) int {
+		t.Helper()
+
+		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+		targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+		binlogParams := mysql.ConnParams{
+			Host:  clusterInstance.Hostname,
+			Port:  clusterInstance.VtgateMySQLPort,
+			Uname: "vt_repl|" + targetString,
+		}
+
+		binlogConn, err := mysql.Connect(ctx, &binlogParams)
+		require.NoError(t, err)
+		defer binlogConn.Close()
+
+		flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+		err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
+		require.NoError(t, err)
+
+		var count int
+		timeout := time.After(30 * time.Second)
+
+		for {
+			select {
+			case <-timeout:
+				t.Fatalf("[%s] Timeout waiting for EOF, received %d packets", label, count)
+			default:
+			}
+
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				t.Logf("[%s] Connection closed after %d packets: %v", label, count, err)
+				return count
+			}
+			if len(data) == 0 {
+				continue
+			}
+
+			switch data[0] {
+			case mysql.EOFPacket:
+				t.Logf("[%s] EOF after %d packets", label, count)
+				return count
+			case mysql.ErrPacket:
+				sqlErr := mysql.ParseErrorPacket(data)
+				t.Fatalf("[%s] Unexpected error packet: %v", label, sqlErr)
+			case mysql.OKPacket:
+				count++
+			}
+		}
+	}
+
+	// Dump 1: empty GTID set (nil sidBlock) — should start from beginning of binlog.
+	emptyCount := countPackets(t, nil, "empty-gtid")
+
+	// Dump 2: current GTID — should get no events (immediate EOF).
+	currentSIDBlock := gtidToSIDBlock(t, currentGTID)
+	currentCount := countPackets(t, currentSIDBlock, "current-gtid")
+
+	t.Logf("Empty GTID packets: %d, Current GTID packets: %d", emptyCount, currentCount)
+	assert.Greater(t, emptyCount, currentCount,
+		"Empty GTID dump should receive more packets than current-position dump")
+}

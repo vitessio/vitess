@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		// This is needed to stream large binlog events (>16MB default)
 		grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, grpcMaxMsgSize)
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, grpcMaxMsgSize, "--enable-binlog-dump")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%")
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
