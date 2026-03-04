@@ -225,8 +225,7 @@ func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Req
 		return
 	}
 
-	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
-	// Currently inst.DetectionAnalysis doesn't store the tablet alias, but once it does we can filter on that too
+	// TODO: Add per-instance filtering once DetectionAnalysis stores the tablet alias.
 	returnAsJSON(response, http.StatusOK, analysis)
 }
 

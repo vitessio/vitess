@@ -18,7 +18,6 @@ package mysqlctl
 
 import (
 	"context"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -402,22 +401,16 @@ func TestMysqldIsMySQLDown(t *testing.T) {
 		assert.True(t, down)
 	})
 
-	t.Run("CRConnHostError via TCP", func(t *testing.T) {
-		// Grab a port that's guaranteed to have nothing listening.
-		ln, listenErr := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, listenErr)
-		port := ln.Addr().(*net.TCPAddr).Port
-		ln.Close()
-
+	t.Run("non-unix-socket returns early", func(t *testing.T) {
 		cp := mysql.ConnParams{
 			Host: "127.0.0.1",
-			Port: port,
+			Port: 1,
 		}
 		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 		tcpMysqld := NewMysqld(dbc)
 		defer tcpMysqld.Close()
 
-		// TCP connection failure (errno 2003) should not report MySQL as down.
+		// Non-unix-socket connections should return early.
 		down, err := tcpMysqld.IsMySQLDown(context.Background())
 		assert.NoError(t, err)
 		assert.False(t, down)

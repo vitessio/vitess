@@ -982,32 +982,23 @@ func extractRowTableName(ev *binlogdatapb.VEvent) *string {
 // produce the same error.
 func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 	errCode := vterrors.Code(err)
-	// In this context, where we will run the tablet picker again on retry, these
-	// codes indicate that it's worth a retry as the error is likely a transient
-	// one with a tablet or within the shard.
+	// Transient tablet/shard errors are worth retrying with a new tablet picker.
 	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
 		return true, false
 	}
-	// This typically indicates that the user provided invalid arguments for the
-	// VStream so we should not retry.
+	// Invalid arguments generally mean we should not retry.
 	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
-		// But if there is a GTIDSet Mismatch on the tablet, omit that tablet from
-		// the candidate list in the TabletPicker and retry. The argument was invalid
-		// *for that specific *tablet* but it's not generally invalid.
+		// GTIDSet Mismatch is tablet-specific, so retry with a different tablet.
 		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
 			return true, true
 		}
 		return false, false
 	}
-	// Internal errors such as not having all journaling partipants require a new
-	// VStream.
+	// Internal errors (e.g. missing journaling participants) require a new VStream.
 	if errCode == vtrpcpb.Code_INTERNAL {
 		return false, false
 	}
-	// Handle binary log purging errors by retrying with a different tablet.
-	// This occurs when a tablet doesn't have the requested GTID because the
-	// source purged the required binary logs. Another tablet might still have
-	// the logs, so we ignore this tablet and retry.
+	// Binlog purging: the tablet lacks the requested GTID, try another tablet.
 	if errCode == vtrpcpb.Code_UNKNOWN {
 		sqlErr := sqlerror.NewSQLErrorFromError(err)
 		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
@@ -1019,9 +1010,7 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 		}
 	}
 
-	// For anything else, if this is an ephemeral SQL error -- such as a
-	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other
-	// type of non-SQL error, then retry.
+	// Retry ephemeral SQL errors (e.g. MAX_EXECUTION_TIME) and non-SQL errors.
 	return sqlerror.IsEphemeralError(err), false
 }
 

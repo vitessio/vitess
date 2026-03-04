@@ -91,7 +91,6 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
-		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
 	}()
 
@@ -112,6 +111,22 @@ func TestDownPrimary(t *testing.T) {
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
+
+	// Simulate what happens in production (e.g. Kubernetes) where the failed
+	// primary's mysqld and vttablet pods get restarted automatically because
+	// their healthchecks fail.
+	err = curPrimary.MysqlctlProcess.StartProvideInit(false)
+	require.NoError(t, err)
+	err = curPrimary.VttabletProcess.Setup()
+	require.NoError(t, err)
+	defer func() {
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	// Verify the old primary rejoins as a replica with replication working.
+	err = curPrimary.VttabletProcess.WaitForTabletTypes([]string{"replica"})
+	require.NoError(t, err)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, crossCellReplica}, 15*time.Second)
 }
 
 // bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.

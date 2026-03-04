@@ -341,60 +341,51 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // IsMySQLDown probes MySQL by attempting a DBA connection and returns true
-// if MySQL appears to be down. A non-nil error return indicates the MySQL
-// state could not be determined (e.g. file descriptor exhaustion, unexpected
-// socket file state).
+// if MySQL appears to be down. A non-nil error indicates the state could
+// not be determined.
 func (mysqld *Mysqld) IsMySQLDown(ctx context.Context) (bool, error) {
+	// This check only works with unix socket connections.
+	params, pErr := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if pErr != nil || params.UnixSocket == "" {
+		return false, nil
+	}
+
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
 		conn.Close()
 		return false, nil
 	}
 
-	// MySQL returns "too many connections" after accepting the connection,
-	// so getting this error proves the server is alive and listening.
+	// "too many connections" proves MySQL is alive.
 	if sqlerror.IsTooManyConnectionsErr(err) {
 		return false, nil
 	}
 
-	// File descriptor exhaustion (EMFILE/ENFILE) is a client-side problem:
-	// we ran out of fds before we could even attempt the connection, so the
-	// failure says nothing about whether MySQL is up or down.
-	// Note: the MySQL connector wraps the underlying syscall error into a
-	// SQLError, losing the original errno from the error chain. We probe
-	// directly with Dup to detect fd exhaustion independently.
+	// FD exhaustion is client-side; it says nothing about MySQL's state.
 	if isFileDescriptorExhaustedProbe() {
 		return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "file descriptor exhaustion detected, cannot determine MySQL state: %v", err)
 	}
 
-	// We only trust CRConnectionError (errno 2002) as a signal that MySQL
-	// is down. This is the unix socket "can't connect" error. We intentionally
-	// exclude CRConnHostError (errno 2003, TCP) because TCP failures can be
-	// caused by network issues unrelated to MySQL's health.
+	// Only CRConnectionError (errno 2002, unix socket) signals MySQL is down.
+	// TCP errors (errno 2003) may be network-related, not MySQL.
 	var sqlErr *sqlerror.SQLError
 	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
 		return false, nil
 	}
 
-	// Corroborate by inspecting the socket file. If the file is gone, MySQL
-	// is almost certainly dead. If something unexpected occupies the path
-	// (e.g. a regular file), we can't be sure what's going on.
-	params, pErr := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if pErr == nil && params.UnixSocket != "" {
-		fi, sErr := os.Stat(params.UnixSocket)
-		if sErr != nil && !os.IsNotExist(sErr) {
-			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot stat socket file %q: %v", params.UnixSocket, sErr)
-		} else if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
-			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%q exists but is not a socket file", params.UnixSocket)
-		}
+	// Corroborate: missing socket means MySQL is dead; non-socket file is ambiguous.
+	fi, sErr := os.Stat(params.UnixSocket)
+	if sErr != nil && !os.IsNotExist(sErr) {
+		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot stat socket file %q: %v", params.UnixSocket, sErr)
+	} else if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
+		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%q exists but is not a socket file", params.UnixSocket)
 	}
 
 	return true, nil
 }
 
-// isFileDescriptorExhaustedProbe attempts to dup a file descriptor to detect
-// whether the process has run out of fds. This is needed because the MySQL
-// connector wraps the underlying syscall error, losing the EMFILE/ENFILE errno.
+// isFileDescriptorExhaustedProbe uses Dup to detect EMFILE/ENFILE,
+// since the MySQL connector wraps the original syscall error.
 func isFileDescriptorExhaustedProbe() bool {
 	fd, err := syscall.Dup(0)
 	if err != nil {

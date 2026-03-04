@@ -471,20 +471,17 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
 		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero():
-			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
+			// No primary and no primary term start time recorded.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasShardWideAction = true
 		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero():
-			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
-			// the primary tablet was deleted.
+			// No primary tablet but shard has a primary term start time — primary was deleted.
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasShardWideAction = true
 		case a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount:
-			// The primary is reporting that semi-sync monitor is blocked on writes.
-			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
-			// There is some network diruption in progress. We should run an ERS.
+			// Semi-sync blocked despite enough ACK-capable replicas — likely network disruption.
 			a.Analysis = PrimarySemiSyncBlocked
 			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 			ca.hasShardWideAction = true

@@ -744,15 +744,8 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 	return keyspace, shard, err
 }
 
-// ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
-// pre-configured time has passed since they were last checked) or the ones whose tablet information was read
-// but not the mysql information. This could happen if the durability policy of the keyspace wasn't
-// available at the time it was discovered. This would lead to not having the record of the tablet in the
-// database_instance table.
-// We also check for the case where an attempt at instance checking has been made, that hasn't
-// resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
-// never returns. In such case we multiply interval by a factor, so as not to open too many connections on
-// the instance.
+// ReadOutdatedInstanceKeys returns keys for instances that are stale (not checked
+// recently), missing from database_instance, or stuck in an incomplete check.
 func ReadOutdatedInstanceKeys() ([]string, error) {
 	var res []string
 	query := `SELECT
