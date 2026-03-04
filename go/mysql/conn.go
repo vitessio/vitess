@@ -354,9 +354,7 @@ func (c *Conn) endWriterBuffering() error {
 		c.bufferedWriter = nil
 	}()
 
-	if c.flushTimer != nil {
-		c.flushTimer.Stop()
-	}
+	c.flushTimer.Stop()
 	return c.bufferedWriter.Flush()
 }
 
@@ -1068,14 +1066,6 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 	c.recycleReadPacket()
 	kontinue = true
 
-	c.startWriterBuffering()
-	defer func() {
-		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
-			kontinue = false
-		}
-	}()
-
 	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
 		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
@@ -1097,14 +1087,6 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
 	c.recycleReadPacket()
 	kontinue = true
-
-	c.startWriterBuffering()
-	defer func() {
-		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
-			kontinue = false
-		}
-	}()
 
 	logFile, logPos, position, nonBlock, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
