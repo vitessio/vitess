@@ -304,7 +304,7 @@ type Conn struct {
 	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
-	// wantZstdCompression is our "handshake intent" flag — we set it during negotiation
+	// wantZstdCompression is our "handshake intent" flag we set it during negotiation
 	// when both sides agree on zstd. After the handshake completes, initZstdCompression()
 	// checks this flag and creates the actual encoder/decoder (c.zstd). From that point on,
 	// all runtime code just checks c.zstd != nil.
