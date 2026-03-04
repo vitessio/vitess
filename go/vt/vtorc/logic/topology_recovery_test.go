@@ -19,11 +19,8 @@ package logic
 import (
 	"context"
 	"testing"
-<<<<<<< HEAD
-=======
 	"testing/synctest"
 	"time"
->>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -31,12 +28,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-<<<<<<< HEAD
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-=======
-	"vitess.io/vitess/go/vt/log"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
->>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -535,20 +529,18 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-
 }
 
 // TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
 func TestRestartDirectReplicasTimeout(t *testing.T) {
-	orcDB, fromCache, err := db.OpenVTOrcWithCache()
-	require.NoError(t, err)
-	if !fromCache {
-		t.Cleanup(func() {
-			_ = orcDB.Close()
-		})
-	}
+	// Ensure the configuration is marked as loaded so that the background
+	// initializeInstanceDao goroutine can proceed and initialize the
+	// forgetAliases cache (needed by inst.WriteInstance).
+	config.MarkConfigurationLoaded()
+	time.Sleep(100 * time.Millisecond)
 
-	inst.InitializeForgetAliasesCache()
+	orcDB, err := db.OpenVTOrc()
+	require.NoError(t, err)
 
 	synctest.Test(t, func(t *testing.T) {
 		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance"} {
@@ -594,7 +586,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
 
 		require.NoError(t, inst.WriteInstance(&inst.Instance{
-			InstanceAlias:    replicaTablet.Alias,
+			InstanceAlias:    topoproto.TabletAliasString(replicaTablet.Alias),
 			Hostname:         "replica",
 			Port:             3306,
 			SourceHost:       "primary",
@@ -637,7 +629,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 
 		analysisEntry := &inst.DetectionAnalysis{
 			Analysis:              inst.UnreachablePrimary,
-			AnalyzedInstanceAlias: primaryTablet.Alias,
+			AnalyzedInstanceAlias: topoproto.TabletAliasString(primaryTablet.Alias),
 			AnalyzedKeyspace:      keyspace,
 			AnalyzedShard:         shard,
 		}

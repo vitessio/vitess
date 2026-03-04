@@ -492,26 +492,16 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			logger.Infof("Restarting replication on direct replica %s", tabletAlias)
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Restarting replication on direct replica %s", tabletAlias))
 
-<<<<<<< HEAD
-			if err := tmc.StopReplication(ctx, tablet); err != nil {
-				logger.Errorf("Failed to stop replication on %s: %v", tabletAlias, err)
-=======
 			if err := stopReplication(ctx, tablet); err != nil {
-				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
->>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
+				logger.Errorf("Failed to stop replication on %s: %v", tabletAlias, err)
 				return err
 			}
 
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-<<<<<<< HEAD
-			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
-				logger.Errorf("Failed to start replication on %s: %v", tabletAlias, err)
-=======
 			if err := startReplication(ctx, tablet, semiSync); err != nil {
-				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
->>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
+				logger.Errorf("Failed to start replication on %s: %v", tabletAlias, err)
 				return err
 			}
 			logger.Infof("Successfully restarted replication on %s", tabletAlias)
