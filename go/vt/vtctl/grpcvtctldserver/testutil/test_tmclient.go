@@ -167,7 +167,7 @@ func init() {
 
 		tmclient.RegisterFlags(fs)
 	})
-	servenv.ParseFlagsForTests(fsName)
+	servenv.ParseFlags(fsName)
 }
 
 // TabletManagerClient implements the tmclient.TabletManagerClient interface
