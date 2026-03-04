@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/osutil"
 )
 
 func TestVtcomboArguments(t *testing.T) {
@@ -45,14 +47,11 @@ func TestVtcomboArguments(t *testing.T) {
 	})
 }
 
-func TestVtcomboRandomPort(t *testing.T) {
-	require.Empty(t, usedRandomPorts)
-	port := randomPort()
-	// 10000-30000 is the range the rand call in randomPorts() can return
-	require.GreaterOrEqual(t, port, 10000)
-	require.LessOrEqual(t, port, 30000)
-	require.Len(t, usedRandomPorts, 6)
-	require.Contains(t, usedRandomPorts, port)
-	require.NotEqual(t, port, randomPort())
-	require.Len(t, usedRandomPorts, 12)
+func TestGetPortReservation(t *testing.T) {
+	pr := osutil.GetPortReservation(6)
+	require.Greater(t, pr.Start, 0)
+	require.Less(t, pr.Start, 65536)
+	// Consecutive calls return different port ranges.
+	pr2 := osutil.GetPortReservation(6)
+	require.NotEqual(t, pr.Start, pr2.Start)
 }
