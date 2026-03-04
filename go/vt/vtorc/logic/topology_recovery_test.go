@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
