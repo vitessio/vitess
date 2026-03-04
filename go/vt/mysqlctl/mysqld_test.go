@@ -392,17 +392,13 @@ func TestMysqldIsLocalMySQLDown(t *testing.T) {
 	defer mysqld.Close()
 
 	t.Run("mysql is reachable", func(t *testing.T) {
-		down, err := mysqld.IsLocalMySQLDown(context.Background())
-		assert.NoError(t, err)
-		assert.False(t, down)
+		assert.False(t, mysqld.IsLocalMySQLDown(context.Background()))
 	})
 
 	t.Run("mysql is down", func(t *testing.T) {
 		// Close the fake MySQL server to simulate MySQL being down.
 		db.Close()
 
-		down, err := mysqld.IsLocalMySQLDown(context.Background())
-		assert.NoError(t, err)
-		assert.True(t, down)
+		assert.True(t, mysqld.IsLocalMySQLDown(context.Background()))
 	})
 }

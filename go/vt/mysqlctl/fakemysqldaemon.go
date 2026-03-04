@@ -242,8 +242,8 @@ func (fmd *FakeMysqlDaemon) IsMySQLLocal() bool {
 }
 
 // IsLocalMySQLDown is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) IsLocalMySQLDown(_ context.Context) (bool, error) {
-	return fmd.MysqlDown, nil
+func (fmd *FakeMysqlDaemon) IsLocalMySQLDown(_ context.Context) bool {
+	return fmd.MysqlDown
 }
 
 // Start is part of the MysqlDaemon interface.

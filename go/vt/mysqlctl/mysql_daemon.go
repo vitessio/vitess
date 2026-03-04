@@ -36,7 +36,7 @@ import (
 type MysqlDaemon interface {
 	// methods related to mysql running or not
 	IsMySQLLocal() bool
-	IsLocalMySQLDown(ctx context.Context) (bool, error)
+	IsLocalMySQLDown(ctx context.Context) bool
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error
 	RunMysqlUpgrade(ctx context.Context) error

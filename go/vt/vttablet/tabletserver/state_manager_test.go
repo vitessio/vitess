@@ -1011,8 +1011,8 @@ func (t *testMysqlDaemon) IsMySQLLocal() bool {
 	return t.mysqlLocal
 }
 
-func (t *testMysqlDaemon) IsLocalMySQLDown(_ context.Context) (bool, error) {
-	return t.mysqlDown, nil
+func (t *testMysqlDaemon) IsLocalMySQLDown(_ context.Context) bool {
+	return t.mysqlDown
 }
 
 type testTableGC struct {

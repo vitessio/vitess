@@ -347,47 +347,46 @@ func (mysqld *Mysqld) IsMySQLLocal() bool {
 }
 
 // IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
-// if MySQL appears to be down. A non-nil error indicates the state could
-// not be determined. Only meaningful when IsMySQLLocal returns true.
-func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
+// if MySQL appears to be down. Only meaningful when IsMySQLLocal returns true.
+func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	// Test if mysql is available. mysqld.GetDbaConnection()
 	// runs SELECT 1 on a new or pooled connection.
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
 		conn.Close()
-		return false, nil
+		return false
 	}
 
 	// "too many connections" proves MySQL is alive.
 	if sqlerror.IsTooManyConnectionsErr(err) {
-		return false, nil
+		return false
 	}
 
 	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
 	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
 	var sqlErr *sqlerror.SQLError
 	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
-		return false, nil
+		return false
 	}
 
 	// File-descriptor exhaustion is client-side; it is not a good signal of MySQL's state.
 	// It is unfortunately possible for file-descriptor exhaustion to be the cause of the
 	// CRConnectionError (errno 2002) error.
 	if isFileDescriptorExhaustedProbe() {
-		return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "file descriptor exhaustion detected, cannot determine MySQL state: %v", err)
+		return false
 	}
 
 	// Finally, validate the socket file exists and that it really is a socket.
 	params, _ := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
-		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot stat socket file %q: %v", params.UnixSocket, sErr)
+		return false
 	} else if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
-		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%q exists but is not a socket file", params.UnixSocket)
+		return false
 	}
 
 	// We conclude MySQL is down.
-	return true, nil
+	return true
 }
 
 // isFileDescriptorExhaustedProbe uses Dup to detect EMFILE/ENFILE,
