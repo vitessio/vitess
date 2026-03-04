@@ -111,7 +111,7 @@ func writeUint16(data []byte, pos int, value uint16) int {
 	return pos + 2
 }
 
-// writeUint24LE writes a 24-bit value in little-endian (3 bytes). Value must fit in 0..0xFFFFFF.
+// writeUint24LE packs a 24-bit value into 3 little-endian bytes. Caller must ensure value fits in 0..0xFFFFFF.
 func writeUint24LE(data []byte, pos int, value uint32) int {
 	data[pos] = byte(value)
 	data[pos+1] = byte(value >> 8)
@@ -202,7 +202,7 @@ func readUint16(data []byte, pos int) (uint16, int, bool) {
 	return binary.LittleEndian.Uint16(data[pos : pos+2]), pos + 2, true
 }
 
-// readUint24LE reads a 24-bit little-endian value (3 bytes).
+// readUint24LE is the inverse (reads 3 little-endian bytes into a uint32).
 func readUint24LE(data []byte, pos int) (uint32, int, bool) {
 	if pos+2 >= len(data) {
 		return 0, 0, false

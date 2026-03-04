@@ -81,8 +81,8 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
-	// mysqlEnableZstdCompression lets vtgate advertise and use zstd connection compression; when it's false (our default),
-	// we behave exactly like before: no extra capability bits and no compression on the wire.
+	// mysqlEnableZstdCompression controls whether vtgate advertises and uses zstd compression.
+	// When false (the default) we don't touch anything (no extra capability bits, no compression).
 	mysqlEnableZstdCompression = false
 )
 

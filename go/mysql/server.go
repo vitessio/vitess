@@ -76,7 +76,7 @@ var (
 		return connCount.Get() - totalUsers
 	})
 
-	// Compression metrics
+	// Compression metrics — we track active zstd connections and total accepted.
 	connCountZstd  = stats.NewGauge("MysqlServerConnCountZstd", "Active MySQL server connections using zstd compression")
 	connAcceptZstd = stats.NewCounter("MysqlServerConnAcceptedZstd", "Total MySQL server connections accepted with zstd compression")
 )
@@ -232,14 +232,11 @@ type Listener struct {
 	// parser to use for this listener, configured with the correct version.
 	truncateErrLen int
 
-	// EnableZstdCompression controls whether this listener advertises and uses zstd connection compression (MySQL 8.0+).
+	// EnableZstdCompression turns on zstd connection compression for this listener (MySQL 8.0+).
 	EnableZstdCompression bool
 }
 
-// NewFromListener creates a new mysql listener from an existing net.Listener.
-//
-// Deprecated: Use NewListenerWithConfig with a ListenerConfig struct instead.
-// This function has a long positional parameter list that is fragile and hard to read.
+// NewFromListener creates a new mysql listener from an existing net.Listener.Deprecated: prefer NewListenerWithConfig (this function has too many positional parameters and is easy to get wrong.)
 func NewFromListener(
 	l net.Listener,
 	authServer AuthServer,
@@ -276,8 +273,7 @@ func NewFromListener(
 
 // NewListener creates a new Listener.
 //
-// Deprecated: Use NewListenerWithConfig with a ListenerConfig struct instead.
-// This function has a long positional parameter list that is fragile and hard to read.
+// Deprecated: prefer NewListenerWithConfig, this function has too many positional parameters and is easy to get wrong.
 func NewListener(
 	protocol, address string,
 	authServer AuthServer,
@@ -570,7 +566,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		return
 	}
 
-	// Now that the handshake and auth OK are fully sent in cleartext, we can turn zstd on for this connection if it was negotiated.
+	// Now that the handshake and auth OK are sent in cleartext, we can flip zstd on
+	// for this connection if both sides agreed to it during negotiation.
 	if c.wantZstdCompression {
 		if err := c.initZstdCompression(); err != nil {
 			log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))
@@ -637,7 +634,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 	if enableTLS {
 		capabilities |= CapabilityClientSSL
 	}
-	// When EnableZstdCompression is false (default), we do not add any compression bits; backward compatible.
+	// When EnableZstdCompression is off (the default) we don't advertise any compression bits at all, so existing clients keep working exactly as before.
 	if c.listener.EnableZstdCompression {
 		capabilities |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm
 	}
@@ -854,7 +851,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		}
 	}
 
-	// Decode connection attributes sent by the client
+	// Decode connection attributes the client sent us.
 	if clientFlags&CapabilityClientConnAttr != 0 {
 		var err error
 		c.Attributes, pos, err = parseConnAttrs(data, pos)
@@ -863,13 +860,13 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		}
 	}
 
-	// zstd_compression_level (MySQL 8.0+): here we read a single byte that lives immediately after the connection attributes.
-	// The layout is documented here:
+	// zstd_compression_level (MySQL 8.0+): right after the connection attributes there's a
+	// single byte with the requested compression level. The wire layout is documented at:
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
-	// "if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM { int<1> zstd_compression_level }"
-	// We always consume this byte when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set so our parser stays in sync with the packet layout.
-	// Compression is only activated when the client sends BOTH CLIENT_COMPRESS and CLIENT_ZSTD_COMPRESSION_ALGORITHM,
-	// matching the MySQL 8.0 protocol requirement.
+	// if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM
+	// We always consume this byte when the flag is set so our parser stays in sync with the packet.
+	// Compression only kicks in when the client sends BOTH CLIENT_COMPRESS and
+	// CLIENT_ZSTD_COMPRESSION_ALGORITHM(that's the MySQL 8.0 protocol requirement).
 	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
 		level := zstdCompressionLevelDefault
 		if pos < len(data) {
@@ -877,7 +874,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 				level = clampZstdLevel(int(levelByte))
 			}
 		}
-		// Require both capability bits and listener opt-in before activating compression.
+		// Both capability bits present and the listener opted in (let's do it).
 		if l.EnableZstdCompression && clientFlags&CapabilityClientCompress != 0 {
 			c.zstdCompressionLevel = level
 			c.wantZstdCompression = true

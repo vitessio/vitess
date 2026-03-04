@@ -25,11 +25,11 @@ const (
 	// the server supports.
 	MaxPacketSize = (1 << 24) - 1
 
-	// zstdCompressionLevelMin and zstdCompressionLevelMax bound the zstd levels we accept on the wire (MySQL 8.0+).
-	// The protocol allows 1-22; anything outside that range gets clamped.
+	// zstdCompressionLevelMin/Max define the valid range we'll accept (1–22, matching MySQL 8.0+).
+	// Anything outside gets clamped by clampZstdLevel.
 	zstdCompressionLevelMin = 1
 	zstdCompressionLevelMax = 22
-	// zstdCompressionLevelDefault is what we fall back to when clients send 0 or omit the level.
+	// zstdCompressionLevelDefault is the fallback when clients send 0 or skip the level entirely.
 	zstdCompressionLevelDefault = 3
 
 	// protocolVersion is the current version of the protocol.
@@ -40,9 +40,9 @@ const (
 	MaxIdentifierLength = 64
 )
 
-// clampZstdLevel normalizes a zstd compression level to the valid range [1, 22].
-// Levels below the minimum (including 0, which means "unset") are replaced with the default (3).
-// Levels above the maximum are capped at 22.
+// clampZstdLevel takes a raw zstd level and pins it to the valid 1–22 range.
+// Zero (or anything below 1) means "unset", so we fall back to the default (3).
+// Anything above 22 gets capped.
 func clampZstdLevel(level int) int {
 	if level < zstdCompressionLevelMin {
 		return zstdCompressionLevelDefault
@@ -100,10 +100,9 @@ const (
 	// CLIENT_NO_SCHEMA 1 << 4
 	// Do not permit database.table.column. We do permit it.
 
-	// CapabilityClientCompress is CLIENT_COMPRESS.
-	// This enables the MySQL compressed-packet protocol (7-byte frame headers).
-	// It must be combined with CapabilityClientZstdCompressionAlgorithm to negotiate zstd;
-	// bit 5 activates the compressed framing, bit 26 selects the zstd algorithm.
+	// CapabilityClientCompress is CLIENT_COMPRESS — it turns on the compressed-packet
+	// protocol (7-byte frame headers). We need this *plus* bit 26 to get zstd; bit 5
+	// enables the framing and bit 26 picks the algorithm.
 	CapabilityClientCompress = 1 << 5
 
 	// CLIENT_ODBC 1 << 6
@@ -177,7 +176,7 @@ const (
 	CapabilityClientDeprecateEOF = 1 << 24
 
 	// CapabilityClientZstdCompressionAlgorithm is CLIENT_ZSTD_COMPRESSION_ALGORITHM (MySQL 8.0.18+).
-	// Zstd compression method for the compression protocol.
+	// Tells the other side we want zstd as the compression algorithm.
 	CapabilityClientZstdCompressionAlgorithm = 1 << 26
 )
 

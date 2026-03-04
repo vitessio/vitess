@@ -1468,7 +1468,7 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string, extraArgs
 	return output, nil
 }
 
-// runMysqlWithErrContext is like runMysqlWithErr but uses ctx to limit execution time (e.g. for timeout).
+// runMysqlWithErrContext is the same as runMysqlWithErr but takes a context so we can set a timeout.
 func runMysqlWithErrContext(t *testing.T, ctx context.Context, params *ConnParams, command string, extraArgs ...string) (string, error) {
 	dir, err := venv.VtMysqlRoot()
 	require.NoError(t, err)
@@ -1902,19 +1902,18 @@ func TestHandshakeCapabilitiesInvalidFlag(t *testing.T) {
 	assert.Zero(t, caps&CapabilityClientZstdCompressionAlgorithm, "enableZstdCompression=false must not advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM")
 }
 
-// zstdConnSnapshot captures the compression-related Conn fields we want to
-// assert on. It is populated inside ConnectionReady (on the server goroutine)
-// and sent to the test goroutine via a channel, so the test never reads the
-// Conn directly — eliminating the race with the server's deferred Close().
+// zstdConnSnapshot grabs the compression fields from a Conn so we can assert
+// on them from the test goroutine. We populate it inside ConnectionReady (which
+// runs on the server goroutine) and ship it over a channel — that way the test
+// never touches the Conn directly, avoiding the race with deferred Close().
 type zstdConnSnapshot struct {
 	zstdActive           bool // c.zstd != nil
 	zstdCompressionLevel int
 }
 
-// zstdTestHandler wraps testHandler and captures a snapshot of the server-side
-// Conn's compression state inside ConnectionReady, then sends it to the test
-// goroutine via a typed channel. This avoids any cross-goroutine access to the
-// Conn object.
+// zstdTestHandler wraps testHandler and snapshots the server-side Conn's
+// compression state in ConnectionReady, then sends it over a channel so the
+// test goroutine can read it without any data races.
 type zstdTestHandler struct {
 	testHandler
 	ready chan zstdConnSnapshot
@@ -2065,7 +2064,7 @@ func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
 
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err)
-	// Last argument false => EnableZstdCompression disabled on the listener.
+	// EnableZstdCompression is off on the listener, so zstd shouldn't kick in.
 	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, false)
 	require.NoError(t, err)
 	host, port := getHostPort(t, l.Addr())
@@ -2084,7 +2083,7 @@ func TestHandshakeZstdServerDisabledClientRequestsCompression(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Here the server should just ignore the client's request for zstd, since it never advertised zstd in its greeting.
+	// The server never advertised zstd, so the client's request should have been quietly ignored.
 	snap := <-th.ready
 	assert.False(t, snap.zstdActive, "server must not enable zstd when listener has EnableZstdCompression=false")
 	assert.Nil(t, conn.zstd, "client must not enable zstd when server does not advertise zstd capabilities")
