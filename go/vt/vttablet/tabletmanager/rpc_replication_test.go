@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -325,4 +326,66 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
 	require.False(t, isReadOnly)
+}
+
+func TestHandleRelayLogError(t *testing.T) {
+	testCases := []struct {
+		name          string
+		inputErr      error
+		shouldRestart bool
+	}{
+		{
+			name:          "relay log info error",
+			inputErr:      errors.New(relayLogInfoInitializationError),
+			shouldRestart: true,
+		},
+		{
+			name:          "master info error",
+			inputErr:      errors.New(masterInfoInitializationError),
+			shouldRestart: true,
+		},
+		{
+			name:          "applier metadata error",
+			inputErr:      errors.New(applierMetadataInitializationError),
+			shouldRestart: true,
+		},
+		{
+			name:          "unrelated error",
+			inputErr:      errors.New("unexpected replication failure"),
+			shouldRestart: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			if tc.shouldRestart {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+					"STOP REPLICA",
+					"RESET REPLICA",
+					"START REPLICA",
+				}
+			}
+
+			tablet := newTestTablet(t, 100, "ks", "0", nil)
+			tm := &TabletManager{
+				MysqlDaemon: fakeMysqlDaemon,
+				tabletAlias: tablet.Alias,
+				tmState: &tmState{
+					displayState: displayState{
+						tablet: tablet,
+					},
+				},
+			}
+
+			err := tm.handleRelayLogError(context.Background(), tc.inputErr)
+			if tc.shouldRestart {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.inputErr)
+			}
+
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
 }

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -1237,6 +1238,35 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	return nil
 }
 
+// Known MySQL replication metadata initialization failures that can be repaired
+// by restarting replication.
+const (
+	relayLogInfoInitializationError    = "Replica failed to initialize relay log info structure from the repository"
+	masterInfoInitializationError      = "Could not initialize master info structure"
+	applierMetadataInitializationError = "Replica failed to initialize applier metadata structure from the repository"
+)
+
+// recoverableReplicationInitializationErrors enumerates the error substrings we
+// treat as recoverable through RestartReplication.
+var recoverableReplicationInitializationErrors = []string{
+	relayLogInfoInitializationError,
+	masterInfoInitializationError,
+	applierMetadataInitializationError,
+}
+
+// isRecoverableReplicationInitializationError returns true if err contains one
+// of the known recoverable metadata initialization failures.
+func isRecoverableReplicationInitializationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMessage := err.Error()
+	return slices.ContainsFunc(recoverableReplicationInitializationErrors, func(s string) bool {
+		return strings.Contains(errMessage, s)
+	})
+}
+
 // handleRelayLogError resets replication of the instance.
 // This is required because sometimes MySQL gets stuck due to improper initialization of
 // master info structure or related failures and throws errors like
@@ -1247,8 +1277,7 @@ func (tm *TabletManager) handleRelayLogError(ctx context.Context, err error) err
 	// Replica failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START REPLICA
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
-	if strings.Contains(err.Error(), "Replica failed to initialize relay log info structure from the repository") ||
-		strings.Contains(err.Error(), "Could not initialize master info structure") {
+	if isRecoverableReplicationInitializationError(err) {
 		// Stop, reset and start replication again to resolve this error
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
