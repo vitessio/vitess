@@ -17,7 +17,6 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/dave/jennifer v1.7.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-sql-driver/mysql v1.9.3
@@ -35,7 +34,6 @@ require (
 	github.com/hashicorp/consul/api v1.33.3
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.2 // indirect
-	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/klauspost/compress v1.18.4
 	github.com/klauspost/pgzip v1.2.6
 	github.com/minio/minio-go v6.0.14+incompatible
@@ -97,6 +95,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.1
 	github.com/aws/smithy-go v1.24.1
 	github.com/bndr/gotabulate v1.1.2
+	github.com/brianvoe/gofakeit/v7 v7.14.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gammazero/deque v1.2.1
 	github.com/google/go-containerregistry v0.21.1
