@@ -897,8 +897,13 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 
 // TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
 func TestRestartDirectReplicasTimeout(t *testing.T) {
-	orcDB, err := db.OpenVTOrc()
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
 
 	inst.InitializeForgetAliasesCache()
 
