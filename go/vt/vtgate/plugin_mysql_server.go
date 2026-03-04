@@ -496,9 +496,12 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
 // It handles binlog dump requests by forwarding them to a targeted vttablet.
 // The target tablet is determined from the session's TargetString, which can be set via:
-// 1. A USE statement (e.g., "USE `keyspace:shard@type|alias`"), or
-// 2. The username during connection (format: "user|keyspace:shard@type|alias")
-// The target format is "keyspace:shard@tablet_type|tablet_alias" (e.g., "commerce:-80@replica|zone1-100").
+// 1. A USE statement (e.g., "USE `keyspace:shard@type`"), or
+// 2. The username during connection (format: "user|keyspace:shard@type")
+// Supported target formats:
+//   - "keyspace:shard" (e.g., "commerce:0") — routes via health check, defaults to primary
+//   - "keyspace:shard@type" (e.g., "commerce:-80@primary") — routes via health check
+//   - "keyspace:shard@type|alias" (e.g., "commerce:-80@primary|zone1-100") — routes to specific tablet
 func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	// Check for shutdown before starting a long-lived stream
 	if c.IsShuttingDown() {
@@ -548,7 +551,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	targetString := session.TargetString
 
 	if targetString == "" {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no target specified for binlog dump; use 'USE keyspace:shard@type|alias' or connect with username 'user|keyspace:shard@type|alias'")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no target specified for binlog dump; use 'USE keyspace:shard@type' or connect with username 'user|keyspace:shard@type'")
 	}
 
 	// Parse the target string to extract the tablet alias
@@ -556,13 +559,14 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to parse target: %s", targetString)
 	}
-	if tabletAlias == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "target must include tablet alias (e.g., 'keyspace:shard@type|zone1-100'): %s", targetString)
-	}
 
 	// Build the target for the tablet connection
 	var target *querypb.Target
 	if keyspace != "" {
+		// Default to PRIMARY for binlog dump when no tablet type is specified
+		if tabletType == topodatapb.TabletType_UNKNOWN {
+			tabletType = topodatapb.TabletType_PRIMARY
+		}
 		target = &querypb.Target{
 			Keyspace:   keyspace,
 			TabletType: tabletType,
@@ -577,10 +581,9 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		}
 	}
 
-	// Get the query service connection to the tablet
-	qs, err := vh.vtg.Gateway().QueryServiceByAlias(ctx, tabletAlias, target)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to get connection to tablet %s", topoproto.TabletAliasString(tabletAlias))
+	// Validate that at minimum keyspace and shard are specified
+	if target == nil || target.Keyspace == "" || target.Shard == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
 	// Build the BinlogDumpGTID request
@@ -588,12 +591,10 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		BinlogFilename: logFile,
 		BinlogPosition: logPos,
 		NonBlock:       nonBlock,
+		Target:         target,
 	}
 	if gtidSet != nil {
 		request.GtidSet = gtidSet.String()
-	}
-	if target != nil {
-		request.Target = target
 	}
 
 	// TODO: Add support for replication session variables (for Fivetran MySQL adapter compatibility):
@@ -606,8 +607,24 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// See: https://dev.mysql.com/doc/refman/8.0/en/replication-options-replica.html
 
 	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	if tabletAlias != nil {
+		// Route to a specific tablet by alias
+		qs, err := vh.vtg.Gateway().QueryServiceByAlias(ctx, tabletAlias, target)
+		if err != nil {
+			return vh.streamBinlogDumpResponse(c, "ComBinlogDumpGTID", &state, func() error {
+				return vterrors.Wrapf(err, "failed to get connection to tablet %s", topoproto.TabletAliasString(tabletAlias))
+			})
+		}
+		return vh.streamBinlogDumpResponse(c, "ComBinlogDumpGTID", &state, func() error {
+			return qs.BinlogDumpGTID(ctx, request, callback)
+		})
+	}
+
+	// Route via health check — gateway selects a healthy tablet for the target
 	return vh.streamBinlogDumpResponse(c, "ComBinlogDumpGTID", &state, func() error {
-		return qs.BinlogDumpGTID(ctx, request, vh.binlogStreamCallback(c, &state))
+		return vh.vtg.Gateway().BinlogDumpGTID(ctx, request, callback)
 	})
 }
 

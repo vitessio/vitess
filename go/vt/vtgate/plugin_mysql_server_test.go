@@ -998,12 +998,14 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("target without tablet alias", func(t *testing.T) {
+	t.Run("target without tablet alias routes via gateway", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "target must include tablet alias")
+		require.NoError(t, err)
 	})
 
 	t.Run("binlog dump with error from tablet", func(t *testing.T) {

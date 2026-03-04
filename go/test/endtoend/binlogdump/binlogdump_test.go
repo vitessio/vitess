@@ -986,3 +986,101 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 	assert.Greater(t, emptyCount, currentCount,
 		"Empty GTID dump should receive more packets than current-position dump")
 }
+
+// TestBinlogDumpGTID_ShardTargeting tests that binlog events are streamed when using shard-level
+// targeting (e.g., "commerce:0@primary") without specifying a tablet alias. VTGate should
+// automatically select a healthy tablet for the shard via health check.
+func TestBinlogDumpGTID_ShardTargeting(t *testing.T) {
+	ctx := t.Context()
+
+	// Connect to vtgate for binlog streaming using shard-level targeting (no tablet alias)
+	targetString := keyspaceName + ":0@primary"
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	t.Logf("Connecting with shard-level target: %s", targetString)
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Start binlog dump with no initial GTID - will start from current position
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
+	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP_GTID with shard-level target")
+
+	// Channel to receive packets and errors
+	packetCh := make(chan []byte, 10)
+	errCh := make(chan error, 1)
+
+	// Start reading packets in a goroutine
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		defer close(packetCh)
+		for {
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case packetCh <- data:
+			default:
+			}
+		}
+	})
+
+	// Give the binlog dump a moment to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Insert data to generate binlog packets
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	t.Log("Inserting test data to generate binlog packets")
+	for i := range 3 {
+		_, err := dataConn.ExecuteFetch(fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('shard_target_test_%d')", i), 1, false)
+		require.NoError(t, err)
+	}
+
+	// Wait for at least one packet or timeout
+	receivedPackets := 0
+	timeout := time.After(5 * time.Second)
+
+packetLoop:
+	for {
+		select {
+		case data, ok := <-packetCh:
+			if !ok {
+				t.Logf("Packet channel closed after receiving %d packets", receivedPackets)
+				break packetLoop
+			}
+			receivedPackets++
+			if len(data) > 0 {
+				t.Logf("Received packet %d: first byte=0x%02x, length=%d", receivedPackets, data[0], len(data))
+			}
+			if receivedPackets >= 3 {
+				t.Logf("Received %d packets, test passed", receivedPackets)
+				break packetLoop
+			}
+		case err := <-errCh:
+			t.Logf("Got error from packet reader: %v", err)
+			break packetLoop
+		case <-timeout:
+			t.Logf("Timeout after receiving %d packets", receivedPackets)
+			break packetLoop
+		}
+	}
+
+	// Close the connection to stop the reader goroutine
+	binlogConn.Close()
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet with shard-level targeting")
+}
