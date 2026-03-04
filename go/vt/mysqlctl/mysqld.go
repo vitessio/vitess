@@ -340,16 +340,16 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	return err
 }
 
-// IsMySQLDown probes MySQL by attempting a DBA connection and returns true
-// if MySQL appears to be down. A non-nil error indicates the state could
-// not be determined.
-func (mysqld *Mysqld) IsMySQLDown(ctx context.Context) (bool, error) {
-	// This check only works with unix socket connections.
-	params, pErr := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if pErr != nil || params.UnixSocket == "" {
-		return false, nil
-	}
+// IsMySQLLocal returns true if the DBA connection uses a local unix socket.
+func (mysqld *Mysqld) IsMySQLLocal() bool {
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	return err == nil && params.UnixSocket != ""
+}
 
+// IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
+// if MySQL appears to be down. A non-nil error indicates the state could
+// not be determined. Only meaningful when IsMySQLLocal returns true.
+func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
 		conn.Close()
@@ -374,6 +374,7 @@ func (mysqld *Mysqld) IsMySQLDown(ctx context.Context) (bool, error) {
 	}
 
 	// Corroborate: missing socket means MySQL is dead; non-socket file is ambiguous.
+	params, _ := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
 		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot stat socket file %q: %v", params.UnixSocket, sErr)

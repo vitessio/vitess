@@ -35,7 +35,8 @@ import (
 // MysqlDaemon is the interface we use for abstracting Mysqld.
 type MysqlDaemon interface {
 	// methods related to mysql running or not
-	IsMySQLDown(ctx context.Context) (bool, error)
+	IsMySQLLocal() bool
+	IsLocalMySQLDown(ctx context.Context) (bool, error)
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error
 	RunMysqlUpgrade(ctx context.Context) error

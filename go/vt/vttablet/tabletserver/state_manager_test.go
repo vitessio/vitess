@@ -1003,10 +1003,15 @@ func (te *testLagThrottler) Close() {
 }
 
 type testMysqlDaemon struct {
-	mysqlDown bool
+	mysqlLocal bool
+	mysqlDown  bool
 }
 
-func (t *testMysqlDaemon) IsMySQLDown(_ context.Context) (bool, error) {
+func (t *testMysqlDaemon) IsMySQLLocal() bool {
+	return t.mysqlLocal
+}
+
+func (t *testMysqlDaemon) IsLocalMySQLDown(_ context.Context) (bool, error) {
 	return t.mysqlDown, nil
 }
 

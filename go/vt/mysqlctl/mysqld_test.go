@@ -357,26 +357,58 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	assert.Contains(t, env, "TZ=Europe/Berlin")
 }
 
-func TestFakeMysqlDaemonIsMySQLDown(t *testing.T) {
+func TestFakeMysqlDaemonIsMySQLLocal(t *testing.T) {
+	fmd := NewFakeMysqlDaemon(nil)
+	defer fmd.Close()
+
+	assert.False(t, fmd.IsMySQLLocal())
+	fmd.MysqlLocal = true
+	assert.True(t, fmd.IsMySQLLocal())
+}
+
+func TestFakeMysqlDaemonIsLocalMySQLDown(t *testing.T) {
 	fmd := NewFakeMysqlDaemon(nil)
 	defer fmd.Close()
 
 	t.Run("MysqlDown false", func(t *testing.T) {
 		fmd.MysqlDown = false
-		down, err := fmd.IsMySQLDown(context.Background())
+		down, err := fmd.IsLocalMySQLDown(context.Background())
 		assert.NoError(t, err)
 		assert.False(t, down)
 	})
 
 	t.Run("MysqlDown true", func(t *testing.T) {
 		fmd.MysqlDown = true
-		down, err := fmd.IsMySQLDown(context.Background())
+		down, err := fmd.IsLocalMySQLDown(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, down)
 	})
 }
 
-func TestMysqldIsMySQLDown(t *testing.T) {
+func TestMysqldIsMySQLLocal(t *testing.T) {
+	t.Run("unix socket", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		cp := *db.ConnParams()
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		mysqld := NewMysqld(dbc)
+		defer mysqld.Close()
+		assert.True(t, mysqld.IsMySQLLocal())
+	})
+
+	t.Run("tcp", func(t *testing.T) {
+		cp := mysql.ConnParams{
+			Host: "127.0.0.1",
+			Port: 1,
+		}
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+		mysqld := NewMysqld(dbc)
+		defer mysqld.Close()
+		assert.False(t, mysqld.IsMySQLLocal())
+	})
+}
+
+func TestMysqldIsLocalMySQLDown(t *testing.T) {
 	db := fakesqldb.New(t)
 
 	params := db.ConnParams()
@@ -387,7 +419,7 @@ func TestMysqldIsMySQLDown(t *testing.T) {
 	defer mysqld.Close()
 
 	t.Run("mysql is reachable", func(t *testing.T) {
-		down, err := mysqld.IsMySQLDown(context.Background())
+		down, err := mysqld.IsLocalMySQLDown(context.Background())
 		assert.NoError(t, err)
 		assert.False(t, down)
 	})
@@ -396,23 +428,8 @@ func TestMysqldIsMySQLDown(t *testing.T) {
 		// Close the fake MySQL server to simulate MySQL being down.
 		db.Close()
 
-		down, err := mysqld.IsMySQLDown(context.Background())
+		down, err := mysqld.IsLocalMySQLDown(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, down)
-	})
-
-	t.Run("non-unix-socket returns early", func(t *testing.T) {
-		cp := mysql.ConnParams{
-			Host: "127.0.0.1",
-			Port: 1,
-		}
-		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
-		tcpMysqld := NewMysqld(dbc)
-		defer tcpMysqld.Close()
-
-		// Non-unix-socket connections should return early.
-		down, err := tcpMysqld.IsMySQLDown(context.Background())
-		assert.NoError(t, err)
-		assert.False(t, down)
 	})
 }
