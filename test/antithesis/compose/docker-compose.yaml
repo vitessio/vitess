@@ -2,11 +2,16 @@ services:
   antithesis-client:
     image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest
     depends_on:
-      - vtorc
-      - vtgate
-      - schemaload_test_keyspace
-      - set_keyspace_durability_policy
-      - schemaload_lookup_keyspace
+      vtorc:
+        condition: service_started
+      vtgate:
+        condition: service_started
+      schemaload_test_keyspace:
+        condition: service_completed_successfully
+      set_keyspace_durability_policy:
+        condition: service_completed_successfully
+      schemaload_lookup_keyspace:
+        condition: service_completed_successfully
     environment:
       - VTORC_ADDR=http://vtorc:8080
       - VTGATE_ADDR=http://vtgate:8080
