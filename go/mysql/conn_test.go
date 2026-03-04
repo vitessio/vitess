@@ -1237,3 +1237,92 @@ func (t testRun) Env() *vtenv.Environment {
 }
 
 var _ Handler = (*testRun)(nil)
+
+func TestWritePacketHeader(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	t.Run("Single chunk", func(t *testing.T) {
+		payload := []byte{0x00, 0x01, 0x02, 0x03}
+
+		err := cConn.WritePacketHeader(len(payload))
+		require.NoError(t, err)
+		err = cConn.WritePacketRaw(payload)
+		require.NoError(t, err)
+
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, payload, data)
+	})
+
+	sConn.sequence = 0
+	cConn.sequence = 0
+
+	t.Run("Multiple chunks", func(t *testing.T) {
+		chunks := [][]byte{
+			{0x00, 0x01},
+			{0x02, 0x03},
+			{0x04, 0x05, 0x06},
+		}
+
+		totalLen := 0
+		for _, c := range chunks {
+			totalLen += len(c)
+		}
+
+		err := cConn.WritePacketHeader(totalLen)
+		require.NoError(t, err)
+		for _, chunk := range chunks {
+			err = cConn.WritePacketRaw(chunk)
+			require.NoError(t, err)
+		}
+
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}, data)
+	})
+
+	sConn.sequence = 0
+	cConn.sequence = 0
+
+	t.Run("Interleaved with WritePacketDirect", func(t *testing.T) {
+		// Write packet 0 via WritePacketDirect
+		err := cConn.WritePacketDirect([]byte{0xAA})
+		require.NoError(t, err)
+		assert.Equal(t, uint8(1), cConn.sequence)
+
+		// Write packet 1 via WritePacketHeader + WritePacketRaw
+		err = cConn.WritePacketHeader(2)
+		require.NoError(t, err)
+		assert.Equal(t, uint8(2), cConn.sequence)
+		err = cConn.WritePacketRaw([]byte{0xBB})
+		require.NoError(t, err)
+		err = cConn.WritePacketRaw([]byte{0xCC})
+		require.NoError(t, err)
+
+		// Write packet 2 via WritePacketDirect
+		err = cConn.WritePacketDirect([]byte{0xDD})
+		require.NoError(t, err)
+		assert.Equal(t, uint8(3), cConn.sequence)
+
+		// Read all three — sequence validation happens inside ReadPacket
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xAA}, data)
+
+		data, err = sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xBB, 0xCC}, data)
+
+		data, err = sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xDD}, data)
+
+		assert.Equal(t, uint8(3), sConn.sequence)
+	})
+}

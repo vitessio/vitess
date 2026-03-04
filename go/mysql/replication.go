@@ -205,58 +205,6 @@ func (c *Conn) WritePacketDirect(payload []byte) error {
 	return nil
 }
 
-// WritePacketChunks writes multiple byte chunks as a single MySQL packet.
-// This avoids allocating a contiguous buffer when a packet's payload arrives
-// in separate gRPC response slices. The caller owns the chunks slice and may
-// reuse it after the call returns.
-func (c *Conn) WritePacketChunks(chunks [][]byte) error {
-	var length int
-	for _, chunk := range chunks {
-		length += len(chunk)
-	}
-
-	var w io.Writer
-	c.bufMu.Lock()
-	if c.bufferedWriter != nil {
-		w = c.bufferedWriter
-		defer func() {
-			c.startFlushTimer()
-			c.bufMu.Unlock()
-		}()
-	} else {
-		c.bufMu.Unlock()
-		w = c.conn
-	}
-
-	// Build header: 3 bytes length + 1 byte sequence
-	var header [4]byte
-	header[0] = byte(length)
-	header[1] = byte(length >> 8)
-	header[2] = byte(length >> 16)
-	header[3] = c.sequence
-
-	// Write header
-	if n, err := w.Write(header[:]); err != nil {
-		return vterrors.Wrapf(err, "Write(header) failed")
-	} else if n != 4 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(header) short write: %v < 4", n)
-	}
-
-	// Write each chunk
-	for _, chunk := range chunks {
-		if len(chunk) > 0 {
-			if n, err := w.Write(chunk); err != nil {
-				return vterrors.Wrapf(err, "Write(chunk) failed")
-			} else if n != len(chunk) {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(chunk) short write: %v < %v", n, len(chunk))
-			}
-		}
-	}
-
-	c.sequence++
-	return nil
-}
-
 type SemiSyncType int8
 
 const (

@@ -330,7 +330,7 @@ func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) erro
 }
 
 // startWriterBuffering starts using buffered writes. This should
-// be terminated by a call to endWriteBuffering.
+// be terminated by a call to endWriterBuffering.
 func (c *Conn) startWriterBuffering() {
 	c.bufMu.Lock()
 	defer c.bufMu.Unlock()
@@ -339,7 +339,7 @@ func (c *Conn) startWriterBuffering() {
 	c.bufferedWriter.Reset(c.conn)
 }
 
-// endWriterBuffering must be called to terminate startWriteBuffering.
+// endWriterBuffering must be called to terminate startWriterBuffering.
 func (c *Conn) endWriterBuffering() error {
 	c.bufMu.Lock()
 	defer c.bufMu.Unlock()
@@ -356,6 +356,80 @@ func (c *Conn) endWriterBuffering() error {
 
 	c.flushTimer.Stop()
 	return c.bufferedWriter.Flush()
+}
+
+// FlushWriteBuffer flushes the buffered writer without tearing down buffering.
+// This is a no-op if buffering is not active.
+func (c *Conn) FlushWriteBuffer() error {
+	c.bufMu.Lock()
+	defer c.bufMu.Unlock()
+
+	if c.bufferedWriter == nil {
+		return nil
+	}
+
+	c.flushTimer.Stop()
+	return c.bufferedWriter.Flush()
+}
+
+// WritePacketHeader writes the 4-byte MySQL packet header for a packet
+// whose payload will be written incrementally via WritePacketRaw calls.
+func (c *Conn) WritePacketHeader(payloadLength int) error {
+	var w io.Writer
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
+	}
+
+	var header [4]byte
+	header[0] = byte(payloadLength)
+	header[1] = byte(payloadLength >> 8)
+	header[2] = byte(payloadLength >> 16)
+	header[3] = c.sequence
+
+	if n, err := w.Write(header[:]); err != nil {
+		return vterrors.Wrapf(err, "Write(header) failed")
+	} else if n != 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(header) short write: %v < 4", n)
+	}
+
+	c.sequence++
+	return nil
+}
+
+// WritePacketRaw writes raw bytes to the connection without any framing.
+// Used for streaming packet payloads after WritePacketHeader.
+func (c *Conn) WritePacketRaw(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	var w io.Writer
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
+	}
+
+	if n, err := w.Write(data); err != nil {
+		return vterrors.Wrapf(err, "Write(raw) failed")
+	} else if n != len(data) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(raw) short write: %v < %v", n, len(data))
+	}
+	return nil
 }
 
 func (c *Conn) returnReader() {
@@ -1096,6 +1170,13 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 		return false
 	}
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			kontinue = false
+		}
+	}()
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, nonBlock); err != nil {
 		log.Error(fmt.Sprintf("conn %v: ComBinlogDumpGTID failed: %v", c.ID(), err))
 		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {

@@ -621,15 +621,15 @@ type binlogStreamState struct {
 }
 
 // binlogStreamCallback returns a streaming callback for binlog dump responses that handles
-// chunk reassembly. The tablet-side streamBinlogPackets packs data into 256KB chunks, so
-// individual MySQL packets may span multiple gRPC responses. This callback reassembles
-// spanning packets before writing them to the client connection.
+// packet spanning. The tablet-side streamBinlogPackets packs data into 256KB chunks, so
+// individual MySQL packets may span multiple gRPC responses. This callback writes packet
+// data directly to the client connection as it arrives, without buffering entire packets.
 func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStreamState) func(*binlogdatapb.BinlogDumpResponse) error {
-	// Spanning-packet state: collect sub-slice references instead of
-	// allocating a contiguous buffer and copying into it.
-	chunks := make([][]byte, 0, 8)
+	// Spanning-packet state: when a MySQL packet spans multiple gRPC
+	// responses, we stream the payload directly to the connection as
+	// each chunk arrives. Only packetLength and written are needed.
 	var packetLength int // total expected payload length of the spanning packet
-	var chunksLength int // bytes collected so far across chunks
+	var written int      // bytes written so far for the spanning packet
 
 	return func(response *binlogdatapb.BinlogDumpResponse) error {
 		state.streamingStarted = true
@@ -639,30 +639,23 @@ func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStream
 
 		if packetLength > 0 {
 			// We're in the middle of streaming a packet that spans multiple responses.
-			remaining := packetLength - chunksLength
+			remaining := packetLength - written
 			if len(buf) < remaining {
 				// This response doesn't have enough data to complete the packet.
-				chunks = append(chunks, buf)
-				chunksLength += len(buf)
-				return nil
+				if err := c.WritePacketRaw(buf); err != nil {
+					return err
+				}
+				written += len(buf)
+				return c.FlushWriteBuffer()
 			}
 
 			// This response completes the spanning packet.
-			chunks = append(chunks, buf[:remaining])
-			bufOffset = remaining
-
-			if err := c.WritePacketChunks(chunks); err != nil {
+			if err := c.WritePacketRaw(buf[:remaining]); err != nil {
 				return err
 			}
-
-			// Reset spanning state.
-			chunks = chunks[:0]
+			bufOffset = remaining
 			packetLength = 0
-			chunksLength = 0
-
-			if bufOffset == len(buf) {
-				return nil
-			}
+			written = 0
 		}
 
 		for len(buf)-bufOffset > 0 {
@@ -684,15 +677,20 @@ func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStream
 				}
 				bufOffset += pktLen
 			} else {
-				// Packet spans multiple responses — start collecting chunks.
+				// Packet spans multiple responses — write header and first chunk directly.
 				packetLength = pktLen
-				chunks = append(chunks, buf[bufOffset:])
-				chunksLength = len(buf[bufOffset:])
+				if err := c.WritePacketHeader(pktLen); err != nil {
+					return err
+				}
+				if err := c.WritePacketRaw(buf[bufOffset:]); err != nil {
+					return err
+				}
+				written = len(buf) - bufOffset
 				bufOffset = len(buf)
 			}
 		}
 
-		return nil
+		return c.FlushWriteBuffer()
 	}
 }
 
