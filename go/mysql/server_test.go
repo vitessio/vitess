@@ -1331,6 +1331,7 @@ func TestErrorCodes(t *testing.T) {
 
 	client, err := Connect(ctx, params)
 	require.NoError(t, err)
+	defer client.Close()
 
 	// Test that the right mysql errno/sqlstate are returned for various
 	// internal vitess errors

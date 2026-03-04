@@ -92,6 +92,13 @@ type BinlogEvent interface {
 	IsPartialUpdateRows() bool
 	// IsDeleteRows returns true if this is a DELETE_ROWS_EVENT.
 	IsDeleteRows() bool
+	// IsRowsQuery returns true if this is a ROWS_QUERY_LOG_EVENT,
+	// which contains the original SQL query for the following row events.
+	// Present when MySQL's binlog_rows_query_log_events is ON.
+	IsRowsQuery() bool
+	// RowsQuery returns the SQL query from a ROWS_QUERY_LOG_EVENT.
+	// Only valid if IsRowsQuery() returns true.
+	RowsQuery(BinlogFormat) (string, error)
 
 	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool

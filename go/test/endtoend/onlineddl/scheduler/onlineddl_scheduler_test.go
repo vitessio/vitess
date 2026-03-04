@@ -572,6 +572,7 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
 				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
+				assert.Equal(t, int64(0), row.AsInt64("eta_seconds", -1))
 			}
 		})
 
@@ -623,6 +624,7 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
 				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
+				assert.Equal(t, int64(0), row.AsInt64("eta_seconds", -1))
 			}
 		})
 

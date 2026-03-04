@@ -2239,6 +2239,10 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Engines:
 		return EnginesStr
+	case Errors:
+		return ErrorsStr
+	case Events:
+		return EventsStr
 	case FunctionC:
 		return FunctionCStr
 	case Function:
@@ -2253,10 +2257,14 @@ func (ty ShowCommandType) ToString() string {
 		return PluginsStr
 	case Privilege:
 		return PrivilegeStr
+	case ProcessList:
+		return ProcessListStr
 	case ProcedureC:
 		return ProcedureCStr
 	case Procedure:
 		return ProcedureStr
+	case Profiles:
+		return ProfilesStr
 	case StatusGlobal:
 		return StatusGlobalStr
 	case StatusSession:
@@ -2298,6 +2306,27 @@ func (ty ShowCommandType) ToString() string {
 	default:
 		return "" +
 			"Unknown ShowCommandType"
+	}
+}
+
+// formatUserOrRoleHost extracts the host from an AT_ID token value.
+// AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
+func formatUserOrRoleHost(atID string) string {
+	host := atID
+	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
+		host = host[1 : len(host)-1]
+	}
+	return host
+}
+
+func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
+	buf.WriteString("'")
+	buf.WriteString(node.Name)
+	buf.WriteString("'")
+	if node.Host != "" {
+		buf.WriteString("@'")
+		buf.WriteString(node.Host)
+		buf.WriteString("'")
 	}
 }
 

@@ -58,6 +58,9 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
+	// QueryStatement is the parsed AST of Query
+	QueryStatement sqlparser.Statement
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
@@ -510,6 +513,18 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
+	// Remove FOR UPDATE locks for warming reads if present
+	warmingQueries := queries
+	if modifiedQuery, ok := removeForUpdateLocks(route.QueryStatement); ok {
+		warmingQueries = make([]*querypb.BoundQuery, len(queries))
+		for i, query := range queries {
+			warmingQueries[i] = &querypb.BoundQuery{
+				Sql:           modifiedQuery,
+				BindVariables: query.BindVariables,
+			}
+		}
+	}
+
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
@@ -525,7 +540,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
@@ -535,4 +550,23 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	default:
 		log.Warn("Failed to execute warming replica read as pool is full")
 	}
+}
+
+func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return "", false
+	}
+
+	lock := sel.GetLock()
+	if lock != sqlparser.ForUpdateLock &&
+		lock != sqlparser.ForUpdateLockNoWait &&
+		lock != sqlparser.ForUpdateLockSkipLocked {
+		return "", false
+	}
+
+	clonedSel := sqlparser.CloneSelectStatement(sel)
+	clonedSel.SetLock(sqlparser.NoLock)
+
+	return sqlparser.String(clonedSel), true
 }

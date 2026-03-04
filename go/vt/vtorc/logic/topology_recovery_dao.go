@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -44,7 +45,7 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			?,
 			DATETIME('now')
 		)`,
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
@@ -83,11 +84,11 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 			?
 		)`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		analysisEntry.RecoveryId,
 	)
 	if err != nil {
@@ -145,7 +146,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 			recovery_id = ?
 		`,
 		topologyRecovery.IsSuccessful,
-		topologyRecovery.SuccessorAlias,
+		topoproto.TabletAliasString(topologyRecovery.SuccessorAlias),
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.ID,
 	)
@@ -174,8 +175,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 			topology_recovery
 		%s
 		ORDER BY recovery_id DESC
-		%s
-		`,
+		%s`,
 		whereCondition,
 		limit,
 	)
@@ -187,12 +187,22 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
 
-		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
+		var err error
+		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
+		if err != nil {
+			return err
+		}
+
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.AnalyzedKeyspace = m.GetString("keyspace")
 		topologyRecovery.AnalysisEntry.AnalyzedShard = m.GetString("shard")
 
-		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
+		if successorAlias := m.GetString("successor_alias"); successorAlias != "" {
+			topologyRecovery.SuccessorAlias, err = topoproto.ParseTabletAlias(successorAlias)
+			if err != nil {
+				return err
+			}
+		}
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
 

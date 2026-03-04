@@ -58,6 +58,12 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
 	}
+	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
+	if versionErr != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
+	} else if mysqlctldVer >= 24 {
+		args = append(args, "--log-format", "text")
+	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
 	}
@@ -78,6 +84,12 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
+	}
+	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
+	if versionErr != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
+	} else if mysqlctldVer >= 24 {
+		args = append(args, "--log-format", "text")
 	}
 	if mysqlctld.SocketFile != "" {
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -161,10 +173,19 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	// 	return nil
 	// }
 	mysqlctld.exitSignalReceived = true
-	tmpProcess := exec.Command(
-		"mysqlctl",
+	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
+	}
+	mysqlctlVer, versionErr := GetMajorVersion("mysqlctl")
+	if versionErr != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", "mysqlctl", versionErr))
+	} else if mysqlctlVer >= 24 {
+		args = append(args, "--log-format", "text")
+	}
+	tmpProcess := exec.Command(
+		"mysqlctl",
+		args...,
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")

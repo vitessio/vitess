@@ -392,10 +392,10 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		return vterrors.Wrap(err, "could not decode position")
 	}
 	if !curPos.AtLeast(pos) {
-		uvs.vse.errorCounts.Add("GTIDSet Mismatch", 1)
+		uvs.vse.errorCounts.Add(vterrors.GTIDSetMismatch, 1)
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"GTIDSet Mismatch: requested source position:%v, current target vrep position: %v",
-			replication.EncodePosition(pos), replication.EncodePosition(curPos))
+			"%s: requested source position:%v, current target vrep position: %v",
+			vterrors.GTIDSetMismatch, replication.EncodePosition(pos), replication.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil

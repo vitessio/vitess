@@ -2088,7 +2088,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='error applying event: Duplicate",
-		"/update _vt.vreplication set state='Error', message='terminal error: error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message=left\\('terminal error: error applying event: Duplicate",
 	))
 	cancel()
 

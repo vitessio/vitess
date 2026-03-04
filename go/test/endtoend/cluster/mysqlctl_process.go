@@ -57,8 +57,11 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 		// todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
-		"init",
 	}
+	if mysqlctl.MajorVersion >= 24 {
+		args = append(args, "--log-format", "text")
+	}
+	args = append(args, "init")
 	if mysqlctl.MajorVersion < 18 {
 		args = append(args, "--")
 	}
@@ -98,11 +101,17 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 }
 
 func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
+	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
+	}
+	if mysqlctl.MajorVersion >= 24 {
+		args = append(args, "--log-format", "text")
+	}
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
@@ -227,10 +236,16 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
+	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
+	}
+	if mysqlctl.MajorVersion >= 24 {
+		args = append(args, "--log-format", "text")
+	}
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)

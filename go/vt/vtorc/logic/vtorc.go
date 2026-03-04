@@ -29,7 +29,9 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -40,10 +42,10 @@ import (
 // requested for discovery. It can be continuously updated
 // as discovery process progresses.
 var (
-	discoveryQueue             *DiscoveryQueue
-	snapshotDiscoveryKeys      chan string
-	snapshotDiscoveryKeysMutex sync.Mutex
-	hasReceivedSIGTERM         int32
+	discoveryQueue                *DiscoveryQueue
+	snapshotDiscoveryAliases      chan *topodatapb.TabletAlias
+	snapshotDiscoveryAliasesMutex sync.Mutex
+	hasReceivedSIGTERM            int32
 )
 
 var (
@@ -62,7 +64,7 @@ var (
 var recentDiscoveryOperationKeys *cache.Cache
 
 func init() {
-	snapshotDiscoveryKeys = make(chan string, 10)
+	snapshotDiscoveryAliases = make(chan *topodatapb.TabletAlias, 10)
 
 	onMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
@@ -80,7 +82,7 @@ func closeVTOrc() {
 	log.Info("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 	// Poke other go routines to stop cleanly here ...
-	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
+	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 	// wait for the locks to be released
 	waitForLocksRelease()
 	ts.Close()
@@ -133,9 +135,10 @@ func handleDiscoveryRequests() {
 // DiscoverInstance will attempt to discover (poll) an instance (unless
 // it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
-func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
+func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 	if inst.InstanceIsForgotten(tabletAlias) {
-		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias))
+		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAliasString))
 		return
 	}
 
@@ -146,30 +149,42 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		"instance",
 		"total",
 	})
+	var (
+		instance *inst.Instance
+		found    bool
+		err      error
+	)
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
-			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds()))
+			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAliasString, discoveryTime.Seconds()))
+			if instance != nil && instance.TabletType == topodatapb.TabletType_PRIMARY {
+				// Consider this a type of healthcheck failure.
+				inst.RecordPrimaryHealthCheck(tabletAlias, false)
+			}
+		} else {
+			// Consider this a type of healthcheck pass.
+			inst.RecordPrimaryHealthCheck(tabletAlias, true)
 		}
 	}()
 
-	if tabletAlias == "" {
+	if tabletAlias == nil {
 		return
 	}
 
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAliasString, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
 
 	latency.Start("backend")
-	instance, found, _ := inst.ReadInstance(tabletAlias)
+	instance, found, _ = inst.ReadInstance(tabletAlias)
 	latency.Stop("backend")
 	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
@@ -179,7 +194,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveriesCounter.Add(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
+	instance, err = inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -192,16 +207,16 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err))
+		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAliasString, forceDiscovery, err))
 	} else {
-		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance))
+		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAliasString, forceDiscovery, instance))
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
-		if util.ClearToLog("discoverInstance", tabletAlias) {
+		if util.ClearToLog("discoverInstance", tabletAliasString) {
 			log.Warn(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
-				tabletAlias,
+				tabletAliasString,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
 				instanceLatency.Seconds(),
@@ -213,7 +228,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
-	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
+	tabletAliases, err := inst.ReadOutdatedInstances()
 	if err != nil {
 		log.Error(err.Error())
 	}
@@ -221,21 +236,17 @@ func onHealthTick() {
 	func() {
 		// Normally onHealthTick() shouldn't run concurrently. It is kicked by a ticker.
 		// However it _is_ invoked inside a goroutine. I like to be safe here.
-		snapshotDiscoveryKeysMutex.Lock()
-		defer snapshotDiscoveryKeysMutex.Unlock()
+		snapshotDiscoveryAliasesMutex.Lock()
+		defer snapshotDiscoveryAliasesMutex.Unlock()
 
-		countSnapshotKeys := len(snapshotDiscoveryKeys)
-		for range countSnapshotKeys {
-			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
+		countSnapshotAliases := len(snapshotDiscoveryAliases)
+		for range countSnapshotAliases {
+			tabletAliases = append(tabletAliases, <-snapshotDiscoveryAliases)
 		}
 	}()
-	// avoid any logging unless there's something to be done
-	if len(tabletAliases) > 0 {
-		for _, tabletAlias := range tabletAliases {
-			if tabletAlias != "" {
-				discoveryQueue.Push(tabletAlias)
-			}
-		}
+
+	for _, tabletAlias := range tabletAliases {
+		discoveryQueue.Push(tabletAlias)
 	}
 }
 

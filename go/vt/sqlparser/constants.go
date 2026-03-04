@@ -319,6 +319,8 @@ const (
 	CreateVStr                 = " create view"
 	DatabaseStr                = " databases"
 	EnginesStr                 = " engines"
+	ErrorsStr                  = " errors"
+	EventsStr                  = " events"
 	FunctionCStr               = " function code"
 	FunctionStr                = " function status"
 	GtidExecGlobalStr          = " global gtid_executed"
@@ -326,8 +328,10 @@ const (
 	OpenTableStr               = " open tables"
 	PluginsStr                 = " plugins"
 	PrivilegeStr               = " privileges"
+	ProcessListStr             = " processlist"
 	ProcedureCStr              = " procedure code"
 	ProcedureStr               = " procedure status"
+	ProfilesStr                = " profiles"
 	StatusGlobalStr            = " global status"
 	StatusSessionStr           = " status"
 	TablesStr                  = " tables"
@@ -908,6 +912,8 @@ const (
 	CreateV
 	Database
 	Engines
+	Errors
+	Events
 	FunctionC
 	Function
 	GtidExecGlobal
@@ -915,8 +921,10 @@ const (
 	OpenTable
 	Plugins
 	Privilege
+	ProcessList
 	ProcedureC
 	Procedure
+	Profiles
 	StatusGlobal
 	StatusSession
 	Table

@@ -2301,8 +2301,20 @@ var validSQL = []struct {
 }, {
 	input: "show binary logs",
 }, {
-	input:  "show binlog events",
-	output: "show binlog",
+	input: "show binlog events",
+}, {
+	input: "show binlog events in 'mysql-bin.000001'",
+}, {
+	input: "show binlog events from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4 limit 10",
+}, {
+	input: "show binlog events limit 10",
+}, {
+	input:  "show binlog events limit 5, 10",
+	output: "show binlog events limit 5, 10",
 }, {
 	input: "purge binary logs to 'x'",
 }, {
@@ -2345,7 +2357,13 @@ var validSQL = []struct {
 	input: "show create trigger t",
 }, {
 	input:  "show create user u",
-	output: "show create user",
+	output: "show create user 'u'",
+}, {
+	input:  "show create user 'root'@'localhost'",
+	output: "show create user 'root'@'localhost'",
+}, {
+	input:  "show create user current_user",
+	output: "show create user current_user",
 }, {
 	input: "show create view v",
 }, {
@@ -2361,23 +2379,49 @@ var validSQL = []struct {
 	input:  "show schemas like '%'",
 	output: "show databases like '%'",
 }, {
-	input:  "show engine INNODB",
-	output: "show engine",
+	input:  "show engine INNODB status",
+	output: "show engine innodb status",
+}, {
+	input:  "show engine INNODB mutex",
+	output: "show engine innodb mutex",
 }, {
 	input: "show engines",
 }, {
 	input:  "show storage engines",
-	output: "show storage",
+	output: "show engines",
 }, {
 	input: "show errors",
 }, {
+	input:  "show errors limit 10",
+	output: "show errors limit 10",
+}, {
+	input:  "show errors limit 5, 10",
+	output: "show errors limit 5, 10",
+}, {
 	input: "show events",
+}, {
+	input:  "show events from db_name",
+	output: "show events from db_name",
+}, {
+	input:  "show events like '%pattern%'",
+	output: "show events like '%pattern%'",
 }, {
 	input: "show function code func",
 }, {
 	input: "show function status",
 }, {
 	input:  "show grants for 'root@localhost'",
+	output: "show grants for 'root@localhost'",
+}, {
+	input: "show grants",
+}, {
+	input:  "show grants for 'root'@'localhost'",
+	output: "show grants for 'root'@'localhost'",
+}, {
+	input:  "show grants for current_user",
+	output: "show grants",
+}, {
+	input:  "show grants for current_user()",
 	output: "show grants",
 }, {
 	input:  "show index from t",
@@ -2388,8 +2432,7 @@ var validSQL = []struct {
 	input:  "show keys from t",
 	output: "show indexes from t",
 }, {
-	input:  "show master status",
-	output: "show master",
+	input: "show master status",
 }, {
 	input: "show open tables",
 }, {
@@ -2407,22 +2450,51 @@ var validSQL = []struct {
 	output: "show processlist",
 }, {
 	input:  "show full processlist",
-	output: "show processlist",
+	output: "show full processlist",
+}, {
+	input: "show profile",
+}, {
+	input:  "show profile cpu",
+	output: "show profile cpu",
+}, {
+	input:  "show profile cpu, memory",
+	output: "show profile cpu, memory",
+}, {
+	input:  "show profile all for query 1",
+	output: "show profile all for query 1",
 }, {
 	input:  "show profile cpu for query 1",
-	output: "show profile",
+	output: "show profile cpu for query 1",
+}, {
+	input:  "show profile cpu for query 1 limit 10",
+	output: "show profile cpu for query 1 limit 10",
 }, {
 	input:  "show profiles",
 	output: "show profiles",
 }, {
-	input:  "show relaylog events",
-	output: "show relaylog",
+	input: "show relaylog events",
 }, {
-	input:  "show slave hosts",
-	output: "show slave",
+	input: "show relaylog events in 'relay-bin.000001'",
 }, {
-	input:  "show slave status",
-	output: "show slave",
+	input: "show relaylog events from 4",
+}, {
+	input: "show relaylog events for channel 'channel_1'",
+}, {
+	input: "show relaylog events in 'relay-bin.000001' from 4 limit 10 for channel 'channel_1'",
+}, {
+	input: "show slave hosts",
+}, {
+	input: "show slave status",
+}, {
+	input: "show slave status for channel 'channel_1'",
+}, {
+	input: "show binary log status",
+}, {
+	input: "show replica status",
+}, {
+	input: "show replica status for channel 'channel_1'",
+}, {
+	input: "show replicas",
 }, {
 	input:  "show status",
 	output: "show status",
@@ -2525,8 +2597,6 @@ var validSQL = []struct {
 	input: "show vitess_tablets like '%'",
 }, {
 	input: "show vitess_tablets where hostname = 'some-tablet'",
-}, {
-	input: "show vitess_targets",
 }, {
 	input: "show vschema tables",
 }, {
@@ -2635,14 +2705,11 @@ var validSQL = []struct {
 }, {
 	input: "show warnings",
 }, {
+	input:  "show warnings limit 10",
+	output: "show warnings limit 10",
+}, {
 	input:  "select warnings from t",
 	output: "select `warnings` from t",
-}, {
-	input:  "show foobar",
-	output: "show foobar",
-}, {
-	input:  "show foobar like select * from table where syntax is 'ignored'",
-	output: "show foobar",
 }, {
 	// Making sure "force_cutover" is not a keyword
 	input:  "select force_cutover from t",

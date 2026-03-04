@@ -39,3 +39,13 @@ message Shard {
   // can be used in Vtorc recoveries.
   bool disable_emergency_reparent = 1;
 }
+
+message PrimaryHealthEvent {
+  int64 at_unix_nanos = 1;
+  bool success = 2;
+}
+
+message PrimaryHealthState {
+  repeated PrimaryHealthEvent events = 1;
+  bool unhealthy = 2;
+}

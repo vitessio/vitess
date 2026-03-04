@@ -28,7 +28,6 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -981,37 +980,17 @@ func extractRowTableName(ev *binlogdatapb.VEvent) *string {
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
 func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
-	errCode := vterrors.Code(err)
-	// Transient tablet/shard errors are worth retrying with a new tablet picker.
-	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+	action := discovery.ShouldRetryTabletError(err)
+	switch action {
+	case discovery.TabletErrorActionRetry:
+		return true, false
+	case discovery.TabletErrorActionIgnoreTablet:
+		return true, true
+	case discovery.TabletErrorActionFail:
+		return false, false
+	default:
 		return true, false
 	}
-	// Invalid arguments generally mean we should not retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
-		// GTIDSet Mismatch is tablet-specific, so retry with a different tablet.
-		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
-			return true, true
-		}
-		return false, false
-	}
-	// Internal errors (e.g. missing journaling participants) require a new VStream.
-	if errCode == vtrpcpb.Code_INTERNAL {
-		return false, false
-	}
-	// Binlog purging: the tablet lacks the requested GTID, try another tablet.
-	if errCode == vtrpcpb.Code_UNKNOWN {
-		sqlErr := sqlerror.NewSQLErrorFromError(err)
-		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
-			switch sqlError.Number() {
-			case sqlerror.ERMasterFatalReadingBinlog, // 1236
-				sqlerror.ERSourceHasPurgedRequiredGtids: // 1789
-				return true, true
-			}
-		}
-	}
-
-	// Retry ephemeral SQL errors (e.g. MAX_EXECUTION_TIME) and non-SQL errors.
-	return sqlerror.IsEphemeralError(err), false
 }
 
 // sendAll sends a group of events together while holding the lock.
