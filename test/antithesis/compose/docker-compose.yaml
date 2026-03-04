@@ -1,8 +1,6 @@
 services:
   antithesis-client:
-    build:
-      context: ./antithesis-client
-      dockerfile: Dockerfile
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest
     depends_on:
       - vtorc
       - vtgate

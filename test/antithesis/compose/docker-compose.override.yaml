@@ -1,0 +1,10 @@
+services:
+  antithesis-client:
+    build:
+      context: ./antithesis-client
+      dockerfile: Dockerfile
+
+  source_db_host:
+    build:
+      context: ./source_db/mysql
+      dockerfile: Dockerfile
