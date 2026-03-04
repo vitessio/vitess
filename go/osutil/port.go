@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -36,16 +34,12 @@ const (
 // PortReservation represents an inclusive range of reserved TCP ports.
 type PortReservation struct {
 	Start, End int
-}
-
-type portAllocation struct {
-	PortReservation
-	allocated time.Time
+	allocated  time.Time
 }
 
 var (
 	randomPortMu    sync.Mutex
-	allocatedRanges []portAllocation
+	allocatedRanges []*PortReservation
 	portFilePath    string
 )
 
@@ -56,7 +50,7 @@ func SetPortFilePath(path string) {
 	portFilePath = path
 }
 
-func rangeOverlaps(ranges []portAllocation, from, to int) bool {
+func hasRangeOverlap(ranges []*PortReservation, from, to int) bool {
 	for _, r := range ranges {
 		if from <= r.End && to >= r.Start {
 			return true
@@ -65,47 +59,31 @@ func rangeOverlaps(ranges []portAllocation, from, to int) bool {
 	return false
 }
 
-func readPortFile(f *os.File) []portAllocation {
-	var ranges []portAllocation
+func readPortFile(f *os.File) []*PortReservation {
+	var ranges []*PortReservation
 	now := time.Now()
 	if _, err := f.Seek(0, 0); err != nil {
 		return nil
 	}
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+		var start, end int
+		var ts int64
+		if _, err := fmt.Sscanf(scanner.Text(), "%d %d %d", &start, &end, &ts); err != nil {
 			continue
 		}
-		parts := strings.SplitN(line, " ", 3)
-		if len(parts) != 3 {
-			continue
+		if allocated := time.Unix(ts, 0); now.Sub(allocated) <= portFileTimeout {
+			ranges = append(ranges, &PortReservation{
+				Start:     start,
+				End:       end,
+				allocated: allocated,
+			})
 		}
-		from, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue
-		}
-		to, err := strconv.Atoi(parts[1])
-		if err != nil {
-			continue
-		}
-		ts, err := strconv.ParseInt(parts[2], 10, 64)
-		if err != nil {
-			continue
-		}
-		allocated := time.Unix(ts, 0)
-		if now.Sub(allocated) > portFileTimeout {
-			continue
-		}
-		ranges = append(ranges, portAllocation{
-			PortReservation: PortReservation{Start: from, End: to},
-			allocated:       allocated,
-		})
 	}
 	return ranges
 }
 
-func writePortFile(f *os.File, ranges []portAllocation) {
+func writePortFile(f *os.File, ranges []*PortReservation) {
 	_ = f.Truncate(0)
 	_, _ = f.Seek(0, 0)
 	for _, r := range ranges {
@@ -137,10 +115,31 @@ func mergeFileRanges(f *os.File) {
 		return
 	}
 	for _, r := range readPortFile(f) {
-		if !rangeOverlaps(allocatedRanges, r.Start, r.End) {
+		if !hasRangeOverlap(allocatedRanges, r.Start, r.End) {
 			allocatedRanges = append(allocatedRanges, r)
 		}
 	}
+}
+
+func randomPort() int {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic(fmt.Sprintf("osutil: failed to listen: %v", err))
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
+
+func portsAvailable(base, count int) bool {
+	for i := 1; i < count; i++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", base+i))
+		if err != nil {
+			return false
+		}
+		ln.Close()
+	}
+	return true
 }
 
 // GetPortReservation reserves count consecutive available TCP ports on 127.0.0.1.
@@ -155,44 +154,19 @@ func GetPortReservation(count int) *PortReservation {
 
 	f, cleanup := openAndLockPortFile()
 	defer cleanup()
-
 	mergeFileRanges(f)
 
 	for {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			panic(fmt.Sprintf("osutil.GetPortReservation: failed to listen: %v", err))
-		}
-		basePort := l.Addr().(*net.TCPAddr).Port
-		l.Close()
-
-		if rangeOverlaps(allocatedRanges, basePort, basePort+count-1) {
+		base := randomPort()
+		if hasRangeOverlap(allocatedRanges, base, base+count-1) || !portsAvailable(base, count) {
 			continue
 		}
 
-		allAvailable := true
-		for i := 1; i < count; i++ {
-			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(basePort+i)))
-			if err != nil {
-				allAvailable = false
-				break
-			}
-			ln.Close()
-		}
-		if !allAvailable {
-			continue
-		}
-
-		pr := &PortReservation{Start: basePort, End: basePort + count - 1}
-		allocatedRanges = append(allocatedRanges, portAllocation{
-			PortReservation: *pr,
-			allocated:       time.Now(),
-		})
-
+		pr := &PortReservation{Start: base, End: base + count - 1, allocated: time.Now()}
+		allocatedRanges = append(allocatedRanges, pr)
 		if f != nil {
 			writePortFile(f, allocatedRanges)
 		}
-
 		return pr
 	}
 }
