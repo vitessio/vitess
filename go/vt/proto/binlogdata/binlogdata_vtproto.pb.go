@@ -929,7 +929,7 @@ func (m *BinlogDumpResponse) CloneVT() *BinlogDumpResponse {
 	if m == nil {
 		return (*BinlogDumpResponse)(nil)
 	}
-	r := new(BinlogDumpResponse)
+	r := BinlogDumpResponseFromVTPool()
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -3662,6 +3662,29 @@ func (m *VStreamTablesResponse) ReturnToVTPool() {
 }
 func VStreamTablesResponseFromVTPool() *VStreamTablesResponse {
 	return vtprotoPool_VStreamTablesResponse.Get().(*VStreamTablesResponse)
+}
+
+var vtprotoPool_BinlogDumpResponse = sync.Pool{
+	New: func() interface{} {
+		return &BinlogDumpResponse{}
+	},
+}
+
+func (m *BinlogDumpResponse) ResetVT() {
+	if m != nil {
+		f0 := m.Raw[:0]
+		m.Reset()
+		m.Raw = f0
+	}
+}
+func (m *BinlogDumpResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_BinlogDumpResponse.Put(m)
+	}
+}
+func BinlogDumpResponseFromVTPool() *BinlogDumpResponse {
+	return vtprotoPool_BinlogDumpResponse.Get().(*BinlogDumpResponse)
 }
 func (m *Charset) SizeVT() (n int) {
 	if m == nil {

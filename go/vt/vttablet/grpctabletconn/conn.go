@@ -887,9 +887,10 @@ func (conn *gRPCQueryClient) BinlogDumpGTID(ctx context.Context, request *binlog
 	if err != nil {
 		return err
 	}
+	r := binlogdatapb.BinlogDumpResponseFromVTPool()
+	defer r.ReturnToVTPool()
 	for {
-		r, err := stream.Recv()
-		if err != nil {
+		if err := stream.RecvMsg(r); err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		select {
@@ -903,6 +904,7 @@ func (conn *gRPCQueryClient) BinlogDumpGTID(ctx context.Context, request *binlog
 			}
 			return err
 		}
+		r.ResetVT()
 	}
 }
 
