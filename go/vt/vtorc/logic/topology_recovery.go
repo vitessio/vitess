@@ -356,6 +356,183 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
+<<<<<<< HEAD
+=======
+func restartArbitraryDirectReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 1, logger)
+}
+
+func restartAllDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 0, logger)
+}
+
+// restartDirectReplicas restarts replication on direct replicas of an unreachable primary
+func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAnalysis, maxReplicas int, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	topologyRecovery, err := AttemptRecoveryRegistration(analysisEntry)
+	if topologyRecovery == nil {
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another restartDirectReplicas.", analysisEntry.AnalyzedInstanceAlias)
+		logger.Warn(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, nil, err
+	}
+	logger.Info(fmt.Sprintf("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias))
+
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	defer func() {
+		if err := resolveRecovery(topologyRecovery, nil); err != nil {
+			logger.Error(
+				"failed to resolve recovery",
+				slog.String("recovery", "restartDirectReplicas"),
+				slog.Any("error", err),
+			)
+		}
+	}()
+
+	// Get durability policy for the keyspace to determine semi-sync settings
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err))
+		return false, topologyRecovery, err
+	}
+
+	// Get all tablets in the shard
+	tablets, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
+		return false, topologyRecovery, err
+	}
+
+	// Find the primary tablet for semi-sync policy determination
+	var primaryTablet *topodatapb.Tablet
+	for _, tabletInfo := range tablets {
+		if topoproto.TabletAliasEqual(tabletInfo.Alias, analysisEntry.AnalyzedInstanceAlias) {
+			primaryTablet = tabletInfo.Tablet
+			break
+		}
+	}
+
+	if primaryTablet == nil {
+		logger.Error("Could not find primary tablet " + topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias))
+		return false, topologyRecovery, fmt.Errorf("could not find primary tablet %v", topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias))
+	}
+
+	eg, _ := errgroup.WithContext(ctx)
+	var restartExpected int
+	var restartPerformed atomic.Int64
+	// Iterate through all tablets and find direct replicas of the primary.
+	// We intentionally shuffle tablet order. When maxReplicas is non-zero, we want to
+	// randomly pick which replicas to restart, to avoid biasing towards replicas.
+	for i, tabletIndex := range rand.Perm(len(tablets)) {
+		if maxReplicas > 0 && i >= maxReplicas {
+			break
+		}
+		tabletInfo := tablets[tabletIndex]
+		tablet := tabletInfo.Tablet
+		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
+
+		// Skip the primary itself
+		if topoproto.TabletAliasEqual(tablet.Alias, analysisEntry.AnalyzedInstanceAlias) {
+			continue
+		}
+
+		if err := urgentOperations.Add(tabletAliasString, true, cache.DefaultExpiration); err != nil {
+			// Rate limit interval has not passed yet
+			continue
+		}
+
+		// Read the instance to check replication source
+		instance, found, err := inst.ReadInstance(tablet.Alias)
+		if err != nil || !found {
+			logger.Warn(fmt.Sprintf("Could not read instance information for %s: %v", tabletAliasString, err))
+			continue
+		}
+		if instance.ReplicationDepth != 1 {
+			// Not a direct replica of the primary
+			continue
+		}
+
+		restartExpected++
+		eg.Go(func() error {
+			logger.Info("Restarting replication on direct replica " + tabletAliasString)
+			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
+
+			if err := stopReplication(ctx, tablet); err != nil {
+				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
+				return err
+			}
+
+			// Determine if this replica should use semi-sync based on the durability policy
+			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
+
+			if err := startReplication(ctx, tablet, semiSync); err != nil {
+				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
+				return err
+			}
+			logger.Info("Successfully restarted replication on " + tabletAliasString)
+			restartPerformed.Add(1)
+			return nil
+		})
+	}
+	err = eg.Wait()
+	message := fmt.Sprintf("Completed restart of %d/%d direct replicas for unreachable primary %+v. err=%+v", restartPerformed.Load(), restartExpected, analysisEntry.AnalyzedInstanceAlias, err)
+	logger.Info(message)
+	_ = AuditTopologyRecovery(topologyRecovery, message)
+
+	if err != nil {
+		return true, topologyRecovery, err
+	}
+
+	return true, topologyRecovery, nil
+}
+
+// getShardTablets gets tablets for the given keyspace and shard with a timeout.
+func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShard(ctx, keyspace, shard)
+}
+
+// stopReplication calls StopReplication RPC for the given tablet with a timeout.
+func stopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StopReplication(ctx, tablet)
+}
+
+// startReplication calls StartReplication RPC for the given tablet with a timeout.
+func startReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StartReplication(ctx, tablet, semiSync)
+}
+
+// isERSEnabled returns true if ERS can be used globally or for the given keyspace.
+func isERSEnabled(analysisEntry *inst.DetectionAnalysis) bool {
+	// If ERS is disabled globally we have no way of repairing the cluster.
+	if !config.ERSEnabled() {
+		log.Info(fmt.Sprintf("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis))
+		return false
+	}
+
+	// Return false if ERS is disabled on the keyspace.
+	if analysisEntry.AnalyzedKeyspaceEmergencyReparentDisabled {
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis))
+		return false
+	}
+
+	// Return false if ERS is disabled on the shard.
+	if analysisEntry.AnalyzedShardEmergencyReparentDisabled {
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis))
+		return false
+	}
+
+	return true
+}
+
+>>>>>>> 301d27be54 (vtorc: add timeout helpers for remaining recovery topo/tmc calls (#19520))
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
 func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
 	switch analysisCode {
