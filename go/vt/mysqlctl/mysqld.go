@@ -350,6 +350,8 @@ func (mysqld *Mysqld) IsMySQLLocal() bool {
 // if MySQL appears to be down. A non-nil error indicates the state could
 // not be determined. Only meaningful when IsMySQLLocal returns true.
 func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
+	// Test if mysql is available. mysqld.GetDbaConnection()
+	// runs SELECT 1 on a new or pooled connection.
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
 		conn.Close()
@@ -361,19 +363,19 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	// FD exhaustion is client-side; it says nothing about MySQL's state.
-	if isFileDescriptorExhaustedProbe() {
-		return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "file descriptor exhaustion detected, cannot determine MySQL state: %v", err)
-	}
-
-	// Only CRConnectionError (errno 2002, unix socket) signals MySQL is down.
-	// TCP errors (errno 2003) may be network-related, not MySQL.
+	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
+	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
 	var sqlErr *sqlerror.SQLError
 	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
 		return false, nil
 	}
 
-	// Corroborate: missing socket means MySQL is dead; non-socket file is ambiguous.
+	// File-descriptor exhaustion is client-side; it is not a good signal of MySQL's state.
+	if isFileDescriptorExhaustedProbe() {
+		return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "file descriptor exhaustion detected, cannot determine MySQL state: %v", err)
+	}
+
+	// Finally, validate the socket file exists and that it really is a socket.
 	params, _ := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
@@ -382,6 +384,7 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) (bool, error) {
 		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%q exists but is not a socket file", params.UnixSocket)
 	}
 
+	// We conclude MySQL is down.
 	return true, nil
 }
 
