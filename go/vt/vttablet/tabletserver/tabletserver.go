@@ -1405,6 +1405,13 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
 	bufOffset := 0
 
+	resp := &binlogdatapb.BinlogDumpResponse{}
+
+	flush := func() error {
+		resp.Raw = buf[:bufOffset]
+		return send(resp)
+	}
+
 	type headerResult struct {
 		packetLength int
 		err          error
@@ -1452,7 +1459,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 				// Flush the data we have in the buffer (if we have anything),
 				// and then wait for the header read to complete.
 
-				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+				if err := flush(); err != nil {
 					return 0, err
 				}
 
@@ -1480,7 +1487,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	for {
 		if bufOffset+mysql.PacketHeaderSize > len(buf) {
 			// Flush the buffer if we don't have enough space for the next packet header.
-			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+			if err := flush(); err != nil {
 				return err
 			}
 			bufOffset = 0
@@ -1508,7 +1515,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 		// Are we at the end of the buffer? If so, flush it before we start reading the packet body.
 		if bufOffset+packetLength > len(buf) {
-			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+			if err := flush(); err != nil {
 				return err
 			}
 			bufOffset = 0
@@ -1539,7 +1546,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 				// Flush the buffer if we've reached the end
 				if bufOffset == len(buf) {
-					if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+					if err := flush(); err != nil {
 						return err
 					}
 					bufOffset = 0
@@ -1548,7 +1555,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 			if bufOffset+mysql.PacketHeaderSize > len(buf) {
 				// Flush the buffer if we don't have enough space for the next packet header.
-				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+				if err := flush(); err != nil {
 					return err
 				}
 				bufOffset = 0
@@ -1588,7 +1595,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 			// Flush the buffer if we've reached the end
 			if bufOffset == len(buf) {
-				if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+				if err := flush(); err != nil {
 					return err
 				}
 				bufOffset = 0
@@ -1597,7 +1604,7 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 		if isTerminal {
 			// If this is a terminal message (EOF or ERR), flush it immediately and stop streaming.
-			if err := send(&binlogdatapb.BinlogDumpResponse{Raw: buf[:bufOffset]}); err != nil {
+			if err := flush(); err != nil {
 				return err
 			}
 			return nil
