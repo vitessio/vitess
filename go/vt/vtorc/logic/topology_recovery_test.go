@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -1012,29 +1011,35 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 				require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
 				require.NoError(t, ts.CreateTablet(ctx, staleTablet))
 
-				staleAlias := topoproto.TabletAliasString(staleTablet.Alias)
+				mockController := gomock.NewController(t)
+				t.Cleanup(mockController.Finish)
 
-				fakeTMC := &testutil.TabletManagerClient{
-					TopoServer: ts,
-					DemotePrimaryResults: map[string]struct {
-						Status *replicationdatapb.PrimaryStatus
-						Error  error
-					}{
-						staleAlias: {Status: &replicationdatapb.PrimaryStatus{}, Error: tt.demotePrimaryErr},
-					},
-					SetReplicationSourceResults: map[string]error{
-						staleAlias: nil,
-					},
-				}
+				mockTMC := NewMockTabletManagerClient(mockController)
+				mockTMC.EXPECT().
+					DemotePrimary(gomock.Any(), gomock.Any(), true).
+					DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.PrimaryStatus, error) {
+						if tt.demotePrimaryDelay > 0 {
+							select {
+							case <-ctx.Done():
+								return nil, ctx.Err()
+							case <-time.After(tt.demotePrimaryDelay):
+							}
+						}
 
-				// Configure a delay so that DemotePrimary times out, if this test case has one.
-				if tt.demotePrimaryDelay > 0 {
-					fakeTMC.DemotePrimaryDelays = map[string]time.Duration{
-						staleAlias: tt.demotePrimaryDelay,
-					}
-				}
+						if tt.demotePrimaryErr != nil {
+							return nil, tt.demotePrimaryErr
+						}
 
-				tmc = fakeTMC
+						return &replicationdatapb.PrimaryStatus{}, nil
+					}).
+					Times(1)
+
+				mockTMC.EXPECT().
+					SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(nil).
+					AnyTimes()
+
+				tmc = mockTMC
 
 				analysisEntry := &inst.DetectionAnalysis{
 					Analysis:              inst.StaleTopoPrimary,
