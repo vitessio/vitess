@@ -310,4 +310,3 @@ func (bc *BinlogConnection) Close() {
 		serverIDPool.Put(bc.serverID)
 	}
 }
-
