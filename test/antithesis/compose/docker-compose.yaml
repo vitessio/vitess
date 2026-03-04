@@ -126,8 +126,10 @@ services:
       - -c
       - /script/set_keyspace_durability_policy.sh
     depends_on:
-      - vttablet101
-      - vttablet301
+      vttablet101:
+        condition: service_healthy
+      vttablet301:
+        condition: service_healthy
     environment:
       - KEYSPACES=test_keyspace lookup_keyspace
       - GRPC_PORT=15999
@@ -159,6 +161,8 @@ services:
         --service_map ''grpc-vtctl,grpc-vtctld'' --backup_storage_implementation file --file_backup_storage_root
         /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc_port 15999 '
     depends_on:
+      etcd:
+          condition: service_started
       source_db_host:
         condition: service_healthy
     image: docker.io/vitess/lite:latest
@@ -193,8 +197,11 @@ services:
       - -c
       - /script/vtorc-up.sh
     depends_on:
-      - vtctld
-      - set_keyspace_durability_policy
+      vtctld:
+        condition: service_started
+      set_keyspace_durability_policy:
+        condition: service_completed_successfully
+
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global

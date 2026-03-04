@@ -16,9 +16,6 @@ FROM gcr.io/distroless/base:nonroot
 
 COPY --from=builder /out/antithesis-entrypoint /antithesis-entrypoint
 COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eventually_vitess_health
-<<<<<<< HEAD
-=======
 COPY --from=builder /out/antithesis-sleep /opt/antithesis/test/v1/main/serial_driver_sleep
->>>>>>> 59974eede1 (Add serial driver so eventually runs)
 
 ENTRYPOINT ["/antithesis-entrypoint"]
