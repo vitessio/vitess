@@ -46,7 +46,7 @@ if [ ! -f "$SCHEMA_RUN" ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
       vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql-file "/script/tables/${schema_file}" "$KEYSPACE" || \
-      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE" || echo "Failed to apply schema ${schema_file}" && exit 1
+      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE" || { echo "Failed to apply schema ${schema_file}"; exit 1; }
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
