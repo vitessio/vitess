@@ -24,10 +24,7 @@ import (
 	"log/slog"
 	"maps"
 	"math/rand/v2"
-	"net"
-	"net/http"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -398,12 +395,12 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
-	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
+	reachable, reachErr := isPrimaryReachable(ctx, analysisEntry)
 	if reachErr != nil {
-		logger.Info(fmt.Sprintf("healthz probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr))
+		logger.Info(fmt.Sprintf("tabletmanager ping probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr))
 	}
 	if !reachable {
-		logger.Info(fmt.Sprintf("Skipping IncapacitatedPrimary recovery; primary is not reachable via healthz: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
+		logger.Info(fmt.Sprintf("Skipping IncapacitatedPrimary recovery; primary is not reachable via tabletmanager Ping: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
 			analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, nil
 	}
@@ -422,39 +419,41 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 }
 
-// healthzProbe is a swappable function to check a tablet's /healthz endpoint.
-// Tests can replace it to avoid network calls and control the reachability result.
-var healthzProbe = probeTabletHealthz
-
-// isPrimaryHealthzReachable loads the analyzed primary tablet from the vtorc DB
-// and checks whether its /healthz endpoint is reachable within a short timeout.
+// isPrimaryReachable loads the analyzed primary tablet from the vtorc DB
+// and checks whether tabletmanager Ping is reachable within a short timeout.
 // It returns false with a nil error when the tablet is missing or incomplete so
 // the caller can decide whether to skip recovery without failing outright.
-func isPrimaryHealthzReachable(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+func isPrimaryReachable(ctx context.Context, analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	if analysisEntry == nil || analysisEntry.AnalyzedInstanceAlias == nil {
 		return false, nil
 	}
-	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
-	if err != nil || tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
-		return false, err
-	}
-	return healthzProbe(tablet)
-}
 
-func probeTabletHealthz(tablet *topodatapb.Tablet) (bool, error) {
-	vtPort, ok := tablet.PortMap["vt"]
-	if !ok || vtPort == 0 {
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		return false, fmt.Errorf("failed to read tablet %q from vtorc db: %w", topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), err)
+	}
+
+	if tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
 		return false, nil
 	}
-	addr := net.JoinHostPort(tablet.Hostname, strconv.Itoa(int(vtPort)))
-	url := fmt.Sprintf("http://%s/healthz", addr)
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
+
+	grpcPort, ok := tablet.PortMap["grpc"]
+	if !ok || grpcPort == 0 {
+		return false, nil
+	}
+
+	if tmc == nil {
+		return false, errors.New("tablet manager client is not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if err := tmc.Ping(ctx, tablet); err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK, nil
+
+	return true, nil
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
@@ -521,7 +520,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	// Get all tablets in the shard
-	tablets, err := ts.GetTabletsByShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	tablets, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
@@ -581,7 +580,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			logger.Info("Restarting replication on direct replica " + tabletAliasString)
 			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
 
-			if err := tmc.StopReplication(ctx, tablet); err != nil {
+			if err := stopReplication(ctx, tablet); err != nil {
 				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -589,7 +588,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
+			if err := startReplication(ctx, tablet, semiSync); err != nil {
 				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -608,6 +607,30 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	return true, topologyRecovery, nil
+}
+
+// getShardTablets gets tablets for the given keyspace and shard with a timeout.
+func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShard(ctx, keyspace, shard)
+}
+
+// stopReplication calls StopReplication RPC for the given tablet with a timeout.
+func stopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StopReplication(ctx, tablet)
+}
+
+// startReplication calls StartReplication RPC for the given tablet with a timeout.
+func startReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StartReplication(ctx, tablet, semiSync)
 }
 
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.

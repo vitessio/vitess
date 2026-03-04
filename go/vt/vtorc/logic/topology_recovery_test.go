@@ -32,6 +32,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -604,14 +605,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 	tests := []struct {
 		name        string
 		analysis    *inst.DetectionAnalysis
-		probeOK     bool
+		pingOK      bool
 		wantAttempt bool
 		setupDB     bool
 		rows        int
 		prsFails    bool
 	}{
 		{
-			name: "reachable healthz (prs failure)",
+			name: "reachable ping (prs failure)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -619,14 +620,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 			prsFails:    true,
 		},
 		{
-			name: "reachable healthz (ers fallback)",
+			name: "reachable ping (ers fallback)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -634,14 +635,14 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        false,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 			prsFails:    true,
 		},
 		{
-			name: "reachable healthz (prs ok)",
+			name: "reachable ping (prs ok)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -649,18 +650,18 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				AnalyzedShard:         "0",
 				LastCheckValid:        true,
 			},
-			probeOK:     true,
+			pingOK:      true,
 			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 		},
 		{
-			name: "unreachable healthz",
+			name: "unreachable ping",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 			},
-			probeOK:     false,
+			pingOK:      false,
 			wantAttempt: false,
 			setupDB:     true,
 			rows:        3,
@@ -680,14 +681,6 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			analysis := *tt.analysis
 			analysis.AnalyzedKeyspace = keyspace
 			analysis.AnalyzedShard = shard
-
-			oldProbe := healthzProbe
-			healthzProbe = func(_ *topodatapb.Tablet) (bool, error) {
-				return tt.probeOK, nil
-			}
-			defer func() {
-				healthzProbe = oldProbe
-			}()
 
 			oldTs := ts
 			oldTmc := tmc
@@ -761,7 +754,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 						Seconds: 1,
 					},
 					PortMap: map[string]int32{
-						"vt": 15000,
+						"vt":   15000,
+						"grpc": 16000,
 					},
 				}
 				require.NoError(t, inst.SaveTablet(primaryTablet))
@@ -777,7 +771,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 						Seconds: 1,
 					},
 					PortMap: map[string]int32{
-						"vt": 15001,
+						"vt":   15001,
+						"grpc": 16001,
 					},
 				}))
 
@@ -798,12 +793,20 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					Shard:         shard,
 					Type:          topodatapb.TabletType_REPLICA,
 					PortMap: map[string]int32{
-						"vt": 15001,
+						"vt":   15001,
+						"grpc": 16001,
 					},
 				})
 				require.NoError(t, err)
 
 				tmc = &testutil.TabletManagerClient{}
+				pingErr := error(nil)
+				if !tt.pingOK {
+					pingErr = errors.New("ping failed")
+				}
+				tmc.(*testutil.TabletManagerClient).PingResults = map[string]error{
+					"zon1-0000000100": pingErr,
+				}
 				fullStatusPosition := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
 				tmc.(*testutil.TabletManagerClient).FullStatusResult = &replicationdatapb.FullStatus{
 					PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: fullStatusPosition},
@@ -1057,4 +1060,157 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
+func TestRestartDirectReplicasTimeout(t *testing.T) {
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
+
+	inst.InitializeForgetAliasesCache()
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance"} {
+			_, err = orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
+
+		const (
+			keyspace = "ks"
+			shard    = "0"
+		)
+
+		primaryTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:             "primary",
+			MysqlHostname:        "primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+			PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+		}
+
+		replicaTablet := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:      "replica",
+			MysqlHostname: "replica",
+			MysqlPort:     3306,
+			Keyspace:      keyspace,
+			Shard:         shard,
+			Type:          topodatapb.TabletType_REPLICA,
+			PortMap:       map[string]int32{"vt": 15200, "grpc": 15201},
+		}
+
+		require.NoError(t, inst.SaveTablet(primaryTablet))
+		require.NoError(t, inst.SaveTablet(replicaTablet))
+
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+		}
+		keyspaceInfo.SetKeyspaceName(keyspace)
+		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+		require.NoError(t, inst.WriteInstance(&inst.Instance{
+			InstanceAlias:    replicaTablet.Alias,
+			Hostname:         "replica",
+			Port:             3306,
+			SourceHost:       "primary",
+			SourcePort:       3306,
+			ReplicationDepth: 1,
+		}, true, nil))
+
+		ctx := t.Context()
+
+		oldTS := ts
+		oldTMC := tmc
+		t.Cleanup(func() {
+			ts = oldTS
+			tmc = oldTMC
+		})
+
+		ts = memorytopo.NewServer(ctx, "zone1")
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+		require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+		require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
+		require.NoError(t, ts.CreateTablet(ctx, replicaTablet))
+
+		urgentOperations.Flush()
+
+		mockController := gomock.NewController(t)
+		t.Cleanup(mockController.Finish)
+
+		// Simulate a replication RPC that never returns on its own. The call only unblocks
+		// when the passed context is canceled.
+		mockTMC := NewMockTabletManagerClient(mockController)
+		mockTMC.EXPECT().
+			StopReplication(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
+			Times(1)
+
+		tmc = mockTMC
+
+		analysisEntry := &inst.DetectionAnalysis{
+			Analysis:              inst.UnreachablePrimary,
+			AnalyzedInstanceAlias: primaryTablet.Alias,
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard,
+		}
+
+		logger := log.NewPrefixedLogger("test-restart-replicas-hang")
+
+		type restartDirectReplicasResult struct {
+			attempted        bool
+			topologyRecovery *TopologyRecovery
+			err              error
+		}
+
+		ctx, cancel := context.WithCancel(ctx)
+		t.Cleanup(func() {
+			cancel()
+			synctest.Wait()
+		})
+
+		// Run the recovery in a separate goroutine and collect its result.
+		resultCh := make(chan restartDirectReplicasResult, 1)
+		go func() {
+			attempted, topologyRecovery, err := restartDirectReplicas(ctx, analysisEntry, 0, logger)
+			resultCh <- restartDirectReplicasResult{
+				attempted:        attempted,
+				topologyRecovery: topologyRecovery,
+				err:              err,
+			}
+		}()
+
+		// Let the recovery goroutine reach a blocked state before advancing fake time (in this case,
+		// hanging on the StopReplication RPC).
+		synctest.Wait()
+
+		// Move fake time just beyond the expected RPC timeout boundary.
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
+		// The recovery should now have returned with context.DeadlineExceeded.
+		select {
+		case result := <-resultCh:
+			require.True(t, result.attempted, "recovery must be attempted")
+			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
+			require.ErrorIs(t, result.err, context.DeadlineExceeded, "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
+		default:
+			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when a replication RPC hangs indefinitely", topo.RemoteOperationTimeout)
+		}
+
+		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+		require.NoError(t, err)
+		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
+	})
 }

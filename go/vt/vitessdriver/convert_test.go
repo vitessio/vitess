@@ -147,7 +147,7 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Blob, "a"),
-			out:     []byte("a"),
+			out:     "a",
 		},
 		{
 			convert: &converter{},
@@ -157,7 +157,7 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.VarBinary, "a"),
-			out:     []byte("a"),
+			out:     "a",
 		},
 		{
 			convert: &converter{},
@@ -167,7 +167,7 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Binary, "a"),
-			out:     []byte("a"),
+			out:     "a",
 		},
 		{
 			convert: &converter{},

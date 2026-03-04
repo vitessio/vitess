@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/fileutil"
@@ -41,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -140,14 +143,20 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
-	args := []string{}
-	if mysqlShellFlags != "" {
-		args = append(args, strings.Fields(mysqlShellFlags)...)
+	args, err := shlex.Split(mysqlShellFlags)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
+	}
+
+	// compact and validate the json input from mysqlShellDumpFlags.
+	var compactDumpFlags bytes.Buffer
+	if err := json.Compact(&compactDumpFlags, []byte(mysqlShellDumpFlags)); err != nil {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-dump-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.dumpInstance(%q, %s)",
 		location,
-		mysqlShellDumpFlags,
+		compactDumpFlags.String(),
 	))
 
 	// to be able to get the consistent GTID sets, we will acquire a global read lock before starting mysql shell.
@@ -362,15 +371,20 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	}
 	defer resetFunc()
 
-	args := []string{}
+	args, err := shlex.Split(mysqlShellFlags)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
+	}
 
-	if mysqlShellFlags != "" {
-		args = append(args, strings.Fields(mysqlShellFlags)...)
+	// compact and validate the json input from mysqlShellLoadFlags.
+	var compactLoadFlags bytes.Buffer
+	if err := json.Compact(&compactLoadFlags, []byte(mysqlShellLoadFlags)); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-load-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.loadDump(%q, %s)",
 		location,
-		mysqlShellLoadFlags,
+		compactLoadFlags.String(),
 	))
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
