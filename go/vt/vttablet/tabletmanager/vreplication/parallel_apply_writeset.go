@@ -19,13 +19,55 @@ package vreplication
 import (
 	"fmt"
 	"maps"
-	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+// FNV-1a constants for uint64.
+// We use inline FNV-1a hashing to convert writeset keys (previously
+// heap-allocated strings like "table:pk1,pk2") into uint64 values.
+// This eliminates per-transaction string allocations in the scheduler
+// hot path, which were the dominant allocation source at high TPS.
+const (
+	fnvOffset uint64 = 14695981039346656037
+	fnvPrime  uint64 = 1099511628211
+)
+
+// writesetHash returns a new FNV-1a hash seeded with the table name.
+func writesetHash(tableName string) uint64 {
+	h := fnvOffset
+	for i := range len(tableName) {
+		h ^= uint64(tableName[i])
+		h *= fnvPrime
+	}
+	// Separator between table name and values.
+	h ^= uint64(':')
+	h *= fnvPrime
+	return h
+}
+
+// writesetHashAddByte folds a single byte into an FNV-1a hash.
+func writesetHashAddByte(h uint64, b byte) uint64 {
+	h ^= uint64(b)
+	h *= fnvPrime
+	return h
+}
+
+// writesetHashAddValue folds a sqltypes.Value into the hash by writing
+// its type discriminator followed by its raw bytes.
+func writesetHashAddValue(h uint64, v sqltypes.Value) uint64 {
+	// Type discriminator (1 byte) to distinguish e.g. INT64(1) from VARCHAR("1").
+	h = writesetHashAddByte(h, byte(v.Type()))
+	raw := v.Raw()
+	for _, b := range raw {
+		h ^= uint64(b)
+		h *= fnvPrime
+	}
+	return h
+}
 
 // fkConstraintRef represents one foreign key constraint on a table.
 // It maps one or more child columns to a parent table, allowing the
@@ -38,12 +80,10 @@ type fkConstraintRef struct {
 
 // writesetKeysForFKRef generates writeset keys based on a foreign key constraint.
 // For each row (before and after), it looks up the child column values and produces
-// a key in the format "parentTable:val1,val2,..." which will conflict with the
-// parent table's PK-based writeset key, forcing serialization of dependent txns.
-//
-// beforeVals/afterVals are pre-decoded row values (decoded once per change in
-// buildTxnWriteset). fieldIdx maps field name to index in the values slice.
-func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[string]struct{}, buf *strings.Builder) {
+// a hash keyed on the parent table name and FK column values, which will conflict
+// with the parent table's PK-based writeset key, forcing serialization of
+// dependent txns.
+func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) {
 	if ref == nil {
 		return
 	}
@@ -51,36 +91,48 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 		if len(vals) == 0 {
 			return
 		}
-		buf.Reset()
-		buf.WriteString(ref.ParentTable)
-		buf.WriteByte(':')
+		h := writesetHash(ref.ParentTable)
 		first := true
 		for _, colName := range ref.ChildColumnNames {
 			idx, ok := fieldIdx[colName]
 			if !ok {
-				// Column not in fields — can't build FK key, skip silently.
 				return
 			}
 			if idx >= len(vals) {
 				return
 			}
 			if !first {
-				buf.WriteByte(',')
+				h = writesetHashAddByte(h, ',')
 			}
 			first = false
-			buf.WriteString(vals[idx].String())
+			h = writesetHashAddValue(h, vals[idx])
 		}
-		keySet[buf.String()] = struct{}{}
+		keySet[h] = struct{}{}
 	}
 	appendFKKey(beforeVals)
 	appendFKKey(afterVals)
 }
 
-func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, events []*binlogdatapb.VEvent) ([]string, error) {
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	// Cache fieldIdx per table to avoid rebuilding on every row change.
-	fieldIdxCache := map[string]map[string]int{}
+// buildTxnWriteset builds writeset keys for the given events.
+// fieldIdxCache is an optional cache of field-name→index maps, shared
+// across transactions on the same scheduler goroutine. Pass nil to
+// use a local cache (e.g. in tests).
+func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, events []*binlogdatapb.VEvent, fieldIdxCaches ...map[string]map[string]int) ([]uint64, error) {
+	// Pre-estimate capacity to avoid map rehashing during key insertion.
+	// Each row change can produce ~2 keys (before + after).
+	estimated := 0
+	for _, event := range events {
+		if event.Type == binlogdatapb.VEventType_ROW && event.RowEvent != nil {
+			estimated += 2 * len(event.RowEvent.RowChanges)
+		}
+	}
+	keySet := make(map[uint64]struct{}, estimated)
+	var fieldIdxCache map[string]map[string]int
+	if len(fieldIdxCaches) > 0 && fieldIdxCaches[0] != nil {
+		fieldIdxCache = fieldIdxCaches[0]
+	} else {
+		fieldIdxCache = map[string]map[string]int{}
+	}
 	for _, event := range events {
 		if event.Type != binlogdatapb.VEventType_ROW {
 			continue
@@ -116,18 +168,18 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			if change.After != nil && plan.Fields != nil {
 				afterVals = sqltypes.MakeRowTrusted(plan.Fields, change.After)
 			}
-			if err := writesetKeysForChange(plan, rowEvent.TableName, beforeVals, afterVals, keySet, &buf); err != nil {
+			if err := writesetKeysForChange(plan, rowEvent.TableName, beforeVals, afterVals, keySet); err != nil {
 				return nil, err
 			}
 			for i := range refs {
-				writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet, &buf)
+				writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet)
 			}
 		}
 	}
 	if len(keySet) == 0 {
 		return nil, nil
 	}
-	keys := make([]string, 0, len(keySet))
+	keys := make([]uint64, 0, len(keySet))
 	for key := range keySet {
 		keys = append(keys, key)
 	}
@@ -150,10 +202,8 @@ func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, vers
 }
 
 // writesetKeysForChange extracts PK-based writeset keys from pre-decoded row
-// values and inserts them directly into the caller's keySet map. The buf
-// argument is a reusable strings.Builder to avoid per-call allocations.
-// beforeVals/afterVals are decoded once per change in buildTxnWriteset.
-func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterVals []sqltypes.Value, keySet map[string]struct{}, buf *strings.Builder) error {
+// values and inserts them directly into the caller's keySet map as uint64 hashes.
+func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if plan == nil {
 		return nil
 	}
@@ -164,9 +214,7 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 		if len(vals) == 0 {
 			return nil
 		}
-		buf.Reset()
-		buf.WriteString(tableName)
-		buf.WriteByte(':')
+		h := writesetHash(tableName)
 		first := true
 		hasPK := false
 		for i, isPK := range plan.PKIndices {
@@ -178,15 +226,15 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 			}
 			hasPK = true
 			if !first {
-				buf.WriteByte(',')
+				h = writesetHashAddByte(h, ',')
 			}
 			first = false
-			buf.WriteString(vals[i].String())
+			h = writesetHashAddValue(h, vals[i])
 		}
 		if !hasPK {
 			return nil
 		}
-		keySet[buf.String()] = struct{}{}
+		keySet[h] = struct{}{}
 		return nil
 	}
 	if err := appendKey(beforeVals); err != nil {

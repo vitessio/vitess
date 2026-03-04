@@ -62,7 +62,13 @@ var (
 )
 
 func acquireApplyTxn() *applyTxn {
-	return applyTxnPool.Get().(*applyTxn)
+	txn := applyTxnPool.Get().(*applyTxn)
+	// Reuse the buffered done channel from a previous pool cycle to avoid
+	// a make(chan struct{}) heap allocation per transaction.
+	if txn.done == nil {
+		txn.done = make(chan struct{}, 1)
+	}
+	return txn
 }
 
 func acquireApplyTxnPayload() *applyTxnPayload {
@@ -77,7 +83,18 @@ func releaseApplyTxn(txn *applyTxn) {
 		*p = applyTxnPayload{}
 		applyTxnPayloadPool.Put(p)
 	}
+	// Preserve the buffered done channel across pool cycles to avoid
+	// re-allocating it on every acquireApplyTxn call. Drain any pending
+	// signal so the channel is ready for reuse.
+	doneCh := txn.done
+	if doneCh != nil {
+		select {
+		case <-doneCh:
+		default:
+		}
+	}
 	*txn = applyTxn{}
+	txn.done = doneCh
 	applyTxnPool.Put(txn)
 }
 
@@ -131,7 +148,9 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	defer cancel()
 
 	scheduler := newApplyScheduler(ctx)
-	commitCh := make(chan *applyTxn, workerCount)
+	// Buffer 4x worker count to decouple worker throughput from commit
+	// latency. Workers block when commitCh is full, stalling the pipeline.
+	commitCh := make(chan *applyTxn, workerCount*4)
 	applyErr := make(chan error, 2)
 	workerErr := make(chan error, workerCount)
 
@@ -339,6 +358,12 @@ type parallelScheduleState struct {
 	lastHeartbeatRefresh time.Time
 	cachedPlanSnapshot   map[string]*TablePlan
 	cachedPlanVersion    int64
+	// fieldIdxCache caches the field-name→index map per table to avoid
+	// rebuilding it on every transaction. Most transactions touch the same
+	// tables so this eliminates redundant map construction. Invalidated
+	// when tablePlansVersion changes (new FIELD events arrive).
+	fieldIdxCache        map[string]map[string]int
+	fieldIdxCacheVersion int64
 }
 
 func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, items [][]*binlogdatapb.VEvent) error {
@@ -369,7 +394,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		txn.commitParent = state.curCommitParent
 		txn.hasCommitMeta = state.curHasCommitMeta
 		txn.payload = payload
-		txn.done = make(chan struct{})
 		// if parallelDebugEnabled() {
 		// 	parallelDebugLog(fmt.Sprintf("FLUSH txn: stream=%d workflow=%s order=%d events=%d rowOnly=%t commitOnly=%t hasMeta=%t seq=%d parent=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, len(payload.events), payload.rowOnly, payload.commitOnly, txn.hasCommitMeta, txn.sequenceNumber, txn.commitParent, payload.pos))
 		// }
@@ -387,6 +411,11 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		} else {
 			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, &vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
 			state.cachedPlanSnapshot = planSnapshot
+			// Invalidate fieldIdxCache when table plans change (new FIELD events).
+			if state.fieldIdxCacheVersion != state.cachedPlanVersion {
+				state.fieldIdxCache = make(map[string]map[string]int)
+				state.fieldIdxCacheVersion = state.cachedPlanVersion
+			}
 			// if parallelDebugEnabled() {
 			// 	for _, ev := range state.curEvents {
 			// 		if ev.Type == binlogdatapb.VEventType_ROW && ev.RowEvent != nil {
@@ -399,7 +428,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			// 		}
 			// 	}
 			// }
-			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, state.curEvents)
+			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, state.curEvents, state.fieldIdxCache)
 			if err != nil {
 				// Table plan may not be populated yet (FIELD event not yet applied).
 				// Treat as forceGlobal to serialize safely.
@@ -417,7 +446,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
 		}
-		state.curEvents = nil
+		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
+		// pattern on the hot path. We can't reuse the old slice via [:0]
+		// because the payload still references the backing array.
+		state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 		state.curRowOnly = false
 		state.curRowOnlySet = false
 		state.curMustSave = false
@@ -501,7 +533,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					if state.curHasCommitMeta {
 						scheduler.advanceCommittedSequence(state.curSequence)
 					}
-					state.curEvents = nil
+					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
 					state.curRowOnlySet = false
 					state.curMustSave = false
@@ -563,7 +595,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if err := flush(false); err != nil {
 					return err
 				}
-				state.curEvents = nil
+				state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 				state.curRowOnly = false
 				state.curRowOnlySet = false
 				state.curMustSave = false
@@ -745,6 +777,12 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 }
 
 func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
+	// Shallow-copy vplayer once per worker lifetime instead of per
+	// transaction. This eliminates a ~200-300 byte struct copy on every
+	// txn in the hot path. The FK check state is reset once here since
+	// each worker has its own MySQL connection.
+	vp2 := *vp
+	vp2.foreignKeyChecksStateInitialized = false
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -784,8 +822,6 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// 		}
 		// 	}
 		// }
-		vp2 := *vp
-		vp2.foreignKeyChecksStateInitialized = false
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
 				worker.rollback()
@@ -803,7 +839,10 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		if txn.done != nil {
+		// Wait for the commitLoop to finish committing this txn before
+		// reusing the worker's DB connection. commitOnly txns are handled
+		// directly by commitLoop and don't need this handshake.
+		if !payload.commitOnly {
 			select {
 			case <-txn.done:
 			case <-ctx.Done():
@@ -892,8 +931,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				}
 			}
 			updateLag()
-			if txn.done != nil {
-				close(txn.done)
+			// commitOnly txns aren't waited on by workers, so skip signaling.
+			if !payload.commitOnly {
+				txn.done <- struct{}{}
 			}
 			if err := scheduler.markCommitted(txn); err != nil {
 				return err
@@ -906,9 +946,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return err
 		}
 		updateLag()
-		if txn.done != nil {
-			close(txn.done)
-		}
+		// Non-commitOnly: signal the worker that commit is done so it
+		// can reuse its DB connection for the next transaction.
+		txn.done <- struct{}{}
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
 		}

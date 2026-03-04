@@ -211,7 +211,7 @@ func TestApplySchedulerAdvanceUnblocksMeta(t *testing.T) {
 	// Enqueue a non-meta txn first AND keep it inflight so that when
 	// meta2 is enqueued, the seeding condition is NOT met (inflightMissingMeta > 0).
 	// This ensures lastCommittedSequence stays 0 and meta2 is blocked.
-	blocker := &applyTxn{order: 1, writeset: []string{"t1:1"}}
+	blocker := &applyTxn{order: 1, writeset: []uint64{100}}
 	require.NoError(t, s.enqueue(blocker))
 	gotBlocker, err := s.nextReady(ctx)
 	require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestApplySchedulerWaitForIdle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Enqueue and dequeue a txn, mark committed, then waitForIdle
-	txn := &applyTxn{order: 1, writeset: []string{"t1:1"}}
+	txn := &applyTxn{order: 1, writeset: []uint64{100}}
 	require.NoError(t, s.enqueue(txn))
 	got, err := s.nextReady(ctx)
 	require.NoError(t, err)
@@ -312,8 +312,8 @@ func TestApplySchedulerClose(t *testing.T) {
 	s := newApplyScheduler(ctx)
 
 	// Enqueue some transactions
-	require.NoError(t, s.enqueue(&applyTxn{order: 1, writeset: []string{"t1:1"}}))
-	require.NoError(t, s.enqueue(&applyTxn{order: 2, writeset: []string{"t1:2"}}))
+	require.NoError(t, s.enqueue(&applyTxn{order: 1, writeset: []uint64{100}}))
+	require.NoError(t, s.enqueue(&applyTxn{order: 2, writeset: []uint64{200}}))
 
 	s.mu.Lock()
 	assert.Equal(t, 2, s.pendingCount)
@@ -362,7 +362,7 @@ func TestApplySchedulerRemovePendingCompaction(t *testing.T) {
 
 	// Enqueue 4 transactions with independent writesets
 	for i := int64(1); i <= 4; i++ {
-		require.NoError(t, s.enqueue(&applyTxn{order: i, writeset: []string{"t1:" + string(rune('0'+i))}}))
+		require.NoError(t, s.enqueue(&applyTxn{order: i, writeset: []uint64{uint64(i)}}))
 	}
 
 	// Dequeue all 4 — this exercises removePendingLocked compaction
@@ -1047,7 +1047,8 @@ func TestScheduleItems_WritesetBuild(t *testing.T) {
 	assert.Contains(t, got.payload.events[0].RowEvent.TableName, "t1")
 	// Writeset should contain PK-based key
 	require.Len(t, got.writeset, 1)
-	assert.Equal(t, "t1:INT64(42)", got.writeset[0])
+	expected := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	assert.Equal(t, expected, got.writeset[0])
 }
 
 func TestScheduleItems_MissingTablePlanForcesGlobal(t *testing.T) {

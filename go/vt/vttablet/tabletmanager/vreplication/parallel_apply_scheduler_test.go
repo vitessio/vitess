@@ -56,8 +56,8 @@ func TestApplySchedulerAllowsIndependentWritesets(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	txn1 := &applyTxn{writeset: []string{"t1:1"}}
-	txn2 := &applyTxn{writeset: []string{"t1:2"}}
+	txn1 := &applyTxn{writeset: []uint64{1}}
+	txn2 := &applyTxn{writeset: []uint64{2}}
 
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
@@ -74,8 +74,8 @@ func TestApplySchedulerBlocksConflictingWritesets(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	txn1 := &applyTxn{writeset: []string{"t1:1"}}
-	txn2 := &applyTxn{writeset: []string{"t1:1"}}
+	txn1 := &applyTxn{writeset: []uint64{100}}
+	txn2 := &applyTxn{writeset: []uint64{100}}
 
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
@@ -106,7 +106,7 @@ func TestApplySchedulerBlocksCommitMetaDuringMissingMeta(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	missing := &applyTxn{writeset: []string{"t1:1"}}
+	missing := &applyTxn{writeset: []uint64{100}}
 	meta := &applyTxn{sequenceNumber: 2, commitParent: 0, hasCommitMeta: true}
 
 	require.NoError(t, s.enqueue(missing))
@@ -139,8 +139,8 @@ func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	txn1 := &applyTxn{writeset: []string{"t1:1"}, sequenceNumber: 1, commitParent: 0, hasCommitMeta: true}
-	txn2 := &applyTxn{writeset: []string{"t1:1"}, sequenceNumber: 2, commitParent: 0, hasCommitMeta: true}
+	txn1 := &applyTxn{writeset: []uint64{100}, sequenceNumber: 1, commitParent: 0, hasCommitMeta: true}
+	txn2 := &applyTxn{writeset: []uint64{100}, sequenceNumber: 2, commitParent: 0, hasCommitMeta: true}
 
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
@@ -173,7 +173,7 @@ func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
 	s := newApplyScheduler(ctx)
 	require.Equal(t, int64(0), s.lastCommittedSequence)
 
-	missing := &applyTxn{writeset: []string{"t1:1"}}
+	missing := &applyTxn{writeset: []uint64{100}}
 	meta := &applyTxn{sequenceNumber: 5, commitParent: 0, hasCommitMeta: true}
 
 	require.NoError(t, s.enqueue(missing))
@@ -218,9 +218,9 @@ func TestApplySchedulerWritesetBypassesCommitParent(t *testing.T) {
 	// the immediately prior sequence number, forming a strict serial chain.
 	// With non-conflicting writesets, the scheduler should allow parallelism
 	// by ignoring the commit-parent dependency.
-	txn1 := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []string{"t1:1"}}
-	txn2 := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true, writeset: []string{"t1:2"}}
-	txn3 := &applyTxn{order: 3, sequenceNumber: 12, commitParent: 11, hasCommitMeta: true, writeset: []string{"t1:3"}}
+	txn1 := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{1}}
+	txn2 := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true, writeset: []uint64{2}}
+	txn3 := &applyTxn{order: 3, sequenceNumber: 12, commitParent: 11, hasCommitMeta: true, writeset: []uint64{3}}
 
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
@@ -251,8 +251,8 @@ func TestApplySchedulerWritesetConflictStillBlocks(t *testing.T) {
 
 	// Even with the commit-parent bypass, conflicting writesets must still
 	// cause serialization.
-	txn1 := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []string{"t1:1"}}
-	txn2 := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true, writeset: []string{"t1:1"}}
+	txn1 := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{100}}
+	txn2 := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true, writeset: []uint64{100}}
 
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
@@ -327,7 +327,7 @@ func TestApplySchedulerNoConflictDoesNotBlockPending(t *testing.T) {
 
 	// Enqueue a noConflict txn first and a normal txn second.
 	nc := &applyTxn{order: 1, noConflict: true}
-	normal := &applyTxn{order: 2, writeset: []string{"t1:1"}}
+	normal := &applyTxn{order: 2, writeset: []uint64{100}}
 
 	require.NoError(t, s.enqueue(nc))
 	require.NoError(t, s.enqueue(normal))
@@ -349,7 +349,7 @@ func TestApplySchedulerForceGlobalBlocksWritesets(t *testing.T) {
 	s := newApplyScheduler(ctx)
 
 	global := &applyTxn{order: 1, forceGlobal: true}
-	conflict := &applyTxn{order: 2, writeset: []string{"t1:1"}}
+	conflict := &applyTxn{order: 2, writeset: []uint64{100}}
 
 	require.NoError(t, s.enqueue(global))
 	require.NoError(t, s.enqueue(conflict))
@@ -425,7 +425,7 @@ func TestApplySchedulerWaitForIdleReturnsOnSchedulerCancel(t *testing.T) {
 	sCtx, cancel := context.WithCancel(ctx)
 	s := newApplyScheduler(sCtx)
 
-	require.NoError(t, s.enqueue(&applyTxn{writeset: []string{"t1:1"}}))
+	require.NoError(t, s.enqueue(&applyTxn{writeset: []uint64{100}}))
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -448,7 +448,7 @@ func TestApplySchedulerCloseClearsPending(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	require.NoError(t, s.enqueue(&applyTxn{writeset: []string{"t1:1"}}))
+	require.NoError(t, s.enqueue(&applyTxn{writeset: []uint64{100}}))
 
 	err := s.close()
 	require.ErrorIs(t, err, io.EOF)

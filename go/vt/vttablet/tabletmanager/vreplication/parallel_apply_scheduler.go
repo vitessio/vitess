@@ -29,9 +29,12 @@ type applyTxn struct {
 	hasCommitMeta  bool
 	forceGlobal    bool
 	noConflict     bool
-	writeset       []string
-	payload        *applyTxnPayload
-	done           chan struct{}
+	// writeset holds FNV-1a hashes of PK-based keys (e.g. hash of "table:pk1,pk2").
+	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
+	// in the scheduler hot path, reducing GC pressure at high TPS.
+	writeset []uint64
+	payload  *applyTxnPayload
+	done     chan struct{}
 }
 
 type applyScheduler struct {
@@ -46,7 +49,7 @@ type applyScheduler struct {
 	lastCommittedSequence int64
 	lastCommittedOrder    int64
 
-	inflightWriteset    map[string]int
+	inflightWriteset    map[uint64]int
 	inflightGlobal      int
 	inflightMissingMeta int
 	inflightCommitMeta  int
@@ -55,7 +58,7 @@ type applyScheduler struct {
 func newApplyScheduler(ctx context.Context) *applyScheduler {
 	s := &applyScheduler{
 		ctx:              ctx,
-		inflightWriteset: make(map[string]int),
+		inflightWriteset: make(map[uint64]int),
 	}
 	s.cond = sync.NewCond(&s.mu)
 	go func() {
@@ -120,8 +123,22 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order
 	}
+	// Track pre-release state to decide between Signal and Broadcast.
+	wasForceGlobal := txn.forceGlobal
+	hadInflightGlobal := s.inflightGlobal > 0
+	hadInflightMissingMeta := s.inflightMissingMeta > 0
 	s.releaseInflightLocked(txn)
-	s.cond.Broadcast()
+	// Use Broadcast when releasing a forceGlobal txn or when a global/
+	// missingMeta counter drops to zero — multiple blocked txns may
+	// become ready at once. Otherwise use Signal to avoid thundering-
+	// herd wakeup of N workers when only one txn can proceed.
+	if wasForceGlobal ||
+		(hadInflightGlobal && s.inflightGlobal == 0) ||
+		(hadInflightMissingMeta && s.inflightMissingMeta == 0) {
+		s.cond.Broadcast()
+	} else {
+		s.cond.Signal()
+	}
 	return nil
 }
 
@@ -176,6 +193,15 @@ func (s *applyScheduler) removePendingLocked(i int) {
 		}
 		s.pending = s.pending[:n]
 		s.pendingOff = 0
+	}
+	// Shrink capacity after bursts to prevent permanent memory retention.
+	// If the backing array is >64 slots and >4x the live element count,
+	// allocate a right-sized slice and copy.
+	n := len(s.pending)
+	if cap(s.pending) > 64 && cap(s.pending) > 4*n {
+		shrunk := make([]*applyTxn, n, 2*n+1)
+		copy(shrunk, s.pending)
+		s.pending = shrunk
 	}
 }
 

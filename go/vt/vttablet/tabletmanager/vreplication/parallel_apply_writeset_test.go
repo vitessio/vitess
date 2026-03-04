@@ -17,8 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +29,18 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+// testWritesetHash mirrors production hash logic for test assertions.
+func testWritesetHash(tableName string, vals ...sqltypes.Value) uint64 {
+	h := writesetHash(tableName)
+	for i, v := range vals {
+		if i > 0 {
+			h = writesetHashAddByte(h, ',')
+		}
+		h = writesetHashAddValue(h, v)
+	}
+	return h
+}
 
 func TestBuildTxnWritesetSinglePK(t *testing.T) {
 	plan := &TablePlan{
@@ -45,7 +55,8 @@ func TestBuildTxnWritesetSinglePK(t *testing.T) {
 
 	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
-	require.Equal(t, []string{"t1:INT64(1)"}, keys)
+	expected := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
+	require.Equal(t, []uint64{expected}, keys)
 }
 
 func TestBuildTxnWritesetUsesBeforeAndAfter(t *testing.T) {
@@ -62,8 +73,10 @@ func TestBuildTxnWritesetUsesBeforeAndAfter(t *testing.T) {
 
 	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
-	sort.Strings(keys) // buildTxnWriteset no longer sorts; sort for deterministic assertion
-	require.Equal(t, []string{"t1:INT64(1)", "t1:INT64(2)"}, keys)
+	require.Len(t, keys, 2)
+	h1 := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
+	h2 := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("2")))
+	assert.ElementsMatch(t, []uint64{h1, h2}, keys)
 }
 
 func TestBuildTxnWritesetNoPK(t *testing.T) {
@@ -83,9 +96,8 @@ func TestBuildTxnWritesetNoPK(t *testing.T) {
 }
 
 func TestWritesetKeysForChangeMissingPlan(t *testing.T) {
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	err := writesetKeysForChange(nil, "t1", nil, nil, keySet, &buf)
+	keySet := map[uint64]struct{}{}
+	err := writesetKeysForChange(nil, "t1", nil, nil, keySet)
 	require.NoError(t, err)
 	require.Empty(t, keySet)
 }
@@ -101,15 +113,16 @@ func TestWritesetKeysForChangeMultiplePK(t *testing.T) {
 	}
 	row := &querypb.Row{Values: []byte("1foo"), Lengths: []int64{1, 3}}
 	afterVals := sqltypes.MakeRowTrusted(plan.Fields, row)
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet, &buf)
+	keySet := map[uint64]struct{}{}
+	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet)
 	require.NoError(t, err)
-	keys := make([]string, 0, len(keySet))
-	for k := range keySet {
-		keys = append(keys, k)
-	}
-	require.Equal(t, []string{"t1:INT64(1),VARCHAR(\"foo\")"}, keys)
+	require.Len(t, keySet, 1)
+	expected := testWritesetHash("t1",
+		sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")),
+		sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("foo")),
+	)
+	_, ok := keySet[expected]
+	require.True(t, ok)
 }
 
 func TestWritesetKeysForChangeUsesMakeRowTrusted(t *testing.T) {
@@ -120,15 +133,13 @@ func TestWritesetKeysForChangeUsesMakeRowTrusted(t *testing.T) {
 	}
 	row := &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}
 	afterVals := sqltypes.MakeRowTrusted(plan.Fields, row)
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet, &buf)
+	keySet := map[uint64]struct{}{}
+	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet)
 	require.NoError(t, err)
-	keys := make([]string, 0, len(keySet))
-	for k := range keySet {
-		keys = append(keys, k)
-	}
-	require.Equal(t, []string{"t1:" + sqltypes.MakeRowTrusted(plan.Fields, row)[0].String()}, keys)
+	require.Len(t, keySet, 1)
+	expected := testWritesetHash("t1", sqltypes.MakeRowTrusted(plan.Fields, row)[0])
+	_, ok := keySet[expected]
+	require.True(t, ok)
 }
 
 type stubDBClient struct {
@@ -169,9 +180,8 @@ func TestWritesetKeysForChangePKOutOfRange(t *testing.T) {
 	}
 	row := &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}
 	afterVals := sqltypes.MakeRowTrusted(plan.Fields[:1], row)
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet, &buf)
+	keySet := map[uint64]struct{}{}
+	err := writesetKeysForChange(plan, "t1", nil, afterVals, keySet)
 	require.Error(t, err)
 }
 
@@ -234,9 +244,8 @@ func TestWritesetKeysForFKRefMissingColumn(t *testing.T) {
 	ref := &fkConstraintRef{ParentTable: "parent", ChildColumnNames: []string{"missing"}}
 	fieldIdx := map[string]int{"id": 0}
 	vals := []sqltypes.Value{sqltypes.NewInt64(1)}
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet, &buf)
+	keySet := map[uint64]struct{}{}
+	writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet)
 	require.Empty(t, keySet)
 }
 
@@ -262,14 +271,12 @@ func TestWritesetKeysForFKRef(t *testing.T) {
 	for i, f := range childPlan.Fields {
 		fieldIdx[f.Name] = i
 	}
-	keySet := map[string]struct{}{}
-	var buf strings.Builder
-	writesetKeysForFKRef(ref, fieldIdx, nil, afterVals, keySet, &buf)
-	keys := make([]string, 0, len(keySet))
-	for k := range keySet {
-		keys = append(keys, k)
-	}
-	require.Equal(t, []string{"parent:INT64(42)"}, keys)
+	keySet := map[uint64]struct{}{}
+	writesetKeysForFKRef(ref, fieldIdx, nil, afterVals, keySet)
+	require.Len(t, keySet, 1)
+	expected := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	_, ok := keySet[expected]
+	require.True(t, ok)
 }
 
 func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
@@ -314,29 +321,31 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{childChange}},
 	}
 
-	// Build writeset for parent txn — should have "parent:INT64(42)"
+	// Build writeset for parent txn
 	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, []*binlogdatapb.VEvent{parentEvent})
 	require.NoError(t, err)
-	require.Equal(t, []string{"parent:INT64(42)"}, parentKeys)
+	parentHash := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	require.Equal(t, []uint64{parentHash}, parentKeys)
 
-	// Build writeset for child txn — should have both "child:INT64(5)" (PK) and "parent:INT64(42)" (FK ref)
+	// Build writeset for child txn — should have both child PK hash and parent FK ref hash
 	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, []*binlogdatapb.VEvent{childEvent})
 	require.NoError(t, err)
-	sort.Strings(childKeys) // buildTxnWriteset no longer sorts; sort for deterministic assertion
-	require.Equal(t, []string{"child:INT64(5)", "parent:INT64(42)"}, childKeys)
+	require.Len(t, childKeys, 2)
+	childPKHash := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))
+	assert.ElementsMatch(t, []uint64{childPKHash, parentHash}, childKeys)
 
-	// The key "parent:INT64(42)" appears in both writesets — this creates a conflict
+	// The parent hash appears in both writesets — this creates a conflict
 	// that forces serialization, preventing FK constraint violations.
-	conflict := false
-	parentKeySet := map[string]struct{}{}
+	parentKeySet := map[uint64]struct{}{}
 	for _, k := range parentKeys {
 		parentKeySet[k] = struct{}{}
 	}
+	conflict := false
 	for _, k := range childKeys {
 		if _, ok := parentKeySet[k]; ok {
 			conflict = true
 			break
 		}
 	}
-	require.True(t, conflict, "parent and child writesets should conflict on parent:INT64(42)")
+	require.True(t, conflict, "parent and child writesets should conflict on parent hash")
 }
