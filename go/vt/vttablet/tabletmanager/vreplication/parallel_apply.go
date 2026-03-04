@@ -29,9 +29,11 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type applyTxnPayload struct {
@@ -1089,7 +1091,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 					return err
 				}
 				if len(pending) > 0 {
-					return fmt.Errorf("parallel apply commit missing order: pending=%d next=%d", len(pending), nextOrder)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "parallel apply commit missing order: pending=%d next=%d", len(pending), nextOrder)
 				}
 				return nil
 			}

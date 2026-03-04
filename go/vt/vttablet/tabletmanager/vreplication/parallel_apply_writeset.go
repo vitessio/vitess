@@ -22,8 +22,10 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // FNV-1a constants for uint64.
@@ -143,7 +145,7 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 		}
 		plan := tablePlans[rowEvent.TableName]
 		if plan == nil {
-			return nil, fmt.Errorf("missing table plan for %s", rowEvent.TableName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
 		}
 		refs := fkRefs[rowEvent.TableName]
 		// Build fieldIdx once per table for FK ref lookups.
@@ -225,7 +227,7 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 				continue
 			}
 			if i >= len(vals) {
-				return fmt.Errorf("pk index out of range for %s", tableName)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pk index out of range for %s", tableName)
 			}
 			hasPK = true
 			if !first {
@@ -265,7 +267,7 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 	)
 	qr, err := dbClient.ExecuteFetch(query, 10000)
 	if err != nil {
-		return nil, fmt.Errorf("queryFKRefs: %w", err)
+		return nil, vterrors.Wrapf(err, "queryFKRefs")
 	}
 	if len(qr.Rows) == 0 {
 		return nil, nil
