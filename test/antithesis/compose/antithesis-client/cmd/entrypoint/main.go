@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/antithesishq/antithesis-sdk-go/lifecycle"
@@ -25,22 +27,35 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), envDuration("SETUP_TIMEOUT", defaultTimeout))
 	defer cancel()
 
+	fmt.Println("waiting for vtorc health...")
 	if err := waitForHealth(ctx, vtorcAddr+"/debug/health"); err != nil {
 		fmt.Printf("vtorc health check failed: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("vtorc is healthy")
+
+	fmt.Println("waiting for vtgate health...")
 	if err := waitForHealth(ctx, vtgateAddr+"/debug/health"); err != nil {
 		fmt.Printf("vtgate health check failed: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("vtgate is healthy")
 
+	fmt.Println("waiting for tablet topology...")
 	if err := waitForTabletTopology(ctx, vtctldAddr, vtctldCell); err != nil {
 		fmt.Printf("vtctld tablet topology unavailable: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("tablet topology ready")
 
 	lifecycle.SetupComplete(map[string]any{"message": "vitess cluster is healthy"})
-	select {}
+	fmt.Println("setup complete, cluster is healthy")
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	fmt.Println("signal received, shutting down...")
 }
 
 func waitForHealth(ctx context.Context, url string) error {
