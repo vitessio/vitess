@@ -179,9 +179,7 @@ func TestIsLocalMySQLDown(t *testing.T) {
 	defer mysqld.Close()
 
 	t.Run("mysql is alive", func(t *testing.T) {
-		down, err := mysqld.IsLocalMySQLDown(t.Context())
-		assert.NoError(t, err)
-		assert.False(t, down)
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()))
 	})
 
 	t.Run("mysql killed with SIGKILL", func(t *testing.T) {
@@ -204,9 +202,7 @@ func TestIsLocalMySQLDown(t *testing.T) {
 			return os.IsNotExist(err)
 		}, 30*time.Second, 100*time.Millisecond, "socket file %q did not disappear after SIGKILL", socketFile)
 
-		down, err := mysqld.IsLocalMySQLDown(t.Context())
-		assert.NoError(t, err)
-		assert.True(t, down)
+		assert.True(t, mysqld.IsLocalMySQLDown(t.Context()))
 	})
 
 	t.Run("fd exhaustion", func(t *testing.T) {
@@ -235,8 +231,6 @@ func TestIsLocalMySQLDown(t *testing.T) {
 			fds = append(fds, fd)
 		}
 
-		down, err := mysqld.IsLocalMySQLDown(t.Context())
-		assert.Error(t, err, "expected an error indicating fd exhaustion")
-		assert.False(t, down, "should not report MySQL as down when fds are exhausted")
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()), "should not report MySQL as down when fds are exhausted")
 	})
 }
