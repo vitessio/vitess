@@ -12,7 +12,7 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-entr
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-healthcheck ./cmd/healthcheck
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-sleep ./cmd/sleep
 
-FROM gcr.io/distroless/base:nonroot
+FROM docker.io/library/debian:bookworm-slim
 
 COPY --from=builder /out/antithesis-entrypoint /antithesis-entrypoint
 COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eventually_vitess_health

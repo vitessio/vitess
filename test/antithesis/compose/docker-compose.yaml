@@ -56,6 +56,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASS:-source_db_password}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
       MYSQL_USER: ${DB_USER:-source_db_user}
+      MYSQL_ONETIME_PASSWORD: ""
     healthcheck:
       retries: 10
       test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute
@@ -100,9 +101,9 @@ services:
       - /script/schemaload.sh
     depends_on:
       vttablet101:
-        condition: service_healthy
+        condition: service_started
       vttablet201:
-        condition: service_healthy
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -127,9 +128,9 @@ services:
       - /script/set_keyspace_durability_policy.sh
     depends_on:
       vttablet101:
-        condition: service_healthy
+        condition: service_started
       vttablet301:
-        condition: service_healthy
+        condition: service_started
     environment:
       - KEYSPACES=test_keyspace lookup_keyspace
       - GRPC_PORT=15999
@@ -239,7 +240,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
@@ -277,7 +278,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
@@ -315,7 +316,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
@@ -353,7 +354,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
@@ -391,7 +392,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
@@ -429,7 +430,7 @@ services:
       - DB_PASS=
       - DB_CHARSET=
     healthcheck:
-      interval: 30s
+      interval: 15s
       retries: 15
       test:
         - CMD-SHELL
