@@ -273,6 +273,12 @@ func (sqb *SubQueryBuilder) inspectWhere(
 	}
 	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
 		sqlparser.RemoveKeyspaceInCol(predicate)
+
+		if newExpr := sqb.pullOutBothSubqueriesComparison(ctx, predicate, sqb.totalID); newExpr != nil {
+			jpc.inspectPredicate(ctx, newExpr)
+			continue
+		}
+
 		subq := sqb.handleSubquery(ctx, predicate, sqb.totalID)
 		if subq != nil {
 			continue
@@ -365,6 +371,23 @@ func createComparisonSubQuery(
 	}
 
 	return subquery
+}
+
+// pullOutBothSubqueriesComparison handles comparisons where both sides are subqueries (e.g. subq1 <= subq2).
+// It pulls out each subquery as a separate argument and returns the rewritten expression, or nil if not applicable.
+// IN and NOT IN are excluded because they require different pullout opcodes for left and right sides.
+func (sqb *SubQueryBuilder) pullOutBothSubqueriesComparison(ctx *plancontext.PlanningContext, expr sqlparser.Expr, outerID semantics.TableSet) sqlparser.Expr {
+	cmp, ok := expr.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return nil
+	}
+	_, leftIsSubq := cmp.Left.(*sqlparser.Subquery)
+	_, rightIsSubq := cmp.Right.(*sqlparser.Subquery)
+	if !leftIsSubq || !rightIsSubq || cmp.Operator == sqlparser.InOp || cmp.Operator == sqlparser.NotInOp {
+		return nil
+	}
+	newExpr, _ := sqb.pullOutValueSubqueries(ctx, expr, outerID, true)
+	return newExpr
 }
 
 // pullOutValueSubqueries extracts all subqueries from an expression and replaces them with arguments.
