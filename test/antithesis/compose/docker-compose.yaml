@@ -62,8 +62,6 @@ services:
       test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute
         "SHOW DATABASES;"
       timeout: 10s
-    ports:
-      - "3306"
     restart: always
     volumes:
       - ./source_db/mysql/:/docker-entrypoint-initdb.d/
@@ -169,7 +167,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15000:8080
-      - "15999"
     volumes:
       - .:/script
   vtgate:
@@ -187,7 +184,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15099:8080
-      - "15999"
       - 15306:15306
     volumes:
       - .:/script
@@ -249,8 +245,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15101:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
   vttablet102:
@@ -287,8 +281,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15102:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
   vttablet201:
@@ -325,8 +317,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15201:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
   vttablet202:
@@ -363,8 +353,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15202:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
   vttablet301:
@@ -401,8 +389,6 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15301:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
   vttablet302:
@@ -439,7 +425,5 @@ services:
     image: docker.io/vitess/lite:latest
     ports:
       - 15302:8080
-      - "15999"
-      - "3306"
     volumes:
       - .:/script
