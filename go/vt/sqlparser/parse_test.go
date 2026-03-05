@@ -6328,7 +6328,6 @@ func TestCreateTableEscaped(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 var (
 	invalidSQL = []struct {
 		input  string
@@ -6478,165 +6477,14 @@ var (
 	}, {
 		input:  "insert into t1 (a1) values row('a'), ('b')",
 		output: "syntax error at position 39",
+	}, {
+		input:  "select a, * from t",
+		output: "syntax error: unexpected '*' at position 12",
+	}, {
+		input:  "select *, * from t",
+		output: "syntax error: unexpected '*' at position 12",
 	}}
 )
-=======
-var invalidSQL = []struct {
-	input  string
-	output string
-}{{
-	input:  "select : from t",
-	output: "syntax error at position 9 near ':'",
-}, {
-	input:  "execute stmt using 1;",
-	output: "syntax error at position 21 near '1'",
-}, {
-	input:  "PREPARE stmt FROM a;",
-	output: "syntax error at position 20 near 'a'",
-}, {
-	input:  "PREPARE stmt FROM @@a;",
-	output: "syntax error at position 22 near 'a'",
-}, {
-	input:  "select x'78 from t",
-	output: "syntax error at position 12 near '78'",
-}, {
-	input:  "select x'777' from t",
-	output: "syntax error at position 14 near '777'",
-}, {
-	input:  "select * from t where :1f = 2",
-	output: "syntax error at position 26 near 'f'",
-}, {
-	input:  "select * from t where :. = 2",
-	output: "syntax error at position 24 near ':'",
-}, {
-	input:  "select * from t where ::1 = 2",
-	output: "syntax error at position 25 near '::'",
-}, {
-	input:  "select * from t where ::. = 2",
-	output: "syntax error at position 25 near '::'",
-}, {
-	input:  "update a set c = values(1)",
-	output: "syntax error at position 26 near '1'",
-}, {
-	input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-		"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-		"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-		"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-		"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-		"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-		"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-		"(F(F(F(F(F(F(F(F(F(F(F(F(",
-	output: "syntax error at position 406",
-}, {
-	// This construct is considered invalid due to a grammar conflict.
-	input:  "insert into a select * from b join c on duplicate key update d=e",
-	output: "syntax error at position 54 near 'key'",
-}, {
-	input:  "select * from a left join b",
-	output: "syntax error at position 28",
-}, {
-	input:  "select * from a natural join b on c = d",
-	output: "syntax error at position 34 near 'on'",
-}, {
-	input:  "select * from a natural join b using (c)",
-	output: "syntax error at position 37 near 'using'",
-}, {
-	input:  "select next id from a",
-	output: "expecting value after next at position 15 near 'id'",
-}, {
-	input:  "select count(1) from user where x_id = 'abc' group by n_id having json_arrayagg(x, y) = '[]'",
-	output: "syntax error at position 83",
-}, {
-	input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(x, y, z) = '[]'",
-	output: "syntax error at position 87",
-}, {
-	input:  "select next 1+1 values from a",
-	output: "syntax error at position 15",
-}, {
-	input:  "insert into a values (select * from b)",
-	output: "syntax error at position 29 near 'select'",
-}, {
-	input:  "select database",
-	output: "syntax error at position 16",
-}, {
-	input:  "select mod from t",
-	output: "syntax error at position 16 near 'from'",
-}, {
-	input:  "select 1 from t where div 5",
-	output: "syntax error at position 26 near 'div'",
-}, {
-	input:  "select 1 from t where binary",
-	output: "syntax error at position 29",
-}, {
-	input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
-	output: "syntax error at position 57 near 'with'",
-}, {
-	input:  "select /* reserved keyword as unqualified column */ * from t where key = 'test'",
-	output: "syntax error at position 71 near 'key'",
-}, {
-	input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
-	output: "syntax error at position 81 near 'escape'",
-}, {
-	input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
-	output: "syntax error at position 66 near 'using'",
-}, {
-	input:  "select 'aa",
-	output: "syntax error at position 11 near 'aa'",
-}, {
-	input:  "select 'aa\\",
-	output: "syntax error at position 12 near 'aa'",
-}, {
-	input:  "select /* aa",
-	output: "syntax error at position 13 near '/* aa'",
-}, {
-	// This is a valid MySQL query but does not yet work with Vitess.
-	// The problem is that the tokenizer takes .3 as a single token which causes parsing error
-	// We should instead be using . as a separate token and then 3t2 as an identifier.
-	// This highlights another problem, the tokenization has to be aware of the context of parsing!
-	// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
-	input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
-	output: "syntax error at position 18 near '.3'",
-}, {
-	input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
-	output: "syntax error at position 67",
-}, {
-	input:  "ALTER TABLE t DROP PARTITION p1, DROP PARTITION p2",
-	output: "syntax error at position 38 near 'DROP'",
-}, {
-	input:  "ALTER TABLE t DROP PARTITION p1, ADD COLUMN c INT",
-	output: "syntax error at position 37 near 'ADD'",
-}, {
-	input:  "ALTER TABLE t ADD COLUMN c INT, DROP PARTITION p1",
-	output: "syntax error at position 47 near 'PARTITION'",
-}, {
-	input:  "execute stmt1 using a, @b",
-	output: "syntax error at position 22 near 'a'",
-}, {
-	input:  "create index @a on b (col1)",
-	output: "syntax error at position 16 near 'a'",
-}, {
-	input:  "create database test_db default collate @a",
-	output: "syntax error at position 43 near 'a'",
-}, {
-	input:  "create database test_db default charset @a",
-	output: "syntax error at position 43 near 'a'",
-}, {
-	input:  "create database test_db default encryption @a",
-	output: "syntax error at position 46 near 'a'",
-}, {
-	input:  "select * from t1 where a1 in row('a')",
-	output: "syntax error at position 33 near 'row'",
-}, {
-	input:  "insert into t1 (a1) values row('a'), ('b')",
-	output: "syntax error at position 39",
-}, {
-	input:  "select a, * from t",
-	output: "syntax error: unexpected '*' at position 12",
-}, {
-	input:  "select *, * from t",
-	output: "syntax error: unexpected '*' at position 12",
-}}
->>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 
 func TestErrors(t *testing.T) {
 	parser := NewTestParser()
