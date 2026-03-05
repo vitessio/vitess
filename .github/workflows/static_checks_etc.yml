@@ -41,7 +41,7 @@ jobs:
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
           github-token: ${{ github.token }}
 
-      - name: Check for changes in Go files
+      - name: Check for changes in files
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: changes
         with:
@@ -187,7 +187,7 @@ jobs:
           yamllint_config_filepath: .github/yamllint.yml
           yamllint_file_or_dir: .github/*.yml
 
-      - name: Check .github/workflows
+      - name: Check .github/workflows files
         if: steps.changes.outputs.workflows == 'true'
         uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2 # v3.0.0
         with:
