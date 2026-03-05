@@ -18,6 +18,7 @@ package test
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -74,6 +75,7 @@ type InfoForRecoveryAnalysis struct {
 	CountMixedBasedLoggingReplicas            uint
 	CountRowBasedLoggingReplicas              uint
 	CountDistinctMajorVersionsLoggingReplicas uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	CountDelayedReplicas                      uint
 	CountLaggingReplicas                      uint
 	MinReplicaGTIDMode                        string
@@ -97,14 +99,15 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountLoggingReplicas), Valid: true}
 	rowMap["count_mixed_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountMixedBasedLoggingReplicas), Valid: true}
 	rowMap["count_oracle_gtid_replicas"] = sqlutils.CellData{Valid: false}
-	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicas), Valid: true}
-	rowMap["count_row_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountRowBasedLoggingReplicas), Valid: true}
-	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountSemiSyncReplicasEnabled), Valid: true}
-	rowMap["count_statement_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountStatementBasedLoggingReplicas), Valid: true}
-	rowMap["count_valid_binlog_server_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidBinlogServerReplicas), Valid: true}
-	rowMap["count_valid_oracle_gtid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidOracleGTIDReplicas), Valid: true}
-	rowMap["count_valid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidReplicas), Valid: true}
-	rowMap["count_valid_replicating_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidReplicatingReplicas), Valid: true}
+	rowMap["count_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountReplicas), 10), Valid: true}
+	rowMap["count_row_based_logging_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountRowBasedLoggingReplicas), 10), Valid: true}
+	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountSemiSyncReplicasEnabled), 10), Valid: true}
+	rowMap["count_statement_based_logging_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountStatementBasedLoggingReplicas), 10), Valid: true}
+	rowMap["count_valid_binlog_server_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidBinlogServerReplicas), 10), Valid: true}
+	rowMap["count_valid_oracle_gtid_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidOracleGTIDReplicas), 10), Valid: true}
+	rowMap["count_valid_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidReplicas), 10), Valid: true}
+	rowMap["count_valid_replicating_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidReplicatingReplicas), 10), Valid: true}
+	rowMap["count_valid_semi_sync_replicating_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidSemiSyncReplicatingReplicas), 10), Valid: true}
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
