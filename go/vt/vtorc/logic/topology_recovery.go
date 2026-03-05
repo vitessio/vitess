@@ -24,10 +24,7 @@ import (
 	"log/slog"
 	"maps"
 	"math/rand/v2"
-	"net"
-	"net/http"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,8 +40,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/util"
@@ -64,9 +63,9 @@ const (
 	FixReplicaRecoveryName                           string = "FixReplica"
 	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
 
-	// DemoteStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
+	// ReconcileStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
 	// in the topology but a newer primary has been elected.
-	DemoteStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
+	ReconcileStaleTopoPrimaryRecoveryName string = "ReconcileStaleTopoPrimary"
 )
 
 // RecoverySkipCode represents the reason for a skipped recovery.
@@ -161,9 +160,9 @@ const (
 	fixReplicaFunc
 	recoverErrantGTIDDetectedFunc
 
-	// demoteStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
-	// PRIMARY in the topology and should be demoted.
-	demoteStaleTopoPrimaryFunc
+	// reconcileStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
+	// PRIMARY in the topology and should be updated and demoted.
+	reconcileStaleTopoPrimaryFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -396,12 +395,12 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
-	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
+	reachable, reachErr := isPrimaryReachable(ctx, analysisEntry)
 	if reachErr != nil {
-		logger.Info(fmt.Sprintf("healthz probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr))
+		logger.Info(fmt.Sprintf("tabletmanager ping probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr))
 	}
 	if !reachable {
-		logger.Info(fmt.Sprintf("Skipping IncapacitatedPrimary recovery; primary is not reachable via healthz: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
+		logger.Info(fmt.Sprintf("Skipping IncapacitatedPrimary recovery; primary is not reachable via tabletmanager Ping: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
 			analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, nil
 	}
@@ -420,39 +419,41 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 }
 
-// healthzProbe is a swappable function to check a tablet's /healthz endpoint.
-// Tests can replace it to avoid network calls and control the reachability result.
-var healthzProbe = probeTabletHealthz
-
-// isPrimaryHealthzReachable loads the analyzed primary tablet from the vtorc DB
-// and checks whether its /healthz endpoint is reachable within a short timeout.
+// isPrimaryReachable loads the analyzed primary tablet from the vtorc DB
+// and checks whether tabletmanager Ping is reachable within a short timeout.
 // It returns false with a nil error when the tablet is missing or incomplete so
 // the caller can decide whether to skip recovery without failing outright.
-func isPrimaryHealthzReachable(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+func isPrimaryReachable(ctx context.Context, analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	if analysisEntry == nil || analysisEntry.AnalyzedInstanceAlias == nil {
 		return false, nil
 	}
-	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
-	if err != nil || tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
-		return false, err
-	}
-	return healthzProbe(tablet)
-}
 
-func probeTabletHealthz(tablet *topodatapb.Tablet) (bool, error) {
-	vtPort, ok := tablet.PortMap["vt"]
-	if !ok || vtPort == 0 {
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		return false, fmt.Errorf("failed to read tablet %q from vtorc db: %w", topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), err)
+	}
+
+	if tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
 		return false, nil
 	}
-	addr := net.JoinHostPort(tablet.Hostname, strconv.Itoa(int(vtPort)))
-	url := fmt.Sprintf("http://%s/healthz", addr)
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
+
+	grpcPort, ok := tablet.PortMap["grpc"]
+	if !ok || grpcPort == 0 {
+		return false, nil
+	}
+
+	if tmc == nil {
+		return false, errors.New("tablet manager client is not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if err := tmc.Ping(ctx, tablet); err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK, nil
+
+	return true, nil
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
@@ -519,7 +520,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	// Get all tablets in the shard
-	tablets, err := ts.GetTabletsByShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	tablets, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
@@ -579,7 +580,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			logger.Info("Restarting replication on direct replica " + tabletAliasString)
 			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
 
-			if err := tmc.StopReplication(ctx, tablet); err != nil {
+			if err := stopReplication(ctx, tablet); err != nil {
 				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -587,7 +588,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
+			if err := startReplication(ctx, tablet, semiSync); err != nil {
 				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -606,6 +607,30 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	}
 
 	return true, topologyRecovery, nil
+}
+
+// getShardTablets gets tablets for the given keyspace and shard with a timeout.
+func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShard(ctx, keyspace, shard)
+}
+
+// stopReplication calls StopReplication RPC for the given tablet with a timeout.
+func stopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StopReplication(ctx, tablet)
+}
+
+// startReplication calls StartReplication RPC for the given tablet with a timeout.
+func startReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return tmc.StartReplication(ctx, tablet, semiSync)
 }
 
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.
@@ -668,7 +693,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
 	case inst.StaleTopoPrimary:
-		recoveryFunc = demoteStaleTopoPrimaryFunc
+		recoveryFunc = reconcileStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
@@ -726,7 +751,7 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverErrantGTIDDetectedFunc:
 		return true
-	case demoteStaleTopoPrimaryFunc:
+	case reconcileStaleTopoPrimaryFunc:
 		return true
 	default:
 		return false
@@ -764,8 +789,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixReplica
 	case recoverErrantGTIDDetectedFunc:
 		return recoverErrantGTIDDetected
-	case demoteStaleTopoPrimaryFunc:
-		return demoteStaleTopoPrimary
+	case reconcileStaleTopoPrimaryFunc:
+		return reconcileStaleTopoPrimary
 	default:
 		return nil
 	}
@@ -801,8 +826,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixReplicaRecoveryName
 	case recoverErrantGTIDDetectedFunc:
 		return RecoverErrantGTIDDetectedName
-	case demoteStaleTopoPrimaryFunc:
-		return DemoteStaleTopoPrimaryRecoveryName
+	case reconcileStaleTopoPrimaryFunc:
+		return ReconcileStaleTopoPrimaryRecoveryName
 	default:
 		return ""
 	}
@@ -1311,10 +1336,21 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	return true, topologyRecovery, err
 }
 
-// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
-// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
-// to the current primary.
-func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+// reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of
+// PRIMARY. This can often happen when the demotion step during an EmergencyReparentShard fails or partially fails, and
+// the old primary remains as PRIMARY in the topology (and potentially still writable). This recovery will additionally
+// attempt to demote and set up replication on the stale primary, but only on a best-effort basis, i.e. the recovery
+// will succeed as long as the tablet's type is updated to REPLICA in the topology.
+//
+// The reason the demotion and replication setup happen on a best-effort basis is due to the fact that a stale topo
+// primary usually appears when an EmergencyReparentShard expectedly fails to reach a failed or degraded primary, and
+// therefore can't demote it completely. This means that the demotion and replication setup are likely to fail here
+// as well, as the old primary is likely still in a failed or degraded state.
+//
+// In the case that the tablet's type is updated to REPLICA and the best-effort steps fail, and the tablet does
+// recover eventually, other recoveries will complete the process, such as ReplicaIsWritable to set read-only, or
+// NotConnectedToPrimary to set up replication correctly.
+func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	alias := analysisEntry.AnalyzedInstanceAlias
 	aliasString := topoproto.TabletAliasString(alias)
 
@@ -1323,7 +1359,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	if topologyRecovery == nil {
 		logger.Warn("skipping recovery, active or recent recovery exists",
 			slog.String("tablet", aliasString),
-			slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 		)
 
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
@@ -1342,7 +1378,7 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
 			logger.Error(
 				"failed to resolve recovery",
-				slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
+				slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 				slog.Any("error", err),
 			)
 		}
@@ -1354,45 +1390,59 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
-	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	var wg sync.WaitGroup
+
+	// Make sure the best-effort steps complete or timeout before we return.
+	defer wg.Wait()
+
+	// On a best-effort basis, attempt to demote the tablet and configure replication concurrently
+	// with the topology type update below. Failures here will not fail the overall recovery.
+	wg.Go(func() {
+		// Demote the tablet, forcing it to become read-only and drop pending transactions.
+		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
+			logger.Error("failed to demote stale primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
+
+		primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+		if err != nil {
+			logger.Error("failed to find shard primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+		if err != nil {
+			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
+
+		// Point the tablet's replication at the current primary. This also changes the tablet's type
+		// to REPLICA and attempts to update the topology.
+		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
+			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		logger.Info("successfully set replication source", slog.String("tablet", aliasString))
+	})
+
+	// Update the tablet's type directly in the topology to REPLICA.
+	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
 	if err != nil {
-		logger.Error("failed to find primary for shard",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
+		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen
+		// if we race with the goroutine above and `SetReplicationSource` already changed the type to REPLICA
+		// before we update the topology. Any other error is considered a failure, and we'll try again next iteration.
+		if !topo.IsErrType(err, topo.NoUpdateNeeded) {
+			return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
+		}
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-	if err != nil {
-		logger.Error("failed to read durability policy",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
-	}
-
-	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = forceDemotePrimary(ctx, analyzedTablet)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
-	}
-	logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
-
-	// Set tablet to REPLICA in topology.
-	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
-	}
-
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
-	}
-
-	return true, topologyRecovery, err
+	logger.Info("successfully updated topo type to REPLICA", slog.String("tablet", aliasString))
+	return true, topologyRecovery, nil
 }
 
 // forceDemotePrimary calls the DemotePrimary RPC for the given tablet.
