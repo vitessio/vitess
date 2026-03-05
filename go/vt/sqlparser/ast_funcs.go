@@ -443,33 +443,23 @@ func (node *AliasedTableExpr) TableNameString() string {
 	return tableName.Name.String()
 }
 
-// isTableExprDual checks whether a given TableExpr represents exactly the
-// special MySQL table `dual`.
-//
-// We only return true if the expression is a simple table reference to
-// `dual` (case-insensitive), optionally wrapped in parentheses like `(dual)`.
-// Anything more complex — joins, subqueries, multiple tables, etc. should
-// NOT be treated as `dual`.
-//
-// This is important because `dual` has special handling in MySQL/Vitess
-// (it behaves like a single-row dummy table), and we must ensure that only
-// the standalone `dual` table gets that behavior.
+// isDualTableName returns true if the table name is the special MySQL table "dual" (case-insensitive).
+func isDualTableName(tn TableName) bool {
+	return strings.EqualFold(tn.Name.String(), "dual")
+}
+
+// isTableExprDual returns true if expr is exactly the dual table, optionally in parens: (dual).
+// Joins, subqueries, and other table expr types return false so only standalone dual gets special handling.
 func isTableExprDual(expr TableExpr) bool {
 	if expr == nil {
 		return false
 	}
 	switch node := expr.(type) {
 	case *AliasedTableExpr:
-		tableName, ok := node.Expr.(TableName)
-		if !ok {
-			return false
-		}
-		return strings.EqualFold(tableName.Name.String(), "dual")
+		tn, ok := node.Expr.(TableName)
+		return ok && isDualTableName(tn)
 	case *ParenTableExpr:
-		if len(node.Exprs) != 1 {
-			return false
-		}
-		return isTableExprDual(node.Exprs[0])
+		return len(node.Exprs) == 1 && isTableExprDual(node.Exprs[0])
 	default:
 		return false
 	}
