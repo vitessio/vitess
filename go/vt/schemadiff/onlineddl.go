@@ -631,7 +631,7 @@ func OnlineDDLMigrationTablesAnalysis(
 
 // ValidateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
 // - extra validation (no FKs for now...)
-// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+// - generate new and unique names for all constraints (CHECK, FK, and named UNIQUE/PRIMARY KEY constraints)
 func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID string, createTable *sqlparser.CreateTable, allowForeignKeys bool) (constraintMap map[string]string, err error) {
 	constraintMap = map[string]string{}
 	hashExists := map[string]bool{}
@@ -647,6 +647,17 @@ func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID stri
 			newName := newConstraintName(originalTableName, baseUUID, node, hashExists, sqlparser.CanonicalString(node.Details), oldName)
 			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
+		case *sqlparser.IndexDefinition:
+			if node.Info.ConstraintName.String() != "" {
+				oldName := node.Info.ConstraintName.String()
+				constraintType := sqlparser.String(node.Info.Type)
+				newName := generateConstraintNameWithHash(
+					originalTableName, baseUUID, hashExists,
+					sqlparser.CanonicalString(node), oldName, constraintType,
+				)
+				node.Info.ConstraintName = sqlparser.NewIdentifierCI(newName)
+				constraintMap[oldName] = newName
+			}
 		}
 		return true, nil
 	}
@@ -669,13 +680,23 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType || node.Type == sqlparser.ConstraintType {
-				// drop a check or a foreign key constraint
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint - these must be in constraintMap
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
 					return false, fmt.Errorf("Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
 				node.Name = sqlparser.NewIdentifierCI(mappedName)
+			} else if node.Type == sqlparser.ConstraintType {
+				// DROP CONSTRAINT can refer to FK/CHECK (in constraintMap) or named UNIQUE/PRIMARY (in indexes, not in constraintMap)
+				// Special case: DROP CONSTRAINT PRIMARY should be converted to DROP PRIMARY KEY
+				if strings.EqualFold(node.Name.String(), "PRIMARY") {
+					node.Type = sqlparser.PrimaryKeyType
+					node.Name = sqlparser.NewIdentifierCI("")
+				} else if mappedName, ok := constraintMap[node.Name.String()]; ok {
+					// Only remap if found in constraintMap; otherwise leave unchanged (it's a named UNIQUE/PRIMARY constraint)
+					node.Name = sqlparser.NewIdentifierCI(mappedName)
+				}
 			}
 		case *sqlparser.AddConstraintDefinition:
 			oldName := node.ConstraintDefinition.Name.String()
