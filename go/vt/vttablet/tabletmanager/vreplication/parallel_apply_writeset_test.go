@@ -19,6 +19,7 @@ package vreplication
 import (
 	"testing"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,14 +33,15 @@ import (
 
 // testWritesetHash mirrors production hash logic for test assertions.
 func testWritesetHash(tableName string, vals ...sqltypes.Value) uint64 {
-	h := writesetHash(tableName)
+	var d xxhash.Digest
+	writesetDigestInit(&d, tableName)
 	for i, v := range vals {
 		if i > 0 {
-			h = writesetHashAddByte(h, ',')
+			d.Write([]byte{','})
 		}
-		h = writesetHashAddValue(h, v)
+		writesetDigestAddValue(&d, v)
 	}
-	return h
+	return d.Sum64()
 }
 
 func TestBuildTxnWritesetSinglePK(t *testing.T) {

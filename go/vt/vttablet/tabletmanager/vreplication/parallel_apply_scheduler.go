@@ -48,7 +48,7 @@ type applyTxn struct {
 	// are always ready, preventing deadlocks where an earlier-order
 	// position save is blocked by later-order inflight data transactions.
 	noConflict bool
-	// writeset holds FNV-1a hashes of PK-based keys (e.g. hash of "table:pk1,pk2").
+	// writeset holds xxhash digests of PK-based keys (e.g. hash of "table:pk1,pk2").
 	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
 	// in the scheduler hot path, reducing GC pressure at high TPS.
 	writeset []uint64

@@ -21,6 +21,8 @@ import (
 	"maps"
 	"sync"
 
+	"github.com/cespare/xxhash/v2"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -28,47 +30,21 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// FNV-1a constants for uint64.
-// We use inline FNV-1a hashing to convert writeset keys (previously
-// heap-allocated strings like "table:pk1,pk2") into uint64 values.
-// This eliminates per-transaction string allocations in the scheduler
-// hot path, which were the dominant allocation source at high TPS.
-const (
-	fnvOffset uint64 = 14695981039346656037
-	fnvPrime  uint64 = 1099511628211
-)
-
-// writesetHash returns a new FNV-1a hash seeded with the table name.
-func writesetHash(tableName string) uint64 {
-	h := fnvOffset
-	for i := range len(tableName) {
-		h ^= uint64(tableName[i])
-		h *= fnvPrime
-	}
-	// Separator between table name and values.
-	h ^= uint64(':')
-	h *= fnvPrime
-	return h
+// writesetDigestInit initializes an xxhash digest with the table name
+// followed by a ':' separator. Callers declare a stack-local xxhash.Digest
+// and pass its address to avoid heap allocation. xxhash provides better
+// throughput than FNV-1a for writeset keys with multiple PK columns.
+func writesetDigestInit(d *xxhash.Digest, tableName string) {
+	d.Reset()
+	d.WriteString(tableName)
+	d.Write([]byte{':'})
 }
 
-// writesetHashAddByte folds a single byte into an FNV-1a hash.
-func writesetHashAddByte(h uint64, b byte) uint64 {
-	h ^= uint64(b)
-	h *= fnvPrime
-	return h
-}
-
-// writesetHashAddValue folds a sqltypes.Value into the hash by writing
-// its type discriminator followed by its raw bytes.
-func writesetHashAddValue(h uint64, v sqltypes.Value) uint64 {
-	// Type discriminator (1 byte) to distinguish e.g. INT64(1) from VARCHAR("1").
-	h = writesetHashAddByte(h, byte(v.Type()))
-	raw := v.Raw()
-	for _, b := range raw {
-		h ^= uint64(b)
-		h *= fnvPrime
-	}
-	return h
+// writesetDigestAddValue folds a sqltypes.Value into the digest by writing
+// its type discriminator (1 byte) followed by its raw bytes.
+func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
+	d.Write([]byte{byte(v.Type())})
+	d.Write(v.Raw())
 }
 
 // fkConstraintRef represents one foreign key constraint on a table.
@@ -93,7 +69,8 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 		if len(vals) == 0 {
 			return
 		}
-		h := writesetHash(ref.ParentTable)
+		var d xxhash.Digest
+		writesetDigestInit(&d, ref.ParentTable)
 		first := true
 		for _, colName := range ref.ChildColumnNames {
 			idx, ok := fieldIdx[colName]
@@ -104,12 +81,12 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 				return
 			}
 			if !first {
-				h = writesetHashAddByte(h, ',')
+				d.Write([]byte{','})
 			}
 			first = false
-			h = writesetHashAddValue(h, vals[idx])
+			writesetDigestAddValue(&d, vals[idx])
 		}
-		keySet[h] = struct{}{}
+		keySet[d.Sum64()] = struct{}{}
 	}
 	appendFKKey(beforeVals)
 	appendFKKey(afterVals)
@@ -219,7 +196,8 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 		if len(vals) == 0 {
 			return nil
 		}
-		h := writesetHash(tableName)
+		var d xxhash.Digest
+		writesetDigestInit(&d, tableName)
 		first := true
 		hasPK := false
 		for i, isPK := range plan.PKIndices {
@@ -231,15 +209,15 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 			}
 			hasPK = true
 			if !first {
-				h = writesetHashAddByte(h, ',')
+				d.Write([]byte{','})
 			}
 			first = false
-			h = writesetHashAddValue(h, vals[i])
+			writesetDigestAddValue(&d, vals[i])
 		}
 		if !hasPK {
 			return nil
 		}
-		keySet[h] = struct{}{}
+		keySet[d.Sum64()] = struct{}{}
 		return nil
 	}
 	if err := appendKey(beforeVals); err != nil {
