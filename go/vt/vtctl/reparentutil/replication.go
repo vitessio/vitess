@@ -221,7 +221,6 @@ func (e *tabletAliasError) Error() string {
 	return e.err.Error()
 }
 
-// String returns a string representation of the error including the tablet alias.
 // GetAlias returns the tablet alias that produced the error.
 func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
 	return e.alias
