@@ -74,7 +74,7 @@ services:
       - /script/schemaload.sh
     depends_on:
       vttablet301:
-        condition: service_healthy
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
