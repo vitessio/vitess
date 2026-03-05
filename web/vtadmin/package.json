@@ -32,7 +32,7 @@
     "react-tiny-popover": "^8.1.6",
     "react-toastify": "^11.0.5",
     "sass": "^1.97.3",
-    "svgo": "^4.0.0",
+    "svgo": "^4.0.1",
     "web-vitals": "^5.1.0"
   },
   "scripts": {
