@@ -40,6 +40,11 @@ services:
     ports:
       - 2379:2379
       - 2380:2380
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
   source_db_host:
     container_name: source_db_host
     image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest
@@ -164,7 +169,7 @@ services:
         /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc_port 15999 '
     depends_on:
       etcd:
-          condition: service_started
+          condition: service_healthy
       source_db_host:
         condition: service_healthy
     image: docker.io/vitess/lite:latest
@@ -197,8 +202,6 @@ services:
       - -c
       - /script/vtorc-up.sh
     depends_on:
-      vtctld:
-        condition: service_started
       set_keyspace_durability_policy:
         condition: service_completed_successfully
 
@@ -221,8 +224,6 @@ services:
       - -c
       - /script/vttablet-up.sh 101
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:
@@ -260,8 +261,6 @@ services:
       - -c
       - /script/vttablet-up.sh 102
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:
@@ -299,8 +298,6 @@ services:
       - -c
       - /script/vttablet-up.sh 201
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:
@@ -338,8 +335,6 @@ services:
       - -c
       - /script/vttablet-up.sh 202
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:
@@ -377,8 +372,6 @@ services:
       - -c
       - /script/vttablet-up.sh 301
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:
@@ -416,8 +409,6 @@ services:
       - -c
       - /script/vttablet-up.sh 302
     depends_on:
-      etcd:
-        condition: service_started
       vtctld:
         condition: service_started
     environment:

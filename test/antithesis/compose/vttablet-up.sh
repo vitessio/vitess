@@ -162,12 +162,6 @@ fi
 
 read -r -a topo_args <<< "$TOPOLOGY_FLAGS"
 
-# Wait for etcd to be directly reachable
-until curl -sf http://etcd:2379/health >/dev/null 2>&1; do
-  echo "Waiting for etcd to be healthy..."
-  sleep 1
-done
-
 # Wait for vtctld to be reachable
 until $VTROOT/bin/vtctldclient --server "vtctld:$GRPC_PORT" GetCellInfoNames 2>/dev/null; do
   echo "Waiting for vtctld to be reachable..."
