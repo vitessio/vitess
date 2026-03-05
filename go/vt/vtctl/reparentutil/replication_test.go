@@ -1103,6 +1103,58 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			// A single replica fails StopReplication, but primaryAlias points to a
+			// *different* tablet (the actual primary). The error doesn't match the
+			// primary alias, so we fall through to haveRevoked, which fails because
+			// the primary itself was not reached.
+			name:       "single replica failure with primaryAlias set does not suppress error",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": { // replica fails
+						Err: assert.AnError,
+					},
+					"zone1-0000000101": { // primary succeeds
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			// primaryAlias points to zone1-0000000101 (the primary), but the error
+			// came from zone1-0000000100 (a replica) — alias mismatch should not suppress.
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			ignoredTablets: sets.New[string](),
+			shouldErr:      true,
+		},
+		{
 			name:       "multiple tablets fail StopReplication",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
