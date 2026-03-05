@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -347,7 +348,7 @@ func createComparisonSubQuery(
 ) *SubQuery {
 	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
 	if outside == nil || subq != subFromOutside {
-		panic("uh oh")
+		panic(vterrors.VT12001("comparison of two subqueries"))
 	}
 
 	filterType := opcode.PulloutValue
