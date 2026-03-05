@@ -909,7 +909,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	defer lockConnRestoreLockWaitTimeout()
 	// Limit `@@wait_timeout` to ensure the lock connection is released quickly if the cut-over fails
-	// and this connection remaining alive and idle. The MySQL default is 8 hours, which is too high.
+	// and this connection remains alive and idle. The MySQL default is 8 hours, which is too high.
 	lockConnRestoreWaitTimeout, err := e.initConnectionWaitTimeout(ctx, lockConn.Conn, 3*onlineDDL.CutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting wait_timeout on locking connection")
