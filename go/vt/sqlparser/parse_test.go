@@ -4395,6 +4395,27 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "select _binary foo",
 			err:   "syntax error at position 19 near 'foo'",
+		}, {
+			input: "SELECT 1 FROM dual LEFT JOIN t1 ON 1 = t1.id",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM dual JOIN t1 ON 1 = t1.id",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM dual CROSS JOIN t1",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM dual NATURAL JOIN t1",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM dual STRAIGHT_JOIN t1",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM t1 LEFT JOIN dual ON 1 = t1.id",
+			err:   "syntax error",
+		}, {
+			input: "SELECT 1 FROM (dual) LEFT JOIN t1 ON 1 = 1",
+			err:   "syntax error",
 		},
 	}
 
@@ -4404,6 +4425,21 @@ func TestInvalid(t *testing.T) {
 			_, err := parser.Parse(tcase.input)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tcase.err)
+		})
+	}
+}
+
+func TestDualTableJoinCompatibility(t *testing.T) {
+	parser := NewTestParser()
+	valid := []string{
+		"SELECT 1 FROM dual",
+		"SELECT * FROM (SELECT 1 FROM dual) AS t LEFT JOIN t1 ON t.a = t1.id",
+	}
+	for _, sql := range valid {
+		t.Run(sql, func(t *testing.T) {
+			stmt, err := parser.Parse(sql)
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
 		})
 	}
 }

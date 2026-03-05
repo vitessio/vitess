@@ -5728,18 +5728,34 @@ partition_list:
 join_table:
   table_reference inner_join table_factor join_condition_opt
   {
+    if isTableExprDual($1) || isTableExprDual($3) {
+      yylex.Error("syntax error")
+      return 1
+    }
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
 | table_reference straight_join table_factor on_expression_opt
   {
+    if isTableExprDual($1) || isTableExprDual($3) {
+      yylex.Error("syntax error")
+      return 1
+    }
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
 | table_reference outer_join table_reference join_condition
   {
+    if isTableExprDual($1) || isTableExprDual($3) {
+      yylex.Error("syntax error")
+      return 1
+    }
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
 | table_reference natural_join table_factor
   {
+    if isTableExprDual($1) || isTableExprDual($3) {
+      yylex.Error("syntax error")
+      return 1
+    }
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
 
