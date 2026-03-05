@@ -222,10 +222,6 @@ func (e *tabletAliasError) Error() string {
 }
 
 // String returns a string representation of the error including the tablet alias.
-func (e *tabletAliasError) String() string {
-	return fmt.Sprintf("tablet %s: %v", topoproto.TabletAliasString(e.alias), e.err)
-}
-
 // GetAlias returns the tablet alias that produced the error.
 func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
 	return e.alias

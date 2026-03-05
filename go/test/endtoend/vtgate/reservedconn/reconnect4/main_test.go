@@ -85,6 +85,9 @@ func TestVttabletDownServingChange(t *testing.T) {
 	// Disable VTOrc emergency reparents to prevent VTOrc from racing with the manual ERS below.
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspaceName)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspaceName)
+	})
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,
