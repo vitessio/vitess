@@ -99,7 +99,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
 		}
@@ -158,4 +158,5 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitCode)
 	}
+
 }
