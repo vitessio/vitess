@@ -8414,7 +8414,11 @@ var yyPgo = [...]int{
 	0, 1377, 144, 2933, 223,
 }
 
+<<<<<<< HEAD
 //line sql.y:9344
+=======
+//line sql.y:9551
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 type yySymType struct {
 	union             any
 	empty             struct{}
@@ -18416,6 +18420,10 @@ yydefault:
 		var yyLOCAL *SelectExprs
 //line sql.y:5343
 		{
+			if starExpr, ok := yyDollar[3].selectExprUnion().(*StarExpr); ok && starExpr.TableName.IsEmpty() {
+				yylex.Error("syntax error: unexpected '*'")
+				return 1
+			}
 			res := yyDollar[1].selectExprsUnion()
 			res.Exprs = append(res.Exprs, yyDollar[3].selectExprUnion())
 			yyLOCAL = res
@@ -18424,7 +18432,11 @@ yydefault:
 	case 1002:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL SelectExpr
+<<<<<<< HEAD
 //line sql.y:5351
+=======
+//line sql.y:5556
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &StarExpr{}
 		}
@@ -18432,7 +18444,11 @@ yydefault:
 	case 1003:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL SelectExpr
+<<<<<<< HEAD
 //line sql.y:5355
+=======
+//line sql.y:5560
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &AliasedExpr{Expr: yyDollar[1].exprUnion(), As: yyDollar[2].identifierCI}
 		}
@@ -18440,7 +18456,11 @@ yydefault:
 	case 1004:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL SelectExpr
+<<<<<<< HEAD
 //line sql.y:5359
+=======
+//line sql.y:5564
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Name: yyDollar[1].identifierCS}}
 		}
@@ -18448,39 +18468,63 @@ yydefault:
 	case 1005:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL SelectExpr
+<<<<<<< HEAD
 //line sql.y:5363
+=======
+//line sql.y:5568
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}}
 		}
 		yyVAL.union = yyLOCAL
 	case 1006:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5368
+=======
+//line sql.y:5573
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = IdentifierCI{}
 		}
 	case 1007:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5372
+=======
+//line sql.y:5577
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = yyDollar[1].identifierCI
 		}
 	case 1008:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5376
+=======
+//line sql.y:5581
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = yyDollar[2].identifierCI
 		}
 	case 1010:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5383
+=======
+//line sql.y:5588
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = NewIdentifierCI(string(yyDollar[1].str))
 		}
 	case 1011:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL TableExprs
+<<<<<<< HEAD
 //line sql.y:5388
+=======
+//line sql.y:5593
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewIdentifierCS("dual")}}}
 		}
@@ -18488,7 +18532,11 @@ yydefault:
 	case 1012:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExprs
+<<<<<<< HEAD
 //line sql.y:5392
+=======
+//line sql.y:5597
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].tableExprsUnion()
 		}
@@ -18496,7 +18544,11 @@ yydefault:
 	case 1013:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL TableExprs
+<<<<<<< HEAD
 //line sql.y:5398
+=======
+//line sql.y:5603
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].tableExprsUnion()
 		}
@@ -18504,14 +18556,22 @@ yydefault:
 	case 1014:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExprs
+<<<<<<< HEAD
 //line sql.y:5404
+=======
+//line sql.y:5609
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = TableExprs{yyDollar[1].tableExprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1015:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5408
+=======
+//line sql.y:5613
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*TableExprs)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableExprUnion())
@@ -18519,7 +18579,11 @@ yydefault:
 	case 1018:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5418
+=======
+//line sql.y:5623
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].aliasedTableNameUnion()
 		}
@@ -18527,7 +18591,11 @@ yydefault:
 	case 1019:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5422
+=======
+//line sql.y:5627
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].derivedTableUnion(), As: yyDollar[3].identifierCS, Columns: yyDollar[4].columnsUnion()}
 		}
@@ -18535,7 +18603,11 @@ yydefault:
 	case 1020:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5426
+=======
+//line sql.y:5631
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ParenTableExpr{Exprs: yyDollar[2].tableExprsUnion()}
 		}
@@ -18543,7 +18615,11 @@ yydefault:
 	case 1021:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5430
+=======
+//line sql.y:5635
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].tableExprUnion()
 		}
@@ -18551,7 +18627,11 @@ yydefault:
 	case 1022:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *DerivedTable
+<<<<<<< HEAD
 //line sql.y:5436
+=======
+//line sql.y:5641
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[1].tableStmtUnion()}
 		}
@@ -18559,7 +18639,11 @@ yydefault:
 	case 1023:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *DerivedTable
+<<<<<<< HEAD
 //line sql.y:5440
+=======
+//line sql.y:5645
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[2].tableStmtUnion()}
 		}
@@ -18567,7 +18651,11 @@ yydefault:
 	case 1024:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *AliasedTableExpr
+<<<<<<< HEAD
 //line sql.y:5446
+=======
+//line sql.y:5651
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].identifierCS, Hints: yyDollar[3].indexHintsUnion()}
 		}
@@ -18575,7 +18663,11 @@ yydefault:
 	case 1025:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL *AliasedTableExpr
+<<<<<<< HEAD
 //line sql.y:5450
+=======
+//line sql.y:5655
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitionsUnion(), As: yyDollar[6].identifierCS, Hints: yyDollar[7].indexHintsUnion()}
 		}
@@ -18583,7 +18675,11 @@ yydefault:
 	case 1026:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5455
+=======
+//line sql.y:5660
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -18591,7 +18687,11 @@ yydefault:
 	case 1027:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5459
+=======
+//line sql.y:5664
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].columnsUnion()
 		}
@@ -18599,7 +18699,11 @@ yydefault:
 	case 1028:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5464
+=======
+//line sql.y:5669
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -18607,7 +18711,11 @@ yydefault:
 	case 1029:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5468
+=======
+//line sql.y:5673
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].columnsUnion()
 		}
@@ -18615,14 +18723,22 @@ yydefault:
 	case 1030:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5474
+=======
+//line sql.y:5679
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 1031:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5478
+=======
+//line sql.y:5683
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Columns)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI)
@@ -18630,14 +18746,22 @@ yydefault:
 	case 1032:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
+<<<<<<< HEAD
 //line sql.y:5484
+=======
+//line sql.y:5689
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*Variable{yyDollar[1].variableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1033:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5488
+=======
+//line sql.y:5693
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]*Variable)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].variableUnion())
@@ -18645,7 +18769,11 @@ yydefault:
 	case 1034:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5494
+=======
+//line sql.y:5699
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI}
 		}
@@ -18653,21 +18781,33 @@ yydefault:
 	case 1035:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:5498
+=======
+//line sql.y:5703
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Columns{NewIdentifierCI(string(yyDollar[1].str))}
 		}
 		yyVAL.union = yyLOCAL
 	case 1036:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5502
+=======
+//line sql.y:5707
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Columns)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI)
 		}
 	case 1037:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5506
+=======
+//line sql.y:5711
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Columns)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, NewIdentifierCI(string(yyDollar[3].str)))
@@ -18675,14 +18815,22 @@ yydefault:
 	case 1038:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Partitions
+<<<<<<< HEAD
 //line sql.y:5512
+=======
+//line sql.y:5717
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Partitions{yyDollar[1].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 1039:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5516
+=======
+//line sql.y:5721
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Partitions)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI)
@@ -18690,7 +18838,11 @@ yydefault:
 	case 1040:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5529
+=======
+//line sql.y:5734
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
@@ -18698,7 +18850,11 @@ yydefault:
 	case 1041:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5533
+=======
+//line sql.y:5738
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
@@ -18706,7 +18862,11 @@ yydefault:
 	case 1042:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5537
+=======
+//line sql.y:5742
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
@@ -18714,87 +18874,143 @@ yydefault:
 	case 1043:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableExpr
+<<<<<<< HEAD
 //line sql.y:5541
+=======
+//line sql.y:5746
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1044:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5547
+=======
+//line sql.y:5752
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 1045:
 		yyDollar = yyS[yypt-4 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5549
+=======
+//line sql.y:5754
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = &JoinCondition{Using: yyDollar[3].columnsUnion()}
 		}
 	case 1046:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5553
+=======
+//line sql.y:5758
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = &JoinCondition{}
 		}
 	case 1047:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5555
+=======
+//line sql.y:5760
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = yyDollar[1].joinCondition
 		}
 	case 1048:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5559
+=======
+//line sql.y:5764
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = &JoinCondition{}
 		}
 	case 1049:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5561
+=======
+//line sql.y:5766
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 1050:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5564
+=======
+//line sql.y:5769
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1051:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5566
+=======
+//line sql.y:5771
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1052:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5569
+=======
+//line sql.y:5774
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS("")
 		}
 	case 1053:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5573
+=======
+//line sql.y:5778
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = yyDollar[1].identifierCS
 		}
 	case 1054:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5577
+=======
+//line sql.y:5782
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = yyDollar[2].identifierCS
 		}
 	case 1056:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5584
+=======
+//line sql.y:5789
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS(string(yyDollar[1].str))
 		}
 	case 1057:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5590
+=======
+//line sql.y:5795
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -18802,7 +19018,11 @@ yydefault:
 	case 1058:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5594
+=======
+//line sql.y:5799
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -18810,7 +19030,11 @@ yydefault:
 	case 1059:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5598
+=======
+//line sql.y:5803
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -18818,7 +19042,11 @@ yydefault:
 	case 1060:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5604
+=======
+//line sql.y:5809
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = StraightJoinType
 		}
@@ -18826,7 +19054,11 @@ yydefault:
 	case 1061:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5610
+=======
+//line sql.y:5815
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LeftJoinType
 		}
@@ -18834,7 +19066,11 @@ yydefault:
 	case 1062:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5614
+=======
+//line sql.y:5819
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LeftJoinType
 		}
@@ -18842,7 +19078,11 @@ yydefault:
 	case 1063:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5618
+=======
+//line sql.y:5823
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = RightJoinType
 		}
@@ -18850,7 +19090,11 @@ yydefault:
 	case 1064:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5622
+=======
+//line sql.y:5827
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = RightJoinType
 		}
@@ -18858,7 +19102,11 @@ yydefault:
 	case 1065:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5628
+=======
+//line sql.y:5833
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NaturalJoinType
 		}
@@ -18866,7 +19114,11 @@ yydefault:
 	case 1066:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
+<<<<<<< HEAD
 //line sql.y:5632
+=======
+//line sql.y:5837
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			if yyDollar[2].joinTypeUnion() == LeftJoinType {
 				yyLOCAL = NaturalLeftJoinType
@@ -18877,38 +19129,62 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1067:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5642
+=======
+//line sql.y:5847
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.tableName = yyDollar[2].tableName
 		}
 	case 1068:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5646
+=======
+//line sql.y:5851
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.tableName = yyDollar[1].tableName
 		}
 	case 1069:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5652
+=======
+//line sql.y:5857
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.tableName = TableName{Name: yyDollar[1].identifierCS}
 		}
 	case 1070:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5656
+=======
+//line sql.y:5861
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.tableName = TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}
 		}
 	case 1071:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5662
+=======
+//line sql.y:5867
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.tableName = TableName{Name: yyDollar[1].identifierCS}
 		}
 	case 1072:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IndexHints
+<<<<<<< HEAD
 //line sql.y:5667
+=======
+//line sql.y:5872
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -18916,7 +19192,11 @@ yydefault:
 	case 1073:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IndexHints
+<<<<<<< HEAD
 //line sql.y:5671
+=======
+//line sql.y:5876
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].indexHintsUnion()
 		}
@@ -18924,14 +19204,22 @@ yydefault:
 	case 1074:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IndexHints
+<<<<<<< HEAD
 //line sql.y:5677
+=======
+//line sql.y:5882
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IndexHints{yyDollar[1].indexHintUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1075:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:5681
+=======
+//line sql.y:5886
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*IndexHints)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[2].indexHintUnion())
@@ -18939,7 +19227,11 @@ yydefault:
 	case 1076:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5687
+=======
+//line sql.y:5892
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
@@ -18947,7 +19239,11 @@ yydefault:
 	case 1077:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5691
+=======
+//line sql.y:5896
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion()}
 		}
@@ -18955,7 +19251,11 @@ yydefault:
 	case 1078:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5695
+=======
+//line sql.y:5900
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
@@ -18963,7 +19263,11 @@ yydefault:
 	case 1079:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5699
+=======
+//line sql.y:5904
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: ForceOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
@@ -18971,7 +19275,11 @@ yydefault:
 	case 1080:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5703
+=======
+//line sql.y:5908
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: UseVindexOp, Indexes: yyDollar[4].columnsUnion()}
 		}
@@ -18979,7 +19287,11 @@ yydefault:
 	case 1081:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
+<<<<<<< HEAD
 //line sql.y:5707
+=======
+//line sql.y:5912
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreVindexOp, Indexes: yyDollar[4].columnsUnion()}
 		}
@@ -18987,7 +19299,11 @@ yydefault:
 	case 1082:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IndexHintForType
+<<<<<<< HEAD
 //line sql.y:5712
+=======
+//line sql.y:5917
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NoForType
 		}
@@ -18995,7 +19311,11 @@ yydefault:
 	case 1083:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IndexHintForType
+<<<<<<< HEAD
 //line sql.y:5716
+=======
+//line sql.y:5921
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = JoinForType
 		}
@@ -19003,7 +19323,11 @@ yydefault:
 	case 1084:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL IndexHintForType
+<<<<<<< HEAD
 //line sql.y:5720
+=======
+//line sql.y:5925
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = OrderByForType
 		}
@@ -19011,7 +19335,11 @@ yydefault:
 	case 1085:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL IndexHintForType
+<<<<<<< HEAD
 //line sql.y:5724
+=======
+//line sql.y:5929
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = GroupByForType
 		}
@@ -19019,7 +19347,11 @@ yydefault:
 	case 1086:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5730
+=======
+//line sql.y:5935
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19027,7 +19359,11 @@ yydefault:
 	case 1087:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5734
+=======
+//line sql.y:5939
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
@@ -19343,7 +19679,11 @@ yydefault:
 	case 1128:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5908
+=======
+//line sql.y:5946
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
 		}
@@ -19351,7 +19691,11 @@ yydefault:
 	case 1129:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5912
+=======
+//line sql.y:5950
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()}
 		}
@@ -19359,7 +19703,11 @@ yydefault:
 	case 1130:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5916
+=======
+//line sql.y:5954
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
 		}
@@ -19367,7 +19715,11 @@ yydefault:
 	case 1131:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5920
+=======
+//line sql.y:5958
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()}
 		}
@@ -19375,7 +19727,11 @@ yydefault:
 	case 1132:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5924
+=======
+//line sql.y:5962
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19383,7 +19739,11 @@ yydefault:
 	case 1133:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5930
+=======
+//line sql.y:5966
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19391,7 +19751,11 @@ yydefault:
 	case 1134:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5934
+=======
+//line sql.y:5970
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19399,23 +19763,348 @@ yydefault:
 	case 1135:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5938
+=======
+//line sql.y:5974
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 1136:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 		var yyLOCAL Expr
 //line sql.y:5942
+=======
+//line sql.y:5980
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 1137:
+<<<<<<< HEAD
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
 //line sql.y:5946
+=======
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line sql.y:5983
+		{
+		}
+	case 1138:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:5988
+		{
+			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNullOp}
+		}
+		yyVAL.union = yyLOCAL
+	case 1139:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:5992
+		{
+			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNotNullOp}
+		}
+		yyVAL.union = yyLOCAL
+	case 1140:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:5996
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1141:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6000
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: Any, Right: yyDollar[4].subqueryUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1142:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6004
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: Any, Right: yyDollar[4].subqueryUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1143:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6008
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: All, Right: yyDollar[4].subqueryUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1144:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6012
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1145:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6018
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: InOp, Right: yyDollar[3].colTupleUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1146:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6022
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotInOp, Right: yyDollar[4].colTupleUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1147:
+		yyDollar = yyS[yypt-5 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6026
+		{
+			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), IsBetween: true, From: yyDollar[3].exprUnion(), To: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1148:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6030
+		{
+			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), IsBetween: false, From: yyDollar[4].exprUnion(), To: yyDollar[6].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1149:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6034
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1150:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6038
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1151:
+		yyDollar = yyS[yypt-5 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6042
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion(), Escape: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1152:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6046
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion(), Escape: yyDollar[6].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1153:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6050
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: RegexpOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1154:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6054
+		{
+			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotRegexpOp, Right: yyDollar[4].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1155:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6058
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1156:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line sql.y:6064
+		{
+		}
+	case 1157:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line sql.y:6067
+		{
+		}
+	case 1158:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6073
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitOrOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1159:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6077
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitAndOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1160:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6081
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftLeftOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1161:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6085
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftRightOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1162:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6089
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: PlusOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1163:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6093
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MinusOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1164:
+		yyDollar = yyS[yypt-5 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6097
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1165:
+		yyDollar = yyS[yypt-5 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6101
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1166:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6105
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MultOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1167:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6109
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: DivOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1168:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6113
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1169:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6117
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1170:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6121
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1171:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6125
+		{
+			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1172:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6129
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1173:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6135
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1174:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6139
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1175:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6143
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1176:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6147
+		{
+			yyLOCAL = yyDollar[1].exprUnion()
+		}
+		yyVAL.union = yyLOCAL
+	case 1177:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:6151
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &CollateExpr{Expr: yyDollar[1].exprUnion(), Collation: yyDollar[3].str}
 		}
@@ -19423,7 +20112,11 @@ yydefault:
 	case 1138:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5950
+=======
+//line sql.y:6155
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19431,7 +20124,11 @@ yydefault:
 	case 1139:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5954
+=======
+//line sql.y:6159
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19439,7 +20136,11 @@ yydefault:
 	case 1140:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5958
+=======
+//line sql.y:6163
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
@@ -19447,7 +20148,11 @@ yydefault:
 	case 1141:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5962
+=======
+//line sql.y:6167
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].exprUnion() // TODO: do we really want to ignore unary '+' before any kind of literals?
 		}
@@ -19455,7 +20160,11 @@ yydefault:
 	case 1142:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5966
+=======
+//line sql.y:6171
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
 		}
@@ -19463,7 +20172,11 @@ yydefault:
 	case 1143:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5970
+=======
+//line sql.y:6175
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].exprUnion()}
 		}
@@ -19471,7 +20184,11 @@ yydefault:
 	case 1144:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5974
+=======
+//line sql.y:6179
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].exprUnion()}
 		}
@@ -19479,7 +20196,11 @@ yydefault:
 	case 1145:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5978
+=======
+//line sql.y:6183
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].subqueryUnion()
 		}
@@ -19487,7 +20208,11 @@ yydefault:
 	case 1146:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5982
+=======
+//line sql.y:6187
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -19495,7 +20220,11 @@ yydefault:
 	case 1147:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5986
+=======
+//line sql.y:6191
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subqueryUnion()}
 		}
@@ -19503,7 +20232,11 @@ yydefault:
 	case 1148:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5990
+=======
+//line sql.y:6195
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNamesUnion(), Expr: yyDollar[5].exprUnion(), Option: yyDollar[6].matchExprOptionUnion()}
 		}
@@ -19511,7 +20244,11 @@ yydefault:
 	case 1149:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5994
+=======
+//line sql.y:6199
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &CastExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion(), Array: yyDollar[6].booleanUnion()}
 		}
@@ -19519,7 +20256,11 @@ yydefault:
 	case 1150:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:5998
+=======
+//line sql.y:6203
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion()}
 		}
@@ -19527,7 +20268,11 @@ yydefault:
 	case 1151:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6002
+=======
+//line sql.y:6207
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertUsingExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].str}
 		}
@@ -19535,7 +20280,11 @@ yydefault:
 	case 1152:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6006
+=======
+//line sql.y:6211
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			// From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
 			// To convert a string expression to a binary string, these constructs are equivalent:
@@ -19547,7 +20296,11 @@ yydefault:
 	case 1153:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6014
+=======
+//line sql.y:6219
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Default{ColName: yyDollar[2].str}
 		}
@@ -19555,7 +20308,11 @@ yydefault:
 	case 1154:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6018
+=======
+//line sql.y:6223
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: yyDollar[5].exprUnion(), Unit: yyDollar[3].intervalTypeUnion(), Interval: yyDollar[2].exprUnion()}
 		}
@@ -19563,7 +20320,11 @@ yydefault:
 	case 1155:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6022
+=======
+//line sql.y:6227
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalFuncExpr{Expr: yyDollar[3].exprUnion(), Exprs: yyDollar[5].exprsUnion()}
 		}
@@ -19571,7 +20332,11 @@ yydefault:
 	case 1156:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6026
+=======
+//line sql.y:6231
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: []Expr{yyDollar[3].exprUnion()}}
 		}
@@ -19579,7 +20344,11 @@ yydefault:
 	case 1157:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6030
+=======
+//line sql.y:6235
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: []Expr{yyDollar[3].exprUnion()}}}
 		}
@@ -19587,7 +20356,11 @@ yydefault:
 	case 1158:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ColName
+<<<<<<< HEAD
 //line sql.y:6036
+=======
+//line sql.y:6241
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].colNamesUnion()
 		}
@@ -19595,7 +20368,11 @@ yydefault:
 	case 1159:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*ColName
+<<<<<<< HEAD
 //line sql.y:6040
+=======
+//line sql.y:6245
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].colNamesUnion()
 		}
@@ -19603,14 +20380,22 @@ yydefault:
 	case 1160:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ColName
+<<<<<<< HEAD
 //line sql.y:6046
+=======
+//line sql.y:6251
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*ColName{yyDollar[1].colNameUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1161:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6050
+=======
+//line sql.y:6255
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]*ColName)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].colNameUnion())
@@ -19618,7 +20403,11 @@ yydefault:
 	case 1162:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
+<<<<<<< HEAD
 //line sql.y:6056
+=======
+//line sql.y:6261
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = BothTrimType
 		}
@@ -19626,7 +20415,11 @@ yydefault:
 	case 1163:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
+<<<<<<< HEAD
 //line sql.y:6060
+=======
+//line sql.y:6265
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LeadingTrimType
 		}
@@ -19634,7 +20427,11 @@ yydefault:
 	case 1164:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
+<<<<<<< HEAD
 //line sql.y:6064
+=======
+//line sql.y:6269
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = TrailingTrimType
 		}
@@ -19642,7 +20439,11 @@ yydefault:
 	case 1165:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FrameUnitType
+<<<<<<< HEAD
 //line sql.y:6070
+=======
+//line sql.y:6275
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = FrameRowsType
 		}
@@ -19650,7 +20451,11 @@ yydefault:
 	case 1166:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FrameUnitType
+<<<<<<< HEAD
 //line sql.y:6074
+=======
+//line sql.y:6279
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = FrameRangeType
 		}
@@ -19658,7 +20463,11 @@ yydefault:
 	case 1167:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
+<<<<<<< HEAD
 //line sql.y:6081
+=======
+//line sql.y:6286
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = CumeDistExprType
 		}
@@ -19666,7 +20475,11 @@ yydefault:
 	case 1168:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
+<<<<<<< HEAD
 //line sql.y:6085
+=======
+//line sql.y:6290
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = DenseRankExprType
 		}
@@ -19674,7 +20487,11 @@ yydefault:
 	case 1169:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
+<<<<<<< HEAD
 //line sql.y:6089
+=======
+//line sql.y:6294
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = PercentRankExprType
 		}
@@ -19682,7 +20499,11 @@ yydefault:
 	case 1170:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
+<<<<<<< HEAD
 //line sql.y:6093
+=======
+//line sql.y:6298
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = RankExprType
 		}
@@ -19690,7 +20511,11 @@ yydefault:
 	case 1171:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
+<<<<<<< HEAD
 //line sql.y:6097
+=======
+//line sql.y:6302
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = RowNumberExprType
 		}
@@ -19698,7 +20523,11 @@ yydefault:
 	case 1172:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6103
+=======
+//line sql.y:6308
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: CurrentRowType}
 		}
@@ -19706,7 +20535,11 @@ yydefault:
 	case 1173:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6107
+=======
+//line sql.y:6312
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedPrecedingType}
 		}
@@ -19714,7 +20547,11 @@ yydefault:
 	case 1174:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6111
+=======
+//line sql.y:6316
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedFollowingType}
 		}
@@ -19722,7 +20559,11 @@ yydefault:
 	case 1175:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6115
+=======
+//line sql.y:6320
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[1].exprUnion()}
 		}
@@ -19730,7 +20571,11 @@ yydefault:
 	case 1176:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6119
+=======
+//line sql.y:6324
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].intervalTypeUnion()}
 		}
@@ -19738,7 +20583,11 @@ yydefault:
 	case 1177:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6123
+=======
+//line sql.y:6328
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[1].exprUnion()}
 		}
@@ -19746,7 +20595,11 @@ yydefault:
 	case 1178:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *FramePoint
+<<<<<<< HEAD
 //line sql.y:6127
+=======
+//line sql.y:6332
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].intervalTypeUnion()}
 		}
@@ -19754,7 +20607,11 @@ yydefault:
 	case 1179:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *FrameClause
+<<<<<<< HEAD
 //line sql.y:6132
+=======
+//line sql.y:6337
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19762,7 +20619,11 @@ yydefault:
 	case 1180:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *FrameClause
+<<<<<<< HEAD
 //line sql.y:6136
+=======
+//line sql.y:6341
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].frameClauseUnion()
 		}
@@ -19770,7 +20631,11 @@ yydefault:
 	case 1181:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FrameClause
+<<<<<<< HEAD
 //line sql.y:6142
+=======
+//line sql.y:6347
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[2].framePointUnion()}
 		}
@@ -19778,7 +20643,11 @@ yydefault:
 	case 1182:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *FrameClause
+<<<<<<< HEAD
 //line sql.y:6146
+=======
+//line sql.y:6351
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[3].framePointUnion(), End: yyDollar[5].framePointUnion()}
 		}
@@ -19786,7 +20655,11 @@ yydefault:
 	case 1183:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []Expr
+<<<<<<< HEAD
 //line sql.y:6151
+=======
+//line sql.y:6356
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19794,27 +20667,43 @@ yydefault:
 	case 1184:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []Expr
+<<<<<<< HEAD
 //line sql.y:6155
+=======
+//line sql.y:6360
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[3].exprsUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 1185:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6160
+=======
+//line sql.y:6365
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = IdentifierCI{}
 		}
 	case 1186:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6164
+=======
+//line sql.y:6369
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = yyDollar[1].identifierCI
 		}
 	case 1187:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *WindowSpecification
+<<<<<<< HEAD
 //line sql.y:6170
+=======
+//line sql.y:6375
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &WindowSpecification{Name: yyDollar[1].identifierCI, PartitionClause: yyDollar[2].exprsUnion(), OrderClause: yyDollar[3].orderByUnion(), FrameClause: yyDollar[4].frameClauseUnion()}
 		}
@@ -19822,7 +20711,11 @@ yydefault:
 	case 1188:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *OverClause
+<<<<<<< HEAD
 //line sql.y:6176
+=======
+//line sql.y:6381
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &OverClause{WindowSpec: yyDollar[3].windowSpecificationUnion()}
 		}
@@ -19830,7 +20723,11 @@ yydefault:
 	case 1189:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *OverClause
+<<<<<<< HEAD
 //line sql.y:6180
+=======
+//line sql.y:6385
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &OverClause{WindowName: yyDollar[2].identifierCI}
 		}
@@ -19838,7 +20735,11 @@ yydefault:
 	case 1190:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *OverClause
+<<<<<<< HEAD
 //line sql.y:6186
+=======
+//line sql.y:6391
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].overClauseUnion()
 		}
@@ -19846,7 +20747,11 @@ yydefault:
 	case 1191:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *OverClause
+<<<<<<< HEAD
 //line sql.y:6190
+=======
+//line sql.y:6395
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19854,7 +20759,11 @@ yydefault:
 	case 1192:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *NullTreatmentClause
+<<<<<<< HEAD
 //line sql.y:6195
+=======
+//line sql.y:6400
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19862,7 +20771,11 @@ yydefault:
 	case 1194:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *NullTreatmentClause
+<<<<<<< HEAD
 //line sql.y:6202
+=======
+//line sql.y:6407
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &NullTreatmentClause{yyDollar[1].nullTreatmentTypeUnion()}
 		}
@@ -19870,7 +20783,11 @@ yydefault:
 	case 1195:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL NullTreatmentType
+<<<<<<< HEAD
 //line sql.y:6208
+=======
+//line sql.y:6413
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = RespectNullsType
 		}
@@ -19878,7 +20795,11 @@ yydefault:
 	case 1196:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL NullTreatmentType
+<<<<<<< HEAD
 //line sql.y:6212
+=======
+//line sql.y:6417
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IgnoreNullsType
 		}
@@ -19886,7 +20807,11 @@ yydefault:
 	case 1197:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FirstOrLastValueExprType
+<<<<<<< HEAD
 //line sql.y:6218
+=======
+//line sql.y:6423
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = FirstValueExprType
 		}
@@ -19894,7 +20819,11 @@ yydefault:
 	case 1198:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FirstOrLastValueExprType
+<<<<<<< HEAD
 //line sql.y:6222
+=======
+//line sql.y:6427
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LastValueExprType
 		}
@@ -19902,7 +20831,11 @@ yydefault:
 	case 1199:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL FromFirstLastType
+<<<<<<< HEAD
 //line sql.y:6228
+=======
+//line sql.y:6433
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = FromFirstType
 		}
@@ -19910,7 +20843,11 @@ yydefault:
 	case 1200:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL FromFirstLastType
+<<<<<<< HEAD
 //line sql.y:6232
+=======
+//line sql.y:6437
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = FromLastType
 		}
@@ -19918,7 +20855,11 @@ yydefault:
 	case 1201:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *FromFirstLastClause
+<<<<<<< HEAD
 //line sql.y:6237
+=======
+//line sql.y:6442
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -19926,7 +20867,11 @@ yydefault:
 	case 1203:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *FromFirstLastClause
+<<<<<<< HEAD
 //line sql.y:6244
+=======
+//line sql.y:6449
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FromFirstLastClause{yyDollar[1].fromFirstLastTypeUnion()}
 		}
@@ -19934,7 +20879,11 @@ yydefault:
 	case 1204:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LagLeadExprType
+<<<<<<< HEAD
 //line sql.y:6250
+=======
+//line sql.y:6455
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LagExprType
 		}
@@ -19942,7 +20891,11 @@ yydefault:
 	case 1205:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LagLeadExprType
+<<<<<<< HEAD
 //line sql.y:6254
+=======
+//line sql.y:6459
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LeadExprType
 		}
@@ -19950,7 +20903,11 @@ yydefault:
 	case 1206:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *WindowDefinition
+<<<<<<< HEAD
 //line sql.y:6260
+=======
+//line sql.y:6465
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &WindowDefinition{Name: yyDollar[1].identifierCI, WindowSpec: yyDollar[4].windowSpecificationUnion()}
 		}
@@ -19958,34 +20915,54 @@ yydefault:
 	case 1207:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL WindowDefinitions
+<<<<<<< HEAD
 //line sql.y:6266
+=======
+//line sql.y:6471
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = WindowDefinitions{yyDollar[1].windowDefinitionUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1208:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6270
+=======
+//line sql.y:6475
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*WindowDefinitions)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].windowDefinitionUnion())
 		}
 	case 1209:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6276
+=======
+//line sql.y:6481
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1210:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6280
+=======
+//line sql.y:6485
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[2].identifierCI.String())
 		}
 	case 1211:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL BoolVal
+<<<<<<< HEAD
 //line sql.y:6286
+=======
+//line sql.y:6491
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = BoolVal(true)
 		}
@@ -19993,7 +20970,11 @@ yydefault:
 	case 1212:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL BoolVal
+<<<<<<< HEAD
 //line sql.y:6290
+=======
+//line sql.y:6495
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = BoolVal(false)
 		}
@@ -20001,7 +20982,11 @@ yydefault:
 	case 1213:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IsExprOperator
+<<<<<<< HEAD
 //line sql.y:6297
+=======
+//line sql.y:6502
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IsTrueOp
 		}
@@ -20009,7 +20994,11 @@ yydefault:
 	case 1214:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IsExprOperator
+<<<<<<< HEAD
 //line sql.y:6301
+=======
+//line sql.y:6506
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IsNotTrueOp
 		}
@@ -20017,7 +21006,11 @@ yydefault:
 	case 1215:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IsExprOperator
+<<<<<<< HEAD
 //line sql.y:6305
+=======
+//line sql.y:6510
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IsFalseOp
 		}
@@ -20025,7 +21018,11 @@ yydefault:
 	case 1216:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IsExprOperator
+<<<<<<< HEAD
 //line sql.y:6309
+=======
+//line sql.y:6514
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IsNotFalseOp
 		}
@@ -20033,7 +21030,11 @@ yydefault:
 	case 1217:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6315
+=======
+//line sql.y:6520
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].comparisonExprOperatorUnion()
 		}
@@ -20041,7 +21042,11 @@ yydefault:
 	case 1218:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6319
+=======
+//line sql.y:6524
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NullSafeEqualOp
 		}
@@ -20049,7 +21054,11 @@ yydefault:
 	case 1219:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6325
+=======
+//line sql.y:6530
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = EqualOp
 		}
@@ -20057,7 +21066,11 @@ yydefault:
 	case 1220:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6329
+=======
+//line sql.y:6534
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LessThanOp
 		}
@@ -20065,7 +21078,11 @@ yydefault:
 	case 1221:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6333
+=======
+//line sql.y:6538
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = GreaterThanOp
 		}
@@ -20073,7 +21090,11 @@ yydefault:
 	case 1222:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6337
+=======
+//line sql.y:6542
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = LessEqualOp
 		}
@@ -20081,7 +21102,11 @@ yydefault:
 	case 1223:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6341
+=======
+//line sql.y:6546
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = GreaterEqualOp
 		}
@@ -20089,7 +21114,11 @@ yydefault:
 	case 1224:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
+<<<<<<< HEAD
 //line sql.y:6345
+=======
+//line sql.y:6550
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NotEqualOp
 		}
@@ -20097,7 +21126,11 @@ yydefault:
 	case 1225:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
+<<<<<<< HEAD
 //line sql.y:6351
+=======
+//line sql.y:6556
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
@@ -20105,7 +21138,11 @@ yydefault:
 	case 1226:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
+<<<<<<< HEAD
 //line sql.y:6355
+=======
+//line sql.y:6560
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].subqueryUnion()
 		}
@@ -20113,7 +21150,11 @@ yydefault:
 	case 1227:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
+<<<<<<< HEAD
 //line sql.y:6359
+=======
+//line sql.y:6564
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ListArg(yyDollar[1].str[2:])
 			markBindVariable(yylex, yyDollar[1].str[2:])
@@ -20122,7 +21163,11 @@ yydefault:
 	case 1228:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Subquery
+<<<<<<< HEAD
 //line sql.y:6366
+=======
+//line sql.y:6571
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Subquery{yyDollar[1].tableStmtUnion()}
 		}
@@ -20130,14 +21175,22 @@ yydefault:
 	case 1229:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []Expr
+<<<<<<< HEAD
 //line sql.y:6372
+=======
+//line sql.y:6577
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []Expr{yyDollar[1].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1230:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:6376
+=======
+//line sql.y:6581
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]Expr)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].exprUnion())
@@ -20145,7 +21198,11 @@ yydefault:
 	case 1231:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6386
+=======
+//line sql.y:6591
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: yyDollar[1].identifierCI, Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -20153,7 +21210,11 @@ yydefault:
 	case 1232:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6390
+=======
+//line sql.y:6595
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCI, Exprs: yyDollar[5].exprsUnion()}
 		}
@@ -20481,7 +21542,11 @@ yydefault:
 	case 1273:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6571
+=======
+//line sql.y:6605
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONPrettyExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
@@ -20489,7 +21554,11 @@ yydefault:
 	case 1274:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6575
+=======
+//line sql.y:6609
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONStorageFreeExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
@@ -20497,7 +21566,11 @@ yydefault:
 	case 1275:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6579
+=======
+//line sql.y:6613
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONStorageSizeExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
@@ -20505,7 +21578,11 @@ yydefault:
 	case 1276:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6583
+=======
+//line sql.y:6617
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONArrayAgg{Expr: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
@@ -20513,7 +21590,11 @@ yydefault:
 	case 1277:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6587
+=======
+//line sql.y:6621
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONObjectAgg{Key: yyDollar[3].exprUnion(), Value: yyDollar[5].exprUnion(), OverClause: yyDollar[7].overClauseUnion()}
 		}
@@ -20521,7 +21602,11 @@ yydefault:
 	case 1278:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6591
+=======
+//line sql.y:6625
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: LTrimType, Type: LeadingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
@@ -20529,7 +21614,11 @@ yydefault:
 	case 1279:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6595
+=======
+//line sql.y:6629
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: RTrimType, Type: TrailingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
@@ -20537,7 +21626,11 @@ yydefault:
 	case 1280:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6599
+=======
+//line sql.y:6633
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &TrimFuncExpr{Type: yyDollar[3].trimTypeUnion(), TrimArg: yyDollar[4].exprUnion(), StringArg: yyDollar[6].exprUnion()}
 		}
@@ -20545,7 +21638,11 @@ yydefault:
 	case 1281:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6603
+=======
+//line sql.y:6637
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &TrimFuncExpr{StringArg: yyDollar[3].exprUnion()}
 		}
@@ -20553,7 +21650,11 @@ yydefault:
 	case 1282:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6607
+=======
+//line sql.y:6641
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -20561,7 +21662,11 @@ yydefault:
 	case 1283:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6611
+=======
+//line sql.y:6645
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprsUnion(), Charset: yyDollar[5].str}
 		}
@@ -20569,7 +21674,11 @@ yydefault:
 	case 1284:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6615
+=======
+//line sql.y:6656
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &TrimFuncExpr{TrimArg: yyDollar[3].exprUnion(), StringArg: yyDollar[5].exprUnion()}
 		}
@@ -20577,7 +21686,11 @@ yydefault:
 	case 1285:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6619
+=======
+//line sql.y:6660
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion()}
 		}
@@ -20585,7 +21698,11 @@ yydefault:
 	case 1286:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6623
+=======
+//line sql.y:6666
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion(), Pos: yyDollar[7].exprUnion()}
 		}
@@ -20593,7 +21710,11 @@ yydefault:
 	case 1287:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6627
+=======
+//line sql.y:6670
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion()}
 		}
@@ -20601,7 +21722,11 @@ yydefault:
 	case 1288:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6631
+=======
+//line sql.y:6674
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockingFunc{Type: GetLock, Name: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
@@ -20609,7 +21734,11 @@ yydefault:
 	case 1289:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6635
+=======
+//line sql.y:6679
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockingFunc{Type: IsFreeLock, Name: yyDollar[3].exprUnion()}
 		}
@@ -20617,7 +21746,11 @@ yydefault:
 	case 1290:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6639
+=======
+//line sql.y:6684
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockingFunc{Type: IsUsedLock, Name: yyDollar[3].exprUnion()}
 		}
@@ -20625,7 +21758,11 @@ yydefault:
 	case 1291:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6643
+=======
+//line sql.y:6688
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseAllLocks}
 		}
@@ -20633,7 +21770,11 @@ yydefault:
 	case 1292:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6647
+=======
+//line sql.y:6692
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseLock, Name: yyDollar[3].exprUnion()}
 		}
@@ -20641,7 +21782,11 @@ yydefault:
 	case 1293:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6651
+=======
+//line sql.y:6696
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONSchemaValidFuncExpr{Schema: yyDollar[3].exprUnion(), Document: yyDollar[5].exprUnion()}
 		}
@@ -20649,7 +21794,11 @@ yydefault:
 	case 1294:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6655
+=======
+//line sql.y:6700
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONSchemaValidationReportFuncExpr{Schema: yyDollar[3].exprUnion(), Document: yyDollar[5].exprUnion()}
 		}
@@ -20657,7 +21806,11 @@ yydefault:
 	case 1295:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6659
+=======
+//line sql.y:6704
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONArrayExpr{Params: yyDollar[3].exprsUnion()}
 		}
@@ -20665,7 +21818,11 @@ yydefault:
 	case 1296:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6663
+=======
+//line sql.y:6708
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20673,7 +21830,11 @@ yydefault:
 	case 1297:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6667
+=======
+//line sql.y:6712
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].exprUnion(), AxisOrderOpt: yyDollar[5].exprUnion()}
 		}
@@ -20681,7 +21842,11 @@ yydefault:
 	case 1298:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6671
+=======
+//line sql.y:6716
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20689,7 +21854,11 @@ yydefault:
 	case 1299:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6675
+=======
+//line sql.y:6720
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].exprUnion(), AxisOrderOpt: yyDollar[5].exprUnion()}
 		}
@@ -20697,7 +21866,11 @@ yydefault:
 	case 1300:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6679
+=======
+//line sql.y:6724
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsEmpty, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20705,7 +21878,11 @@ yydefault:
 	case 1301:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6683
+=======
+//line sql.y:6728
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsSimple, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20713,7 +21890,11 @@ yydefault:
 	case 1302:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6687
+=======
+//line sql.y:6732
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Dimension, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20721,7 +21902,11 @@ yydefault:
 	case 1303:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6691
+=======
+//line sql.y:6736
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Envelope, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20729,7 +21914,11 @@ yydefault:
 	case 1304:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6695
+=======
+//line sql.y:6740
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: GeometryType, Geom: yyDollar[3].exprUnion()}
 		}
@@ -20737,7 +21926,11 @@ yydefault:
 	case 1305:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6699
+=======
+//line sql.y:6744
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].exprUnion()}
 		}
@@ -20745,7 +21938,11 @@ yydefault:
 	case 1306:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6703
+=======
+//line sql.y:6748
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
@@ -20753,7 +21950,11 @@ yydefault:
 	case 1307:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6707
+=======
+//line sql.y:6752
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].exprUnion()}
 		}
@@ -20761,7 +21962,11 @@ yydefault:
 	case 1308:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6711
+=======
+//line sql.y:6756
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
@@ -20769,7 +21974,11 @@ yydefault:
 	case 1309:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6715
+=======
+//line sql.y:6760
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: EndPoint, Linestring: yyDollar[3].exprUnion()}
 		}
@@ -20777,7 +21986,11 @@ yydefault:
 	case 1310:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6719
+=======
+//line sql.y:6764
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: IsClosed, Linestring: yyDollar[3].exprUnion()}
 		}
@@ -20785,7 +21998,11 @@ yydefault:
 	case 1311:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6723
+=======
+//line sql.y:6768
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].exprUnion()}
 		}
@@ -20793,7 +22010,11 @@ yydefault:
 	case 1312:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6727
+=======
+//line sql.y:6772
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
@@ -20801,7 +22022,11 @@ yydefault:
 	case 1313:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6731
+=======
+//line sql.y:6776
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: NumPoints, Linestring: yyDollar[3].exprUnion()}
 		}
@@ -20809,7 +22034,11 @@ yydefault:
 	case 1314:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6735
+=======
+//line sql.y:6780
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: PointN, Linestring: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
@@ -20817,7 +22046,11 @@ yydefault:
 	case 1315:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6739
+=======
+//line sql.y:6784
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: StartPoint, Linestring: yyDollar[3].exprUnion()}
 		}
@@ -20825,7 +22058,11 @@ yydefault:
 	case 1316:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6743
+=======
+//line sql.y:6788
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].exprUnion()}
 		}
@@ -20833,7 +22070,11 @@ yydefault:
 	case 1317:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6747
+=======
+//line sql.y:6792
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
@@ -20841,7 +22082,11 @@ yydefault:
 	case 1318:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6751
+=======
+//line sql.y:6796
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].exprUnion()}
 		}
@@ -20849,7 +22094,11 @@ yydefault:
 	case 1319:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6755
+=======
+//line sql.y:6800
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
@@ -20857,7 +22106,11 @@ yydefault:
 	case 1320:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6759
+=======
+//line sql.y:6804
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20865,7 +22118,11 @@ yydefault:
 	case 1321:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6763
+=======
+//line sql.y:6808
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20873,7 +22130,11 @@ yydefault:
 	case 1322:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6767
+=======
+//line sql.y:6812
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -20881,7 +22142,11 @@ yydefault:
 	case 1323:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6771
+=======
+//line sql.y:6816
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20889,7 +22154,11 @@ yydefault:
 	case 1324:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6775
+=======
+//line sql.y:6820
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20897,7 +22166,11 @@ yydefault:
 	case 1325:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6779
+=======
+//line sql.y:6824
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -20905,7 +22178,11 @@ yydefault:
 	case 1326:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6783
+=======
+//line sql.y:6828
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20913,7 +22190,11 @@ yydefault:
 	case 1327:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6787
+=======
+//line sql.y:6832
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20921,7 +22202,11 @@ yydefault:
 	case 1328:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6791
+=======
+//line sql.y:6836
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -20929,7 +22214,11 @@ yydefault:
 	case 1329:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6795
+=======
+//line sql.y:6840
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20937,7 +22226,11 @@ yydefault:
 	case 1330:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6799
+=======
+//line sql.y:6844
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20945,7 +22238,11 @@ yydefault:
 	case 1331:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6803
+=======
+//line sql.y:6848
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -20953,7 +22250,11 @@ yydefault:
 	case 1332:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6807
+=======
+//line sql.y:6852
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20961,7 +22262,11 @@ yydefault:
 	case 1333:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6811
+=======
+//line sql.y:6856
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20969,7 +22274,11 @@ yydefault:
 	case 1334:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6815
+=======
+//line sql.y:6860
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -20977,7 +22286,11 @@ yydefault:
 	case 1335:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6819
+=======
+//line sql.y:6864
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -20985,7 +22298,11 @@ yydefault:
 	case 1336:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6823
+=======
+//line sql.y:6868
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -20993,7 +22310,11 @@ yydefault:
 	case 1337:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6827
+=======
+//line sql.y:6872
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21001,7 +22322,11 @@ yydefault:
 	case 1338:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6831
+=======
+//line sql.y:6876
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -21009,7 +22334,11 @@ yydefault:
 	case 1339:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6835
+=======
+//line sql.y:6880
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21017,7 +22346,11 @@ yydefault:
 	case 1340:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6839
+=======
+//line sql.y:6884
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21025,7 +22358,11 @@ yydefault:
 	case 1341:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6843
+=======
+//line sql.y:6888
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
@@ -21033,7 +22370,11 @@ yydefault:
 	case 1342:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6847
+=======
+//line sql.y:6892
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21041,7 +22382,11 @@ yydefault:
 	case 1343:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6851
+=======
+//line sql.y:6896
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21049,7 +22394,11 @@ yydefault:
 	case 1344:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6855
+=======
+//line sql.y:6900
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21057,7 +22406,11 @@ yydefault:
 	case 1345:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6859
+=======
+//line sql.y:6904
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21065,7 +22418,11 @@ yydefault:
 	case 1346:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6863
+=======
+//line sql.y:6908
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21073,7 +22430,11 @@ yydefault:
 	case 1347:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6867
+=======
+//line sql.y:6912
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21081,7 +22442,11 @@ yydefault:
 	case 1348:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6871
+=======
+//line sql.y:6916
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21089,7 +22454,11 @@ yydefault:
 	case 1349:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6875
+=======
+//line sql.y:6920
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21097,7 +22466,11 @@ yydefault:
 	case 1350:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6879
+=======
+//line sql.y:6924
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21105,7 +22478,11 @@ yydefault:
 	case 1351:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6883
+=======
+//line sql.y:6928
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21113,7 +22490,11 @@ yydefault:
 	case 1352:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6887
+=======
+//line sql.y:6932
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21121,7 +22502,11 @@ yydefault:
 	case 1353:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6891
+=======
+//line sql.y:6936
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21129,7 +22514,11 @@ yydefault:
 	case 1354:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6895
+=======
+//line sql.y:6940
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21137,7 +22526,11 @@ yydefault:
 	case 1355:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6899
+=======
+//line sql.y:6944
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21145,7 +22538,11 @@ yydefault:
 	case 1356:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6903
+=======
+//line sql.y:6948
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21153,7 +22550,11 @@ yydefault:
 	case 1357:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6907
+=======
+//line sql.y:6952
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21161,7 +22562,11 @@ yydefault:
 	case 1358:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6911
+=======
+//line sql.y:6956
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21169,7 +22574,11 @@ yydefault:
 	case 1359:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6915
+=======
+//line sql.y:6960
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21177,7 +22586,11 @@ yydefault:
 	case 1360:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6919
+=======
+//line sql.y:6964
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21185,7 +22598,11 @@ yydefault:
 	case 1361:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6923
+=======
+//line sql.y:6968
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21193,7 +22610,11 @@ yydefault:
 	case 1362:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6927
+=======
+//line sql.y:6972
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21201,7 +22622,11 @@ yydefault:
 	case 1363:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6931
+=======
+//line sql.y:6976
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21209,7 +22634,11 @@ yydefault:
 	case 1364:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6935
+=======
+//line sql.y:6980
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21217,7 +22646,11 @@ yydefault:
 	case 1365:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6939
+=======
+//line sql.y:6984
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
@@ -21225,7 +22658,11 @@ yydefault:
 	case 1366:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6943
+=======
+//line sql.y:6988
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
@@ -21233,7 +22670,11 @@ yydefault:
 	case 1367:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6947
+=======
+//line sql.y:6992
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
@@ -21241,7 +22682,11 @@ yydefault:
 	case 1368:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6951
+=======
+//line sql.y:6996
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Area, Polygon: yyDollar[3].exprUnion()}
 		}
@@ -21249,7 +22694,11 @@ yydefault:
 	case 1369:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6955
+=======
+//line sql.y:7000
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Centroid, Polygon: yyDollar[3].exprUnion()}
 		}
@@ -21257,7 +22706,11 @@ yydefault:
 	case 1370:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6959
+=======
+//line sql.y:7004
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: ExteriorRing, Polygon: yyDollar[3].exprUnion()}
 		}
@@ -21265,7 +22718,11 @@ yydefault:
 	case 1371:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6963
+=======
+//line sql.y:7008
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: InteriorRingN, Polygon: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
@@ -21273,7 +22730,11 @@ yydefault:
 	case 1372:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6967
+=======
+//line sql.y:7012
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: NumInteriorRings, Polygon: yyDollar[3].exprUnion()}
 		}
@@ -21281,7 +22742,11 @@ yydefault:
 	case 1373:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6971
+=======
+//line sql.y:7016
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: GeometryN, GeomColl: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
@@ -21289,7 +22754,11 @@ yydefault:
 	case 1374:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6975
+=======
+//line sql.y:7020
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: NumGeometries, GeomColl: yyDollar[3].exprUnion()}
 		}
@@ -21297,7 +22766,11 @@ yydefault:
 	case 1375:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6979
+=======
+//line sql.y:7024
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeoHashFromLatLongExpr{Longitude: yyDollar[3].exprUnion(), Latitude: yyDollar[5].exprUnion(), MaxLength: yyDollar[7].exprUnion()}
 		}
@@ -21305,7 +22778,11 @@ yydefault:
 	case 1376:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6983
+=======
+//line sql.y:7028
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeoHashFromPointExpr{Point: yyDollar[3].exprUnion(), MaxLength: yyDollar[5].exprUnion()}
 		}
@@ -21313,7 +22790,11 @@ yydefault:
 	case 1377:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6987
+=======
+//line sql.y:7032
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LatitudeFromHash, GeoHash: yyDollar[3].exprUnion()}
 		}
@@ -21321,7 +22802,11 @@ yydefault:
 	case 1378:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6991
+=======
+//line sql.y:7036
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LongitudeFromHash, GeoHash: yyDollar[3].exprUnion()}
 		}
@@ -21329,7 +22814,11 @@ yydefault:
 	case 1379:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6995
+=======
+//line sql.y:7040
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: PointFromHash, GeoHash: yyDollar[3].exprUnion(), SridOpt: yyDollar[5].exprUnion()}
 		}
@@ -21337,7 +22826,11 @@ yydefault:
 	case 1380:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:6999
+=======
+//line sql.y:7044
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion()}
 		}
@@ -21345,7 +22838,11 @@ yydefault:
 	case 1381:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7003
+=======
+//line sql.y:7048
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion(), HigherDimHandlerOpt: yyDollar[5].exprUnion()}
 		}
@@ -21353,7 +22850,11 @@ yydefault:
 	case 1382:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7007
+=======
+//line sql.y:7052
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion(), HigherDimHandlerOpt: yyDollar[5].exprUnion(), Srid: yyDollar[7].exprUnion()}
 		}
@@ -21361,7 +22862,11 @@ yydefault:
 	case 1383:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7011
+=======
+//line sql.y:7056
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion()}
 		}
@@ -21369,7 +22874,11 @@ yydefault:
 	case 1384:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7015
+=======
+//line sql.y:7060
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion(), MaxDecimalDigits: yyDollar[5].exprUnion()}
 		}
@@ -21377,7 +22886,11 @@ yydefault:
 	case 1385:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7019
+=======
+//line sql.y:7064
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion(), MaxDecimalDigits: yyDollar[5].exprUnion(), Bitmask: yyDollar[7].exprUnion()}
 		}
@@ -21385,7 +22898,11 @@ yydefault:
 	case 1386:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7023
+=======
+//line sql.y:7068
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONObjectExpr{Params: yyDollar[3].jsonObjectParamsUnion()}
 		}
@@ -21393,7 +22910,11 @@ yydefault:
 	case 1387:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7027
+=======
+//line sql.y:7072
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONQuoteExpr{StringArg: yyDollar[3].exprUnion()}
 		}
@@ -21401,7 +22922,11 @@ yydefault:
 	case 1388:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7031
+=======
+//line sql.y:7076
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONContainsExpr{Target: yyDollar[3].exprUnion(), Candidate: yyDollar[5].exprsUnion()[0], PathList: yyDollar[5].exprsUnion()[1:]}
 		}
@@ -21409,7 +22934,11 @@ yydefault:
 	case 1389:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7035
+=======
+//line sql.y:7080
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONContainsPathExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), PathList: yyDollar[7].exprsUnion()}
 		}
@@ -21417,7 +22946,11 @@ yydefault:
 	case 1390:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7039
+=======
+//line sql.y:7084
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[3].exprUnion(), PathList: yyDollar[5].exprsUnion()}
 		}
@@ -21425,7 +22958,11 @@ yydefault:
 	case 1391:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7043
+=======
+//line sql.y:7088
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].exprUnion()}
 		}
@@ -21433,7 +22970,11 @@ yydefault:
 	case 1392:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7047
+=======
+//line sql.y:7092
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
 		}
@@ -21441,7 +22982,11 @@ yydefault:
 	case 1393:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7051
+=======
+//line sql.y:7096
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].exprUnion(), JSONDoc2: yyDollar[5].exprUnion()}
 		}
@@ -21449,7 +22994,11 @@ yydefault:
 	case 1394:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7055
+=======
+//line sql.y:7100
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion()}
 		}
@@ -21457,7 +23006,11 @@ yydefault:
 	case 1395:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7059
+=======
+//line sql.y:7104
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion(), EscapeChar: yyDollar[9].exprsUnion()[0], PathList: yyDollar[9].exprsUnion()[1:]}
 		}
@@ -21465,7 +23018,11 @@ yydefault:
 	case 1396:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7063
+=======
+//line sql.y:7108
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion()}
 		}
@@ -21473,7 +23030,11 @@ yydefault:
 	case 1397:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7067
+=======
+//line sql.y:7112
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion()}
 		}
@@ -21481,7 +23042,11 @@ yydefault:
 	case 1398:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7071
+=======
+//line sql.y:7116
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), ErrorOnResponse: yyDollar[7].jtOnResponseUnion()}
 		}
@@ -21489,7 +23054,11 @@ yydefault:
 	case 1399:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7075
+=======
+//line sql.y:7120
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion(), ErrorOnResponse: yyDollar[8].jtOnResponseUnion()}
 		}
@@ -21497,7 +23066,11 @@ yydefault:
 	case 1400:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7079
+=======
+//line sql.y:7124
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
@@ -21505,7 +23078,11 @@ yydefault:
 	case 1401:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7083
+=======
+//line sql.y:7128
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: ValidAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
@@ -21513,7 +23090,11 @@ yydefault:
 	case 1402:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7087
+=======
+//line sql.y:7132
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: TypeAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
@@ -21521,7 +23102,11 @@ yydefault:
 	case 1403:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7091
+=======
+//line sql.y:7136
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
@@ -21529,7 +23114,11 @@ yydefault:
 	case 1404:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7095
+=======
+//line sql.y:7140
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
 		}
@@ -21537,7 +23126,11 @@ yydefault:
 	case 1405:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7099
+=======
+//line sql.y:7144
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayAppendType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
@@ -21545,7 +23138,11 @@ yydefault:
 	case 1406:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7103
+=======
+//line sql.y:7148
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
@@ -21553,7 +23150,11 @@ yydefault:
 	case 1407:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7107
+=======
+//line sql.y:7152
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
@@ -21561,7 +23162,11 @@ yydefault:
 	case 1408:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7111
+=======
+//line sql.y:7156
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONReplaceType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
@@ -21569,7 +23174,11 @@ yydefault:
 	case 1409:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7115
+=======
+//line sql.y:7160
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONSetType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
@@ -21577,7 +23186,11 @@ yydefault:
 	case 1410:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7119
+=======
+//line sql.y:7164
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
@@ -21585,7 +23198,11 @@ yydefault:
 	case 1411:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7123
+=======
+//line sql.y:7168
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
@@ -21593,7 +23210,11 @@ yydefault:
 	case 1412:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7127
+=======
+//line sql.y:7172
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
@@ -21601,7 +23222,11 @@ yydefault:
 	case 1413:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7131
+=======
+//line sql.y:7176
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONRemoveExpr{JSONDoc: yyDollar[3].exprUnion(), PathList: yyDollar[5].exprsUnion()}
 		}
@@ -21609,7 +23234,11 @@ yydefault:
 	case 1414:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7135
+=======
+//line sql.y:7180
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: yyDollar[3].exprUnion()}
 		}
@@ -21617,7 +23246,11 @@ yydefault:
 	case 1415:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7139
+=======
+//line sql.y:7184
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &MultiPolygonExpr{PolygonParams: yyDollar[3].exprsUnion()}
 		}
@@ -21625,7 +23258,11 @@ yydefault:
 	case 1416:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7143
+=======
+//line sql.y:7188
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &MultiPointExpr{PointParams: yyDollar[3].exprsUnion()}
 		}
@@ -21633,7 +23270,11 @@ yydefault:
 	case 1417:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7147
+=======
+//line sql.y:7192
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &MultiLinestringExpr{LinestringParams: yyDollar[3].exprsUnion()}
 		}
@@ -21641,7 +23282,11 @@ yydefault:
 	case 1418:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7151
+=======
+//line sql.y:7196
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PolygonExpr{LinestringParams: yyDollar[3].exprsUnion()}
 		}
@@ -21649,7 +23294,11 @@ yydefault:
 	case 1419:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7155
+=======
+//line sql.y:7200
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LineStringExpr{PointParams: yyDollar[3].exprsUnion()}
 		}
@@ -21657,7 +23306,11 @@ yydefault:
 	case 1420:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7159
+=======
+//line sql.y:7204
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PointExpr{XCordinate: yyDollar[3].exprUnion(), YCordinate: yyDollar[5].exprUnion()}
 		}
@@ -21665,7 +23318,11 @@ yydefault:
 	case 1421:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7163
+=======
+//line sql.y:7208
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ArgumentLessWindowExpr{Type: yyDollar[1].argumentLessWindowExprTypeUnion(), OverClause: yyDollar[4].overClauseUnion()}
 		}
@@ -21673,7 +23330,11 @@ yydefault:
 	case 1422:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7167
+=======
+//line sql.y:7212
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
@@ -21681,7 +23342,11 @@ yydefault:
 	case 1423:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7171
+=======
+//line sql.y:7216
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &NtileExpr{N: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
@@ -21689,7 +23354,11 @@ yydefault:
 	case 1424:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7175
+=======
+//line sql.y:7220
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), FromFirstLastClause: yyDollar[7].fromFirstLastClauseUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
 		}
@@ -21697,7 +23366,11 @@ yydefault:
 	case 1425:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7179
+=======
+//line sql.y:7224
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
@@ -21705,7 +23378,11 @@ yydefault:
 	case 1426:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7183
+=======
+//line sql.y:7228
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), Default: yyDollar[6].exprUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
 		}
@@ -21713,7 +23390,11 @@ yydefault:
 	case 1427:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7187
+=======
+//line sql.y:7232
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
@@ -21721,7 +23402,11 @@ yydefault:
 	case 1428:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7191
+=======
+//line sql.y:7236
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
@@ -21729,7 +23414,11 @@ yydefault:
 	case 1429:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7195
+=======
+//line sql.y:7240
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
@@ -21737,7 +23426,11 @@ yydefault:
 	case 1430:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7199
+=======
+//line sql.y:7244
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
@@ -21745,7 +23438,11 @@ yydefault:
 	case 1431:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7203
+=======
+//line sql.y:7248
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
@@ -21753,7 +23450,331 @@ yydefault:
 	case 1432:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7207
+=======
+//line sql.y:7252
+		{
+			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1433:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7256
+		{
+			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].exprUnion(), JSONDoc2: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1434:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7260
+		{
+			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1435:
+		yyDollar = yyS[yypt-10 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7264
+		{
+			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion(), EscapeChar: yyDollar[9].exprsUnion()[0], PathList: yyDollar[9].exprsUnion()[1:]}
+		}
+		yyVAL.union = yyLOCAL
+	case 1436:
+		yyDollar = yyS[yypt-7 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7268
+		{
+			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1437:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7272
+		{
+			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1438:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7276
+		{
+			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), ErrorOnResponse: yyDollar[7].jtOnResponseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1439:
+		yyDollar = yyS[yypt-9 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7280
+		{
+			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion(), ErrorOnResponse: yyDollar[8].jtOnResponseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1440:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7284
+		{
+			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1441:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7288
+		{
+			yyLOCAL = &JSONAttributesExpr{Type: ValidAttributeType, JSONDoc: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1442:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7292
+		{
+			yyLOCAL = &JSONAttributesExpr{Type: TypeAttributeType, JSONDoc: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1443:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7296
+		{
+			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1444:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7300
+		{
+			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1445:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7304
+		{
+			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayAppendType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1446:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7308
+		{
+			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1447:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7312
+		{
+			yyLOCAL = &JSONValueModifierExpr{Type: JSONInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1448:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7316
+		{
+			yyLOCAL = &JSONValueModifierExpr{Type: JSONReplaceType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1449:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7320
+		{
+			yyLOCAL = &JSONValueModifierExpr{Type: JSONSetType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1450:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7324
+		{
+			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1451:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7328
+		{
+			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1452:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7332
+		{
+			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1453:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7336
+		{
+			yyLOCAL = &JSONRemoveExpr{JSONDoc: yyDollar[3].exprUnion(), PathList: yyDollar[5].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1454:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7340
+		{
+			yyLOCAL = &JSONUnquoteExpr{JSONValue: yyDollar[3].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1455:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7344
+		{
+			yyLOCAL = &MultiPolygonExpr{PolygonParams: yyDollar[3].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1456:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7348
+		{
+			yyLOCAL = &MultiPointExpr{PointParams: yyDollar[3].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1457:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7352
+		{
+			yyLOCAL = &MultiLinestringExpr{LinestringParams: yyDollar[3].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1458:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7356
+		{
+			yyLOCAL = &PolygonExpr{LinestringParams: yyDollar[3].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1459:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7360
+		{
+			yyLOCAL = &LineStringExpr{PointParams: yyDollar[3].exprsUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1460:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7364
+		{
+			yyLOCAL = &PointExpr{XCordinate: yyDollar[3].exprUnion(), YCordinate: yyDollar[5].exprUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1461:
+		yyDollar = yyS[yypt-4 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7368
+		{
+			yyLOCAL = &ArgumentLessWindowExpr{Type: yyDollar[1].argumentLessWindowExprTypeUnion(), OverClause: yyDollar[4].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1462:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7372
+		{
+			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1463:
+		yyDollar = yyS[yypt-5 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7376
+		{
+			yyLOCAL = &NtileExpr{N: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1464:
+		yyDollar = yyS[yypt-9 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7380
+		{
+			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), FromFirstLastClause: yyDollar[7].fromFirstLastClauseUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1465:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7384
+		{
+			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1466:
+		yyDollar = yyS[yypt-9 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7388
+		{
+			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), Default: yyDollar[6].exprUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1467:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7392
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1468:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7396
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
+		}
+		yyVAL.union = yyLOCAL
+	case 1469:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7400
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1470:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7404
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1471:
+		yyDollar = yyS[yypt-8 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7408
+		{
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+		}
+		yyVAL.union = yyLOCAL
+	case 1472:
+		yyDollar = yyS[yypt-6 : yypt+1]
+		var yyLOCAL Expr
+//line sql.y:7412
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
@@ -21761,7 +23782,11 @@ yydefault:
 	case 1437:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7217
+=======
+//line sql.y:7422
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
@@ -21769,7 +23794,11 @@ yydefault:
 	case 1438:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7221
+=======
+//line sql.y:7426
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[1].str)
 		}
@@ -21777,7 +23806,11 @@ yydefault:
 	case 1439:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7225
+=======
+//line sql.y:7430
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
@@ -21785,7 +23818,11 @@ yydefault:
 	case 1440:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7229
+=======
+//line sql.y:7434
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].str[1:])
 		}
@@ -21793,7 +23830,11 @@ yydefault:
 	case 1441:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7234
+=======
+//line sql.y:7439
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -21801,7 +23842,11 @@ yydefault:
 	case 1442:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7238
+=======
+//line sql.y:7443
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
@@ -21809,7 +23854,11 @@ yydefault:
 	case 1443:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7244
+=======
+//line sql.y:7449
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
@@ -21817,7 +23866,11 @@ yydefault:
 	case 1444:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7248
+=======
+//line sql.y:7453
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion()}
 		}
@@ -21825,7 +23878,11 @@ yydefault:
 	case 1445:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7252
+=======
+//line sql.y:7457
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion()}
 		}
@@ -21833,7 +23890,11 @@ yydefault:
 	case 1446:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7256
+=======
+//line sql.y:7461
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), ReturnOption: yyDollar[11].exprUnion()}
 		}
@@ -21841,7 +23902,11 @@ yydefault:
 	case 1447:
 		yyDollar = yyS[yypt-14 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7260
+=======
+//line sql.y:7465
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), ReturnOption: yyDollar[11].exprUnion(), MatchType: yyDollar[13].exprUnion()}
@@ -21850,7 +23915,11 @@ yydefault:
 	case 1448:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7265
+=======
+//line sql.y:7470
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
@@ -21858,7 +23927,11 @@ yydefault:
 	case 1449:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7269
+=======
+//line sql.y:7474
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), MatchType: yyDollar[7].exprUnion()}
 		}
@@ -21866,7 +23939,11 @@ yydefault:
 	case 1450:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7273
+=======
+//line sql.y:7478
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion()}
 		}
@@ -21874,7 +23951,11 @@ yydefault:
 	case 1451:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7277
+=======
+//line sql.y:7482
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion()}
 		}
@@ -21882,7 +23963,11 @@ yydefault:
 	case 1452:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7281
+=======
+//line sql.y:7486
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion(), Occurrence: yyDollar[11].exprUnion()}
 		}
@@ -21890,7 +23975,11 @@ yydefault:
 	case 1453:
 		yyDollar = yyS[yypt-14 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7285
+=======
+//line sql.y:7490
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion(), Occurrence: yyDollar[11].exprUnion(), MatchType: yyDollar[13].exprUnion()}
@@ -21899,7 +23988,11 @@ yydefault:
 	case 1454:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7290
+=======
+//line sql.y:7495
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
@@ -21907,7 +24000,11 @@ yydefault:
 	case 1455:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7294
+=======
+//line sql.y:7499
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion()}
 		}
@@ -21915,7 +24012,11 @@ yydefault:
 	case 1456:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7298
+=======
+//line sql.y:7503
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion()}
 		}
@@ -21923,7 +24024,11 @@ yydefault:
 	case 1457:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7302
+=======
+//line sql.y:7507
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), MatchType: yyDollar[11].exprUnion()}
@@ -21932,7 +24037,11 @@ yydefault:
 	case 1458:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7309
+=======
+//line sql.y:7514
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ExtractValueExpr{Fragment: yyDollar[3].exprUnion(), XPathExpr: yyDollar[5].exprUnion()}
 		}
@@ -21940,7 +24049,11 @@ yydefault:
 	case 1459:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7313
+=======
+//line sql.y:7518
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &UpdateXMLExpr{Target: yyDollar[3].exprUnion(), XPathExpr: yyDollar[5].exprUnion(), NewXML: yyDollar[7].exprUnion()}
 		}
@@ -21948,7 +24061,11 @@ yydefault:
 	case 1460:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7319
+=======
+//line sql.y:7524
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatBytesType, Argument: yyDollar[3].exprUnion()}
 		}
@@ -21956,7 +24073,11 @@ yydefault:
 	case 1461:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7323
+=======
+//line sql.y:7528
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatPicoTimeType, Argument: yyDollar[3].exprUnion()}
 		}
@@ -21964,7 +24085,11 @@ yydefault:
 	case 1462:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7327
+=======
+//line sql.y:7532
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsCurrentThreadIDType}
 		}
@@ -21972,7 +24097,11 @@ yydefault:
 	case 1463:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7331
+=======
+//line sql.y:7536
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument: yyDollar[3].exprUnion()}
 		}
@@ -21980,7 +24109,11 @@ yydefault:
 	case 1464:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7337
+=======
+//line sql.y:7542
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubsetType, Set1: yyDollar[3].exprUnion(), Set2: yyDollar[5].exprUnion()}
 		}
@@ -21988,7 +24121,11 @@ yydefault:
 	case 1465:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7341
+=======
+//line sql.y:7546
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubtractType, Set1: yyDollar[3].exprUnion(), Set2: yyDollar[5].exprUnion()}
 		}
@@ -21996,7 +24133,11 @@ yydefault:
 	case 1466:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7345
+=======
+//line sql.y:7550
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].exprUnion()}
 		}
@@ -22004,7 +24145,11 @@ yydefault:
 	case 1467:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7349
+=======
+//line sql.y:7554
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
@@ -22012,7 +24157,11 @@ yydefault:
 	case 1468:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7353
+=======
+//line sql.y:7558
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion()}
 		}
@@ -22020,7 +24169,11 @@ yydefault:
 	case 1469:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7357
+=======
+//line sql.y:7562
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
@@ -22028,7 +24181,11 @@ yydefault:
 	case 1470:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7361
+=======
+//line sql.y:7566
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion(), Channel: yyDollar[7].exprUnion()}
 		}
@@ -22036,7 +24193,11 @@ yydefault:
 	case 1471:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7366
+=======
+//line sql.y:7571
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22044,7 +24205,11 @@ yydefault:
 	case 1472:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7370
+=======
+//line sql.y:7575
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].convertTypeUnion()
 		}
@@ -22052,7 +24217,11 @@ yydefault:
 	case 1473:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7376
+=======
+//line sql.y:7581
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDayHour
 		}
@@ -22060,7 +24229,11 @@ yydefault:
 	case 1474:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7380
+=======
+//line sql.y:7585
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDayMicrosecond
 		}
@@ -22068,7 +24241,11 @@ yydefault:
 	case 1475:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7384
+=======
+//line sql.y:7589
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDayMinute
 		}
@@ -22076,7 +24253,11 @@ yydefault:
 	case 1476:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7388
+=======
+//line sql.y:7593
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDaySecond
 		}
@@ -22084,7 +24265,11 @@ yydefault:
 	case 1477:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7392
+=======
+//line sql.y:7597
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHourMicrosecond
 		}
@@ -22092,7 +24277,11 @@ yydefault:
 	case 1478:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7396
+=======
+//line sql.y:7601
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHourMinute
 		}
@@ -22100,7 +24289,11 @@ yydefault:
 	case 1479:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7400
+=======
+//line sql.y:7605
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHourSecond
 		}
@@ -22108,7 +24301,11 @@ yydefault:
 	case 1480:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7404
+=======
+//line sql.y:7609
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMinuteMicrosecond
 		}
@@ -22116,7 +24313,11 @@ yydefault:
 	case 1481:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7408
+=======
+//line sql.y:7613
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMinuteSecond
 		}
@@ -22124,7 +24325,11 @@ yydefault:
 	case 1482:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7412
+=======
+//line sql.y:7617
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalSecondMicrosecond
 		}
@@ -22132,7 +24337,11 @@ yydefault:
 	case 1483:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7416
+=======
+//line sql.y:7621
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalYearMonth
 		}
@@ -22140,7 +24349,11 @@ yydefault:
 	case 1484:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7420
+=======
+//line sql.y:7625
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -22148,7 +24361,11 @@ yydefault:
 	case 1485:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7424
+=======
+//line sql.y:7629
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -22156,7 +24373,11 @@ yydefault:
 	case 1486:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7428
+=======
+//line sql.y:7633
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -22164,7 +24385,11 @@ yydefault:
 	case 1487:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7432
+=======
+//line sql.y:7637
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -22172,7 +24397,11 @@ yydefault:
 	case 1488:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7436
+=======
+//line sql.y:7641
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -22180,7 +24409,11 @@ yydefault:
 	case 1489:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7440
+=======
+//line sql.y:7645
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -22188,7 +24421,11 @@ yydefault:
 	case 1490:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7444
+=======
+//line sql.y:7649
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -22196,7 +24433,11 @@ yydefault:
 	case 1491:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7448
+=======
+//line sql.y:7653
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -22204,7 +24445,11 @@ yydefault:
 	case 1492:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7452
+=======
+//line sql.y:7657
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalYear
 		}
@@ -22212,7 +24457,11 @@ yydefault:
 	case 1493:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7458
+=======
+//line sql.y:7663
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -22220,7 +24469,11 @@ yydefault:
 	case 1494:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7462
+=======
+//line sql.y:7667
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -22228,7 +24481,11 @@ yydefault:
 	case 1495:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7466
+=======
+//line sql.y:7671
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -22236,7 +24493,11 @@ yydefault:
 	case 1496:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7470
+=======
+//line sql.y:7675
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -22244,7 +24505,11 @@ yydefault:
 	case 1497:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7474
+=======
+//line sql.y:7679
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -22252,7 +24517,11 @@ yydefault:
 	case 1498:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7478
+=======
+//line sql.y:7683
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -22260,7 +24529,11 @@ yydefault:
 	case 1499:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7482
+=======
+//line sql.y:7687
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -22268,7 +24541,11 @@ yydefault:
 	case 1500:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7486
+=======
+//line sql.y:7691
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -22276,7 +24553,11 @@ yydefault:
 	case 1501:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7490
+=======
+//line sql.y:7695
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalYear
 		}
@@ -22284,7 +24565,11 @@ yydefault:
 	case 1502:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7494
+=======
+//line sql.y:7699
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -22292,7 +24577,11 @@ yydefault:
 	case 1503:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7498
+=======
+//line sql.y:7703
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -22300,7 +24589,11 @@ yydefault:
 	case 1504:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7502
+=======
+//line sql.y:7707
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -22308,7 +24601,11 @@ yydefault:
 	case 1505:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7506
+=======
+//line sql.y:7711
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -22316,7 +24613,11 @@ yydefault:
 	case 1506:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7510
+=======
+//line sql.y:7715
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -22324,7 +24625,11 @@ yydefault:
 	case 1507:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7514
+=======
+//line sql.y:7719
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -22332,7 +24637,11 @@ yydefault:
 	case 1508:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7518
+=======
+//line sql.y:7723
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -22340,7 +24649,11 @@ yydefault:
 	case 1509:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7522
+=======
+//line sql.y:7727
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -22348,7 +24661,11 @@ yydefault:
 	case 1510:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
+<<<<<<< HEAD
 //line sql.y:7526
+=======
+//line sql.y:7731
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IntervalYear
 		}
@@ -22356,7 +24673,11 @@ yydefault:
 	case 1513:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL int
+<<<<<<< HEAD
 //line sql.y:7536
+=======
+//line sql.y:7741
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = 0
 		}
@@ -22364,7 +24685,11 @@ yydefault:
 	case 1514:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL int
+<<<<<<< HEAD
 //line sql.y:7540
+=======
+//line sql.y:7745
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = 0
 		}
@@ -22372,7 +24697,11 @@ yydefault:
 	case 1515:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL int
+<<<<<<< HEAD
 //line sql.y:7544
+=======
+//line sql.y:7749
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = convertStringToInt(yyDollar[2].str)
 		}
@@ -22380,7 +24709,11 @@ yydefault:
 	case 1516:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7554
+=======
+//line sql.y:7759
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -22388,7 +24721,11 @@ yydefault:
 	case 1517:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7558
+=======
+//line sql.y:7763
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -22396,7 +24733,11 @@ yydefault:
 	case 1518:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7562
+=======
+//line sql.y:7767
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -22404,7 +24745,11 @@ yydefault:
 	case 1519:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7566
+=======
+//line sql.y:7771
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -22412,7 +24757,11 @@ yydefault:
 	case 1520:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7570
+=======
+//line sql.y:7775
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: yyDollar[3].exprsUnion()}
 		}
@@ -22420,7 +24769,11 @@ yydefault:
 	case 1521:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL MatchExprOption
+<<<<<<< HEAD
 //line sql.y:7576
+=======
+//line sql.y:7781
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NoOption
 		}
@@ -22428,7 +24781,11 @@ yydefault:
 	case 1522:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL MatchExprOption
+<<<<<<< HEAD
 //line sql.y:7580
+=======
+//line sql.y:7785
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = BooleanModeOpt
 		}
@@ -22436,7 +24793,11 @@ yydefault:
 	case 1523:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL MatchExprOption
+<<<<<<< HEAD
 //line sql.y:7584
+=======
+//line sql.y:7789
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NaturalLanguageModeOpt
 		}
@@ -22444,7 +24805,11 @@ yydefault:
 	case 1524:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL MatchExprOption
+<<<<<<< HEAD
 //line sql.y:7588
+=======
+//line sql.y:7793
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NaturalLanguageModeWithQueryExpansionOpt
 		}
@@ -22452,33 +24817,53 @@ yydefault:
 	case 1525:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL MatchExprOption
+<<<<<<< HEAD
 //line sql.y:7592
+=======
+//line sql.y:7797
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = QueryExpansionOpt
 		}
 		yyVAL.union = yyLOCAL
 	case 1526:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7598
+=======
+//line sql.y:7803
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].identifierCI.String())
 		}
 	case 1527:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7602
+=======
+//line sql.y:7807
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1528:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7606
+=======
+//line sql.y:7811
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1529:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7612
+=======
+//line sql.y:7817
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22486,7 +24871,11 @@ yydefault:
 	case 1530:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7616
+=======
+//line sql.y:7821
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str), Length: ptr.Of(convertStringToInt(yyDollar[4].str))}
 		}
@@ -22494,7 +24883,11 @@ yydefault:
 	case 1531:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7620
+=======
+//line sql.y:7825
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str), Length: ptr.Of(convertStringToInt(yyDollar[4].str))}
 		}
@@ -22502,7 +24895,11 @@ yydefault:
 	case 1532:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7626
+=======
+//line sql.y:7831
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion()}
 		}
@@ -22510,7 +24907,11 @@ yydefault:
 	case 1533:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7630
+=======
+//line sql.y:7835
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion(), Charset: yyDollar[3].columnCharset}
 		}
@@ -22518,7 +24919,11 @@ yydefault:
 	case 1534:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7634
+=======
+//line sql.y:7839
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22526,7 +24931,11 @@ yydefault:
 	case 1535:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7638
+=======
+//line sql.y:7843
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion()}
 		}
@@ -22534,7 +24943,11 @@ yydefault:
 	case 1536:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7642
+=======
+//line sql.y:7847
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 			yyLOCAL.Length = yyDollar[2].LengthScaleOption.Length
@@ -22544,7 +24957,11 @@ yydefault:
 	case 1537:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7648
+=======
+//line sql.y:7853
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22552,7 +24969,11 @@ yydefault:
 	case 1538:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7652
+=======
+//line sql.y:7857
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion()}
 		}
@@ -22560,7 +24981,11 @@ yydefault:
 	case 1539:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7656
+=======
+//line sql.y:7861
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22568,7 +24993,11 @@ yydefault:
 	case 1540:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7660
+=======
+//line sql.y:7865
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22576,7 +25005,11 @@ yydefault:
 	case 1541:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7664
+=======
+//line sql.y:7869
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion()}
 		}
@@ -22584,7 +25017,11 @@ yydefault:
 	case 1542:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7668
+=======
+//line sql.y:7873
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22592,7 +25029,11 @@ yydefault:
 	case 1543:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7672
+=======
+//line sql.y:7877
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22600,7 +25041,11 @@ yydefault:
 	case 1544:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7676
+=======
+//line sql.y:7881
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].intPtrUnion()}
 		}
@@ -22608,7 +25053,11 @@ yydefault:
 	case 1545:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7680
+=======
+//line sql.y:7885
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22616,7 +25065,11 @@ yydefault:
 	case 1546:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
+<<<<<<< HEAD
 //line sql.y:7684
+=======
+//line sql.y:7889
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
 		}
@@ -22624,7 +25077,11 @@ yydefault:
 	case 1547:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:7690
+=======
+//line sql.y:7895
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -22632,7 +25089,11 @@ yydefault:
 	case 1548:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:7694
+=======
+//line sql.y:7899
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -22640,7 +25101,11 @@ yydefault:
 	case 1549:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7699
+=======
+//line sql.y:7904
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22648,34 +25113,54 @@ yydefault:
 	case 1550:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7703
+=======
+//line sql.y:7908
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 1551:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7708
+=======
+//line sql.y:7913
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string("")
 		}
 	case 1552:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7712
+=======
+//line sql.y:7917
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = encodeSQLString(yyDollar[2].str)
 		}
 	case 1553:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*When
+<<<<<<< HEAD
 //line sql.y:7718
+=======
+//line sql.y:7923
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*When{yyDollar[1].whenUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1554:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7722
+=======
+//line sql.y:7927
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]*When)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[2].whenUnion())
@@ -22683,7 +25168,11 @@ yydefault:
 	case 1555:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *When
+<<<<<<< HEAD
 //line sql.y:7728
+=======
+//line sql.y:7933
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &When{Cond: yyDollar[2].exprUnion(), Val: yyDollar[4].exprUnion()}
 		}
@@ -22691,7 +25180,11 @@ yydefault:
 	case 1556:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7733
+=======
+//line sql.y:7938
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22699,7 +25192,11 @@ yydefault:
 	case 1557:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7737
+=======
+//line sql.y:7942
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
@@ -22707,7 +25204,11 @@ yydefault:
 	case 1558:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ColName
+<<<<<<< HEAD
 //line sql.y:7743
+=======
+//line sql.y:7948
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ColName{Name: yyDollar[1].identifierCI}
 		}
@@ -22715,7 +25216,11 @@ yydefault:
 	case 1559:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ColName
+<<<<<<< HEAD
 //line sql.y:7747
+=======
+//line sql.y:7952
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ColName{Name: NewIdentifierCI(string(yyDollar[1].str))}
 		}
@@ -22723,7 +25228,11 @@ yydefault:
 	case 1560:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ColName
+<<<<<<< HEAD
 //line sql.y:7751
+=======
+//line sql.y:7956
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ColName{Qualifier: TableName{Name: yyDollar[1].identifierCS}, Name: yyDollar[3].identifierCI}
 		}
@@ -22731,7 +25240,11 @@ yydefault:
 	case 1561:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ColName
+<<<<<<< HEAD
 //line sql.y:7755
+=======
+//line sql.y:7960
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}, Name: yyDollar[5].identifierCI}
 		}
@@ -22739,7 +25252,11 @@ yydefault:
 	case 1562:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7761
+=======
+//line sql.y:7966
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].colNameUnion()
 		}
@@ -22747,7 +25264,11 @@ yydefault:
 	case 1563:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7765
+=======
+//line sql.y:7970
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Offset{V: convertStringToInt(yyDollar[1].str)}
 		}
@@ -22755,7 +25276,11 @@ yydefault:
 	case 1564:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7771
+=======
+//line sql.y:7976
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			// TODO(sougou): Deprecate this construct.
 			if yyDollar[1].identifierCI.Lowered() != "value" {
@@ -22768,7 +25293,11 @@ yydefault:
 	case 1565:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7780
+=======
+//line sql.y:7985
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[1].str)
 		}
@@ -22776,7 +25305,11 @@ yydefault:
 	case 1566:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7784
+=======
+//line sql.y:7989
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].str[1:])
 		}
@@ -22784,7 +25317,11 @@ yydefault:
 	case 1567:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *GroupBy
+<<<<<<< HEAD
 //line sql.y:7789
+=======
+//line sql.y:7994
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22792,7 +25329,11 @@ yydefault:
 	case 1568:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *GroupBy
+<<<<<<< HEAD
 //line sql.y:7793
+=======
+//line sql.y:7998
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &GroupBy{Exprs: yyDollar[3].exprsUnion(), WithRollup: yyDollar[4].booleanUnion()}
 		}
@@ -22800,7 +25341,11 @@ yydefault:
 	case 1569:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:7798
+=======
+//line sql.y:8003
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -22808,7 +25353,11 @@ yydefault:
 	case 1570:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:7802
+=======
+//line sql.y:8007
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -22816,7 +25365,11 @@ yydefault:
 	case 1571:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7808
+=======
+//line sql.y:8013
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22824,7 +25377,11 @@ yydefault:
 	case 1572:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:7812
+=======
+//line sql.y:8017
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
@@ -22832,7 +25389,11 @@ yydefault:
 	case 1573:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *NamedWindow
+<<<<<<< HEAD
 //line sql.y:7818
+=======
+//line sql.y:8023
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &NamedWindow{yyDollar[2].windowDefinitionsUnion()}
 		}
@@ -22840,14 +25401,22 @@ yydefault:
 	case 1574:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL NamedWindows
+<<<<<<< HEAD
 //line sql.y:7824
+=======
+//line sql.y:8029
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NamedWindows{yyDollar[1].namedWindowUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1575:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7828
+=======
+//line sql.y:8033
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*NamedWindows)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].namedWindowUnion())
@@ -22855,7 +25424,11 @@ yydefault:
 	case 1576:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL NamedWindows
+<<<<<<< HEAD
 //line sql.y:7833
+=======
+//line sql.y:8038
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22863,7 +25436,11 @@ yydefault:
 	case 1577:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL NamedWindows
+<<<<<<< HEAD
 //line sql.y:7837
+=======
+//line sql.y:8042
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].namedWindowsUnion()
 		}
@@ -22871,7 +25448,11 @@ yydefault:
 	case 1578:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL OrderBy
+<<<<<<< HEAD
 //line sql.y:7842
+=======
+//line sql.y:8047
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22879,7 +25460,11 @@ yydefault:
 	case 1579:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderBy
+<<<<<<< HEAD
 //line sql.y:7846
+=======
+//line sql.y:8051
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].orderByUnion()
 		}
@@ -22887,7 +25472,11 @@ yydefault:
 	case 1580:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL OrderBy
+<<<<<<< HEAD
 //line sql.y:7852
+=======
+//line sql.y:8057
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[3].orderByUnion()
 		}
@@ -22895,14 +25484,22 @@ yydefault:
 	case 1581:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderBy
+<<<<<<< HEAD
 //line sql.y:7858
+=======
+//line sql.y:8063
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = OrderBy{yyDollar[1].orderUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1582:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7862
+=======
+//line sql.y:8067
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*OrderBy)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].orderUnion())
@@ -22910,7 +25507,11 @@ yydefault:
 	case 1583:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Order
+<<<<<<< HEAD
 //line sql.y:7868
+=======
+//line sql.y:8073
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Order{Expr: yyDollar[1].exprUnion(), Direction: yyDollar[2].orderDirectionUnion()}
 		}
@@ -22918,7 +25519,11 @@ yydefault:
 	case 1584:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL OrderDirection
+<<<<<<< HEAD
 //line sql.y:7873
+=======
+//line sql.y:8078
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AscOrder
 		}
@@ -22926,7 +25531,11 @@ yydefault:
 	case 1585:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderDirection
+<<<<<<< HEAD
 //line sql.y:7877
+=======
+//line sql.y:8082
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AscOrder
 		}
@@ -22934,7 +25543,11 @@ yydefault:
 	case 1586:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderDirection
+<<<<<<< HEAD
 //line sql.y:7881
+=======
+//line sql.y:8086
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = DescOrder
 		}
@@ -22942,7 +25555,11 @@ yydefault:
 	case 1587:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *Limit
+<<<<<<< HEAD
 //line sql.y:7886
+=======
+//line sql.y:8091
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22950,7 +25567,11 @@ yydefault:
 	case 1588:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Limit
+<<<<<<< HEAD
 //line sql.y:7890
+=======
+//line sql.y:8095
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].limitUnion()
 		}
@@ -22958,7 +25579,11 @@ yydefault:
 	case 1589:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Limit
+<<<<<<< HEAD
 //line sql.y:7896
+=======
+//line sql.y:8101
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Limit{Rowcount: yyDollar[2].exprUnion()}
 		}
@@ -22966,7 +25591,11 @@ yydefault:
 	case 1590:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Limit
+<<<<<<< HEAD
 //line sql.y:7900
+=======
+//line sql.y:8105
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Limit{Offset: yyDollar[2].exprUnion(), Rowcount: yyDollar[4].exprUnion()}
 		}
@@ -22974,7 +25603,11 @@ yydefault:
 	case 1591:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Limit
+<<<<<<< HEAD
 //line sql.y:7904
+=======
+//line sql.y:8109
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Limit{Offset: yyDollar[4].exprUnion(), Rowcount: yyDollar[2].exprUnion()}
 		}
@@ -22982,7 +25615,11 @@ yydefault:
 	case 1592:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []AlterOption
+<<<<<<< HEAD
 //line sql.y:7909
+=======
+//line sql.y:8114
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -22990,7 +25627,11 @@ yydefault:
 	case 1593:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []AlterOption
+<<<<<<< HEAD
 //line sql.y:7913
+=======
+//line sql.y:8118
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
@@ -22998,7 +25639,11 @@ yydefault:
 	case 1594:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []AlterOption
+<<<<<<< HEAD
 //line sql.y:7917
+=======
+//line sql.y:8122
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
@@ -23006,7 +25651,11 @@ yydefault:
 	case 1595:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []AlterOption
+<<<<<<< HEAD
 //line sql.y:7921
+=======
+//line sql.y:8126
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
@@ -23014,7 +25663,11 @@ yydefault:
 	case 1596:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []AlterOption
+<<<<<<< HEAD
 //line sql.y:7925
+=======
+//line sql.y:8130
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
@@ -23022,7 +25675,11 @@ yydefault:
 	case 1597:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7932
+=======
+//line sql.y:8137
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockOption{Type: DefaultType}
 		}
@@ -23030,7 +25687,11 @@ yydefault:
 	case 1598:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7936
+=======
+//line sql.y:8141
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockOption{Type: NoneType}
 		}
@@ -23038,7 +25699,11 @@ yydefault:
 	case 1599:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7940
+=======
+//line sql.y:8145
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockOption{Type: SharedType}
 		}
@@ -23046,7 +25711,11 @@ yydefault:
 	case 1600:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7944
+=======
+//line sql.y:8149
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &LockOption{Type: ExclusiveType}
 		}
@@ -23054,7 +25723,11 @@ yydefault:
 	case 1601:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7950
+=======
+//line sql.y:8155
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str)
 		}
@@ -23062,7 +25735,11 @@ yydefault:
 	case 1602:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7954
+=======
+//line sql.y:8159
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str)
 		}
@@ -23070,7 +25747,11 @@ yydefault:
 	case 1603:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7958
+=======
+//line sql.y:8163
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str)
 		}
@@ -23078,93 +25759,153 @@ yydefault:
 	case 1604:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:7962
+=======
+//line sql.y:8167
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 1605:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7967
+=======
+//line sql.y:8172
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1607:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7974
+=======
+//line sql.y:8179
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[3].str)
 		}
 	case 1608:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7978
+=======
+//line sql.y:8183
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[3].str)
 		}
 	case 1609:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7982
+=======
+//line sql.y:8187
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[3].str)
 		}
 	case 1610:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7987
+=======
+//line sql.y:8192
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1611:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7991
+=======
+//line sql.y:8196
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[3].str
 		}
 	case 1612:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:7997
+=======
+//line sql.y:8202
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1613:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8001
+=======
+//line sql.y:8206
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1614:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8006
+=======
+//line sql.y:8211
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1615:
 		yyDollar = yyS[yypt-4 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8010
+=======
+//line sql.y:8215
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[2].str
 		}
 	case 1616:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8015
+=======
+//line sql.y:8220
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = "cascaded"
 		}
 	case 1617:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8019
+=======
+//line sql.y:8224
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1618:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8023
+=======
+//line sql.y:8228
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = string(yyDollar[1].str)
 		}
 	case 1619:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []*ProcParameter
+<<<<<<< HEAD
 //line sql.y:8028
+=======
+//line sql.y:8233
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23172,7 +25913,11 @@ yydefault:
 	case 1620:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ProcParameter
+<<<<<<< HEAD
 //line sql.y:8032
+=======
+//line sql.y:8237
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].procParamsUnion()
 		}
@@ -23180,14 +25925,22 @@ yydefault:
 	case 1621:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ProcParameter
+<<<<<<< HEAD
 //line sql.y:8038
+=======
+//line sql.y:8243
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*ProcParameter{yyDollar[1].procParamUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1622:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8042
+=======
+//line sql.y:8247
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]*ProcParameter)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].procParamUnion())
@@ -23195,7 +25948,11 @@ yydefault:
 	case 1623:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ProcParameter
+<<<<<<< HEAD
 //line sql.y:8048
+=======
+//line sql.y:8253
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &ProcParameter{Mode: yyDollar[1].procParamModeUnion(), Name: yyDollar[2].identifierCI, Type: yyDollar[3].columnType}
 		}
@@ -23203,7 +25960,11 @@ yydefault:
 	case 1624:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL ProcParameterMode
+<<<<<<< HEAD
 //line sql.y:8053
+=======
+//line sql.y:8258
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = InMode
 		}
@@ -23211,7 +25972,11 @@ yydefault:
 	case 1625:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
+<<<<<<< HEAD
 //line sql.y:8057
+=======
+//line sql.y:8262
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = InMode
 		}
@@ -23219,7 +25984,11 @@ yydefault:
 	case 1626:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
+<<<<<<< HEAD
 //line sql.y:8061
+=======
+//line sql.y:8266
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = InoutMode
 		}
@@ -23227,7 +25996,11 @@ yydefault:
 	case 1627:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
+<<<<<<< HEAD
 //line sql.y:8065
+=======
+//line sql.y:8270
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = OutMode
 		}
@@ -23235,7 +26008,11 @@ yydefault:
 	case 1628:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *Definer
+<<<<<<< HEAD
 //line sql.y:8070
+=======
+//line sql.y:8275
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23243,7 +26020,11 @@ yydefault:
 	case 1630:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Definer
+<<<<<<< HEAD
 //line sql.y:8077
+=======
+//line sql.y:8282
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[3].definerUnion()
 		}
@@ -23251,7 +26032,11 @@ yydefault:
 	case 1631:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Definer
+<<<<<<< HEAD
 //line sql.y:8083
+=======
+//line sql.y:8288
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Definer{
 				Name: string(yyDollar[1].str),
@@ -23261,7 +26046,11 @@ yydefault:
 	case 1632:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Definer
+<<<<<<< HEAD
 //line sql.y:8089
+=======
+//line sql.y:8294
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Definer{
 				Name: string(yyDollar[1].str),
@@ -23271,7 +26060,11 @@ yydefault:
 	case 1633:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Definer
+<<<<<<< HEAD
 //line sql.y:8095
+=======
+//line sql.y:8300
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Definer{
 				Name:    yyDollar[1].str,
@@ -23281,32 +26074,52 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1634:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8104
+=======
+//line sql.y:8309
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = encodeSQLString(yyDollar[1].str)
 		}
 	case 1635:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8108
+=======
+//line sql.y:8313
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = formatIdentifier(yyDollar[1].str)
 		}
 	case 1636:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8113
+=======
+//line sql.y:8318
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1637:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8117
+=======
+//line sql.y:8322
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = formatAddress(yyDollar[1].str)
 		}
 	case 1638:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8123
+=======
+//line sql.y:8328
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForUpdateLock
 		}
@@ -23314,7 +26127,11 @@ yydefault:
 	case 1639:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8127
+=======
+//line sql.y:8332
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForUpdateLockNoWait
 		}
@@ -23322,7 +26139,11 @@ yydefault:
 	case 1640:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8131
+=======
+//line sql.y:8336
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForUpdateLockSkipLocked
 		}
@@ -23330,7 +26151,11 @@ yydefault:
 	case 1641:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8135
+=======
+//line sql.y:8340
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForShareLock
 		}
@@ -23338,7 +26163,11 @@ yydefault:
 	case 1642:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8139
+=======
+//line sql.y:8344
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForShareLockNoWait
 		}
@@ -23346,7 +26175,11 @@ yydefault:
 	case 1643:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8143
+=======
+//line sql.y:8348
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ForShareLockSkipLocked
 		}
@@ -23354,7 +26187,11 @@ yydefault:
 	case 1644:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
+<<<<<<< HEAD
 //line sql.y:8147
+=======
+//line sql.y:8352
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ShareModeLock
 		}
@@ -23362,7 +26199,11 @@ yydefault:
 	case 1645:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL *SelectInto
+<<<<<<< HEAD
 //line sql.y:8153
+=======
+//line sql.y:8358
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].str), Charset: yyDollar[5].columnCharset, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
 		}
@@ -23370,7 +26211,11 @@ yydefault:
 	case 1646:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SelectInto
+<<<<<<< HEAD
 //line sql.y:8157
+=======
+//line sql.y:8362
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].str), Charset: ColumnCharset{}, FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
 		}
@@ -23378,7 +26223,11 @@ yydefault:
 	case 1647:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *SelectInto
+<<<<<<< HEAD
 //line sql.y:8161
+=======
+//line sql.y:8366
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].str), Charset: yyDollar[4].columnCharset, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
 		}
@@ -23386,14 +26235,22 @@ yydefault:
 	case 1648:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *SelectInto
+<<<<<<< HEAD
 //line sql.y:8165
+=======
+//line sql.y:8370
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &SelectInto{Type: IntoVariables, VarList: yyDollar[2].variablesUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1649:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8171
+=======
+//line sql.y:8376
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*[]*Variable)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].variableUnion())
@@ -23401,7 +26258,11 @@ yydefault:
 	case 1650:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
+<<<<<<< HEAD
 //line sql.y:8175
+=======
+//line sql.y:8380
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*Variable{yyDollar[1].variableUnion()}
 		}
@@ -23409,7 +26270,11 @@ yydefault:
 	case 1651:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Variable
+<<<<<<< HEAD
 //line sql.y:8181
+=======
+//line sql.y:8386
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
@@ -23417,177 +26282,293 @@ yydefault:
 	case 1652:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Variable
+<<<<<<< HEAD
 //line sql.y:8185
+=======
+//line sql.y:8390
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Variable{Name: createIdentifierCI(yyDollar[1].str), Scope: NoScope}
 		}
 		yyVAL.union = yyLOCAL
 	case 1653:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8190
+=======
+//line sql.y:8395
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1654:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8194
+=======
+//line sql.y:8399
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " format csv" + yyDollar[3].str
 		}
 	case 1655:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8198
+=======
+//line sql.y:8403
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " format text" + yyDollar[3].str
 		}
 	case 1656:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8203
+=======
+//line sql.y:8408
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1657:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8207
+=======
+//line sql.y:8412
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " header"
 		}
 	case 1658:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8212
+=======
+//line sql.y:8417
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1659:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8216
+=======
+//line sql.y:8421
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " manifest on"
 		}
 	case 1660:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8220
+=======
+//line sql.y:8425
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " manifest off"
 		}
 	case 1661:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8225
+=======
+//line sql.y:8430
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1662:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8229
+=======
+//line sql.y:8434
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " overwrite on"
 		}
 	case 1663:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8233
+=======
+//line sql.y:8438
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " overwrite off"
 		}
 	case 1664:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8239
+=======
+//line sql.y:8444
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str + yyDollar[2].str
 		}
 	case 1665:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8244
+=======
+//line sql.y:8449
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1666:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8248
+=======
+//line sql.y:8453
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " lines" + yyDollar[2].str
 		}
 	case 1667:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8254
+=======
+//line sql.y:8459
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str
 		}
 	case 1668:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8258
+=======
+//line sql.y:8463
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str + yyDollar[2].str
 		}
 	case 1669:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8264
+=======
+//line sql.y:8469
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " starting by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 1670:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8268
+=======
+//line sql.y:8473
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " terminated by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 1671:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8273
+=======
+//line sql.y:8478
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1672:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8277
+=======
+//line sql.y:8482
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " " + yyDollar[1].str + yyDollar[2].str
 		}
 	case 1673:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8283
+=======
+//line sql.y:8488
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str
 		}
 	case 1674:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8287
+=======
+//line sql.y:8492
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str + yyDollar[2].str
 		}
 	case 1675:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8293
+=======
+//line sql.y:8498
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " terminated by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 1676:
 		yyDollar = yyS[yypt-4 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8297
+=======
+//line sql.y:8502
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = yyDollar[1].str + " enclosed by " + encodeSQLString(yyDollar[4].str)
 		}
 	case 1677:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8301
+=======
+//line sql.y:8506
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " escaped by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 1678:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8306
+=======
+//line sql.y:8511
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = ""
 		}
 	case 1679:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8310
+=======
+//line sql.y:8515
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = " optionally"
 		}
 	case 1680:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Insert
+<<<<<<< HEAD
 //line sql.y:8323
+=======
+//line sql.y:8528
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Insert{Rows: yyDollar[2].valuesUnion(), RowAlias: yyDollar[3].rowAliasUnion()}
 		}
@@ -23595,7 +26576,11 @@ yydefault:
 	case 1681:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Insert
+<<<<<<< HEAD
 //line sql.y:8327
+=======
+//line sql.y:8532
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Insert{Rows: yyDollar[1].tableStmtUnion()}
 		}
@@ -23603,7 +26588,11 @@ yydefault:
 	case 1682:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *Insert
+<<<<<<< HEAD
 //line sql.y:8331
+=======
+//line sql.y:8536
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[5].valuesUnion(), RowAlias: yyDollar[6].rowAliasUnion()}
 		}
@@ -23611,7 +26600,11 @@ yydefault:
 	case 1683:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *Insert
+<<<<<<< HEAD
 //line sql.y:8335
+=======
+//line sql.y:8540
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].valuesUnion(), RowAlias: yyDollar[5].rowAliasUnion()}
 		}
@@ -23619,7 +26612,11 @@ yydefault:
 	case 1684:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Insert
+<<<<<<< HEAD
 //line sql.y:8339
+=======
+//line sql.y:8544
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].tableStmtUnion()}
 		}
@@ -23627,7 +26624,11 @@ yydefault:
 	case 1687:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:8349
+=======
+//line sql.y:8554
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI}
 		}
@@ -23635,21 +26636,33 @@ yydefault:
 	case 1688:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
+<<<<<<< HEAD
 //line sql.y:8353
+=======
+//line sql.y:8558
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Columns{yyDollar[3].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 1689:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8357
+=======
+//line sql.y:8562
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Columns)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI)
 		}
 	case 1690:
 		yyDollar = yyS[yypt-5 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8361
+=======
+//line sql.y:8566
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Columns)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[5].identifierCI)
@@ -23657,7 +26670,11 @@ yydefault:
 	case 1691:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *RowAlias
+<<<<<<< HEAD
 //line sql.y:8366
+=======
+//line sql.y:8571
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23665,7 +26682,11 @@ yydefault:
 	case 1692:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *RowAlias
+<<<<<<< HEAD
 //line sql.y:8370
+=======
+//line sql.y:8575
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCS}
 		}
@@ -23673,7 +26694,11 @@ yydefault:
 	case 1693:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *RowAlias
+<<<<<<< HEAD
 //line sql.y:8374
+=======
+//line sql.y:8579
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCS, Columns: yyDollar[4].columnsUnion()}
 		}
@@ -23681,7 +26706,11 @@ yydefault:
 	case 1694:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL UpdateExprs
+<<<<<<< HEAD
 //line sql.y:8379
+=======
+//line sql.y:8584
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23689,7 +26718,11 @@ yydefault:
 	case 1695:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL UpdateExprs
+<<<<<<< HEAD
 //line sql.y:8383
+=======
+//line sql.y:8588
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[5].updateExprsUnion()
 		}
@@ -23697,14 +26730,22 @@ yydefault:
 	case 1696:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Values
+<<<<<<< HEAD
 //line sql.y:8389
+=======
+//line sql.y:8594
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Values{yyDollar[1].valTupleUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1697:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8393
+=======
+//line sql.y:8598
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Values)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].valTupleUnion())
@@ -23712,14 +26753,22 @@ yydefault:
 	case 1698:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Values
+<<<<<<< HEAD
 //line sql.y:8399
+=======
+//line sql.y:8604
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = Values{yyDollar[1].valTupleUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1699:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8403
+=======
+//line sql.y:8608
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*Values)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].valTupleUnion())
@@ -23727,7 +26776,11 @@ yydefault:
 	case 1700:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8409
+=======
+//line sql.y:8614
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
@@ -23735,7 +26788,11 @@ yydefault:
 	case 1701:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8413
+=======
+//line sql.y:8618
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ValTuple{}
 		}
@@ -23743,7 +26800,11 @@ yydefault:
 	case 1702:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8419
+=======
+//line sql.y:8624
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
@@ -23751,7 +26812,11 @@ yydefault:
 	case 1703:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8423
+=======
+//line sql.y:8628
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ValTuple{}
 		}
@@ -23759,7 +26824,11 @@ yydefault:
 	case 1704:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8429
+=======
+//line sql.y:8634
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ValTuple(yyDollar[2].exprsUnion())
 		}
@@ -23767,7 +26836,11 @@ yydefault:
 	case 1705:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL ValTuple
+<<<<<<< HEAD
 //line sql.y:8435
+=======
+//line sql.y:8640
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ValTuple(yyDollar[3].exprsUnion())
 		}
@@ -23775,7 +26848,11 @@ yydefault:
 	case 1708:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:8445
+=======
+//line sql.y:8650
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			if len(yyDollar[1].valTupleUnion()) == 1 {
 				yyLOCAL = yyDollar[1].valTupleUnion()[0]
@@ -23787,14 +26864,22 @@ yydefault:
 	case 1709:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL UpdateExprs
+<<<<<<< HEAD
 //line sql.y:8455
+=======
+//line sql.y:8660
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = UpdateExprs{yyDollar[1].updateExprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1710:
 		yyDollar = yyS[yypt-3 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8459
+=======
+//line sql.y:8664
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yySLICE := (*UpdateExprs)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].updateExprUnion())
@@ -23802,21 +26887,33 @@ yydefault:
 	case 1711:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *UpdateExpr
+<<<<<<< HEAD
 //line sql.y:8465
+=======
+//line sql.y:8670
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &UpdateExpr{Name: yyDollar[1].colNameUnion(), Expr: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1713:
 		yyDollar = yyS[yypt-2 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8472
+=======
+//line sql.y:8677
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.str = "charset"
 		}
 	case 1716:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:8482
+=======
+//line sql.y:8687
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NewStrLiteral(yyDollar[1].identifierCI.String())
 		}
@@ -23824,7 +26921,11 @@ yydefault:
 	case 1717:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:8486
+=======
+//line sql.y:8691
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NewStrLiteral(yyDollar[1].str)
 		}
@@ -23832,7 +26933,11 @@ yydefault:
 	case 1718:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:8490
+=======
+//line sql.y:8695
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NewStrLiteral("binary")
 		}
@@ -23840,7 +26945,11 @@ yydefault:
 	case 1719:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
+<<<<<<< HEAD
 //line sql.y:8494
+=======
+//line sql.y:8699
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Default{}
 		}
@@ -23848,7 +26957,11 @@ yydefault:
 	case 1722:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8503
+=======
+//line sql.y:8708
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -23856,7 +26969,11 @@ yydefault:
 	case 1723:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8505
+=======
+//line sql.y:8710
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -23864,7 +26981,11 @@ yydefault:
 	case 1724:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8508
+=======
+//line sql.y:8713
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -23872,7 +26993,11 @@ yydefault:
 	case 1725:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8510
+=======
+//line sql.y:8715
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -23880,7 +27005,11 @@ yydefault:
 	case 1726:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8513
+=======
+//line sql.y:8718
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -23888,7 +27017,11 @@ yydefault:
 	case 1727:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL bool
+<<<<<<< HEAD
 //line sql.y:8515
+=======
+//line sql.y:8720
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -23896,7 +27029,11 @@ yydefault:
 	case 1728:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Ignore
+<<<<<<< HEAD
 //line sql.y:8518
+=======
+//line sql.y:8723
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = false
 		}
@@ -23904,7 +27041,11 @@ yydefault:
 	case 1729:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Ignore
+<<<<<<< HEAD
 //line sql.y:8520
+=======
+//line sql.y:8725
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = true
 		}
@@ -23912,7 +27053,11 @@ yydefault:
 	case 1730:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
+<<<<<<< HEAD
 //line sql.y:8524
+=======
+//line sql.y:8729
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = NoIgnoreOrReplace
 		}
@@ -23920,7 +27065,11 @@ yydefault:
 	case 1731:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
+<<<<<<< HEAD
 //line sql.y:8526
+=======
+//line sql.y:8731
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = IgnoreType
 		}
@@ -23928,33 +27077,53 @@ yydefault:
 	case 1732:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
+<<<<<<< HEAD
 //line sql.y:8528
+=======
+//line sql.y:8733
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ReplaceType
 		}
 		yyVAL.union = yyLOCAL
 	case 1733:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8531
+=======
+//line sql.y:8736
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1734:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8533
+=======
+//line sql.y:8738
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1735:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8535
+=======
+//line sql.y:8740
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1736:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
+<<<<<<< HEAD
 //line sql.y:8539
+=======
+//line sql.y:8744
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &CallProc{Name: yyDollar[2].tableName, Params: yyDollar[4].exprsUnion()}
 		}
@@ -23962,7 +27131,11 @@ yydefault:
 	case 1737:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []Expr
+<<<<<<< HEAD
 //line sql.y:8544
+=======
+//line sql.y:8749
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23970,7 +27143,11 @@ yydefault:
 	case 1738:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []Expr
+<<<<<<< HEAD
 //line sql.y:8548
+=======
+//line sql.y:8753
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = yyDollar[1].exprsUnion()
 		}
@@ -23978,7 +27155,11 @@ yydefault:
 	case 1739:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []*IndexOption
+<<<<<<< HEAD
 //line sql.y:8553
+=======
+//line sql.y:8758
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = nil
 		}
@@ -23986,7 +27167,11 @@ yydefault:
 	case 1740:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*IndexOption
+<<<<<<< HEAD
 //line sql.y:8555
+=======
+//line sql.y:8760
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = []*IndexOption{yyDollar[1].indexOptionUnion()}
 		}
@@ -23994,63 +27179,103 @@ yydefault:
 	case 1741:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *IndexOption
+<<<<<<< HEAD
 //line sql.y:8559
+=======
+//line sql.y:8764
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), String: string(yyDollar[2].identifierCI.String())}
 		}
 		yyVAL.union = yyLOCAL
 	case 1742:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8565
+=======
+//line sql.y:8770
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = yyDollar[1].identifierCI
 		}
 	case 1743:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8569
+=======
+//line sql.y:8774
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = NewIdentifierCI(string(yyDollar[1].str))
 		}
 	case 1745:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8576
+=======
+//line sql.y:8781
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCI = NewIdentifierCI(string(yyDollar[1].str))
 		}
 	case 1746:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8582
+=======
+//line sql.y:8787
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS(string(yyDollar[1].str))
 		}
 	case 1747:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8586
+=======
+//line sql.y:8791
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS(string(yyDollar[1].str))
 		}
 	case 1748:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8592
+=======
+//line sql.y:8797
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS("")
 		}
 	case 1749:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8596
+=======
+//line sql.y:8801
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = yyDollar[1].identifierCS
 		}
 	case 1751:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:8603
+=======
+//line sql.y:8808
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyVAL.identifierCS = NewIdentifierCS(string(yyDollar[1].str))
 		}
 	case 1752:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
+<<<<<<< HEAD
 //line sql.y:8609
+=======
+//line sql.y:8814
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = &Kill{Type: yyDollar[2].killTypeUnion(), ProcesslistID: convertStringToUInt64(yyDollar[3].str)}
 		}
@@ -24058,7 +27283,11 @@ yydefault:
 	case 1753:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL KillType
+<<<<<<< HEAD
 //line sql.y:8615
+=======
+//line sql.y:8820
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ConnectionType
 		}
@@ -24066,7 +27295,11 @@ yydefault:
 	case 1754:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL KillType
+<<<<<<< HEAD
 //line sql.y:8619
+=======
+//line sql.y:8824
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = ConnectionType
 		}
@@ -24074,23 +27307,36 @@ yydefault:
 	case 1755:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL KillType
+<<<<<<< HEAD
 //line sql.y:8623
+=======
+//line sql.y:8828
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			yyLOCAL = QueryType
 		}
 		yyVAL.union = yyLOCAL
 	case 2423:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:9319
+=======
+//line sql.y:9537
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 		}
 	case 2424:
 		yyDollar = yyS[yypt-1 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:9324
+=======
+//line sql.y:9542
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 		}
 	case 2425:
 		yyDollar = yyS[yypt-0 : yypt+1]
+<<<<<<< HEAD
 //line sql.y:9328
 		{
 			skipToEnd(yylex)
@@ -24110,6 +27356,9 @@ yydefault:
 	case 2428:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:9341
+=======
+//line sql.y:9546
+>>>>>>> e73f9aa75a (vtgate: Reject unqualified `*` after comma in `SELECT` list (#19475))
 		{
 			skipToEnd(yylex)
 		}
