@@ -221,6 +221,11 @@ func (e *tabletAliasError) Error() string {
 	return e.err.Error()
 }
 
+// String returns a string representation of the error including the tablet alias.
+func (e *tabletAliasError) String() string {
+	return fmt.Sprintf("tablet %s: %v", topoproto.TabletAliasString(e.alias), e.err)
+}
+
 // GetAlias returns the tablet alias that produced the error.
 func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
 	return e.alias
@@ -372,9 +377,12 @@ func stopReplicationAndBuildStatusMaps(
 		return res, nil
 	}
 
-	// If there are recorded errors, confirm there is a single error from the PRIMARY,
-	// as ERS currently only supports the PRIMARY tablet being down. This logic can be
-	// extended when more partial-failure cases are supportable.
+	// If there are recorded errors, confirm there is a single error from the PRIMARY.
+	// We intentionally do not check for specific error types here because the nature
+	// of ERS means we expect any number of possible errors from the PRIMARY we are
+	// abandoning (e.g. connection refused, context deadline, MySQL down, etc.) and
+	// we don't need to handle them differently — the goal is simply to confirm the
+	// error came from the PRIMARY tablet, not to diagnose why it failed.
 	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
 		var tabletErr *tabletAliasError
 		if errors.As(errRecorder.Errors[0], &tabletErr) {
