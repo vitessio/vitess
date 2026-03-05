@@ -537,6 +537,21 @@ func TestTransactionModeVar(t *testing.T) {
 	}
 }
 
+// TestTransactionModeLimitTWOPCAcceptsAll verifies that with opt-in
+// --transaction-mode-limit=TWOPC all modes (single, multi, twopc) are accepted,
+// and that SET to 'unspecified' resets the session to the server default (MULTI).
+func TestTransactionModeLimitTWOPCAcceptsAll(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = single")
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = multi")
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = twopc")
+
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = unspecified")
+	utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", `[[VARCHAR("MULTI")]]`)
+}
+
 // TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
 func TestAliasesInOuterJoinQueries(t *testing.T) {
 	mcmp, closer := start(t)
