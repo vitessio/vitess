@@ -116,10 +116,11 @@ jobs:
               - './go/tools/releases/**'
               - '.github/workflows/static_checks_etc.yml'
             workflows:
-              - '.github/**'
+              - '.github/workflows/**'
               - 'Makefile'
-              - 'test/ci_workflow_gen.go'
               - '.github/workflows/static_checks_etc.yml'
+            github:
+              - '.github/*.yml'
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
@@ -179,7 +180,13 @@ jobs:
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Check CI workflows
+      - name: Check .github configs
+        if: steps.changes.outputs.github == 'true'
+        uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2 # v3.0.0
+        with:
+          yamllint_file_or_dir: .github/*.yml
+
+      - name: Check .github/workflows
         if: steps.changes.outputs.workflows == 'true'
         uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2 # v3.0.0
         with:
