@@ -63,7 +63,12 @@ func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlp
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
-	op := crossJoin(ctx, sel.From)
+	var op Operator
+	if len(sel.From) == 0 {
+		op = createDualRoute(ctx, sel)
+	} else {
+		op = crossJoin(ctx, sel.From)
+	}
 
 	op = addWherePredicates(ctx, sel.GetWherePredicate(), op)
 
@@ -337,6 +342,20 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		return inner
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl)))
+	}
+}
+
+func createDualRoute(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
+	// Virtual dual (SELECT with no FROM) can't have aliases, can't be joined,
+	// and doesn't need a real table registration in the SemTable.
+	return &Route{
+		unaryOperator: newUnaryOp(&Table{
+			QTable: &QueryTable{
+				Table:  sqlparser.NewTableName("dual"),
+				IsDual: true,
+			},
+		}),
+		Routing: &DualRouting{},
 	}
 }
 

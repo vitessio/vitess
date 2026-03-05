@@ -1052,11 +1052,11 @@ func TestScopingWithWITH(t *testing.T) {
 		}, {
 			query:     "with t as (select 42 as id) select id from t",
 			recursive: NoTables,
-			direct:    TS1,
+			direct:    TS0,
 		}, {
 			query:     "with t as (select 42 as id) select t.id from t",
 			recursive: NoTables,
-			direct:    TS1,
+			direct:    TS0,
 		}, {
 			query:        "with t as (select 42 as id) select ks.t.id from t",
 			errorMessage: "column 'ks.t.id' not found",
@@ -1423,8 +1423,8 @@ func TestNextErrors(t *testing.T) {
 		query, expectedError string
 	}{
 		{
-			query:         "select next 2 values from dual",
-			expectedError: "Table information is not provided in vschema for table `dual`",
+			query:         "select next 2 values from `dual`",
+			expectedError: "Table information is not provided in vschema for table ``dual``",
 		}, {
 			query:         "select next 2 values from t1",
 			expectedError: "NEXT used on a non-sequence table `t1`",

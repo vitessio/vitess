@@ -108,7 +108,7 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 }
 
 func (to *Table) TablesUsed(in []string) []string {
-	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
+	if to.QTable.IsDual || to.VTable == nil || sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
 		return in
 	}
 	return append(in, QualifiedString(to.VTable.Keyspace, to.VTable.Name.String()))

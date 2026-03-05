@@ -264,16 +264,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 		}
 	}
 
-	if len(sel.From) > 1 {
-		return false
-	}
-	table, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return false
-	}
-	tableName, ok := table.Expr.(sqlparser.TableName)
-
-	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
+	return len(sel.From) == 0
 }
 
 func shouldRetryAfterPredicateRewriting(plan engine.Primitive) bool {

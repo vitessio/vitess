@@ -1312,7 +1312,11 @@ func TestSelectDual(t *testing.T) {
 
 	_, err = executorExec(ctx, executor, session, "select @@aa.bb from TestUnsharded.dual", nil)
 	require.NoError(t, err)
-	utils.MustMatch(t, wantQueries, lookup.Queries)
+	wantLookupQueries := []*querypb.BoundQuery{{
+		Sql:           "select @@`aa.bb` from `dual`",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
 }
 
 func TestSelectComments(t *testing.T) {

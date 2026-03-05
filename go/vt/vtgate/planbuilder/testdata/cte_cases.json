@@ -1843,7 +1843,6 @@
         "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select cte.n from unsharded join cte on unsharded.id = cte.n"
       },
       "TablesUsed": [
-        "main.dual",
         "main.unsharded"
       ]
     }
