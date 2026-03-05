@@ -61,8 +61,7 @@ type ConnParams struct {
 	// disabled by default.
 	EnableQueryInfo bool
 
-	// EnableZstdCompression tells the client to negotiate zstd when the server
-	// advertises CLIENT_COMPRESS + CLIENT_ZSTD_COMPRESSION_ALGORITHM.
+	// EnableZstdCompression tells the client to negotiate zstd when the server advertises CLIENT_COMPRESS + CLIENT_ZSTD_COMPRESSION_ALGORITHM.
 	EnableZstdCompression bool
 	// ZstdCompressionLevel is the zstd level (1-22) we ask for. 0 means "use the default (3)".
 	ZstdCompressionLevel int
