@@ -36,4 +36,3 @@ jobs:
           close-pr-message: "This PR was closed because it has been stale for 7 days with no activity."
 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

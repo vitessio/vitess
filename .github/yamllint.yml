@@ -1,6 +1,7 @@
 ---
 extends: default
 rules:
+  brackets: disable
   comments: disable
   document-start: disable
   indentation: disable
