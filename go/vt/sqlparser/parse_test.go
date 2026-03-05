@@ -4243,6 +4243,9 @@ func TestInvalid(t *testing.T) {
 			input: "select next 2 values from seq, seq",
 			err:   "syntax error at position 31",
 		}, {
+			input: "select next 2 values from dual",
+			err:   "syntax error at position 31 near 'dual'",
+		}, {
 			input: "select 1, next value from seq",
 			err:   "syntax error",
 		}, {

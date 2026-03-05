@@ -1423,9 +1423,6 @@ func TestNextErrors(t *testing.T) {
 		query, expectedError string
 	}{
 		{
-			query:         "select next 2 values from `dual`",
-			expectedError: "Table information is not provided in vschema for table ``dual``",
-		}, {
 			query:         "select next 2 values from t1",
 			expectedError: "NEXT used on a non-sequence table `t1`",
 		}, {
