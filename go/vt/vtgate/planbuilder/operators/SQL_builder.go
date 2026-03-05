@@ -557,9 +557,9 @@ func buildLimit(op *Limit, qb *queryBuilder) {
 }
 
 func buildTable(op *Table, qb *queryBuilder) {
-	// Virtual dual tables (SELECT without FROM) should not add a table to the
+	// Virtual dual tables (nil QTable) should not add a table to the
 	// FROM clause. The Select formatter outputs "from dual" when From is nil.
-	if op.QTable.IsDual {
+	if op.QTable == nil {
 		if qb.stmt == nil {
 			qb.stmt = &sqlparser.Select{}
 		}

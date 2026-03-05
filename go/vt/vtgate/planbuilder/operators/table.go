@@ -56,6 +56,9 @@ func (to *Table) Clone([]Operator) Operator {
 
 // Introduces implements the PhysicalOperator interface
 func (to *Table) introducesTableID() semantics.TableSet {
+	if to.QTable == nil {
+		return semantics.EmptyTableSet()
+	}
 	return to.QTable.ID
 }
 
@@ -108,7 +111,7 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 }
 
 func (to *Table) TablesUsed(in []string) []string {
-	if to.QTable.IsDual || to.VTable == nil || sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
+	if to.QTable == nil || to.VTable == nil || sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
 		return in
 	}
 	return append(in, QualifiedString(to.VTable.Keyspace, to.VTable.Name.String()))
@@ -131,6 +134,9 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 }
 
 func (to *Table) ShortDescription() string {
+	if to.QTable == nil {
+		return "dual"
+	}
 	tbl := to.VTable.String()
 	var alias, where string
 	if to.QTable.Alias.As.NotEmpty() {

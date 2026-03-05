@@ -59,7 +59,6 @@ type (
 		Table       sqlparser.TableName
 		Predicates  []sqlparser.Expr
 		IsInfSchema bool
-		IsDual      bool
 	}
 )
 
