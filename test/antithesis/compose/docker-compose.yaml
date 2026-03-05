@@ -58,7 +58,7 @@ services:
       MYSQL_USER: ${DB_USER:-source_db_user}
       MYSQL_ONETIME_PASSWORD: ""
     healthcheck:
-      interval: 10
+      interval: 10s
       retries: 10
       test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute
         "SHOW DATABASES;"
