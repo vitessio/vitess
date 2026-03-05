@@ -183,18 +183,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
-	// IncapacitatedPrimary
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    IncapacitatedPrimary,
-			Description: "Primary is consistently timing out on health checks and may be incapacitated",
-			Priority:    detectionAnalysisPriorityShardWideAction,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy
-		},
-	},
-
 	// PrimaryHasPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
@@ -330,7 +318,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero()
 		},
 	},
 	{
@@ -340,7 +328,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero()
 		},
 	},
 
@@ -372,7 +360,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias
 		},
 	},
 	{
