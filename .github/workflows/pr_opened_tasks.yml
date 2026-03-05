@@ -111,5 +111,5 @@ jobs:
        pull-requests: write
      runs-on: ubuntu-latest
      steps:
-     - name: Run actions/labeler
-       uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+       - name: Run actions/labeler
+         uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
