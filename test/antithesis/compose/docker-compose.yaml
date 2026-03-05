@@ -129,9 +129,9 @@ services:
       - /script/set_keyspace_durability_policy.sh
     depends_on:
       vttablet101:
-        condition: service_started
+        condition: service_healthy
       vttablet301:
-        condition: service_started
+        condition: service_healthy
     environment:
       - KEYSPACES=test_keyspace lookup_keyspace
       - GRPC_PORT=15999
@@ -221,7 +221,10 @@ services:
       - -c
       - /script/vttablet-up.sh 101
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -257,7 +260,10 @@ services:
       - -c
       - /script/vttablet-up.sh 102
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -293,7 +299,10 @@ services:
       - -c
       - /script/vttablet-up.sh 201
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -329,7 +338,10 @@ services:
       - -c
       - /script/vttablet-up.sh 202
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -365,7 +377,10 @@ services:
       - -c
       - /script/vttablet-up.sh 301
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -401,7 +416,10 @@ services:
       - -c
       - /script/vttablet-up.sh 302
     depends_on:
-      - vtctld
+      etcd:
+        condition: service_started
+      vtctld:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
