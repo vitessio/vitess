@@ -5542,6 +5542,10 @@ select_expression_list:
   }
 | select_expression_list ',' select_expression
   {
+    if starExpr, ok := $3.(*StarExpr); ok && starExpr.TableName.IsEmpty() {
+      yylex.Error("syntax error: unexpected '*'")
+      return 1
+    }
     res := $1
     res.Exprs = append(res.Exprs, $3)
     $$ = res
