@@ -63,9 +63,9 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 	node.SelectExprs.FormatFast(buf)
 
 	if len(node.From) == 0 {
-		buf.WriteString(" from dual")
+		buf.WriteLiteral(" from dual")
 	} else {
-		buf.WriteString(" from ")
+		buf.WriteLiteral(" from ")
 		prefix := ""
 		for _, expr := range node.From {
 			buf.WriteString(prefix)
