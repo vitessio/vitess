@@ -19,7 +19,6 @@ set -euo pipefail
 CELL=${CELL:-"test"}
 GRPC_PORT=${GRPC_PORT:-"15999"}
 KEYSPACE=${KEYSPACE:-"test_keyspace"}
-SLEEPTIME=${SLEEPTIME:-0}
 TARGETTAB=${TARGETTAB:-"${CELL}-0000000101"}
 SCHEMA_FILES=${SCHEMA_FILES:-"create_messages.sql create_tokens.sql"}
 VSCHEMA_FILE=${VSCHEMA_FILE:-"default_vschema.json"}
@@ -27,15 +26,12 @@ POST_LOAD_FILE=${POST_LOAD_FILE:-""}
 SOURCE_DB=${SOURCE_DB:-"0"}
 SCHEMA_RUN="/vt/schema_run"
 
-sleeptime=$SLEEPTIME
 targettab=$TARGETTAB
 schema_files=$SCHEMA_FILES
 vschema_file=$VSCHEMA_FILE
 load_file=$POST_LOAD_FILE
 source_db=$SOURCE_DB
 export PATH=/vt/bin:$PATH
-
-sleep "$sleeptime"
 
 if [ ! -f "$SCHEMA_RUN" ]; then
   while true; do
@@ -45,8 +41,18 @@ if [ ! -f "$SCHEMA_RUN" ]; then
   if [ "$source_db" = "0" ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
-      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql-file "/script/tables/${schema_file}" "$KEYSPACE" || \
-      vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE" || { echo "Failed to apply schema ${schema_file}"; exit 1; }
+      max_retries=60
+      retry_count=0
+      until vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql-file "/script/tables/${schema_file}" "$KEYSPACE" || \
+            vtctldclient --server "vtctld:$GRPC_PORT" ApplySchema --sql "$(cat "/script/tables/${schema_file}")" "$KEYSPACE"; do
+        retry_count=$((retry_count + 1))
+        if [ "$retry_count" -ge "$max_retries" ]; then
+          echo "Failed to apply schema ${schema_file} after ${max_retries} attempts"
+          exit 1
+        fi
+        echo "Retrying ApplySchema for ${schema_file} (attempt ${retry_count}/${max_retries})..."
+        sleep 2
+      done
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"

@@ -76,6 +76,8 @@ services:
     depends_on:
       vttablet301:
         condition: service_started
+      vtorc:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -84,7 +86,6 @@ services:
       - CELL=test
       - KEYSPACE=lookup_keyspace
       - TARGETTAB=test-0000000301
-      - SLEEPTIME=15
       - VSCHEMA_FILE=lookup_keyspace_vschema.json
       - SCHEMA_FILES=lookup_keyspace_schema_file.sql
       - POST_LOAD_FILE=
@@ -103,6 +104,8 @@ services:
         condition: service_started
       vttablet201:
         condition: service_started
+      vtorc:
+        condition: service_started
     environment:
       - TOPOLOGY_FLAGS=--topo_implementation etcd2 --topo_global_server_address etcd:2379
         --topo_global_root /vitess/global
@@ -111,7 +114,6 @@ services:
       - CELL=test
       - KEYSPACE=test_keyspace
       - TARGETTAB=test-0000000101
-      - SLEEPTIME=15
       - VSCHEMA_FILE=test_keyspace_vschema.json
       - SCHEMA_FILES=test_keyspace_schema_file.sql
       - POST_LOAD_FILE=
