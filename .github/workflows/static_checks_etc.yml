@@ -183,7 +183,6 @@ jobs:
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
       - name: Check .github YAML configs
-        id: check-github-configs
         if: steps.changes.outputs.github == 'true'
         run: |
           yamllint -d "{extends: relaxed, rules: {indentation: disable, line-length: disable, trailing-spaces: disable}}" \
