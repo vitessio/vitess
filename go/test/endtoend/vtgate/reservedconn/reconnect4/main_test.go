@@ -82,6 +82,10 @@ func TestVttabletDownServingChange(t *testing.T) {
 	utils.Exec(t, conn, "set default_week_format = 1")
 	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
 
+	// Disable VTOrc emergency reparents to prevent VTOrc from racing with the manual ERS below.
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspaceName)
+	require.NoError(t, err)
+
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,
 		primaryTablet.MysqlctlProcess.Stop())
