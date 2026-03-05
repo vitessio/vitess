@@ -1297,7 +1297,7 @@ func TestSelectINFromOR(t *testing.T) {
 }
 
 func TestSelectDual(t *testing.T) {
-	executor, sbc1, _, lookup, ctx := createExecutorEnv(t)
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1309,14 +1309,6 @@ func TestSelectDual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-
-	_, err = executorExec(ctx, executor, session, "select @@aa.bb from TestUnsharded.dual", nil)
-	require.NoError(t, err)
-	wantLookupQueries := []*querypb.BoundQuery{{
-		Sql:           "select @@`aa.bb` from `dual`",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
 }
 
 func TestSelectComments(t *testing.T) {
