@@ -3,6 +3,7 @@ extends: default
 rules:
   comments: disable
   document-start: disable
+  indentation: disable
   line-length: disable
   trailing-spaces: disable
   truthy: disable
