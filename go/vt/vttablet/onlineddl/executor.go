@@ -891,7 +891,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	defer func() {
 		if !renameWasSuccessful {
-			// It is important the LOCK TABLES connection does get put back into
+			// It is important the LOCK TABLES connection does not get put back into
 			// the pool on failure. .Conn.Kill() will kill + close the conn.
 			err := lockConn.Conn.Kill("premature exit while locking tables", 0)
 			if err != nil {
