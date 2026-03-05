@@ -1225,40 +1225,33 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+// initConnectionSessionTimeout saves the current value of the given session variable, sets it to the given duration,
+// and returns a deferred restore function.
+func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	saveQuery := fmt.Sprintf("set @%s=@@session.%s", variable, variable)
+	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read %s: %v", variable, err)
 	}
-	timeoutSeconds := int64(lockWaitTimeout.Seconds())
-	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	setQuery := fmt.Sprintf("set @@session.%s=%d", variable, int64(timeout.Seconds()))
 	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
 	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
+		conn.Exec(ctx, fmt.Sprintf("set @@session.%s=@%s", variable, variable), 0, false)
 	}
 	return deferFunc, nil
 }
 
-// initConnectionWaitTimeout sets the given wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionWaitTimeout(ctx context.Context, conn *connpool.Conn, waitTimeout time.Duration) (deferFunc func(), err error) {
-	deferFunc = func() {}
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
+func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
+	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
+}
 
-	if _, err := conn.Exec(ctx, `set @wait_timeout=@@session.wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read wait_timeout: %v", err)
-	}
-	timeoutSeconds := int64(waitTimeout.Seconds())
-	setQuery := fmt.Sprintf("set @@session.wait_timeout=%d", timeoutSeconds)
-	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
-		return deferFunc, err
-	}
-	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.wait_timeout=@wait_timeout", 0, false)
-	}
-	return deferFunc, nil
+// initConnectionWaitTimeout sets the given wait_timeout for the given connection, with a deferred value restoration function
+func (e *Executor) initConnectionWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
+	return e.initConnectionSessionTimeout(ctx, conn, "wait_timeout", timeout)
 }
 
 // initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
