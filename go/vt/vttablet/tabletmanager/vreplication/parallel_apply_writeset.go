@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
 
@@ -168,19 +169,20 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 // snapshotTablePlans returns a copy-on-write snapshot of tablePlans. It only
 // copies the map when the version has changed since the last snapshot, avoiding
 // the read-lock hold time of building writesets directly against the live map.
-func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, version *int64, cachedVersion *int64, cached map[string]*TablePlan) map[string]*TablePlan {
+func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, version *atomic.Int64, cachedVersion *int64, cached map[string]*TablePlan) map[string]*TablePlan {
 	if tablePlans == nil {
 		return nil
 	}
 	mu.RLock()
 	defer mu.RUnlock()
-	if cached != nil && *version == *cachedVersion {
+	v := version.Load()
+	if cached != nil && v == *cachedVersion {
 		return cached
 	}
-	copy := make(map[string]*TablePlan, len(tablePlans))
-	maps.Copy(copy, tablePlans)
-	*cachedVersion = *version
-	return copy
+	cp := make(map[string]*TablePlan, len(tablePlans))
+	maps.Copy(cp, tablePlans)
+	*cachedVersion = v
+	return cp
 }
 
 // writesetKeysForChange extracts PK-based writeset keys from pre-decoded row
@@ -237,7 +239,7 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 // parent table's PK-based writeset keys.
 func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintRef, error) {
 	query := fmt.Sprintf(
-		"SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, ORDINAL_POSITION "+
+		"SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME "+
 			"FROM information_schema.KEY_COLUMN_USAGE "+
 			"WHERE TABLE_SCHEMA = %s AND REFERENCED_TABLE_NAME IS NOT NULL "+
 			"ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION",
@@ -251,15 +253,19 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		return nil, nil
 	}
 
-	// Group by (childTable, parentTable) constraint — each row is one column
-	// of a potentially multi-column FK.
+	// Group by (childTable, constraintName) — each row is one column
+	// of a potentially multi-column FK. We group by constraint name
+	// rather than parent table because a child table can have multiple
+	// FK constraints referencing the same parent table with different
+	// column sets.
 	type constraintKey struct {
-		childTable  string
-		parentTable string
+		childTable     string
+		constraintName string
 	}
 	type constraintEntry struct {
-		key  constraintKey
-		cols []string // child column names in ordinal order
+		key         constraintKey
+		parentTable string
+		cols        []string // child column names in ordinal order
 	}
 
 	// Use a slice to preserve order; there are typically very few FK constraints.
@@ -268,17 +274,19 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 
 	for _, row := range qr.Rows {
 		childTable := row[0].ToString()
-		colName := row[1].ToString()
-		parentTable := row[2].ToString()
+		constraintName := row[1].ToString()
+		colName := row[2].ToString()
+		parentTable := row[3].ToString()
 
-		k := constraintKey{childTable: childTable, parentTable: parentTable}
+		k := constraintKey{childTable: childTable, constraintName: constraintName}
 		if i, ok := idx[k]; ok {
 			constraints[i].cols = append(constraints[i].cols, colName)
 		} else {
 			idx[k] = len(constraints)
 			constraints = append(constraints, constraintEntry{
-				key:  k,
-				cols: []string{colName},
+				key:         k,
+				parentTable: parentTable,
+				cols:        []string{colName},
 			})
 		}
 	}
@@ -286,7 +294,7 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 	result := make(map[string][]fkConstraintRef, len(constraints))
 	for _, c := range constraints {
 		result[c.key.childTable] = append(result[c.key.childTable], fkConstraintRef{
-			ParentTable:      c.key.parentTable,
+			ParentTable:      c.parentTable,
 			ChildColumnNames: c.cols,
 		})
 	}

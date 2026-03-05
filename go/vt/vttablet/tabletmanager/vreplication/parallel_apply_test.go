@@ -21,7 +21,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -382,9 +381,9 @@ func TestApplySchedulerRemovePendingCompaction(t *testing.T) {
 
 func TestSnapshotTablePlans_Nil(t *testing.T) {
 	mu := &sync.RWMutex{}
-	var version int64
+	version := &atomic.Int64{}
 	var cachedVersion int64
-	result := snapshotTablePlans(mu, nil, &version, &cachedVersion, nil)
+	result := snapshotTablePlans(mu, nil, version, &cachedVersion, nil)
 	assert.Nil(t, result)
 }
 
@@ -394,10 +393,11 @@ func TestSnapshotTablePlans_CopiesMap(t *testing.T) {
 		"t1": {TargetName: "t1"},
 		"t2": {TargetName: "t2"},
 	}
-	var version int64 = 1
+	version := &atomic.Int64{}
+	version.Store(1)
 	var cachedVersion int64
 
-	snap := snapshotTablePlans(mu, plans, &version, &cachedVersion, nil)
+	snap := snapshotTablePlans(mu, plans, version, &cachedVersion, nil)
 	require.Len(t, snap, 2)
 	assert.Equal(t, "t1", snap["t1"].TargetName)
 	assert.Equal(t, "t2", snap["t2"].TargetName)
@@ -413,13 +413,14 @@ func TestSnapshotTablePlans_UsesCacheWhenVersionMatches(t *testing.T) {
 	plans := map[string]*TablePlan{
 		"t1": {TargetName: "t1"},
 	}
-	var version int64 = 5
+	version := &atomic.Int64{}
+	version.Store(5)
 	var cachedVersion int64 = 5
 	cached := map[string]*TablePlan{
 		"cached": {TargetName: "cached"},
 	}
 
-	snap := snapshotTablePlans(mu, plans, &version, &cachedVersion, cached)
+	snap := snapshotTablePlans(mu, plans, version, &cachedVersion, cached)
 	// Should return the cached map since versions match
 	require.Len(t, snap, 1)
 	assert.Equal(t, "cached", snap["cached"].TargetName)
@@ -430,13 +431,14 @@ func TestSnapshotTablePlans_RefreshesCacheWhenVersionChanges(t *testing.T) {
 	plans := map[string]*TablePlan{
 		"t1": {TargetName: "t1"},
 	}
-	var version int64 = 6
+	version := &atomic.Int64{}
+	version.Store(6)
 	var cachedVersion int64 = 5
 	cached := map[string]*TablePlan{
 		"stale": {TargetName: "stale"},
 	}
 
-	snap := snapshotTablePlans(mu, plans, &version, &cachedVersion, cached)
+	snap := snapshotTablePlans(mu, plans, version, &cachedVersion, cached)
 	require.Len(t, snap, 1)
 	assert.Equal(t, "t1", snap["t1"].TargetName)
 	assert.Equal(t, int64(6), cachedVersion)
@@ -483,27 +485,7 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 	return vp, mockDB
 }
 
-func TestParallelDebugEnabled(t *testing.T) {
-	t.Setenv("VREPLICATION_PARALLEL_DEBUG", "1")
-	assert.True(t, parallelDebugEnabled())
 
-	t.Setenv("VREPLICATION_PARALLEL_DEBUG", "0")
-	assert.False(t, parallelDebugEnabled())
-}
-
-func TestParallelDebugLogWritesFile(t *testing.T) {
-	path := "/tmp/parallel_apply_debug.log"
-	_ = os.Remove(path)
-	t.Cleanup(func() {
-		_ = os.Remove(path)
-	})
-
-	parallelDebugLog("unit-test")
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "unit-test")
-}
 
 func TestApplyEventsParallelCanceledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
@@ -575,7 +557,7 @@ func TestScheduleItems_GTIDAndROWAndCOMMIT(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -646,7 +628,7 @@ func TestScheduleLoopProcessesItems(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	rowEvent := &binlogdatapb.VEvent{
@@ -799,7 +781,7 @@ func TestScheduleItems_BEGINIsIgnored(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -899,7 +881,7 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -939,7 +921,7 @@ func TestScheduleItems_NonRowEventSetsRowOnlyFalse(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -975,7 +957,7 @@ func TestScheduleItems_TimestampTracking(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_GTID,
@@ -1017,7 +999,7 @@ func TestScheduleItems_WritesetBuild(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -1058,7 +1040,7 @@ func TestScheduleItems_MissingTablePlanForcesGlobal(t *testing.T) {
 	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
 
 	// No table plan for "t1" — writeset build should fail
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -1099,7 +1081,7 @@ func TestScheduleItems_CommitMeta(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type:           binlogdatapb.VEventType_GTID,
@@ -1145,7 +1127,7 @@ func TestScheduleItems_HeartbeatSetsMustSave(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// recordHeartbeat() calls vr.stats.RecordHeartbeat (no DB) then
 	// mustUpdateHeartbeat() → false (numAccumulatedHeartbeats=0), so no DB call.
@@ -1196,7 +1178,7 @@ func TestScheduleItems_BatchingSkipsFlushWhenAnotherCommitAhead(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// Two transactions in same batch — first COMMIT should be skipped (batched)
 	// since another COMMIT follows
@@ -1240,7 +1222,7 @@ func TestScheduleItems_FKRefsDisableBatching(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// Set FK refs — this should disable batching
 	vp.fkRefs = map[string][]fkConstraintRef{
@@ -1289,7 +1271,7 @@ func TestScheduleItems_BatchingMergedSequenceAdvanced(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// Two transactions with commit meta — first gets merged, its sequence should be advanced
 	items := [][]*binlogdatapb.VEvent{{
@@ -1329,7 +1311,7 @@ func TestScheduleItems_StopPosSetsMustSave(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// Set a stop position
 	stopPos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
@@ -2012,7 +1994,7 @@ func TestScheduleItems_BatchTimeBoundForcesSave(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	// Two transactions in same batch — but time bound should force flush
 	items := [][]*binlogdatapb.VEvent{{
@@ -2116,7 +2098,7 @@ func TestScheduleItems_DDLFlushesAccumulatedEvents(t *testing.T) {
 		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
 		PKIndices:  []bool{true},
 	}
-	vp.tablePlansVersion = 1
+	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,

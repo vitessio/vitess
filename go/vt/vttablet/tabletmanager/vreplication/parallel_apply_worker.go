@@ -79,7 +79,6 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 func (w *applyWorker) close() {
 	if w.client != nil {
 		if w.client.InTransaction {
-			// parallelDebugLog(fmt.Sprintf("WORKER CLOSE with pending txn: stream=%d", w.vr.id))
 			_ = w.client.Rollback()
 		}
 		w.client.Close()

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sync"
 	"time"
 
@@ -140,33 +139,12 @@ func computeLastEventTimestamp(events []*binlogdatapb.VEvent) (timestamp, curren
 	return 0, 0
 }
 
-// parallelDebugEnabled returns true when VREPLICATION_PARALLEL_DEBUG=1
-// is set, enabling verbose file-based debug logging for development.
-func parallelDebugEnabled() bool {
-	return os.Getenv("VREPLICATION_PARALLEL_DEBUG") == "1"
-}
-
-var parallelDebugLogMu sync.Mutex
-
-// parallelDebugLog appends a timestamped message to /tmp/parallel_apply_debug.log.
-func parallelDebugLog(msg string) {
-	parallelDebugLogMu.Lock()
-	defer parallelDebugLogMu.Unlock()
-	f, err := os.OpenFile("/tmp/parallel_apply_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintf(f, "%s [pid=%d] %s\n", time.Now().Format("15:04:05.000"), os.Getpid(), msg)
-}
-
 // applyEventsParallel is the top-level orchestrator for the parallel applier.
 // It creates N worker goroutines and a commitLoop goroutine, then runs
 // scheduleLoop on the calling goroutine. On exit, it tears down the pipeline
 // in order: close scheduler → wait workers → close commitCh → wait commitLoop.
 func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) error {
 	workerCount := vp.vr.workflowConfig.ParallelReplicationWorkers
-	// parallelDebugLog(fmt.Sprintf("applyEventsParallel ENTRY: stream=%d workflow=%s workers=%d copy_state=%d", vp.vr.id, vp.vr.WorkflowName, workerCount, len(vp.copyState)))
 	if workerCount <= 1 {
 		return vp.applyEvents(ctx, relay)
 	}
@@ -192,9 +170,6 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	// a partial creation failure would leak DB connections.
 	defer func() {
 		for _, worker := range workers {
-			// if parallelDebugEnabled() && worker.client != nil && worker.client.InTransaction {
-			// 	parallelDebugLog(fmt.Sprintf("CLOSING worker %d with InTransaction=true: stream=%d workflow=%s", i, vp.vr.id, vp.vr.WorkflowName))
-			// }
 			worker.close()
 		}
 	}()
@@ -222,12 +197,8 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	var wg sync.WaitGroup
 	for i := range workerCount {
 		worker := workers[i]
-		// workerIdx := i
 		wg.Go(func() {
 			err := vp.workerLoop(ctx, scheduler, commitCh, worker)
-			// if parallelDebugEnabled() {
-			// 	log.Warn(fmt.Sprintf("parallel apply worker exited: stream=%d workflow=%s worker=%d err=%v", vp.vr.id, vp.vr.WorkflowName, workerIdx, err))
-			// }
 			if err != nil && err != io.EOF {
 				workerErr <- err
 				cancel()
@@ -239,9 +210,6 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	go func() {
 		defer close(commitDone)
 		if err := vp.commitLoop(ctx, scheduler, commitCh); err != nil {
-			// if parallelDebugEnabled() {
-			// 	log.Warn(fmt.Sprintf("parallel apply commitLoop returned err: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-			// }
 			applyErr <- err
 			// Always cancel context when commitLoop exits with an error,
 			// including io.EOF (stop position reached). This ensures
@@ -249,16 +217,9 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 			// blocking on a commitCh that has no reader.
 			cancel()
 		}
-		// else if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply commitLoop returned nil: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-		// }
 	}()
 
 	schedErr := vp.scheduleLoop(ctx, relay, scheduler)
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply scheduleLoop returned: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, schedErr))
-	// 	parallelDebugLog(fmt.Sprintf("scheduleLoop RETURNED: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, schedErr))
-	// }
 	if schedErr != nil {
 		applyErr <- schedErr
 		if schedErr != io.EOF {
@@ -266,17 +227,8 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		}
 	}
 
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply closing scheduler: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-	// }
 	scheduler.close()
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply waiting for workers: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-	// }
 	wg.Wait()
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply closing commitCh: stream=%d workflow=%s", vp.vr.id, vp.vr.WorkflowName))
-	// }
 	close(commitCh)
 	<-commitDone
 
@@ -322,8 +274,6 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 // throttle-lag estimation. Runs on the main goroutine of applyEventsParallel.
 func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler *applyScheduler) error {
 	defer vp.vr.dbClient.Rollback()
-	// lastFetchPos := ""
-	// fetchCount := 0
 	state := &parallelScheduleState{}
 	for {
 		if ctx.Err() != nil {
@@ -365,18 +315,6 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		if err != nil {
 			return err
 		}
-		// if parallelDebugEnabled() && len(items) > 0 {
-		// 	fetchCount++
-		// 	firstPos := getNextPosition(items, 0, 0)
-		// 	if firstPos != "" && firstPos == lastFetchPos {
-		// 		log.Warn(fmt.Sprintf("parallel apply fetched duplicate pos: stream=%d workflow=%s fetch=%d pos=%s", vp.vr.id, vp.vr.WorkflowName, fetchCount, firstPos))
-		// 	} else {
-		// 		log.Warn(fmt.Sprintf("parallel apply fetched items: stream=%d workflow=%s fetch=%d batches=%d pos=%s", vp.vr.id, vp.vr.WorkflowName, fetchCount, len(items), firstPos))
-		// 	}
-		// 	if firstPos != "" {
-		// 		lastFetchPos = firstPos
-		// 	}
-		// }
 		if err := vp.scheduleItems(ctx, scheduler, state, items); err != nil {
 			return err
 		}
@@ -468,55 +406,27 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		txn.commitParent = state.curCommitParent
 		txn.hasCommitMeta = state.curHasCommitMeta
 		txn.payload = payload
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("FLUSH txn: stream=%d workflow=%s order=%d events=%d rowOnly=%t commitOnly=%t hasMeta=%t seq=%d parent=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, len(payload.events), payload.rowOnly, payload.commitOnly, txn.hasCommitMeta, txn.sequenceNumber, txn.commitParent, payload.pos))
-		// }
-		// if parallelDebugEnabled() && len(payload.events) > 0 {
-		// 	for _, event := range payload.events {
-		// 		if event.Type == binlogdatapb.VEventType_ROW && event.RowEvent != nil {
-		// 			parallelDebugLog(fmt.Sprintf("FLUSH rowevent: stream=%d workflow=%s order=%d table=%s row_changes=%d", vp.vr.id, vp.vr.WorkflowName, txn.order, event.RowEvent.TableName, len(event.RowEvent.RowChanges)))
-		// 		}
-		// 	}
-		// }
 		if state.curRowOnlySet && !state.curRowOnly {
 			txn.forceGlobal = true
 		} else if len(vp.copyState) != 0 {
 			txn.forceGlobal = true
 		} else {
-			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, &vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
+			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
 			state.cachedPlanSnapshot = planSnapshot
 			// Invalidate fieldIdxCache when table plans change (new FIELD events).
 			if state.fieldIdxCacheVersion != state.cachedPlanVersion {
 				state.fieldIdxCache = make(map[string]map[string]int)
 				state.fieldIdxCacheVersion = state.cachedPlanVersion
 			}
-			// if parallelDebugEnabled() {
-			// 	for _, ev := range state.curEvents {
-			// 		if ev.Type == binlogdatapb.VEventType_ROW && ev.RowEvent != nil {
-			// 			plan := planSnapshot[ev.RowEvent.TableName]
-			// 			if plan == nil {
-			// 				parallelDebugLog(fmt.Sprintf("FLUSH plan MISSING for table=%s order=%d", ev.RowEvent.TableName, order))
-			// 			} else {
-			// 				parallelDebugLog(fmt.Sprintf("FLUSH plan for table=%s order=%d: PKIndices=%v Fields=%d", ev.RowEvent.TableName, order, plan.PKIndices, len(plan.Fields)))
-			// 			}
-			// 		}
-			// 	}
-			// }
 			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, state.curEvents, state.fieldIdxCache)
 			if err != nil {
 				// Table plan may not be populated yet (FIELD event not yet applied).
 				// Treat as forceGlobal to serialize safely.
 				txn.forceGlobal = true
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("FLUSH writeset error, forcing global: stream=%d workflow=%s order=%d err=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, err))
-				// }
 			} else {
 				txn.writeset = writeset
 			}
 		}
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("FLUSH writeset: stream=%d workflow=%s order=%d forceGlobal=%t writeset=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, txn.forceGlobal, txn.writeset))
-		// }
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
 		}
@@ -527,6 +437,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		state.curRowOnly = false
 		state.curRowOnlySet = false
 		state.curMustSave = false
+		state.curTimestamp = 0
+		state.curCommitParent = 0
+		state.curSequence = 0
+		state.curHasCommitMeta = false
 		state.lastFlushTime = time.Now()
 		return nil
 	}
@@ -544,26 +458,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				state.curCommitParent = event.CommitParent
 				state.curSequence = event.SequenceNumber
 				state.curHasCommitMeta = event.SequenceNumber != 0 || event.CommitParent != 0
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("scheduleItems GTID: stream=%d workflow=%s seq=%d parent=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, state.curSequence, state.curCommitParent, state.curPos))
-				// }
 				vp.serialMu.Lock()
 				vp.pos = pos
 				vp.unsavedEvent = nil
 				vp.serialMu.Unlock()
 			case binlogdatapb.VEventType_ROW:
-				// if parallelDebugEnabled() && event.RowEvent != nil {
-				// 	parallelDebugLog(fmt.Sprintf("scheduleItems ROW: stream=%d workflow=%s table=%s changes=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, event.RowEvent.TableName, len(event.RowEvent.RowChanges), state.curPos))
-				// }
 				state.curEvents = append(state.curEvents, event)
 				if !state.curRowOnlySet {
 					state.curRowOnly = true
 					state.curRowOnlySet = true
 				}
 			case binlogdatapb.VEventType_COMMIT:
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("scheduleItems COMMIT: stream=%d workflow=%s pos=%v curEvents=%d", vp.vr.id, vp.vr.WorkflowName, state.curPos, len(state.curEvents)))
-				// }
 				state.curMustSave = !vp.stopPos.IsZero() && state.curPos.AtLeast(vp.stopPos)
 				if len(state.curEvents) == 0 {
 					if state.curMustSave {
@@ -590,10 +495,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 							if err != nil {
 								return err
 							}
-							// if parallelDebugEnabled() {
-							// 	parallelDebugLog(fmt.Sprintf("scheduleItems EMPTY TXN time_updated refresh: stream=%d workflow=%s",
-							// 		vp.vr.id, vp.vr.WorkflowName))
-							// }
 						}
 						vp.serialMu.Lock()
 						vp.unsavedEvent = event
@@ -632,10 +533,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// 500ms to keep lag fresh.
 				if !state.lastFlushTime.IsZero() && time.Since(state.lastFlushTime) > 500*time.Millisecond {
 					state.curMustSave = true
-					// if parallelDebugEnabled() {
-					// 	parallelDebugLog(fmt.Sprintf("scheduleItems BATCH TIME BOUND: stream=%d workflow=%s elapsed=%v — forcing flush",
-					// 		vp.vr.id, vp.vr.WorkflowName, time.Since(state.lastFlushTime)))
-					// }
 				}
 				// When FK refs are present, skip batching to keep writesets
 				// small. Large batches merge many parent/child operations
@@ -646,10 +543,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// them in parallel.
 				hasFKRefs := len(vp.fkRefs) > 0
 				if !state.curMustSave && !hasFKRefs && hasAnotherCommit(items, i, j+1) {
-					// if parallelDebugEnabled() {
-					// 	parallelDebugLog(fmt.Sprintf("scheduleItems BATCH: stream=%d workflow=%s seq=%d parent=%d curEvents=%d — skipping flush, another commit ahead",
-					// 		vp.vr.id, vp.vr.WorkflowName, state.curSequence, state.curCommitParent, len(state.curEvents)))
-					// }
 					// Advance lastCommittedSequence for this merged-away
 					// transaction so that future hasCommitMeta transactions
 					// whose commitParent references this sequence are not
@@ -669,14 +562,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if err := flush(false); err != nil {
 					return err
 				}
-				state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
-				state.curRowOnly = false
-				state.curRowOnlySet = false
-				state.curMustSave = false
-				state.curTimestamp = 0
-				state.curCommitParent = 0
-				state.curSequence = 0
-				state.curHasCommitMeta = false
 			case binlogdatapb.VEventType_BEGIN:
 				// No-op: BEGIN is handled on-demand by workers when they encounter
 				// ROW/FIELD events (via activeDBClient().Begin()). We intentionally
@@ -754,8 +639,8 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						return err
 					}
 				}
-				vp.numAccumulatedHeartbeats++
 				vp.serialMu.Lock()
+				vp.numAccumulatedHeartbeats++
 				err := vp.recordHeartbeat()
 				vp.serialMu.Unlock()
 				if err != nil {
@@ -790,9 +675,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					}
 				}
 			default:
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("scheduleItems DEFAULT: stream=%d workflow=%s type=%v pos=%v", vp.vr.id, vp.vr.WorkflowName, event.Type, state.curPos))
-				// }
 				state.curEvents = append(state.curEvents, event)
 				if !state.curRowOnlySet {
 					state.curRowOnly = false
@@ -848,9 +730,6 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	txn.payload = payload
 	// done is nil for commitOnly transactions; workers send them
 	// directly to commitCh without waiting for completion.
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply schedule commit-only: stream=%d workflow=%s order=%d type=%v hasMeta=%t updatePosOnly=%t noConflict=%t pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, event.Type, txn.hasCommitMeta, payload.updatePosOnly, txn.noConflict, payload.pos))
-	// }
 	return scheduler.enqueue(txn)
 }
 
@@ -869,24 +748,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("workerLoop WAITING nextReady: stream=%d workflow=%s worker=%p", vp.vr.id, vp.vr.WorkflowName, worker))
-		// }
 		txn, err := scheduler.nextReady(ctx)
 		if err != nil {
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("workerLoop nextReady ERROR: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-			// }
 			return err
 		}
 		payload := txn.payload
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("workerLoop GOT TXN: stream=%d workflow=%s order=%d events=%d commitOnly=%t forceGlobal=%t pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, len(payload.events), payload.commitOnly, txn.forceGlobal, payload.pos))
-		// }
 		if payload.commitOnly {
-			// if parallelDebugEnabled() {
-			// 	log.Warn(fmt.Sprintf("parallel apply worker commit-only: stream=%d workflow=%s order=%d events=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, len(payload.events), payload.pos))
-			// }
 			select {
 			case commitCh <- txn:
 			case <-ctx.Done():
@@ -894,25 +761,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			continue
 		}
-		// if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply worker apply: stream=%d workflow=%s order=%d events=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, len(payload.events), payload.pos))
-		// 	for _, event := range payload.events {
-		// 		if event.Type == binlogdatapb.VEventType_ROW && event.RowEvent != nil {
-		// 			parallelDebugLog(fmt.Sprintf("WORKER ROW event: stream=%d workflow=%s order=%d table=%s row_changes=%d", vp.vr.id, vp.vr.WorkflowName, txn.order, event.RowEvent.TableName, len(event.RowEvent.RowChanges)))
-		// 		} else {
-		// 			parallelDebugLog(fmt.Sprintf("WORKER event: stream=%d workflow=%s order=%d type=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, event.Type))
-		// 		}
-		// 	}
-		// }
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
 				worker.rollback()
 				return err
 			}
 		}
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("workerLoop SENDING to commitCh: stream=%d workflow=%s order=%d pos=%v", vp.vr.id, vp.vr.WorkflowName, txn.order, payload.pos))
-		// }
 		payload.query = worker.query
 		payload.commit = worker.commit
 		payload.client = worker.client
@@ -936,112 +790,152 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 
 // commitLoop receives completed transactions from workers via commitCh and
 // commits them in strict order (by the order field). For worker transactions,
-// it swaps the worker's DB connection onto vp, calls updatePos + commit, then
-// signals the worker via txn.done. For commitOnly transactions, it applies
-// events and updates position on the main connection.
+// it executes the position update and commit on the worker's connection
+// WITHOUT holding serialMu, then briefly locks to update vp state.
+// For commitOnly transactions, it applies events on the main connection
+// under serialMu.
 func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, commitCh <-chan *applyTxn) error {
-	commitTxn := func(txn *applyTxn) error {
+	updateLag := func(payload *applyTxnPayload) {
+		if payload.lastEventTimestamp != 0 {
+			tsNs := payload.lastEventTimestamp * 1e9
+			vp.lastTimestampNs.Store(tsNs)
+			now := time.Now().UnixNano()
+			offset := now - payload.lastEventCurrentTime
+			vp.timeOffsetNs.Store(offset)
+			lag := now - tsNs - offset
+			if lag >= 0 {
+				lagSecs := lag / 1e9
+				vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
+				vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, lagSecs)
+				return
+			}
+		}
+		behind := time.Now().UnixNano() - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
+		behindSecs := behind / 1e9
+		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
+		vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
+	}
+
+	// commitWorkerTxn handles a worker's row transaction. It executes the
+	// position update SQL and commit on the worker's private MySQL connection
+	// WITHOUT holding serialMu, then briefly locks to update vp state. This
+	// avoids blocking the scheduleLoop during slow MySQL commits.
+	commitWorkerTxn := func(txn *applyTxn) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		payload := txn.payload
-		updateLag := func() {
-			if payload.lastEventTimestamp != 0 {
-				tsNs := payload.lastEventTimestamp * 1e9
-				vp.lastTimestampNs.Store(tsNs)
-				now := time.Now().UnixNano()
-				offset := now - payload.lastEventCurrentTime
-				vp.timeOffsetNs.Store(offset)
-				lag := now - tsNs - offset
-				if lag >= 0 {
-					lagSecs := lag / 1e9
-					vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
-					vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, lagSecs)
-					return
+
+		// Generate the position update SQL. These reads are all from
+		// immutable or atomic fields, no lock needed.
+		updateSQL := binlogplayer.GenerateUpdatePos(vp.vr.id, payload.pos,
+			time.Now().Unix(), payload.timestamp,
+			vp.vr.stats.CopyRowCount.Get(),
+			vp.vr.workflowConfig.StoreCompressedGTID)
+
+		// Execute position update within the worker's open transaction,
+		// then commit. No serialMu needed — we use the payload's
+		// connection directly, never touching vp's fields.
+		if _, err := payload.query(ctx, updateSQL); err != nil {
+			return fmt.Errorf("error %v updating position", err)
+		}
+		if err := payload.commit(); err != nil {
+			return err
+		}
+
+		// Briefly lock to update vp state that scheduleLoop reads.
+		vp.serialMu.Lock()
+		vp.numAccumulatedHeartbeats = 0
+		vp.unsavedEvent = nil
+		vp.timeLastSaved = time.Now()
+		shouldStop := vp.stopPos.GTIDSet != nil
+		posReached := !vp.stopPos.IsZero() && payload.pos.AtLeast(vp.stopPos)
+		vp.serialMu.Unlock()
+
+		vp.vr.stats.SetLastPosition(payload.pos)
+		updateLag(payload)
+
+		// Signal the worker that commit is done so it can reuse its
+		// DB connection for the next transaction.
+		txn.done <- struct{}{}
+
+		if err := scheduler.markCommitted(txn); err != nil {
+			return err
+		}
+
+		// Now that the worker transaction is committed (lock released),
+		// set state on the main connection if stop position was reached.
+		if shouldStop && posReached {
+			if vp.saveStop {
+				if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+					return err
 				}
 			}
-			behind := time.Now().UnixNano() - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
-			behindSecs := behind / 1e9
-			vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
-			vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
+			return io.EOF
 		}
+		return nil
+	}
+
+	// commitOnlyTxn handles commitOnly transactions (DDL, OTHER, JOURNAL,
+	// position-only saves). These run on the main connection under serialMu.
+	commitOnlyTxn := func(txn *applyTxn) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		payload := txn.payload
 		vp.serialMu.Lock()
-		prevQuery := vp.query
-		prevCommit := vp.commit
-		prevClient := vp.dbClient
+		defer vp.serialMu.Unlock()
+
+		shouldStop := vp.stopPos.GTIDSet != nil
+		// Temporarily swap pos for the main connection's updatePos call.
 		prevPos := vp.pos
-		if payload.query != nil {
-			vp.query = payload.query
-		}
-		if payload.commit != nil {
-			vp.commit = payload.commit
-		}
-		if payload.client != nil {
-			vp.dbClient = payload.client
-		}
 		if !payload.pos.IsZero() {
 			vp.pos = payload.pos
 		}
-		defer func() {
-			vp.query = prevQuery
-			vp.commit = prevCommit
-			vp.dbClient = prevClient
-			vp.pos = prevPos
-			vp.serialMu.Unlock()
-		}()
-		if payload.commitOnly {
-			shouldStop := vp.stopPos.GTIDSet != nil
-			if payload.updatePosOnly {
-				posReached, err := vp.updatePos(ctx, payload.timestamp)
-				if err != nil {
-					return err
-				}
-				if shouldStop && posReached {
-					return io.EOF
-				}
-			} else {
-				if err := vp.applyEvent(ctx, payload.events[0], payload.mustSave); err != nil {
-					return err
-				}
-				if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
-					vp.numAccumulatedHeartbeats++
-					if err := vp.recordHeartbeat(); err != nil {
-						return err
-					}
-				}
-				posReached, err := vp.updatePos(ctx, payload.timestamp)
-				if err != nil {
-					return err
-				}
-				if shouldStop && posReached {
-					return io.EOF
-				}
+		defer func() { vp.pos = prevPos }()
+
+		if payload.updatePosOnly {
+			posReached, err := vp.updatePos(ctx, payload.timestamp)
+			if err != nil {
+				return err
 			}
-			updateLag()
+			updateLag(payload)
 			if err := scheduler.markCommitted(txn); err != nil {
 				return err
 			}
+			if shouldStop && posReached {
+				return io.EOF
+			}
 			return nil
 		}
-		shouldStop := vp.stopPos.GTIDSet != nil
-		posReached, err := vp.commitTxn(ctx, payload)
+		if err := vp.applyEvent(ctx, payload.events[0], payload.mustSave); err != nil {
+			return err
+		}
+		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
+			vp.numAccumulatedHeartbeats++
+			if err := vp.recordHeartbeat(); err != nil {
+				return err
+			}
+		}
+		posReached, err := vp.updatePos(ctx, payload.timestamp)
 		if err != nil {
 			return err
 		}
-		updateLag()
-		// Non-commitOnly: signal the worker that commit is done so it
-		// can reuse its DB connection for the next transaction.
-		txn.done <- struct{}{}
+		updateLag(payload)
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
 		}
 		if shouldStop && posReached {
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("commitLoop EOF: commitOnly=false stream=%d workflow=%s stopPos=%v pos=%v", vp.vr.id, vp.vr.WorkflowName, vp.stopPos, vp.pos))
-			// }
 			return io.EOF
 		}
 		return nil
+	}
+
+	commitTxn := func(txn *applyTxn) error {
+		if txn.payload.commitOnly {
+			return commitOnlyTxn(txn)
+		}
+		return commitWorkerTxn(txn)
 	}
 
 	pending := make(map[int64]*applyTxn)
@@ -1085,8 +979,8 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		select {
 		case txn, ok := <-commitCh:
 			if !ok {
-				// The commit channel has been closed so we cannot add anyting else.
-				// We ony need to drain any already pending transactions.
+				// The commit channel has been closed so we cannot add anything else.
+				// We only need to drain any already pending transactions.
 				if err := drainPending(); err != nil {
 					return err
 				}
@@ -1116,73 +1010,50 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	}
 }
 
-// commitTxn commits a worker's transaction. It calls updatePos (which writes
-// to _vt.vreplication within the worker's open transaction), then commits.
-// To avoid self-deadlock when the stop position is reached, it temporarily
-// disables saveStop so updatePos doesn't call setState on the main connection
-// while the worker's connection holds the row lock. After commit releases the
-// lock, setState is called on the main connection if needed.
+// commitTxn commits a worker's transaction. It executes the position update
+// SQL and commit on the worker's connection directly (via payload.query and
+// payload.commit), WITHOUT holding serialMu. After commit, it briefly locks
+// serialMu to update vp state (unsavedEvent, timeLastSaved).
+// To avoid self-deadlock when the stop position is reached, setState is
+// called on the main connection AFTER the worker's transaction is committed
+// and the row lock is released.
 func (vp *vplayer) commitTxn(ctx context.Context, payload *applyTxnPayload) (bool, error) {
-	// if parallelDebugEnabled() {
-	// 	hasCustomer := false
-	// 	for _, event := range payload.events {
-	// 		if event.Type == binlogdatapb.VEventType_ROW && event.RowEvent != nil && event.RowEvent.TableName == "customer" {
-	// 			hasCustomer = true
-	// 			break
-	// 		}
-	// 	}
-	// 	if hasCustomer {
-	// 		parallelDebugLog(fmt.Sprintf("COMMIT customer: stream=%d workflow=%s pos=%v events=%d inTxn=%v", vp.vr.id, vp.vr.WorkflowName, payload.pos, len(payload.events), vp.activeDBClient().InTransaction))
-	// 	}
-	// }
-	// For worker transactions, updatePos acquires a row lock on _vt.vreplication
-	// within the worker's open transaction. If posReached, setState would try to
-	// UPDATE the same row on the MAIN connection, causing a self-deadlock.
-	// To avoid this: temporarily disable saveStop so updatePos skips setState,
-	// commit the worker transaction (releasing the row lock), then call setState
-	// on the main connection.
-	isWorkerTxn := payload.client != nil && payload.client != vp.vr.dbClient
-	origSaveStop := vp.saveStop
-	if isWorkerTxn {
-		vp.saveStop = false
+	queryFn := payload.query
+	commitFn := payload.commit
+	if queryFn == nil {
+		queryFn = vp.query
 	}
-	posReached, err := vp.updatePos(ctx, payload.timestamp)
-	if isWorkerTxn {
-		vp.saveStop = origSaveStop
+	if commitFn == nil {
+		commitFn = vp.commit
 	}
-	if err != nil {
+
+	pos := payload.pos
+	if pos.IsZero() {
+		pos = vp.pos
+	}
+
+	updateSQL := binlogplayer.GenerateUpdatePos(vp.vr.id, pos,
+		time.Now().Unix(), payload.timestamp,
+		vp.vr.stats.CopyRowCount.Get(),
+		vp.vr.workflowConfig.StoreCompressedGTID)
+
+	if _, err := queryFn(ctx, updateSQL); err != nil {
+		return false, fmt.Errorf("error %v updating position", err)
+	}
+	if err := commitFn(); err != nil {
 		return false, err
 	}
-	if err := vp.commit(); err != nil {
-		return false, err
-	}
-	// Now that the worker transaction is committed (lock released), set state
-	// on the main connection if the stop position was reached.
-	if posReached && origSaveStop {
+
+	vp.numAccumulatedHeartbeats = 0
+	vp.unsavedEvent = nil
+	vp.timeLastSaved = time.Now()
+	vp.vr.stats.SetLastPosition(pos)
+	posReached := !vp.stopPos.IsZero() && pos.AtLeast(vp.stopPos)
+
+	if posReached && vp.saveStop {
 		if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 			return false, err
 		}
 	}
-	// if parallelDebugEnabled() {
-	// 	hasCustomer := false
-	// 	for _, event := range payload.events {
-	// 		if event.Type == binlogdatapb.VEventType_ROW && event.RowEvent != nil && event.RowEvent.TableName == "customer" {
-	// 			hasCustomer = true
-	// 			break
-	// 		}
-	// 	}
-	// 	if hasCustomer {
-	// 		parallelDebugLog(fmt.Sprintf("COMMIT customer DONE: stream=%d workflow=%s pos=%v", vp.vr.id, vp.vr.WorkflowName, payload.pos))
-	// 		// Verification: read back dec80 to confirm data is persisted
-	// 		if payload.client != nil {
-	// 			qr, verErr := payload.client.ExecuteFetch("select cid, dec80 from customer order by cid", 100)
-	// 			if verErr != nil {
-	// 				parallelDebugLog(fmt.Sprintf("VERIFY customer FAILED: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, verErr))
-	// 			} else {
-	// 				parallelDebugLog(fmt.Sprintf("VERIFY customer AFTER COMMIT: stream=%d workflow=%s rows=%v", vp.vr.id, vp.vr.WorkflowName, qr.Rows))
-	// 			}
-	// 		}
-	// 	}
-	// }
 	return posReached, nil
 }

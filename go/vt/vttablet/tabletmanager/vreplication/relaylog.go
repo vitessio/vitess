@@ -89,17 +89,6 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	rl.timedout = false
 	rl.items = append(rl.items, events)
 	rl.curSize += eventsSize(events)
-	// if parallelDebugEnabled() && len(events) > 0 {
-	// 	firstPos := getNextPosition([][]*binlogdatapb.VEvent{events}, 0, 0)
-	// 	lastPos := ""
-	// 	for idx := len(events) - 1; idx >= 0; idx-- {
-	// 		if events[idx].Type == binlogdatapb.VEventType_GTID {
-	// 			lastPos = events[idx].Gtid
-	// 			break
-	// 		}
-	// 	}
-	// 	log.Warn(fmt.Sprintf("parallel apply relay send: batches=%d events=%d first_pos=%s last_pos=%s", len(rl.items), len(events), firstPos, lastPos))
-	// }
 	rl.hasItems.Broadcast()
 	return nil
 }
@@ -124,22 +113,6 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	items := rl.items
 	rl.items = nil
 	rl.curSize = 0
-	// if parallelDebugEnabled() && len(items) > 0 {
-	// 	firstPos := getNextPosition(items, 0, 0)
-	// 	lastPos := ""
-	// 	for i := len(items) - 1; i >= 0; i-- {
-	// 		for j := len(items[i]) - 1; j >= 0; j-- {
-	// 			if items[i][j].Type == binlogdatapb.VEventType_GTID {
-	// 				lastPos = items[i][j].Gtid
-	// 				break
-	// 			}
-	// 		}
-	// 		if lastPos != "" {
-	// 			break
-	// 		}
-	// 	}
-	// 	log.Warn(fmt.Sprintf("parallel apply relay fetch: batches=%d first_pos=%s last_pos=%s", len(items), firstPos, lastPos))
-	// }
 	rl.canAccept.Broadcast()
 	return items, nil
 }

@@ -63,7 +63,7 @@ type vplayer struct {
 	replicatorPlan    *ReplicatorPlan
 	tablePlansMu      *sync.RWMutex
 	tablePlans        map[string]*TablePlan
-	tablePlansVersion int64
+	tablePlansVersion *atomic.Int64
 
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
@@ -189,8 +189,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		lastTimestampNs:  &atomic.Int64{},
 		timeOffsetNs:     &atomic.Int64{},
-		tablePlansMu:     &sync.RWMutex{},
-		tablePlans:       make(map[string]*TablePlan),
+		tablePlansMu:      &sync.RWMutex{},
+		tablePlans:        make(map[string]*TablePlan),
+		tablePlansVersion: &atomic.Int64{},
 		serialMu:         &sync.Mutex{},
 		phase:            phase,
 		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
@@ -292,9 +293,6 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 // a backlog builds up.
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	log.Info(fmt.Sprintf("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vp.vr.id, vp.vr.WorkflowName, vp.startPos, vp.stopPos))
-	// if parallelDebugEnabled() {
-	// 	log.Warn(fmt.Sprintf("parallel apply vplayer start: stream=%d workflow=%s start_pos=%v stop_pos=%v vplayer=%p", vp.vr.id, vp.vr.WorkflowName, vp.startPos, vp.stopPos, vp))
-	// }
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -303,45 +301,18 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		// lastStreamPos := ""
-		// streamBatch := 0
 		vstreamOptions := &binlogdatapb.VStreamOptions{
 			ConfigOverrides: vp.vr.workflowConfig.Overrides,
 		}
 		err := vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
 			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
-				// if parallelDebugEnabled() && len(events) > 0 {
-				// 	streamBatch++
-				// 	firstPos := getNextPosition([][]*binlogdatapb.VEvent{events}, 0, 0)
-				// 	lastPos := ""
-				// 	for idx := len(events) - 1; idx >= 0; idx-- {
-				// 		if events[idx].Type == binlogdatapb.VEventType_GTID {
-				// 			lastPos = events[idx].Gtid
-				// 			break
-				// 		}
-				// 	}
-				// 	if firstPos != "" && firstPos == lastStreamPos {
-				// 		log.Warn(fmt.Sprintf("parallel apply vstream duplicate batch: stream=%d workflow=%s batch=%d first_pos=%s last_pos=%s", vp.vr.id, vp.vr.WorkflowName, streamBatch, firstPos, lastPos))
-				// 	} else {
-				// 		log.Warn(fmt.Sprintf("parallel apply vstream batch: stream=%d workflow=%s batch=%d events=%d first_pos=%s last_pos=%s", vp.vr.id, vp.vr.WorkflowName, streamBatch, len(events), firstPos, lastPos))
-				// 	}
-				// 	if firstPos != "" {
-				// 		lastStreamPos = firstPos
-				// 	}
-				// }
 				return relay.Send(events)
 			}, vstreamOptions)
-		// if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply vstream ended: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// 	parallelDebugLog(fmt.Sprintf("VSTREAM ENDED: stream=%d workflow=%s err=%v ctxDone=%v", vp.vr.id, vp.vr.WorkflowName, err, ctx.Err()))
-		// }
 		streamErr <- err
 	}()
 
 	applyErr := make(chan error, 1)
 	go func() {
-		// parallelDebugLog(fmt.Sprintf("fetchAndApply BRANCH: stream=%d workflow=%s parallel_workers=%d copy_state=%d",
-		// 	vp.vr.id, vp.vr.WorkflowName, vp.vr.workflowConfig.ParallelReplicationWorkers, len(vp.copyState)))
 		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 && len(vp.copyState) == 0 {
 			applyErr <- vp.applyEventsParallel(ctx, relay)
 			return
@@ -351,10 +322,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	select {
 	case err := <-applyErr:
-		// if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply applyErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// 	parallelDebugLog(fmt.Sprintf("fetchAndApply APPLY-FIRST: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// }
 		defer func() {
 			// cancel and wait for the other thread to finish.
 			cancel()
@@ -370,10 +337,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		}
 		return err
 	case err := <-streamErr:
-		// if parallelDebugEnabled() {
-		// 	log.Warn(fmt.Sprintf("parallel apply streamErr: stream=%d workflow=%s err=%v", vp.vr.id, vp.vr.WorkflowName, err))
-		// 	parallelDebugLog(fmt.Sprintf("fetchAndApply STREAM-FIRST: stream=%d workflow=%s err=%v ctxDone=%v", vp.vr.id, vp.vr.WorkflowName, err, ctx.Err()))
-		// }
 		defer func() {
 			// cancel and wait for the other thread to finish.
 			cancel()
@@ -429,9 +392,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		start := time.Now()
-		// if parallelDebugEnabled() && rowEvent.TableName == "customer" {
-		// 	parallelDebugLog(fmt.Sprintf("APPLY customer SQL: stream=%d workflow=%s table=%s sql=%s", vp.vr.id, vp.vr.WorkflowName, rowEvent.TableName, sql))
-		// }
 		qr, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
@@ -439,16 +399,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 			stats := NewVrLogStats("ROWCHANGE", start)
 			stats.Send(sql)
 		}
-		// if err != nil && os.Getenv("VREPLICATION_PARALLEL_DEBUG") != "" {
-		// 	log.Error(fmt.Sprintf("vreplication row apply failed: stream=%d workflow=%s pos=%v table=%s sql=%s err=%v", vp.vr.id, vp.vr.WorkflowName, vp.pos, rowEvent.TableName, sql, err))
-		// }
-		// if parallelDebugEnabled() && rowEvent.TableName == "customer" {
-		// 	rowsAffected := uint64(0)
-		// 	if qr != nil {
-		// 		rowsAffected = qr.RowsAffected
-		// 	}
-		// 	parallelDebugLog(fmt.Sprintf("APPLY customer SQL result: stream=%d workflow=%s table=%s rows_affected=%d err=%v", vp.vr.id, vp.vr.WorkflowName, rowEvent.TableName, rowsAffected, err))
-		// }
 		return qr, err
 	}
 
@@ -788,7 +738,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		vp.tablePlansMu.Lock()
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-		vp.tablePlansVersion++
+		vp.tablePlansVersion.Add(1)
 		vp.tablePlansMu.Unlock()
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.FieldEvent))

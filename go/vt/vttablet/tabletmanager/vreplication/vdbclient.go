@@ -106,7 +106,7 @@ func (vc *vdbClient) Commit() error {
 func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
-	for _, err := vc.ExecuteFetchMulti(queries, -1); err != nil; {
+	if _, err := vc.ExecuteFetchMulti(queries, -1); err != nil {
 		log.Error(fmt.Sprintf("vreplication ExecuteFetchMulti failed: %v; query: %s", err, queries))
 		return err
 	}

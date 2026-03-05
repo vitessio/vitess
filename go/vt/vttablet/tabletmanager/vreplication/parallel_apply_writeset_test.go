@@ -194,12 +194,12 @@ func TestQueryFKRefs(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|ORDINAL_POSITION",
-			"varchar|varchar|varchar|int64",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME",
+			"varchar|varchar|varchar|varchar",
 		),
-		"child|parent_id|parent|1",
-		"child|parent_id2|parent|2",
-		"other|parent_id|parent|1",
+		"child|fk_child_parent|parent_id|parent",
+		"child|fk_child_parent|parent_id2|parent",
+		"other|fk_other_parent|parent_id|parent",
 	)
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
 	refs, err := queryFKRefs(client, "db")

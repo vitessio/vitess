@@ -190,9 +190,6 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	if err := s.ctx.Err(); err != nil {
 		return err
 	}
-	// if parallelDebugEnabled() {
-	// 	parallelDebugLog(fmt.Sprintf("markCommitted: order=%d forceGlobal=%t inflightGlobal=%d inflightMissing=%d inflightCommit=%d writesetKeys=%d pending=%d", txn.order, txn.forceGlobal, s.inflightGlobal, s.inflightMissingMeta, s.inflightCommitMeta, len(s.inflightWriteset), len(s.pending)))
-	// }
 	if txn.hasCommitMeta {
 		s.lastCommittedSequence = txn.sequenceNumber
 	}
@@ -204,13 +201,16 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	hadInflightGlobal := s.inflightGlobal > 0
 	hadInflightMissingMeta := s.inflightMissingMeta > 0
 	s.releaseInflightLocked(txn)
-	// Use Broadcast when releasing a forceGlobal txn or when a global/
-	// missingMeta counter drops to zero — multiple blocked txns may
-	// become ready at once. Otherwise use Signal to avoid thundering-
-	// herd wakeup of N workers when only one txn can proceed.
+	// Use Broadcast when releasing a forceGlobal txn, when a global/
+	// missingMeta counter drops to zero, or when all inflight work has
+	// drained (so waitForIdle waiters are woken). Otherwise use Signal
+	// to avoid thundering-herd wakeup of N workers when only one txn
+	// can proceed.
+	allDrained := s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0
 	if wasForceGlobal ||
 		(hadInflightGlobal && s.inflightGlobal == 0) ||
-		(hadInflightMissingMeta && s.inflightMissingMeta == 0) {
+		(hadInflightMissingMeta && s.inflightMissingMeta == 0) ||
+		allDrained {
 		s.cond.Broadcast()
 	} else {
 		s.cond.Signal()
@@ -245,9 +245,6 @@ func (s *applyScheduler) popReadyLocked() *applyTxn {
 		// earlier transaction from ever becoming ready, while the commitLoop
 		// (which requires strict ordering) waits for this earlier transaction
 		// to be committed before it can commit the later one.
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("popReadyLocked STOPPED at non-ready order=%d forceGlobal=%t hasCommitMeta=%t pending=%d", txn.order, txn.forceGlobal, txn.hasCommitMeta, s.pendingCount))
-		// }
 		return nil
 	}
 	return nil
@@ -298,30 +295,18 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 		return true
 	}
 	if s.inflightGlobal > 0 {
-		// if parallelDebugEnabled() {
-		// 	parallelDebugLog(fmt.Sprintf("isReadyLocked BLOCKED by inflightGlobal: order=%d forceGlobal=%t inflightGlobal=%d inflightCommitMeta=%d inflightMissingMeta=%d writesetKeys=%d pending=%d", txn.order, txn.forceGlobal, s.inflightGlobal, s.inflightCommitMeta, s.inflightMissingMeta, len(s.inflightWriteset), len(s.pending)))
-		// }
 		return false
 	}
 	if txn.forceGlobal {
 		ready := s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0
-		// if parallelDebugEnabled() && !ready {
-		// 	parallelDebugLog(fmt.Sprintf("isReadyLocked forceGlobal NOT READY: order=%d inflightMissingMeta=%d inflightCommitMeta=%d writesetKeys=%d", txn.order, s.inflightMissingMeta, s.inflightCommitMeta, len(s.inflightWriteset)))
-		// }
 		return ready
 	}
 	if txn.hasCommitMeta {
 		if s.inflightMissingMeta > 0 {
-			// if parallelDebugEnabled() {
-			// 	parallelDebugLog(fmt.Sprintf("isReadyLocked hasCommitMeta BLOCKED by inflightMissingMeta: order=%d inflightMissingMeta=%d", txn.order, s.inflightMissingMeta))
-			// }
 			return false
 		}
 		for _, key := range txn.writeset {
 			if s.inflightWriteset[key] > 0 {
-				// if parallelDebugEnabled() {
-				// 	parallelDebugLog(fmt.Sprintf("isReadyLocked hasCommitMeta BLOCKED by writeset key=%s: order=%d", key, txn.order))
-				// }
 				return false
 			}
 		}
@@ -342,9 +327,6 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 			return true
 		}
 		ready := txn.commitParent <= s.lastCommittedSequence
-		// if parallelDebugEnabled() && !ready {
-		// 	parallelDebugLog(fmt.Sprintf("isReadyLocked hasCommitMeta BLOCKED by commitParent: order=%d commitParent=%d lastCommittedSequence=%d seq=%d", txn.order, txn.commitParent, s.lastCommittedSequence, txn.sequenceNumber))
-		// }
 		return ready
 	}
 	if s.inflightCommitMeta > 0 {
