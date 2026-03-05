@@ -413,7 +413,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// Buffered to decouple the throttle goroutine from the parseEvents
 	// consumer — an unbuffered channel forces a context switch per event
 	// and becomes a throughput bottleneck at high event rates.
-	throttledEvents := make(chan mysql.BinlogEvent, 128)
+	throttledEvents := make(chan mysql.BinlogEvent, 10)
 	go throttleEvents(throttledEvents)
 
 	for {

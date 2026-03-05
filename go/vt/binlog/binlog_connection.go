@@ -139,7 +139,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 	// progress without blocking on the consumer for every single event.
 	// An unbuffered channel here forces a context switch per event, which
 	// becomes a throughput bottleneck at high event rates.
-	eventChan := make(chan mysql.BinlogEvent, 128)
+	eventChan := make(chan mysql.BinlogEvent, 10)
 	errChan := make(chan error)
 
 	// Start reading events.
