@@ -5479,7 +5479,45 @@
   {
     "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
     "query": "SELECT 1 as x, (SELECT x)",
-    "plan": "column 'x' not found"
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 as x, (SELECT x)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual) from dual"
+      }
+    }
+  },
+  {
+    "comment": "Nested subqueries can reference outer aliases in dual context",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1), (select x from dual where 1 != 1) as `(select (select x from dual) from dual)` from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual), (select x from dual) as `(select (select x from dual) from dual)` from dual"
+      }
+    }
+  },
+  {
+    "comment": "Unresolved column in dual subquery should fail",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT y FROM dual)",
+    "plan": "column 'y' not found"
   },
   {
     "comment": "Duplicate uncorrelated subqueries should not be deduplicated in the projection",
