@@ -41,7 +41,7 @@ jobs:
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
           github-token: ${{ github.token }}
 
-      - name: Check for changes in Go files
+      - name: Check for changes in files
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: changes
         with:
@@ -115,10 +115,9 @@ jobs:
               - 'changelog/**'
               - './go/tools/releases/**'
               - '.github/workflows/static_checks_etc.yml'
-            workflows:
+            github:
               - '.github/**'
               - 'Makefile'
-              - 'test/ci_workflow_gen.go'
               - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
@@ -147,6 +146,10 @@ jobs:
       - name: Install goimports
         run: |
           go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+
+      - name: Install yamllint
+        if: steps.changes.outputs.github == 'true'
+        run: pip install yamllint==1.38.0
 
       - name: check_go_versions
         run:
@@ -178,6 +181,14 @@ jobs:
           make ensure_bootstrap_version
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
+
+      - name: Check .github YAML configs
+        if: steps.changes.outputs.github == 'true'
+        run: |
+          yamllint -d "{extends: relaxed, rules: {indentation: disable, line-length: disable, trailing-spaces: disable}}" \
+            .github/*.yml \
+            .github/ISSUE_TEMPLATE/*.yml \
+            .github/workflows/*.yml
 
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
@@ -234,5 +245,3 @@ jobs:
           echo "$output"
           echo ""
           exit 1
-
-
