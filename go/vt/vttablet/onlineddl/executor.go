@@ -893,7 +893,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		if !renameWasSuccessful {
 			// It is important the LOCK TABLES connection does not get put back into
 			// the pool on failure. .Conn.Kill() will kill + close the conn.
-			err := lockConn.Conn.Kill("premature exit while locking tables", 0)
+			err := lockConn.Conn.Kill("premature exit while holding lock tables", 0)
 			if err != nil {
 				log.Warn(fmt.Sprintf("Failed to kill connection being used to lock tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 			}
