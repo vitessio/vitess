@@ -551,7 +551,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				SequenceNumber: sequenceNumber,
 			})
 		}
-		vs.pos = replication.AppendGTID(vs.pos, gtid)
+		// Use AppendGTIDInPlace to mutate the GTIDSet in place instead of
+		// copying the entire set on every GTID event. The vstreamer owns
+		// vs.pos exclusively, so in-place mutation is safe and avoids a
+		// full map copy per transaction.
+		vs.pos = replication.AppendGTIDInPlace(vs.pos, gtid)
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid

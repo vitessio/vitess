@@ -157,7 +157,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
-		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClient:        newVDBClientWithID(dbClient, stats, workflowConfig.RelayLogMaxItems, id),
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
@@ -1126,7 +1126,7 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	if err := dbc.Connect(); err != nil {
 		return nil, vterrors.Wrap(err, "can't connect to database")
 	}
-	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
+	dbClient := newVDBClientWithID(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
 	}

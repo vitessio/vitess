@@ -34,6 +34,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -429,12 +430,16 @@ func TestMain(m *testing.M) {
 		// --vstream_packet_size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
+		parallelWorkers := 4
+		txPoolSize := max(parallelWorkers, 100)
 		clusterInstance.VtTabletExtraArgs = []string{
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+			"--transaction-limit-per-user", "0.9",
+			"--vreplication-parallel-replication-workers", strconv.Itoa(parallelWorkers),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			utils.GetFlagVariantForTests("--ddl-strategy"), "online",

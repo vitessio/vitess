@@ -426,6 +426,7 @@ Flags:
       --vreplication-net-read-timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)
       --vreplication-net-write-timeout int                               Session value of net_write_timeout for vreplication, in seconds (default 600)
       --vreplication-parallel-insert-workers int                         Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase. (default 1)
+      --vreplication-parallel-replication-workers int                    (Experimental) Number of parallel replication workers to use during the replication phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent apply. (default 1)
       --vreplication-replica-lag-tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
       --vreplication-retry-delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
       --vreplication-store-compressed-gtid                               Store compressed gtids in the pos column of the sidecar database's vreplication table

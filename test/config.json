@@ -2084,20 +2084,20 @@
         "binlog-compression"
       ]
     },
-    "vreplication_copy_parallel": {
+    "vreplication_parallel": {
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vreplication"
       ],
       "Args": [
         "-run",
-        "TestVreplicationCopyParallel",
+        "TestVreplicationParallel",
         "-timeout",
         "20m"
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "vreplication_copy_parallel",
+      "Shard": "vreplication_parallel",
       "Tags": [],
       "Needs": [
         "larger-runner",

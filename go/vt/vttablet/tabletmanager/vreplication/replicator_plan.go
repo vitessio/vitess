@@ -554,6 +554,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 
 	baseQuerySize := int64(len(tp.MultiDelete.Query))
 	querySize := baseQuerySize
+	var lastQR *sqltypes.Result
 
 	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
 		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
@@ -565,7 +566,12 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 			return nil, err
 		}
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
-		return executor(query)
+		qr, err := executor(query)
+		if err != nil {
+			return nil, err
+		}
+		lastQR = qr
+		return qr, nil
 	}
 
 	pkIndex := -1
@@ -582,6 +588,15 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		}
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
+			if len(pkVals) == 0 {
+				pkVals = append(pkVals, vals[pkIndex])
+				if _, err := execQuery(&pkVals); err != nil {
+					return nil, err
+				}
+				pkVals = nil
+				querySize = baseQuerySize
+				continue
+			}
 			if _, err := execQuery(&pkVals); err != nil {
 				return nil, err
 			}
@@ -592,6 +607,12 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		querySize += addedSize
 	}
 
+	if len(pkVals) == 0 {
+		if lastQR != nil {
+			return lastQR, nil
+		}
+		return &sqltypes.Result{}, nil
+	}
 	return execQuery(&pkVals)
 }
 
@@ -612,12 +633,18 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	maxQuerySize -= int64(len(insertPrefix))
 	values := &strings.Builder{}
 
+	var lastQR *sqltypes.Result
 	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
 		if tp.BulkInsertOnDup != nil {
 			vals.WriteString(tp.BulkInsertOnDup.Query)
 		}
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
-		return executor(insertPrefix + vals.String())
+		qr, err := executor(insertPrefix + vals.String())
+		if err != nil {
+			return nil, err
+		}
+		lastQR = qr
+		return qr, nil
 	}
 
 	newStmt := true
@@ -653,6 +680,13 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 			return nil, err
 		}
 		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			if values.Len() == 0 {
+				if _, err := execQuery(rowValues); err != nil {
+					return nil, err
+				}
+				newStmt = true
+				continue
+			}
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}
@@ -666,6 +700,12 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		newStmt = false
 	}
 
+	if values.Len() == 0 {
+		if lastQR != nil {
+			return lastQR, nil
+		}
+		return &sqltypes.Result{}, nil
+	}
 	return execQuery(values)
 }
 
