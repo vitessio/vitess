@@ -466,14 +466,15 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 	}
 
 	vp := &vplayer{
-		vr:              vr,
-		tablePlansMu:    &sync.RWMutex{},
-		tablePlans:      make(map[string]*TablePlan),
-		serialMu:        &sync.Mutex{},
-		lastTimestampNs: &atomic.Int64{},
-		timeOffsetNs:    &atomic.Int64{},
-		timeLastSaved:   time.Now(),
-		idStr:           "1",
+		vr:                vr,
+		tablePlansMu:      &sync.RWMutex{},
+		tablePlans:        make(map[string]*TablePlan),
+		tablePlansVersion: &atomic.Int64{},
+		serialMu:          &sync.Mutex{},
+		lastTimestampNs:   &atomic.Int64{},
+		timeOffsetNs:      &atomic.Int64{},
+		timeLastSaved:     time.Now(),
+		idStr:             "1",
 		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			return &sqltypes.Result{}, nil
 		},
@@ -484,8 +485,6 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 	}
 	return vp, mockDB
 }
-
-
 
 func TestApplyEventsParallelCanceledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
