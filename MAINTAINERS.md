@@ -59,6 +59,9 @@ derekperkins, mattlord
 ### High Availability
 mattlord, timvaillancourt
 
+### Security
+timvaillancourt
+
 ## Past Maintainers
 We thank the following past maintainers for their contributions.
 

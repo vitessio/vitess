@@ -89,7 +89,7 @@ func newLogger(level slog.Level) *slog.Logger {
 		return slog.New(tint.NewHandler(w, &tint.Options{
 			AddSource:  true,
 			Level:      level,
-			TimeFormat: "3:04:05PM",
+			TimeFormat: "2006-01-02 15:04:05.000 MST",
 
 			// When running tests, colored output will be disabled since it's not printed directly to the terminal
 			// (goes through the Go testing "pipeline"). So we also enable coloring if we're in tests to for

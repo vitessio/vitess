@@ -93,8 +93,8 @@ type DetectionAnalysisHints struct {
 
 // DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
+	AnalyzedInstanceAlias        *topodatapb.TabletAlias
+	AnalyzedInstancePrimaryAlias *topodatapb.TabletAlias
 
 	// TabletType is the tablet's type as seen in the topology.
 	TabletType topodatapb.TabletType
