@@ -24,6 +24,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCreateShard tests a few cases for topo.CreateShard
@@ -42,12 +43,12 @@ func TestCreateShard(t *testing.T) {
 
 	// create keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// create shard should now work
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -63,16 +64,16 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 	// create keyspace
 	keyspace := "test_keyspace"
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// create first shard in keyspace
 	shard0 := "0"
 	if err := ts.CreateShard(ctx, keyspace, shard0); err != nil {
-		t.Fatalf("CreateShard(shard0) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
-		t.Fatalf("GetShard(shard0) failed: %v", err)
+		require.NoError(t, err)
 	} else {
 		if !si.IsPrimaryServing {
 			t.Fatalf("shard0 should have all 3 served types")
@@ -82,10 +83,10 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 	// create second shard in keyspace
 	shard1 := "1"
 	if err := ts.CreateShard(ctx, keyspace, shard1); err != nil {
-		t.Fatalf("CreateShard(shard1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
-		t.Fatalf("GetShard(shard1) failed: %v", err)
+		require.NoError(t, err)
 	} else {
 		if si.IsPrimaryServing {
 			t.Fatalf("shard1 should have all 3 served types")

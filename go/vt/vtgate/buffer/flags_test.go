@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVerifyFlags(t *testing.T) {
@@ -41,9 +42,7 @@ func TestVerifyFlags(t *testing.T) {
 	defer resetFlagsForTesting()
 
 	parse([]string{"--buffer-keyspace-shards", "ks1/0"})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "also requires that") {
-		t.Fatalf("List of shards requires --enable-buffer. err: %v", err)
-	}
+	require.ErrorContains(t, verifyFlags(), "also requires that")
 
 	resetFlagsForTesting()
 
@@ -51,9 +50,7 @@ func TestVerifyFlags(t *testing.T) {
 		"--enable-buffer",
 		"--enable-buffer-dry-run",
 	})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "To avoid ambiguity") {
-		t.Fatalf("Dry-run and non-dry-run mode together require an explicit list of shards for actual buffering. err: %v", err)
-	}
+	require.ErrorContains(t, verifyFlags(), "To avoid ambiguity")
 
 	resetFlagsForTesting()
 
@@ -61,9 +58,7 @@ func TestVerifyFlags(t *testing.T) {
 		"--enable-buffer",
 		"--buffer-keyspace-shards", "ks1//0",
 	})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "invalid shard path") {
-		t.Fatalf("Invalid shard names are not allowed. err: %v", err)
-	}
+	require.ErrorContains(t, verifyFlags(), "invalid shard path")
 
 	resetFlagsForTesting()
 
@@ -72,6 +67,6 @@ func TestVerifyFlags(t *testing.T) {
 		"--buffer-keyspace-shards", "ks1,ks1/0",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "has overlapping entries") {
-		t.Fatalf("Listed keyspaces and shards must not overlap. err: %v", err)
+		require.NoError(t, err)
 	}
 }

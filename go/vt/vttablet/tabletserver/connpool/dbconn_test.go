@@ -253,14 +253,10 @@ func TestDBConnKill(t *testing.T) {
 
 	// Kill succeed
 	err = dbConn.Kill("test kill", 0)
-	if err != nil {
-		t.Fatalf("kill should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = dbConn.Reconnect(context.Background())
-	if err != nil {
-		t.Fatalf("reconnect should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
@@ -464,14 +460,10 @@ func TestDBNoPoolConnKill(t *testing.T) {
 
 	// Kill succeed
 	err = dbConn.Kill("test kill", 0)
-	if err != nil {
-		t.Fatalf("kill should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = dbConn.Reconnect(context.Background())
-	if err != nil {
-		t.Fatalf("reconnect should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))

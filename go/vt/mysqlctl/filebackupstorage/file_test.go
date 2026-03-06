@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"github.com/stretchr/testify/require"
 )
 
 // This file tests the file BackupStorage engine.
@@ -45,9 +46,7 @@ func TestListBackups(t *testing.T) {
 	// verify we have no entry now
 	dir := "keyspace/shard"
 	bhs, err := fbs.ListBackups(ctx, dir)
-	if err != nil {
-		t.Fatalf("ListBackups on empty fbs failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(bhs) != 0 {
 		t.Fatalf("ListBackups on empty fbs returned results: %#v", bhs)
 	}
@@ -55,18 +54,14 @@ func TestListBackups(t *testing.T) {
 	// add one empty backup
 	firstBackup := "cell-0001-2015-01-14-10-00-00"
 	bh, err := fbs.StartBackup(ctx, dir, firstBackup)
-	if err != nil {
-		t.Fatalf("fbs.StartBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	if err := bh.EndBackup(ctx); err != nil {
-		t.Fatalf("bh.EndBackup failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// verify we have one entry now
 	bhs, err = fbs.ListBackups(ctx, dir)
-	if err != nil {
-		t.Fatalf("ListBackups on empty fbs failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(bhs) != 1 ||
 		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
@@ -76,18 +71,14 @@ func TestListBackups(t *testing.T) {
 	// add another one, with earlier date
 	secondBackup := "cell-0001-2015-01-12-10-00-00"
 	bh, err = fbs.StartBackup(ctx, dir, secondBackup)
-	if err != nil {
-		t.Fatalf("fbs.StartBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	if err := bh.EndBackup(ctx); err != nil {
-		t.Fatalf("bh.EndBackup failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// verify we have two sorted entries now
 	bhs, err = fbs.ListBackups(ctx, dir)
-	if err != nil {
-		t.Fatalf("ListBackups on empty fbs failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(bhs) != 2 ||
 		bhs[0].Directory() != dir ||
 		bhs[0].Name() != secondBackup ||
@@ -98,12 +89,10 @@ func TestListBackups(t *testing.T) {
 
 	// remove a backup, back to one
 	if err := fbs.RemoveBackup(ctx, dir, secondBackup); err != nil {
-		t.Fatalf("RemoveBackup failed: %v", err)
+		require.NoError(t, err)
 	}
 	bhs, err = fbs.ListBackups(ctx, dir)
-	if err != nil {
-		t.Fatalf("ListBackups after deletion failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(bhs) != 1 ||
 		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
@@ -112,16 +101,12 @@ func TestListBackups(t *testing.T) {
 
 	// add a backup but abort it, should stay at one
 	bh, err = fbs.StartBackup(ctx, dir, secondBackup)
-	if err != nil {
-		t.Fatalf("fbs.StartBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	if err := bh.AbortBackup(ctx); err != nil {
-		t.Fatalf("bh.AbortBackup failed: %v", err)
+		require.NoError(t, err)
 	}
 	bhs, err = fbs.ListBackups(ctx, dir)
-	if err != nil {
-		t.Fatalf("ListBackups after abort failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(bhs) != 1 ||
 		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
@@ -151,18 +136,14 @@ func TestFileContents(t *testing.T) {
 
 	// start a backup, add a file
 	bh, err := fbs.StartBackup(ctx, dir, name)
-	if err != nil {
-		t.Fatalf("fbs.StartBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	wc, err := bh.AddFile(ctx, filename1, 0)
-	if err != nil {
-		t.Fatalf("bh.AddFile failed: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := wc.Write([]byte(contents1)); err != nil {
-		t.Fatalf("wc.Write failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := wc.Close(); err != nil {
-		t.Fatalf("wc.Close failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// test we can't read back on read-write backup
@@ -172,7 +153,7 @@ func TestFileContents(t *testing.T) {
 
 	// and close
 	if err := bh.EndBackup(ctx); err != nil {
-		t.Fatalf("bh.EndBackup failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// re-read the file
@@ -181,14 +162,12 @@ func TestFileContents(t *testing.T) {
 		t.Fatalf("ListBackups after abort returned wrong return: %v %v", err, bhs)
 	}
 	rc, err := bhs[0].ReadFile(ctx, filename1)
-	if err != nil {
-		t.Fatalf("bhs[0].ReadFile failed: %v", err)
-	}
+	require.NoError(t, err)
 	buf := make([]byte, len(contents1)+10)
 	if n, err := rc.Read(buf); (err != nil && err != io.EOF) || n != len(contents1) {
 		t.Fatalf("rc.Read returned wrong result: %v %#v", err, n)
 	}
 	if err := rc.Close(); err != nil {
-		t.Fatalf("rc.Close failed: %v", err)
+		require.NoError(t, err)
 	}
 }

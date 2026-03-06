@@ -83,9 +83,7 @@ func (tc testCase) run(t *testing.T) {
 		},
 	}
 	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)
-	if err != nil {
-		t.Fatalf("failed to convert: %v", err)
-	}
+	require.NoError(t, err)
 
 	v, err := cmp.eval(env)
 	if tc.err == "" {

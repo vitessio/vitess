@@ -91,7 +91,7 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	copy(dataWithHeader[packetHeaderSize:], data)
 
 	if err := cConn.writePacket(dataWithHeader); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -107,7 +107,7 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -121,7 +121,7 @@ func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 

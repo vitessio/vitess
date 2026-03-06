@@ -92,7 +92,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 	}
 	if len(fields) > 0 {
 		if _, err := conn.ExecuteFetch(`DROP TEMPORARY TABLE IF EXISTS vteval_test`, -1, false); err != nil {
-			t.Fatalf("failed to drop temporary table: %v", err)
+			require.NoError(t, err)
 		}
 
 		var schema strings.Builder
@@ -234,24 +234,16 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 	// our backend MySQL is configured with the timezone information as well
 	// for functions like CONVERT_TZ.
 	out, err := exec.Command("mysql_tzinfo_to_sql", "/usr/share/zoneinfo").Output()
-	if err != nil {
-		t.Fatalf("failed to retrieve timezone info: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, more, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
-	if err != nil {
-		t.Fatalf("failed to insert timezone info: %v", err)
-	}
+	require.NoError(t, err)
 	for more {
 		_, more, _, err = conn.ReadQueryResult(-1, false)
-		if err != nil {
-			t.Fatalf("failed to insert timezone info: %v", err)
-		}
+		require.NoError(t, err)
 	}
 	_, err = conn.ExecuteFetch("USE "+connParams.DbName, -1, false)
-	if err != nil {
-		t.Fatalf("failed to switch back to database: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestMySQL(t *testing.T) {

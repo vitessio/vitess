@@ -122,9 +122,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewUnixSocket failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -135,9 +133,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	assert.NoError(t, err)
 	c.Close()
 }
 
@@ -154,9 +150,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	}
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -167,9 +161,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	assert.NoError(t, err)
 	c.Close()
 }
 
@@ -185,9 +177,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Errorf("NewListener failed: %v", err)
-	}
+	assert.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
@@ -314,7 +304,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
 		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-			t.Fatalf("init tls config failure due to: +%v", err)
+			require.NoError(t, err)
 		}
 
 		serverConfig := srv.tcpListener.TLSConfig.Load()
