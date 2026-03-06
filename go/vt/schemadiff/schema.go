@@ -1036,20 +1036,6 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 						// Not interesting
 						return true, nil
 					}
-<<<<<<< HEAD
-					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
-					// The DropKey statement itself only _names_ the constraint, but does not have information
-					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
-					for _, cs := range diff.from.CreateTable.TableSpec.Constraints {
-						if strings.EqualFold(cs.Name.String(), node.Name.String()) {
-							if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
-								parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
-								checkDependencies(diff, []string{parentTableName})
-							}
-						}
-					}
-=======
->>>>>>> 1fadea998c (Fix `DROP CONSTRAINT` to work the same way as MySQL (#19183))
 				}
 
 				return true, nil
