@@ -22,7 +22,11 @@ COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eve
 COPY --from=builder /out/antithesis-sleep /opt/antithesis/test/v1/main/serial_driver_sleep
 
 COPY ./helper.py /opt/antithesis/resources/helper.py
-COPY crud/ /opt/antithesis/test/v1/crud/
-COPY bank-test/ /opt/antithesis/test/v1/bank-test/
+COPY crud/ /opt/antithesis/test/v1/crud
+COPY bank-test/ /opt/antithesis/test/v1/bank-test
+
+RUN mkdir -p /opt/antithesis/catalog \
+    && ln -s /opt/antithesis/test /opt/antithesis/catalog/test \
+    && ln -s /opt/antithesis/resources /opt/antithesis/catalog/resources
 
 ENTRYPOINT ["/antithesis-entrypoint"]
