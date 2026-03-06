@@ -45,10 +45,6 @@ func (cv *converter) ToNative(v sqltypes.Value) (any, error) {
 		return v.ToFloat64()
 	case v.Type() == sqltypes.Datetime, v.Type() == sqltypes.Timestamp, v.Type() == sqltypes.Date:
 		return v.ToTime(cv.location)
-	case v.IsBinary():
-		// sending through string values matches the behavior in go-sql-driver and
-		// is necessary for json values to be handled without erroring in vttablet.
-		out = v.ToString()
 	case v.IsQuoted() || v.Type() == sqltypes.Bit || v.Type() == sqltypes.Decimal:
 		out, err = v.ToBytes()
 	case v.Type() == sqltypes.Expression:
@@ -58,10 +54,16 @@ func (cv *converter) ToNative(v sqltypes.Value) (any, error) {
 }
 
 func (cv *converter) BuildBindVariable(v any) (*querypb.BindVariable, error) {
-	if t, ok := v.(time.Time); ok {
+	switch t := v.(type) {
+	case time.Time:
 		return sqltypes.ValueBindVariable(NewDatetime(t, cv.location)), nil
+	case []byte:
+		// sending through string values matches the behavior in go-sql-driver and
+		// is necessary for json values to be handled without erroring in vttablet.
+		return sqltypes.BuildBindVariable(string(t))
+	default:
+		return sqltypes.BuildBindVariable(v)
 	}
-	return sqltypes.BuildBindVariable(v)
 }
 
 // populateRow populates a row of data using the table's field descriptions.
