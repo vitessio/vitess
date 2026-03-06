@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,8 @@ const (
 	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
 )
 
+var testEnvCounter atomic.Int64
+
 func init() {
 	tabletconn.RegisterDialer("grpc", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &tabletconntest.FakeQueryService{
@@ -90,12 +93,13 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, sourceShards []string) *testEnv {
 	vttablet.InitVReplicationConfigDefaults()
+	protoName := fmt.Sprintf("%s_%d", t.Name(), testEnvCounter.Add(1))
 	tenv := &testEnv{
 		ctx:       context.Background(),
 		tmc:       newFakeTMClient(),
 		cells:     []string{"zone1"},
 		dbName:    "tmtestdb",
-		protoName: t.Name(),
+		protoName: protoName,
 	}
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
@@ -104,7 +108,7 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tenv.tmc.sourceShards = sourceShards
 	tenv.tmc.schema = defaultSchema
 
-	tabletconn.RegisterDialer(t.Name(), func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(protoName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tenv.mu.Lock()
 		defer tenv.mu.Unlock()
 		if qs, ok := tenv.tmc.tablets[int(tablet.Alias.Uid)]; ok {
@@ -112,11 +116,11 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 		}
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
-	tabletconntest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
-	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
+	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.framework_test_"+protoName, protoName)
+	tmclient.RegisterTabletManagerClientFactory(protoName, func() tmclient.TabletManagerClient {
 		return tenv.tmc
 	})
-	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
+	tmclienttest.SetProtocol("go.vt.vttablet.tabletmanager.framework_test_"+protoName, protoName)
 
 	tenv.db = fakesqldb.New(t)
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(tenv.db)
