@@ -320,18 +320,11 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 }
 
 // mapValues maps the row values against the plan.
-// The output of the filtering operation is stored in a result slice because
-// filtering cannot be performed in-place. The resultBuf parameter allows
-// callers to pass a pre-allocated slice to avoid per-row allocations in
-// hot loops (e.g. processRowEvent). Pass nil to allocate a new slice.
-func (plan *Plan) mapValues(values []sqltypes.Value, resultBuf []sqltypes.Value) ([]sqltypes.Value, error) {
-	n := len(plan.ColExprs)
-	result := resultBuf
-	if cap(result) < n {
-		result = make([]sqltypes.Value, n)
-	} else {
-		result = result[:n]
-	}
+// The output of the filtering operation is stored in the 'result' argument because
+// filtering cannot be performed in-place. The result argument must be a slice of
+// length equal to ColExprs
+func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
+	result := make([]sqltypes.Value, len(plan.ColExprs))
 
 	for i, colExpr := range plan.ColExprs {
 		if colExpr.ColNum == -1 {
