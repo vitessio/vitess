@@ -55,7 +55,7 @@ func Get(name querythrottlerpb.ThrottlingStrategy) (StrategyFactory, bool) {
 
 // CreateStrategy creates a new strategy instance using the registered factory.
 // Falls back to NoOpStrategy for unknown strategies or factory errors.
-func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
+func CreateStrategy(cfg *querythrottlerpb.Config, deps Deps) ThrottlingStrategyHandler {
 	// If the requested strategy name is unknown or the factory panics/returns error, CreateStrategy() directly constructs &NoOpStrategy{} as its unconditional fallback.
 	// Configuration files or runtime switches never list "NoOp" as a valid strategy choice; they list "TabletThrottler", "Cinnamon", etc.
 	// The design intent is:

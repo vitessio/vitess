@@ -222,6 +222,7 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.UnhealthyThreshold = 2 * time.Hour
 	want.ReplicationTracker.HeartbeatInterval = time.Second
 	want.ReplicationTracker.Mode = Disable
+	want.TabletThrottlerCacheUpdateInterval = 10 * time.Second
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
