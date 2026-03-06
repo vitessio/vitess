@@ -3634,7 +3634,6 @@ func TestPlayerBatchMode(t *testing.T) {
 				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
 			}
 			expectNontxQueries(t, output, recvTimeout)
-			time.Sleep(1 * time.Second)
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
 			}
@@ -3646,15 +3645,35 @@ func TestPlayerBatchMode(t *testing.T) {
 			expectedBulkInserts += tcase.expectedBulkInserts
 			expectedTrxBatchCommits++ // Should only ever be 1 per test case
 			expectedTrxBatchExecs += tcase.expectedNonCommitBatches
-			if tcase.expectedInLastBatch != "" { // We expect the trx to be split
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+
+			// Poll until the batch query and stats counters are updated.
+			// These are set asynchronously on the vplayer goroutine after
+			// the commit completes, so we poll rather than using a fixed sleep.
+			var batchRE *regexp.Regexp
+			if tcase.expectedInLastBatch != "" {
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch)))
 			} else {
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";"))))
 			}
-			require.Equal(t, expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"], "expected %d bulk inserts but got %d", expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"])
-			require.Equal(t, expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"], "expected %d bulk deletes but got %d", expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"])
-			require.Equal(t, expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"], "expected %d trx batch execs but got %d", expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"])
-			require.Equal(t, expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"], "expected %d trx batch commits but got %d", expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"])
+			require.Eventually(t, func() bool {
+				got := getLastMultiExecQuery()
+				if !batchRE.MatchString(got) {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["insert"] != expectedBulkInserts {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["delete"] != expectedBulkDeletes {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["without_commit"] != expectedTrxBatchExecs {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["with_commit"] != expectedTrxBatchCommits {
+					return false
+				}
+				return true
+			}, 10*time.Second, 100*time.Millisecond, "batch query or stats mismatch after timeout; lastMultiExecQuery: %s", getLastMultiExecQuery())
 		})
 	}
 }
