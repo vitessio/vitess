@@ -37,12 +37,8 @@ jobs:
         fi
 
     - name: Check for changes in files relevant to code coverage
-<<<<<<< HEAD
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
-=======
       if: steps.mode.outputs.is_full_run != 'true'
       uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
->>>>>>> e5073f36c8 (`ci`: run code coverage CI only on go packages that had changes (#19431))
       id: changes
       with:
         token: ''
@@ -55,13 +51,8 @@ jobs:
             - Makefile
 
     - name: Set up Go
-<<<<<<< HEAD
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-=======
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
->>>>>>> e5073f36c8 (`ci`: run code coverage CI only on go packages that had changes (#19431))
       with:
         go-version-file: go.mod
 
@@ -102,13 +93,8 @@ jobs:
         echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
 
     - name: Set up python
-<<<<<<< HEAD
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
-=======
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
->>>>>>> e5073f36c8 (`ci`: run code coverage CI only on go packages that had changes (#19431))
 
     - name: Tune the OS
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
@@ -155,20 +141,9 @@ jobs:
           make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
         fi
 
-<<<<<<< HEAD
-        make unit_test_cover
-
-        # Restore the files we deleted as codecov tries to fix their paths.
-        git reset --hard HEAD
-
-    - name: Upload coverage reports to codecov.io
-      if: steps.changes.outputs.changed_files == 'true'
-      uses: codecov/codecov-action@015f24e6818733317a2da2edd6290ab26238649a # https://github.com/codecov/codecov-action/releases/tag/v5.0.7
-=======
     - name: Upload coverage reports
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
->>>>>>> e5073f36c8 (`ci`: run code coverage CI only on go packages that had changes (#19431))
       with:
         files: coverage.out
         fail_ci_if_error: true
