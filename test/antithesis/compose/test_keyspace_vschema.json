@@ -1,6 +1,54 @@
 {
 	"sharded": true,
 	"tables": {
+		"test_insert": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "xxhash"
+				}
+			]
+		},
+		"test_select": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "xxhash"
+				}
+			]
+		},
+		"test_delete": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "xxhash"
+				}
+			]
+		},
+		"test_update": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "xxhash"
+				}
+			]
+		},
+		"accounts": {
+			"column_vindexes": [
+				{
+					"column": "account_id",
+					"name": "xxhash"
+				}
+			]
+		},
+		"initial_state": {
+			"column_vindexes": [
+				{
+					"column": "num_accts",
+					"name": "xxhash"
+				}
+			]
+		},
 		"messages": {
 			"column_vindexes": [
 				{
