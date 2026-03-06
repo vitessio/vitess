@@ -21,6 +21,7 @@
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
+        - [Improve MySQL-compatibility of Aggregator names](#query-parsing-aggr-name-capitalization)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
@@ -167,6 +168,12 @@ The `JSON_EXTRACT` function now supports dynamic path arguments like bind variab
 Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
 
 Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
+
+#### <a id="query-parsing-aggr-name-capitalization"/>Improve MySQL-compatibility of Aggregator names</a>
+
+The SQL parser now preserves the original capitalization of aggregate function names (`COUNT`, `SUM`, `MIN`, `MAX`, `AVG`, `GROUP_CONCAT`, etc.) as written in the query. Previously, aggregate names were always lowercased in the formatted output, which broke MySQL compatibility — MySQL preserves the user's original capitalization in result column names (e.g. `SELECT MIN(k)` returns a column named `MIN(k)`, not `min(k)`).
+
+See [#19543](https://github.com/vitessio/vitess/pull/19543) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

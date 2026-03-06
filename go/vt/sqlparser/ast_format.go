@@ -1852,9 +1852,9 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 	if node.Distinct {
-		buf.astPrintf(node, "group_concat(%s%n%v", DistinctStr, node.Exprs, node.OrderBy)
+		buf.astPrintf(node, "%s(%s%n%v", node.AggrName(), DistinctStr, node.Exprs, node.OrderBy)
 	} else {
-		buf.astPrintf(node, "group_concat(%n%v", node.Exprs, node.OrderBy)
+		buf.astPrintf(node, "%s(%n%v", node.AggrName(), node.Exprs, node.OrderBy)
 	}
 	if node.Separator != "" {
 		buf.astPrintf(node, " %s %#s", keywordStrings[SEPARATOR], node.Separator)
@@ -2979,7 +2979,7 @@ func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JSONArrayAgg) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "json_arrayagg(%v)", node.Expr)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Expr)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
@@ -2987,7 +2987,7 @@ func (node *JSONArrayAgg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JSONObjectAgg) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "json_objectagg(%v, %v)", node.Key, node.Value)
+	buf.astPrintf(node, "%s(%v, %v)", node.AggrName(), node.Key, node.Value)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
@@ -3170,18 +3170,18 @@ func (node *Count) Format(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
-	buf.WriteString("count(*)")
+	buf.astPrintf(node, "%s(*)", node.AggrName())
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *AnyValue) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "any_value(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 }
 
 func (node *Avg) Format(buf *TrackedBuffer) {
-	buf.WriteString("avg(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -3192,7 +3192,7 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 }
 
 func (node *Max) Format(buf *TrackedBuffer) {
-	buf.WriteString("max(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -3203,7 +3203,7 @@ func (node *Max) Format(buf *TrackedBuffer) {
 }
 
 func (node *Min) Format(buf *TrackedBuffer) {
-	buf.WriteString("min(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -3214,7 +3214,7 @@ func (node *Min) Format(buf *TrackedBuffer) {
 }
 
 func (node *Sum) Format(buf *TrackedBuffer) {
-	buf.WriteString("sum(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -3225,70 +3225,70 @@ func (node *Sum) Format(buf *TrackedBuffer) {
 }
 
 func (node *BitAnd) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "bit_and(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *BitOr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "bit_or(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *BitXor) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "bit_xor(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *Std) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "std(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *StdDev) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "stddev(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *StdPop) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "stddev_pop(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *StdSamp) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "stddev_samp(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *VarPop) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "var_pop(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *VarSamp) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "var_samp(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
 }
 
 func (node *Variance) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "variance(%v)", node.Arg)
+	buf.astPrintf(node, "%s(%v)", node.AggrName(), node.Arg)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}

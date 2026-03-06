@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -66,7 +68,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			t.m[node] = code.ResolveType(inputType, t.collationEnv)
 		}
 	case sqlparser.AggrFunc:
-		if code, ok := opcode.SupportedAggregates[node.AggrName()]; ok {
+		if code, ok := opcode.SupportedAggregates[strings.ToLower(node.AggrName())]; ok {
 			var inputType evalengine.Type
 			if arg := node.GetArg(); arg != nil {
 				if tt, ok := t.m[arg]; ok {

@@ -3005,6 +3005,7 @@ type (
 	// JSONArrayAgg is an aggregation expression that creates a JSON Array.
 	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-arrayagg
 	JSONArrayAgg struct {
+		Name       string
 		Expr       Expr
 		OverClause *OverClause
 	}
@@ -3012,6 +3013,7 @@ type (
 	// JSONObjectAgg is an aggregation expression that creates a JSON Object.
 	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-objectagg
 	JSONObjectAgg struct {
+		Name       string
 		Key        Expr
 		Value      Expr
 		OverClause *OverClause
@@ -3324,7 +3326,7 @@ type (
 		GetArgs() []Expr
 		SetArg(expr Expr)
 		SetArgs(exprs []Expr) error
-		// AggrName returns the lower case string representing this aggregation function
+		// AggrName returns the name of this aggregation function, preserving original capitalization when set by the parser.
 		AggrName() string
 	}
 
@@ -3355,13 +3357,15 @@ type (
 	}
 
 	Count struct {
+		Name       string
 		Args       []Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	CountStar struct {
-		_ bool
+		_    bool
+		Name string
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
 		// You're correct that this might seem a bit strange at first glance.
@@ -3392,81 +3396,96 @@ type (
 	}
 
 	Avg struct {
+		Name       string
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Max struct {
+		Name       string
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Min struct {
+		Name       string
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Sum struct {
+		Name       string
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	BitAnd struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	BitOr struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	BitXor struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	Std struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdDev struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdPop struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdSamp struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	VarPop struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	VarSamp struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	Variance struct {
+		Name       string
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
+		Name      string
 		Distinct  bool
 		Exprs     []Expr
 		OrderBy   OrderBy
@@ -3478,7 +3497,8 @@ type (
 	// It's just simpler to treat it as one
 	// see https://dev.mysql.com/doc/refman/8.0/en/miscellaneous-functions.html#function_any-value
 	AnyValue struct {
-		Arg Expr
+		Arg  Expr
+		Name string
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
@@ -3956,26 +3976,34 @@ func (avg *Avg) SetDistinct(distinct bool)                   { avg.Distinct = di
 func (count *Count) SetDistinct(distinct bool)               { count.Distinct = distinct }
 func (grpConcat *GroupConcatExpr) SetDistinct(distinct bool) { grpConcat.Distinct = distinct }
 
-func (*Sum) AggrName() string             { return "sum" }
-func (*Min) AggrName() string             { return "min" }
-func (*Max) AggrName() string             { return "max" }
-func (*Avg) AggrName() string             { return "avg" }
-func (*CountStar) AggrName() string       { return "count" }
-func (*Count) AggrName() string           { return "count" }
-func (*GroupConcatExpr) AggrName() string { return "group_concat" }
-func (*BitAnd) AggrName() string          { return "bit_and" }
-func (*BitOr) AggrName() string           { return "bit_or" }
-func (*BitXor) AggrName() string          { return "bit_xor" }
-func (*Std) AggrName() string             { return "std" }
-func (*StdDev) AggrName() string          { return "stddev" }
-func (*StdPop) AggrName() string          { return "stddev_pop" }
-func (*StdSamp) AggrName() string         { return "stddev_samp" }
-func (*VarPop) AggrName() string          { return "var_pop" }
-func (*VarSamp) AggrName() string         { return "var_samp" }
-func (*Variance) AggrName() string        { return "variance" }
-func (*AnyValue) AggrName() string        { return "any_value" }
-func (*JSONArrayAgg) AggrName() string    { return "json_arrayagg" }
-func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
+// aggrName returns name if non-empty, otherwise returns defaultName.
+func aggrName(name, defaultName string) string {
+	if name != "" {
+		return name
+	}
+	return defaultName
+}
+
+func (n *Sum) AggrName() string             { return aggrName(n.Name, "sum") }
+func (n *Min) AggrName() string             { return aggrName(n.Name, "min") }
+func (n *Max) AggrName() string             { return aggrName(n.Name, "max") }
+func (n *Avg) AggrName() string             { return aggrName(n.Name, "avg") }
+func (n *CountStar) AggrName() string       { return aggrName(n.Name, "count") }
+func (n *Count) AggrName() string           { return aggrName(n.Name, "count") }
+func (n *GroupConcatExpr) AggrName() string { return aggrName(n.Name, "group_concat") }
+func (n *BitAnd) AggrName() string          { return aggrName(n.Name, "bit_and") }
+func (n *BitOr) AggrName() string           { return aggrName(n.Name, "bit_or") }
+func (n *BitXor) AggrName() string          { return aggrName(n.Name, "bit_xor") }
+func (n *Std) AggrName() string             { return aggrName(n.Name, "std") }
+func (n *StdDev) AggrName() string          { return aggrName(n.Name, "stddev") }
+func (n *StdPop) AggrName() string          { return aggrName(n.Name, "stddev_pop") }
+func (n *StdSamp) AggrName() string         { return aggrName(n.Name, "stddev_samp") }
+func (n *VarPop) AggrName() string          { return aggrName(n.Name, "var_pop") }
+func (n *VarSamp) AggrName() string         { return aggrName(n.Name, "var_samp") }
+func (n *Variance) AggrName() string        { return aggrName(n.Name, "variance") }
+func (n *AnyValue) AggrName() string        { return aggrName(n.Name, "any_value") }
+func (n *JSONArrayAgg) AggrName() string    { return aggrName(n.Name, "json_arrayagg") }
+func (n *JSONObjectAgg) AggrName() string   { return aggrName(n.Name, "json_objectagg") }
 
 func (node *Count) GetOverClause() *OverClause                  { return node.OverClause }
 func (node *CountStar) GetOverClause() *OverClause              { return node.OverClause }

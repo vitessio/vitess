@@ -838,8 +838,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id, sum(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where 1 != 1 group by id",
-        "Query": "select id, sum(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where id = 1 group by id having sum(intcol) > 0",
+        "FieldQuery": "select id, SUM(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where 1 != 1 group by id",
+        "Query": "select id, SUM(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where id = 1 group by id having SUM(intcol) > 0",
         "Values": [
           "1"
         ],
