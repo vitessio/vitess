@@ -20,7 +20,6 @@ services:
       - VTCTLD_CELL=test
       - SETUP_TIMEOUT=10m
       - SETUP_POLL_INTERVAL=5s
-      - ANTITHESIS_SDK_LOCAL_OUTPUT=assertions_20240520.json
     volumes:
       - .:/script
   etcd:
