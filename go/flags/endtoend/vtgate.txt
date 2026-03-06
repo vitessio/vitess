@@ -138,6 +138,7 @@ Flags:
       --mysql-auth-vault-ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
       --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
+      --mysql-enable-zstd-compression                                    Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.
       --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
       --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
       --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")

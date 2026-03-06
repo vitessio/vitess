@@ -325,7 +325,7 @@ func FuzzTLSServer(data []byte) int {
 		Password: "password1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, 0, DefaultFlushDelay, fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), 512, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, DefaultFlushDelay, false, false)
 	if err != nil {
 		return -1
 	}

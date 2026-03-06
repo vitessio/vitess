@@ -25,6 +25,13 @@ const (
 	// the server supports.
 	MaxPacketSize = (1 << 24) - 1
 
+	// zstdCompressionLevelMin/Max define the valid range we'll accept (1–22, matching MySQL 8.0+).
+	// Anything outside gets clamped by clampZstdLevel.
+	zstdCompressionLevelMin = 1
+	zstdCompressionLevelMax = 22
+	// zstdCompressionLevelDefault is the fallback when clients send 0 or skip the level entirely.
+	zstdCompressionLevelDefault = 3
+
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10
@@ -32,6 +39,19 @@ const (
 	// https://dev.mysql.com/doc/refman/en/identifier-length.html
 	MaxIdentifierLength = 64
 )
+
+// clampZstdLevel takes a raw zstd level and pins it to the valid 1–22 range.
+// Zero (or anything below 1) means "unset", so we fall back to the default (3).
+// Anything above 22 gets capped.
+func clampZstdLevel(level int) int {
+	if level < zstdCompressionLevelMin {
+		return zstdCompressionLevelDefault
+	}
+	if level > zstdCompressionLevelMax {
+		return zstdCompressionLevelMax
+	}
+	return level
+}
 
 // AuthMethodDescription is the type for different supported and
 // implemented authentication methods.
@@ -80,8 +100,10 @@ const (
 	// CLIENT_NO_SCHEMA 1 << 4
 	// Do not permit database.table.column. We do permit it.
 
-	// CLIENT_COMPRESS 1 << 5
-	// We do not support compression. CPU is usually our bottleneck.
+	// CapabilityClientCompress is CLIENT_COMPRESS — it turns on the compressed-packet
+	// protocol (7-byte frame headers). We need this *plus* bit 26 to get zstd; bit 5
+	// enables the framing and bit 26 picks the algorithm.
+	CapabilityClientCompress = 1 << 5
 
 	// CLIENT_ODBC 1 << 6
 	// No special behavior since 3.22.
@@ -152,6 +174,10 @@ const (
 	// CapabilityClientDeprecateEOF is CLIENT_DEPRECATE_EOF
 	// Expects an OK (instead of EOF) after the resultset rows of a Text Resultset.
 	CapabilityClientDeprecateEOF = 1 << 24
+
+	// CapabilityClientZstdCompressionAlgorithm is CLIENT_ZSTD_COMPRESSION_ALGORITHM (MySQL 8.0.18+).
+	// Tells the other side we want zstd as the compression algorithm.
+	CapabilityClientZstdCompressionAlgorithm = 1 << 26
 )
 
 // Status flags. They are returned by the server in a few cases.

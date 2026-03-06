@@ -315,9 +315,20 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		return err
 	}
 
-	// Read the server response.
 	if err := c.handleAuthResponse(params); err != nil {
 		return err
+	}
+
+	useZstd := params.EnableZstdCompression &&
+		(capabilities&CapabilityClientCompress != 0) &&
+		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
+	if useZstd {
+		level := clampZstdLevel(params.ZstdCompressionLevel)
+		c.wantZstdCompression = true
+		c.zstdCompressionLevel = level
+		if err := c.initZstdCompression(); err != nil {
+			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "failed to init zstd compression: %v", err)
+		}
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -584,6 +595,17 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length += lenEncIntSize(uint64(attrLength)) + attrLength
 	}
 
+	// zstd_compression_level: we add a 1-byte field right after the connection attributes
+	// when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set. Layout docs:
+	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
+	useZstd := params.EnableZstdCompression &&
+		(capabilities&CapabilityClientCompress != 0) &&
+		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
+	if useZstd {
+		capabilityFlags |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm
+		length++
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
@@ -628,6 +650,11 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 			pos = writeLenEncString(data, pos, key)
 			pos = writeLenEncString(data, pos, value)
 		}
+	}
+
+	// Write the zstd_compression_level byte right after connection attributes, per the protocol spec.
+	if useZstd {
+		pos = writeByte(data, pos, byte(clampZstdLevel(params.ZstdCompressionLevel)))
 	}
 
 	// Sanity-check the length.

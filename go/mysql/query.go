@@ -57,6 +57,10 @@ const (
 func (c *Conn) WriteComQuery(query string) error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
 
 	data, pos := c.startEphemeralPacketWithHeader(len(query) + 1)
 	data[pos] = ComQuery
@@ -72,6 +76,12 @@ func (c *Conn) WriteComQuery(query string) error {
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComInitDB(db string) error {
+	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(len(db) + 1)
 	data[pos] = ComInitDB
 	pos++
@@ -85,6 +95,12 @@ func (c *Conn) writeComInitDB(db string) error {
 // writeComSetOption changes the connection's capability of executing multi statements.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComSetOption(operation uint16) error {
+	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(16 + 1)
 	data[pos] = ComSetOption
 	pos++
