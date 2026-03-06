@@ -43,7 +43,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -98,10 +97,37 @@ type CompressionDetails struct {
 	ManifestExternalDecompressorCmd string
 }
 
+// s3ConfigFromEnv builds S3 backup config from AWS_* env vars when we're running with Ceph (e.g. CI).
+// Here we are doing if AWS_ENDPOINT isn't set we return nil so the rest of the code keeps using file storage.
+func s3ConfigFromEnv() *cluster.S3BackupConfig {
+	endpoint := os.Getenv("AWS_ENDPOINT")
+	if endpoint == "" {
+		return nil
+	}
+	bucket := os.Getenv("AWS_BUCKET")
+	if bucket == "" {
+		bucket = "vitess-test"
+	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	return &cluster.S3BackupConfig{
+		Endpoint:       endpoint,
+		Bucket:         bucket,
+		Region:         region,
+		ForcePathStyle: true,
+	}
+}
+
 // LaunchCluster : starts the cluster as per given params.
-func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+// If s3Config is provided and non-nil, backup storage uses S3 (e.g. MicroCeph) instead of file.
+func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails, s3Config ...*cluster.S3BackupConfig) (int, error) {
 	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
+	if len(s3Config) > 0 && s3Config[0] != nil {
+		localCluster.S3BackupConfig = s3Config[0]
+	}
 
 	// Start topo server
 	err := localCluster.StartTopo()
@@ -412,8 +438,12 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		}, //
 	}
 
-	// setup cluster for the testing
-	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
+	// When CI (or someone) has set AWS_ENDPOINT we should use S3 for backups instead of file.
+	var s3Opt *cluster.S3BackupConfig
+	if cfg := s3ConfigFromEnv(); cfg != nil {
+		s3Opt = cfg
+	}
+	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails, s3Opt)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
@@ -1403,7 +1433,8 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-		if backupstorage.BackupStorageImplementation == "file" {
+		// File-backup stats only show up when we're not using S3.
+		if localCluster != nil && localCluster.S3BackupConfig == nil {
 			require.Contains(t, bb, "BackupStorage.File.File:Write")
 		}
 	}
@@ -1439,7 +1470,8 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 
-	if backupstorage.BackupStorageImplementation == "file" {
+	// Same deal: only expect file stats when we're on file backup, not S3.
+	if localCluster != nil && localCluster.S3BackupConfig == nil {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
 }
@@ -1469,7 +1501,10 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-		require.Contains(t, bb, "BackupStorage.File.File:Read")
+		// File stats only when we're on file backup.
+		if localCluster != nil && localCluster.S3BackupConfig == nil {
+			require.Contains(t, bb, "BackupStorage.File.File:Read")
+		}
 	}
 
 	require.Contains(t, vars, "RestoreCount")
@@ -1503,7 +1538,10 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 
-	require.Contains(t, bd, "BackupStorage.File.File:Read")
+	// Again: file read stats only when we're not on S3.
+	if localCluster != nil && localCluster.S3BackupConfig == nil {
+		require.Contains(t, bd, "BackupStorage.File.File:Read")
+	}
 }
 
 func getDefaultCommonArgs() []string {
@@ -1539,7 +1577,12 @@ func TestBackupEngineSelector(t *testing.T) {
 	defer setDefaultCommonArgs()
 
 	// launch the custer with xtrabackup as the default engine
-	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
+	// This should also pick up S3 from env when we're on Ceph.
+	var s3Opt *cluster.S3BackupConfig
+	if c := s3ConfigFromEnv(); c != nil {
+		s3Opt = c
+	}
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"}, s3Opt)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
@@ -1583,7 +1626,12 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 	cDetails := &CompressionDetails{CompressorEngineName: "pgzip"}
 
 	// launch the custer with xtrabackup as the default engine
-	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
+	// Pick up S3 from env when we're running with Ceph.
+	var s3Opt *cluster.S3BackupConfig
+	if c := s3ConfigFromEnv(); c != nil {
+		s3Opt = c
+	}
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails, s3Opt)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()

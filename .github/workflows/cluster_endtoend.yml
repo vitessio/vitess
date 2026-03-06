@@ -179,6 +179,10 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
         uses: ./.github/actions/setup-minio
 
+      - name: Install MicroCeph
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
+        uses: ./.github/actions/setup-microceph
+
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
         run: make BUILD_PROTOC=0 tools

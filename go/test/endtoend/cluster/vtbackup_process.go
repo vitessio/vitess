@@ -40,6 +40,7 @@ type VtbackupProcess struct {
 
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
+	S3BackupConfig              *S3BackupConfig
 
 	Cell        string
 	Keyspace    string
@@ -62,18 +63,26 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		return err
 	}
 	flags := map[string]string{
-		"--topo-implementation":        vtbackup.TopoImplementation,
-		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
-		"--topo-global-root":           vtbackup.TopoGlobalRoot,
-		// initDBfile is required to run vtbackup
-		"--mysql-port":       strconv.Itoa(vtbackup.MysqlPort),
-		"--init-db-sql-file": vtbackup.initDBfile,
-		"--init-keyspace":    vtbackup.Keyspace,
-		"--init-shard":       vtbackup.Shard,
-
-		// Backup Arguments are not optional
-		utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer): vtbackup.BackupStorageImplementation,
-		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
+		"--topo-implementation":           vtbackup.TopoImplementation,
+		"--topo-global-server-address":    vtbackup.TopoGlobalAddress,
+		"--topo-global-root":              vtbackup.TopoGlobalRoot,
+		"--mysql-port":                    strconv.Itoa(vtbackup.MysqlPort),
+		"--init-db-sql-file":              vtbackup.initDBfile,
+		"--init-keyspace":                 vtbackup.Keyspace,
+		"--init-shard":                    vtbackup.Shard,
+		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
+	}
+	if vtbackup.S3BackupConfig != nil {
+		flags["--s3-backup-aws-endpoint"] = vtbackup.S3BackupConfig.Endpoint
+		flags["--s3-backup-storage-bucket"] = vtbackup.S3BackupConfig.Bucket
+		flags["--s3-backup-aws-region"] = vtbackup.S3BackupConfig.Region
+		flags["--s3-backup-force-path-style"] = strconv.FormatBool(vtbackup.S3BackupConfig.ForcePathStyle)
+		if vtbackup.S3BackupConfig.Root != "" {
+			flags["--s3-backup-storage-root"] = vtbackup.S3BackupConfig.Root
+		}
+	} else {
+		flags[utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer)] = vtbackup.FileBackupStorageRoot
+		flags["--file-backup-storage-root"] = vtbackup.FileBackupStorageRoot
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
