@@ -75,6 +75,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	cConn := newConn(clientConn, DefaultFlushDelay, 0)
 	sConn := newConn(serverConn, DefaultFlushDelay, 0)
 	sConn.PrepareData = map[uint32]*PrepareData{}
+	sConn.cursorStates = map[uint32]*CursorState{}
 
 	return listener, sConn, cConn
 }
@@ -851,9 +852,9 @@ func TestEmptyQuery(t *testing.T) {
 			// The queries run will be an empty query; Even with the empty error, the connection should be fine
 			require.True(t, res, "we should not break the connection in case of no errors")
 			// Read the result and assert that we indeed see the error for empty query.
-			data, more, _, err := cConn.ReadQueryResult(100, true)
+			data, status, _, err := cConn.ReadQueryResult(100, true)
 			require.EqualError(t, err, "Query was empty (errno 1065) (sqlstate 42000)")
-			require.False(t, more)
+			require.False(t, IsMoreResultsExists(status))
 			require.Nil(t, data)
 		})
 	}
@@ -881,17 +882,17 @@ func TestMultiStatement(t *testing.T) {
 			// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
 			require.True(t, res, "we should not break the connection in case of no errors")
 			// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
-			data, more, _, err := cConn.ReadQueryResult(100, true)
+			data, status, _, err := cConn.ReadQueryResult(100, true)
 			require.NoError(t, err)
 			// Since we executed 2 queries, there should be more results to be read
-			require.True(t, more)
+			require.True(t, IsMoreResultsExists(status))
 			require.True(t, data.Equal(selectRowsResult))
 
 			// Read the results for the second query and verify the correctness
-			data, more, _, err = cConn.ReadQueryResult(100, true)
+			data, status, _, err = cConn.ReadQueryResult(100, true)
 			require.NoError(t, err)
 			// This was the final query run, so we expect that more should be false as there are no more queries.
-			require.False(t, more)
+			require.False(t, IsMoreResultsExists(status))
 			require.True(t, data.Equal(selectRowsResult))
 
 			// This time we run two queries fist of which will return an error
@@ -903,10 +904,10 @@ func TestMultiStatement(t *testing.T) {
 			require.True(t, res, "we should not break the connection because of execution errors")
 
 			// Read the result and assert that we indeed see the error that testRun throws.
-			data, more, _, err = cConn.ReadQueryResult(100, true)
+			data, status, _, err = cConn.ReadQueryResult(100, true)
 			require.EqualError(t, err, "cannot get column number (errno 2027) (sqlstate HY000)")
 			// In case of errors in a multi-statement, the following statements are not executed, therefore we want that more should be false
-			require.False(t, more)
+			require.False(t, IsMoreResultsExists(status))
 			require.Nil(t, data)
 		})
 	}
