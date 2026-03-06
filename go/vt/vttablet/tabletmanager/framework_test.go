@@ -116,19 +116,11 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 		}
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
-<<<<<<< HEAD
-	tabletconntest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
-	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
-		return tenv.tmc
-	})
-	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
-=======
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.framework_test_"+protoName, protoName)
 	tmclient.RegisterTabletManagerClientFactory(protoName, func() tmclient.TabletManagerClient {
 		return tenv.tmc
 	})
 	tmclienttest.SetProtocol("go.vt.vttablet.tabletmanager.framework_test_"+protoName, protoName)
->>>>>>> 644e966560 (CI: Address our two flakiest tests (#19587))
 
 	tenv.db = fakesqldb.New(t)
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(tenv.db)
