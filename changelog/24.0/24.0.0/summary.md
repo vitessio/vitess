@@ -8,12 +8,15 @@
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
         - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
+    - **[Breaking Changes](#breaking-changes)**
+        - [External Decompressor No Longer Read from Backup MANIFEST by Default](#vttablet-external-decompressor-manifest)
 - **[Minor Changes](#minor-changes)**
     - **[Logging](#minor-changes-logging)**
         - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
@@ -27,11 +30,13 @@
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
+        - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
     - **[Backup and Restore](#minor-changes-backup-restore)**
         - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
-        - [New `TM_RESTORE_DATA_BACKUP_ENGINE` Environment Variable for Restore Hook](#restore-hook-backup-engine-env)
+        - [Restore Hook Improvements](#restore-hook-backup-engine-env)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -92,13 +97,23 @@ Once set, all subsequent queries in the session route to the specified tablet un
 
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
+### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="vttablet-external-decompressor-manifest"/>External Decompressor No Longer Read from Backup MANIFEST by Default</a>
+
+The external decompressor command stored in a backup's `MANIFEST` file is no longer used at restore time by default. Previously, when no `--external-decompressor` flag was provided, VTTablet would fall back to the command specified in the `MANIFEST`. This posed a security risk: an attacker with write access to backup storage could modify the `MANIFEST` to execute arbitrary commands on the tablet.
+
+Starting in v24, the `MANIFEST`-based decompressor is ignored unless you explicitly opt in with the new `--external-decompressor-use-manifest` flag. If you rely on this behavior, add the flag to your VTTablet configuration, but be aware of the security implications.
+
+See [#19460](https://github.com/vitessio/vitess/pull/19460) for details.
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
 ### <a id="minor-changes-logging"/>Logging</a>
 
 #### <a id="structured-logging"/>Structured logging</a>
 
-Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). To revert to the previous `glog` backend, pass `--log-structured=false`.
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
 
 `glog` is deprecated as of v24 and will be removed in v25.
 
@@ -119,6 +134,14 @@ vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shar
 ```
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-removed-grpc-send-session-in-streaming"/>Removed `--grpc-send-session-in-streaming` flag</a>
+
+The VTGate flag `--grpc-send-session-in-streaming` has been removed. This flag was deprecated in v22 via [#17907](https://github.com/vitessio/vitess/pull/17907) and defaulted to `true`.
+
+The session is now always sent as the last packet in the streaming response for `StreamExecute` and `StreamExecuteMulti` RPCs. This behavior is required to support transactions in streaming and cannot be disabled.
+
+**Impact**: Remove any usage of the `--grpc-send-session-in-streaming` flag from VTGate startup scripts or configuration.
 
 #### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>New default for `--legacy-replication-lag-algorithm` flag</a>
 
@@ -213,6 +236,14 @@ VTOrc's `DiscoverInstance` function now includes the tablet alias in all log mes
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
 
+#### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
+
+VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+
+The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+
+See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
+
 #### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
 
 The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
@@ -230,6 +261,14 @@ The lack of facilities to read the snapshots created by this feature coupled wit
 **Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
 
 **Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+
+#### <a id="vtorc-replication-analysis-api-removed"/>Deprecated `/api/replication-analysis` Endpoint Removed</a>
+
+The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use `/api/detection-analysis` instead, which provides the same functionality.
+
+**Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
+
+**Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
 
 ### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
 
@@ -279,9 +318,12 @@ vtbackup \
 
 **Note:** All tablets participating in CLONE operations (both donors and recipients) must have `--mysql-clone-enabled` set during MySQL initialization to ensure the CLONE plugin is loaded and the clone user exists.
 
-#### <a id="restore-hook-backup-engine-env"/>New `TM_RESTORE_DATA_BACKUP_ENGINE` Environment Variable for Restore Hook</a>
+#### <a id="restore-hook-backup-engine-env"/>Restore Hook Improvements</a>
 
-The `vttablet_restore_done` hook now includes a `TM_RESTORE_DATA_BACKUP_ENGINE` environment variable containing the backup engine used for the restore. The value comes from the backup manifest's `BackupMethod` field.
+**Extended Hook Coverage**: The `vttablet_restore_done` hook now fires when restores are triggered via `vtctldclient RestoreFromBackup`. Previously, this hook only ran during tablet startup or clone operations.
 
-This variable is only set when a restore reads from a backup (not for clone-based restores or when no backup is used). Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another backup engine.
+**New Environment Variable**: The hook now sets `TM_RESTORE_DATA_BACKUP_ENGINE` to indicate which backup engine was used. The value comes from the backup manifest's `BackupMethod` field.
+
+`TM_RESTORE_DATA_BACKUP_ENGINE` is only set when a restore reads from an actual backup—not for clone-based restores or when no backup is used. Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another engine.
+
 
