@@ -22,9 +22,10 @@ import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 // It is used for tests and vtexplain_vtgate where we don't want the user to
 // control certain configs.
 type StaticConfig struct {
-	OnlineDDLEnabled bool
-	DirectDDLEnabled bool
-	TxMode           vtgatepb.TransactionMode
+	OnlineDDLEnabled   bool
+	DirectDDLEnabled   bool
+	BinlogDumpEnabled_ bool
+	TxMode             vtgatepb.TransactionMode
 }
 
 func (s *StaticConfig) OnlineEnabled() bool {
@@ -33,6 +34,10 @@ func (s *StaticConfig) OnlineEnabled() bool {
 
 func (s *StaticConfig) DirectEnabled() bool {
 	return s.DirectDDLEnabled
+}
+
+func (s *StaticConfig) BinlogDumpEnabled() bool {
+	return s.BinlogDumpEnabled_
 }
 
 func (s *StaticConfig) TransactionMode() vtgatepb.TransactionMode {
