@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"os/exec"
 	"path"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -378,7 +378,7 @@ func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, e
 	flags = append(flags, []string{
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", randomPort()),
+		fmt.Sprintf("--port=%d", osutil.GetPortReservation(1).Start),
 		"--data-dir=" + dir,
 	}...)
 	return startCluster(flags...)
@@ -459,11 +459,6 @@ func resetConfig(conf vttest.Config) {
 	config = conf
 }
 
-func randomPort() int {
-	v := rand.Int32N(20000)
-	return int(v + 10000)
-}
-
 func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
 	client, err := vtctlclient.New(ctx, fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
 	assert.NoError(t, err)
@@ -508,7 +503,7 @@ func consumeEventStream(stream logutil.EventStream) (string, error) {
 // Returns the exec.Cmd forked, and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string) {
 	// pick a random port to make sure things work with non-default port
-	port := randomPort()
+	port := osutil.GetPortReservation(1).Start
 
 	cmd := exec.Command("consul",
 		"agent",
