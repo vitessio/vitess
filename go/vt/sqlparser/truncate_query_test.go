@@ -10,8 +10,8 @@ import (
 func TestTruncateQuery(t *testing.T) {
 	tests := []struct {
 		query string
-		max   int
 		want  string
+		max   int
 	}{
 		{
 			query: "select 111",

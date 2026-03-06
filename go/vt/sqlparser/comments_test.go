@@ -254,8 +254,8 @@ func TestExtractMysqlComment(t *testing.T) {
 
 func TestExtractCommentDirectives(t *testing.T) {
 	testCases := []struct {
-		input string
 		vals  map[string]string
+		input string
 	}{{
 		input: "",
 		vals:  nil,
@@ -484,9 +484,9 @@ func TestConsolidator(t *testing.T) {
 
 func TestGetPriorityFromStatement(t *testing.T) {
 	testCases := []struct {
+		expectedError    error
 		query            string
 		expectedPriority string
-		expectedError    error
 	}{
 		{
 			query:            "select * from a_table",
@@ -551,9 +551,9 @@ func TestGetPriorityFromStatement(t *testing.T) {
 func TestGetMySQLSetVarValue(t *testing.T) {
 	tests := []struct {
 		name      string
-		comments  []string
 		valToFind string
 		want      string
+		comments  []string
 	}{
 		{
 			name:      "SET_VAR clause in the middle",

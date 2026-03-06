@@ -163,9 +163,9 @@ type (
 
 	// AddColumns represents a ADD COLUMN alter option
 	AddColumns struct {
+		After   *ColName
 		Columns []*ColumnDefinition
 		First   bool
-		After   *ColName
 	}
 
 	// AlgorithmValue is the algorithm specified in the alter table command
@@ -173,11 +173,11 @@ type (
 
 	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
-		Column         *ColName
-		DropDefault    bool
 		DefaultVal     Expr
-		DefaultLiteral bool
+		Column         *ColName
 		Invisible      *bool
+		DropDefault    bool
+		DefaultLiteral bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -188,23 +188,23 @@ type (
 
 	// CommonTableExpr is the structure for supporting common table expressions
 	CommonTableExpr struct {
+		Subquery TableStatement
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery TableStatement
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// RenameColumn is used to change the column definition in alter table command
@@ -251,8 +251,8 @@ type (
 
 	// DropKey is used to drop a key in an alter table statement
 	DropKey struct {
-		Type DropKeyType
 		Name IdentifierCI
+		Type DropKeyType
 	}
 
 	// Force is used to specify force alter option in an alter table statement
@@ -289,39 +289,38 @@ type (
 
 	// Select represents a SELECT statement.
 	Select struct {
-		Cache            *bool // a reference here so it can be nil
-		Distinct         bool
-		HighPriority     bool
-		StraightJoinHint bool
-		SQLSmallResult   bool
-		SQLBigResult     bool
-		SQLBufferResult  bool
+		Comments         *ParsedComments
+		Into             *SelectInto
+		Limit            *Limit
+		Cache            *bool
+		Having           *Where
+		GroupBy          *GroupBy
+		Where            *Where
+		SelectExprs      *SelectExprs
+		With             *With
+		Windows          NamedWindows
+		From             []TableExpr
+		OrderBy          OrderBy
 		SQLCalcFoundRows bool
-		// The With field needs to come before the FROM clause, so any CTEs have been handled before we analyze it
-		With        *With
-		From        []TableExpr
-		Comments    *ParsedComments
-		SelectExprs *SelectExprs
-		Where       *Where
-		GroupBy     *GroupBy
-		Having      *Where
-		Windows     NamedWindows
-		OrderBy     OrderBy
-		Limit       *Limit
-		Lock        Lock
-		Into        *SelectInto
+		SQLBufferResult  bool
+		SQLBigResult     bool
+		SQLSmallResult   bool
+		StraightJoinHint bool
+		HighPriority     bool
+		Lock             Lock
+		Distinct         bool
 	}
 
 	// SelectInto is a struct that represent the INTO part of a select query
 	SelectInto struct {
-		Type         SelectIntoType
-		VarList      []*Variable
 		FileName     string
-		Charset      ColumnCharset
 		FormatOption string
 		ExportOption string
 		Manifest     string
 		Overwrite    string
+		VarList      []*Variable
+		Charset      ColumnCharset
+		Type         SelectIntoType
 	}
 
 	// SelectIntoType is an enum for SelectInto.Type
@@ -332,23 +331,23 @@ type (
 
 	// Union represents a UNION statement.
 	Union struct {
-		With     *With
 		Left     TableStatement
 		Right    TableStatement
-		Distinct bool
-		OrderBy  OrderBy
+		With     *With
 		Limit    *Limit
-		Lock     Lock
 		Into     *SelectInto
+		OrderBy  OrderBy
+		Distinct bool
+		Lock     Lock
 	}
 
 	// VStream represents a VSTREAM statement.
 	VStream struct {
-		Comments   *ParsedComments
 		SelectExpr SelectExpr
-		Table      TableName
+		Comments   *ParsedComments
 		Where      *Where
 		Limit      *Limit
+		Table      TableName
 	}
 
 	// Stream represents a SELECT statement.
@@ -367,17 +366,15 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action   InsertAction
-		Comments *ParsedComments
-		Ignore   Ignore
-		// The Insert as syntax still take TableName.
-		// The change is made for semantic analyzer as it takes AliasedTableExpr to provide TableInfo
+		Rows       InsertRows
+		Comments   *ParsedComments
 		Table      *AliasedTableExpr
+		RowAlias   *RowAlias
 		Partitions Partitions
 		Columns    Columns
-		Rows       InsertRows
-		RowAlias   *RowAlias
 		OnDup      OnDup
+		Action     InsertAction
+		Ignore     Ignore
 	}
 
 	// Ignore represents whether ignore was specified or not
@@ -391,26 +388,26 @@ type (
 	Update struct {
 		With       *With
 		Comments   *ParsedComments
-		Ignore     Ignore
+		Where      *Where
+		Limit      *Limit
 		TableExprs []TableExpr
 		Exprs      UpdateExprs
-		Where      *Where
 		OrderBy    OrderBy
-		Limit      *Limit
+		Ignore     Ignore
 	}
 
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
 		With       *With
-		Ignore     Ignore
 		Comments   *ParsedComments
+		Where      *Where
+		Limit      *Limit
 		TableExprs []TableExpr
 		Targets    TableNames
 		Partitions Partitions
-		Where      *Where
 		OrderBy    OrderBy
-		Limit      *Limit
+		Ignore     Ignore
 	}
 
 	// Set represents a SET statement.
@@ -431,17 +428,17 @@ type (
 
 	// DatabaseOption is a struct that stores Collation or Character Set value
 	DatabaseOption struct {
+		Value     string
 		Type      DatabaseOptionType
 		IsDefault bool
-		Value     string
 	}
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
 		Comments      *ParsedComments
 		DBName        IdentifierCS
-		IfNotExists   bool
 		CreateOptions []DatabaseOption
+		IfNotExists   bool
 		FullyParsed   bool
 	}
 
@@ -449,16 +446,16 @@ type (
 	AlterDatabase struct {
 		Comments            *ParsedComments
 		DBName              IdentifierCS
-		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
+		UpdateDataDirectory bool
 		FullyParsed         bool
 	}
 
 	// Flush represents a FLUSH statement.
 	Flush struct {
-		IsLocal      bool
 		FlushOptions []string
 		TableNames   TableNames
+		IsLocal      bool
 		WithLock     bool
 		ForExport    bool
 	}
@@ -481,23 +478,17 @@ type (
 
 	// AlterVschema represents a ALTER VSCHEMA statement.
 	AlterVschema struct {
-		Action DDLAction
-		Table  TableName
-
-		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
-		VindexSpec *VindexSpec
-
-		// VindexCols is set for AddColVindexDDLAction.
-		VindexCols []IdentifierCI
-
-		// AutoIncSpec is set for AddAutoIncDDLAction.
+		VindexSpec  *VindexSpec
 		AutoIncSpec *AutoIncSpec
+		Table       TableName
+		VindexCols  []IdentifierCI
+		Action      DDLAction
 	}
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
@@ -512,8 +503,8 @@ type (
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -521,48 +512,47 @@ type (
 
 	// AlterMigration represents a ALTER VITESS_MIGRATION statement
 	AlterMigration struct {
-		Type      AlterMigrationType
+		Ratio     *Literal
 		UUID      string
 		Expire    string
-		Ratio     *Literal
 		Threshold string
 		Shards    string
+		Type      AlterMigrationType
 	}
 
 	// CreateProcedure represents a CREATE PROCEDURE statement.
 	CreateProcedure struct {
-		Name        TableName
-		Comments    *ParsedComments
-		IfNotExists bool
-		Definer     *Definer
-		Params      []*ProcParameter
 		Body        CompoundStatement
+		Comments    *ParsedComments
+		Definer     *Definer
+		Name        TableName
+		Params      []*ProcParameter
+		IfNotExists bool
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table           TableName
-		AlterOptions    []AlterOption
 		PartitionSpec   *PartitionSpec
 		PartitionOption *PartitionOption
 		Comments        *ParsedComments
+		Table           TableName
+		AlterOptions    []AlterOption
 		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.
 	DropTable struct {
-		Temp       bool
+		Comments   *ParsedComments
 		FromTables TableNames
-		// The following fields are set if a DDL was fully analyzed.
-		IfExists bool
-		Comments *ParsedComments
+		Temp       bool
+		IfExists   bool
 	}
 
 	// DropView represents a DROP VIEW statement.
 	DropView struct {
+		Comments   *ParsedComments
 		FromTables TableNames
 		IfExists   bool
-		Comments   *ParsedComments
 	}
 
 	// DropProcedure represents a DROP procedure statement.
@@ -577,40 +567,40 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp            bool
-		Table           TableName
-		IfNotExists     bool
+		Select          TableStatement
 		TableSpec       *TableSpec
 		OptLike         *OptLike
 		Comments        *ParsedComments
+		Table           TableName
+		Temp            bool
+		IfNotExists     bool
 		IgnoreOrReplace IgnoreOrReplaceType
-		Select          TableStatement
 		FullyParsed     bool
 	}
 
 	// CreateView represents a CREATE VIEW query
 	CreateView struct {
+		Select      TableStatement
+		Definer     *Definer
+		Comments    *ParsedComments
 		ViewName    TableName
 		Algorithm   string
-		Definer     *Definer
 		Security    string
-		Columns     Columns
-		Select      TableStatement
 		CheckOption string
+		Columns     Columns
 		IsReplace   bool
-		Comments    *ParsedComments
 	}
 
 	// AlterView represents a ALTER VIEW query
 	AlterView struct {
+		Select      TableStatement
+		Definer     *Definer
+		Comments    *ParsedComments
 		ViewName    TableName
 		Algorithm   string
-		Definer     *Definer
 		Security    string
-		Columns     Columns
-		Select      TableStatement
 		CheckOption string
-		Comments    *ParsedComments
+		Columns     Columns
 	}
 
 	// Definer stores the user for AlterView and CreateView definers
@@ -649,11 +639,8 @@ type (
 
 	// Begin represents a Begin statement.
 	Begin struct {
-		// We need to differentiate between BEGIN and START TRANSACTION statements
-		// because inside a stored procedure the former is considered part of a BEGIN...END statement,
-		// while the latter starts a transaction.
-		Type          BeginType
 		TxAccessModes []TxAccessMode
+		Type          BeginType
 	}
 
 	// Commit represents a Commit statement.
@@ -708,9 +695,9 @@ type (
 
 	// ExplainStmt represents an Explain statement
 	ExplainStmt struct {
-		Type      ExplainType
 		Statement Statement
 		Comments  *ParsedComments
+		Type      ExplainType
 	}
 
 	// VExplainType is an enum for VExplainStmt.Type
@@ -718,9 +705,9 @@ type (
 
 	// VExplainStmt represents an VtExplain statement
 	VExplainStmt struct {
-		Type      VExplainType
 		Statement Statement
 		Comments  *ParsedComments
+		Type      VExplainType
 	}
 
 	// ExplainTab represents the Explain table
@@ -732,9 +719,9 @@ type (
 	// PrepareStmt represents a Prepare Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
 	PrepareStmt struct {
-		Name      IdentifierCI
 		Statement Expr
 		Comments  *ParsedComments
+		Name      IdentifierCI
 	}
 
 	// ExecuteStmt represents an Execute Statement
@@ -754,8 +741,8 @@ type (
 
 	// Analyze represents the Analyze statement.
 	Analyze struct {
-		IsLocal bool
 		Table   TableName
+		IsLocal bool
 	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
@@ -806,8 +793,8 @@ type (
 	IfStatement struct {
 		SearchCondition Expr
 		ThenStatements  *CompoundStatements
-		ElseIfBlocks    []*ElseIfBlock
 		ElseStatements  *CompoundStatements
+		ElseIfBlocks    []*ElseIfBlock
 	}
 
 	// ElseIfBlock represents a ELSEIF block in an IF statement.
@@ -818,21 +805,21 @@ type (
 
 	// DeclareVar represents a Local Variable DECLARE Statement
 	DeclareVar struct {
-		VarNames []IdentifierCI
 		Type     *ColumnType
+		VarNames []IdentifierCI
 	}
 
 	// DeclareHandler represents a DECLARE...HANDLER statement
 	DeclareHandler struct {
-		Action     HandlerAction
-		Conditions []HandlerCondition
 		Statement  CompoundStatement
+		Conditions []HandlerCondition
+		Action     HandlerAction
 	}
 
 	// DeclareCondition represents a DECLARE...CONDITION statement
 	DeclareCondition struct {
-		Name      IdentifierCI
 		Condition HandlerCondition
+		Name      IdentifierCI
 	}
 
 	// Signal represents a SIGNAL statement
@@ -855,8 +842,8 @@ type SignalConditionName int8
 
 // SignalSet represents a set condition in a SIGNAL statement
 type SignalSet struct {
-	ConditionName SignalConditionName
 	Value         Expr
+	ConditionName SignalConditionName
 }
 
 // HandlerCondition represents a condition in a DECLARE HANDLER statement
@@ -2007,12 +1994,12 @@ type (
 
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
-		Command ShowCommandType
-		Full    bool
-		Tbl     TableName
-		DbName  IdentifierCS
 		Filter  *ShowFilter
 		Limit   *Limit
+		Tbl     TableName
+		DbName  IdentifierCS
+		Command ShowCommandType
+		Full    bool
 	}
 
 	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
@@ -2023,8 +2010,8 @@ type (
 
 	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
 	ShowCreate struct {
-		Command ShowCommandType
 		Op      TableName
+		Command ShowCommandType
 	}
 
 	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
@@ -2047,9 +2034,9 @@ type (
 
 	// ShowProfile represents SHOW PROFILE [type, ...] [FOR QUERY n] [LIMIT row_count [OFFSET offset]].
 	ShowProfile struct {
-		Types    []string
 		ForQuery *Literal
 		Limit    *Limit
+		Types    []string
 	}
 
 	// ShowCreateUser represents SHOW CREATE USER user_or_role.
@@ -2059,17 +2046,17 @@ type (
 
 	// ShowBinlogEvents represents SHOW BINLOG EVENTS / SHOW RELAYLOG EVENTS statements.
 	ShowBinlogEvents struct {
-		IsRelaylog bool
-		LogName    string
 		Position   Expr
 		Limit      *Limit
-		Channel    string // only for RELAYLOG
+		LogName    string
+		Channel    string
+		IsRelaylog bool
 	}
 
 	// ShowReplicationStatus represents SHOW REPLICA STATUS / SHOW SLAVE STATUS statements.
 	ShowReplicationStatus struct {
-		Legacy  bool // true for SLAVE (deprecated), false for REPLICA
 		Channel string
+		Legacy  bool
 	}
 
 	// ShowReplicationSourceStatus represents SHOW BINARY LOG STATUS / SHOW MASTER STATUS statements.
@@ -2117,9 +2104,9 @@ type OptLike struct {
 
 // ProcParameter represents a procedure parameter
 type ProcParameter struct {
-	Mode ProcParameterMode
-	Name IdentifierCI
 	Type *ColumnType
+	Name IdentifierCI
+	Mode ProcParameterMode
 }
 
 // ProcParameterMode is an enum for ProcParameter.Mode
@@ -2127,13 +2114,13 @@ type ProcParameterMode int8
 
 // PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {
-	Action            PartitionSpecAction
-	Names             Partitions
 	Number            *Literal
-	IsAll             bool
 	TableName         TableName
-	WithoutValidation bool
+	Names             Partitions
 	Definitions       []*PartitionDefinition
+	Action            PartitionSpecAction
+	IsAll             bool
+	WithoutValidation bool
 }
 
 // PartitionSpecAction is an enum for PartitionSpec.Action
@@ -2141,8 +2128,8 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name    IdentifierCI
 	Options *PartitionDefinitionOptions
+	Name    IdentifierCI
 }
 
 type PartitionDefinitionOptions struct {
@@ -2159,8 +2146,8 @@ type PartitionDefinitionOptions struct {
 
 // Subpartition Definition Corresponds to the subpartition_definition option of partition_definition
 type SubPartitionDefinition struct {
-	Name    IdentifierCI
 	Options *SubPartitionDefinitionOptions
+	Name    IdentifierCI
 }
 
 // This is a list of SubPartitionDefinition
@@ -2181,14 +2168,14 @@ type SubPartitionDefinitionOptions struct {
 type PartitionValueRangeType int8
 
 type PartitionValueRange struct {
-	Type     PartitionValueRangeType
 	Range    ValTuple
+	Type     PartitionValueRangeType
 	Maxvalue bool
 }
 
 type PartitionEngine struct {
-	Storage bool
 	Name    string
+	Storage bool
 }
 
 // PartitionByType is an enum storing how we are partitioning a table
@@ -2196,24 +2183,24 @@ type PartitionByType int8
 
 // PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
+	Expr         Expr
+	SubPartition *SubPartition
+	ColList      Columns
+	Definitions  []*PartitionDefinition
+	KeyAlgorithm int
+	Partitions   int
 	Type         PartitionByType
 	IsLinear     bool
-	KeyAlgorithm int
-	ColList      Columns
-	Expr         Expr
-	Partitions   int
-	SubPartition *SubPartition
-	Definitions  []*PartitionDefinition
 }
 
 // SubPartition describes subpartitions control
 type SubPartition struct {
+	Expr          Expr
+	ColList       Columns
+	KeyAlgorithm  int
+	SubPartitions int
 	Type          PartitionByType
 	IsLinear      bool
-	KeyAlgorithm  int
-	ColList       Columns
-	Expr          Expr
-	SubPartitions int
 }
 
 // TableOptions specifies a list of table options
@@ -2221,39 +2208,30 @@ type TableOptions []*TableOption
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
+	PartitionOption *PartitionOption
 	Columns         []*ColumnDefinition
 	Indexes         []*IndexDefinition
 	Constraints     []*ConstraintDefinition
 	Options         TableOptions
-	PartitionOption *PartitionOption
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
-	Name IdentifierCI
 	Type *ColumnType
+	Name IdentifierCI
 }
 
 // ColumnType represents a sql type in a CREATE TABLE statement
 // All optional fields are nil if not specified
 type ColumnType struct {
-	// The base type string
-	Type string
-
-	// Generic field options.
-	Options *ColumnTypeOptions
-
-	// Numeric field options
-	Length   *int
-	Unsigned bool
-	Zerofill bool
-	Scale    *int
-
-	// Text field options
-	Charset ColumnCharset
-
-	// Enum and Set column definition values
+	Options    *ColumnTypeOptions
+	Length     *int
+	Scale      *int
+	Type       string
+	Charset    ColumnCharset
 	EnumValues []string
+	Unsigned   bool
+	Zerofill   bool
 }
 
 // ColumnCharset exists because in the type definition it's possible
@@ -2279,50 +2257,22 @@ type ColumnFormat int
 
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
-	/* We need Null to be *bool to distinguish 3 cases -
-	1. When Not Null is specified (Null = false)
-	2. When Null is specified (Null = true)
-	3. When nothing is specified (Null = nil)
-	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
-	Therefore we do not know whether the column is nullable or not in case 3.
-	*/
-	Null           *bool
-	Autoincrement  bool
-	Default        Expr
-	DefaultLiteral bool
-	OnUpdate       Expr
-	As             Expr
-	Comment        *Literal
-	Storage        ColumnStorage
-	Collate        string
-	// Reference stores a foreign key constraint for the given column
-	Reference *ReferenceDefinition
-
-	// Key specification
-	KeyOpt ColumnKeyOption
-
-	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
-	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
-	// and only when INVISIBLE is set does the pointer value return true.
-	Invisible *bool
-
-	// Storage format for this specific column. This is NDB specific, but the parser
-	// still allows for it and ignores it for other storage engines. So we also should
-	// parse it but it's then not used anywhere.
-	Format ColumnFormat
-
-	// EngineAttribute is a new attribute not used for anything yet, but accepted
-	// since 8.0.23 in the MySQL parser.
-	EngineAttribute *Literal
-
-	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
-	// since 8.0.23 in the MySQL parser.
+	Default                  Expr
+	OnUpdate                 Expr
+	As                       Expr
+	Invisible                *bool
+	SRID                     *Literal
 	SecondaryEngineAttribute *Literal
-
-	// SRID is an attribute that indiciates the spatial reference system.
-	//
-	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
-	SRID *Literal
+	Comment                  *Literal
+	EngineAttribute          *Literal
+	Null                     *bool
+	Reference                *ReferenceDefinition
+	Collate                  string
+	KeyOpt                   ColumnKeyOption
+	Format                   ColumnFormat
+	Storage                  ColumnStorage
+	DefaultLiteral           bool
+	Autoincrement            bool
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement
@@ -2334,9 +2284,9 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type           IndexType
 	Name           IdentifierCI
 	ConstraintName IdentifierCI
+	Type           IndexType
 }
 
 func (ii *IndexInfo) IsUnique() bool {
@@ -2369,8 +2319,8 @@ type VindexParam struct {
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement
 type ConstraintDefinition struct {
-	Name    IdentifierCI
 	Details ConstraintInfo
+	Name    IdentifierCI
 }
 
 type (
@@ -2382,9 +2332,9 @@ type (
 
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
-		Source              Columns
-		IndexName           IdentifierCI
 		ReferenceDefinition *ReferenceDefinition
+		IndexName           IdentifierCI
+		Source              Columns
 	}
 
 	// ReferenceDefinition describes the referenced tables and columns that the foreign key references
@@ -2405,8 +2355,8 @@ type (
 
 // ShowFilter is show tables filter
 type ShowFilter struct {
-	Like   string
 	Filter Expr
+	Like   string
 }
 
 // Comments represents a list of comments.
@@ -2420,8 +2370,8 @@ func (c Comments) Parsed() *ParsedComments {
 }
 
 type ParsedComments struct {
-	comments    Comments
 	_directives *CommentDirectives
+	comments    Comments
 }
 
 type SelectExprs struct {
@@ -2486,9 +2436,9 @@ type (
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
 	JoinTableExpr struct {
 		LeftExpr  TableExpr
-		Join      JoinType
 		RightExpr TableExpr
 		Condition *JoinCondition
+		Join      JoinType
 	}
 
 	// JoinType represents the type of Join for JoinTableExpr
@@ -2528,8 +2478,8 @@ type (
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
-		Lateral bool
 		Select  TableStatement
+		Lateral bool
 	}
 )
 
@@ -2549,9 +2499,9 @@ type JoinCondition struct {
 // IndexHint represents an index hint.
 // More information available on https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
 type IndexHint struct {
+	Indexes []IdentifierCI
 	Type    IndexHintType
 	ForType IndexHintForType
-	Indexes []IdentifierCI
 }
 
 // IndexHints represents a list of index hints.
@@ -2565,8 +2515,8 @@ type IndexHintForType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
-	Type WhereType
 	Expr Expr
+	Type WhereType
 }
 
 // WhereType is an enum for Where.Type
@@ -2575,10 +2525,10 @@ type WhereType int8
 // TrimFuncExpr represents a TRIM function
 // More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
 type TrimFuncExpr struct {
-	TrimFuncType TrimFuncType
-	Type         TrimType
 	TrimArg      Expr
 	StringArg    Expr
+	TrimFuncType TrimFuncType
+	Type         TrimType
 }
 
 // TrimFuncType is an enum to get types of TrimFunc.
@@ -2594,15 +2544,15 @@ type (
 	// WindowSpecification represents window_spec
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	WindowSpecification struct {
+		FrameClause     *FrameClause
 		Name            IdentifierCI
 		PartitionClause []Expr
 		OrderClause     OrderBy
-		FrameClause     *FrameClause
 	}
 
 	WindowDefinition struct {
-		Name       IdentifierCI
 		WindowSpec *WindowSpecification
+		Name       IdentifierCI
 	}
 
 	WindowDefinitions []*WindowDefinition
@@ -2616,24 +2566,24 @@ type (
 	// FrameClause represents frame_clause
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FrameClause struct {
-		Unit  FrameUnitType
 		Start *FramePoint
 		End   *FramePoint
+		Unit  FrameUnitType
 	}
 
 	// FramePoint refers to frame_start/frame_end
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
+		Expr Expr
 		Type FramePointType
 		Unit IntervalType
-		Expr Expr
 	}
 
 	// OverClause refers to over_clause
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	OverClause struct {
-		WindowName IdentifierCI
 		WindowSpec *WindowSpecification
+		WindowName IdentifierCI
 	}
 
 	// FrameUnitType is an enum to get types of Unit used in FrameClause.
@@ -2701,10 +2651,11 @@ type (
 
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
-		Operator    ComparisonExprOperator
-		Modifier    ComparisonModifier
-		Left, Right Expr
-		Escape      Expr
+		Left     Expr
+		Right    Expr
+		Escape   Expr
+		Operator ComparisonExprOperator
+		Modifier ComparisonModifier
 	}
 
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
@@ -2715,9 +2666,10 @@ type (
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
-		IsBetween bool
 		Left      Expr
-		From, To  Expr
+		From      Expr
+		To        Expr
+		IsBetween bool
 	}
 
 	// RangeCondOperator is an enum for RangeCond.Operator
@@ -2744,8 +2696,8 @@ type (
 
 	// Literal represents a fixed value.
 	Literal struct {
-		Type ValType
 		Val  string
+		Type ValType
 	}
 
 	// Argument represents bindvariable expression
@@ -2771,8 +2723,8 @@ type (
 	Scope int8
 
 	Variable struct {
-		Scope Scope
 		Name  IdentifierCI
+		Scope Scope
 	}
 
 	// ColTuple represents a list of column values.
@@ -2790,8 +2742,9 @@ type (
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
-		Operator    BinaryExprOperator
-		Left, Right Expr
+		Left     Expr
+		Right    Expr
+		Operator BinaryExprOperator
 	}
 
 	// BinaryExprOperator is an enum for BinaryExpr.Operator
@@ -2799,8 +2752,8 @@ type (
 
 	// UnaryExpr represents a unary value expression.
 	UnaryExpr struct {
-		Operator UnaryExprOperator
 		Expr     Expr
+		Operator UnaryExprOperator
 	}
 
 	// UnaryExprOperator is an enum for UnaryExpr.Operator
@@ -2808,8 +2761,8 @@ type (
 
 	// IntroducerExpr represents a unary value expression.
 	IntroducerExpr struct {
-		CharacterSet string
 		Expr         Expr
+		CharacterSet string
 	}
 
 	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
@@ -2821,8 +2774,8 @@ type (
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalType IntervalType
 		Expr         Expr
+		IntervalType IntervalType
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -2884,8 +2837,8 @@ type (
 
 	// MatchExpr represents a call to the MATCH function
 	MatchExpr struct {
-		Columns []*ColName
 		Expr    Expr
+		Columns []*ColName
 		Option  MatchExprOption
 	}
 
@@ -2895,8 +2848,8 @@ type (
 	// CaseExpr represents a CASE expression.
 	CaseExpr struct {
 		Expr  Expr
-		Whens []*When
 		Else  Expr
+		Whens []*When
 	}
 
 	// InsertExpr represents an INSERT expression
@@ -2922,8 +2875,8 @@ type (
 
 	// CharExpr represents a CHAR function expression
 	CharExpr struct {
-		Exprs   []Expr
 		Charset string
+		Exprs   []Expr
 	}
 
 	// Default represents a DEFAULT expression.
@@ -2965,8 +2918,8 @@ type (
 	// Offset is an AST type that is used during planning and never produced by the parser
 	// it is the column offset from the incoming result stream
 	Offset struct {
-		V        int
 		Original Expr
+		V        int
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -3034,12 +2987,12 @@ type (
 
 	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 	JtPathColDef struct {
-		Name            IdentifierCI
-		Type            *ColumnType
-		JtColExists     bool
 		Path            Expr
+		Type            *ColumnType
 		EmptyOnResponse *JtOnResponse
 		ErrorOnResponse *JtOnResponse
+		Name            IdentifierCI
+		JtColExists     bool
 	}
 
 	// JtNestedPathColDef is type of column definition with nested column definitions
@@ -3050,8 +3003,8 @@ type (
 
 	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
 	JtOnResponse struct {
-		ResponseType JtOnResponseType
 		Expr         Expr
+		ResponseType JtOnResponseType
 	}
 
 	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
@@ -3138,9 +3091,9 @@ type (
 	// JSONAttributesExpr represents the argument and function for functions returning JSON value attributes
 	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-attribute-functions.html
 	JSONAttributesExpr struct {
-		Type    JSONAttributeType
 		JSONDoc Expr
 		Path    Expr
+		Type    JSONAttributeType
 	}
 
 	// JSONAttributeType is an enum to get types of TrimFunc.
@@ -3148,9 +3101,9 @@ type (
 	JSONAttributeType int8
 
 	JSONValueModifierExpr struct {
-		Type    JSONValueModifierType
 		JSONDoc Expr
 		Params  []*JSONObjectParam
+		Type    JSONValueModifierType
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -3160,9 +3113,9 @@ type (
 	// JSONValueMergeExpr represents the json value modifier functions which merges documents.
 	// Functions falling under this class: JSON_MERGE, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE
 	JSONValueMergeExpr struct {
-		Type        JSONValueMergeType
 		JSONDoc     Expr
 		JSONDocList []Expr
+		Type        JSONValueMergeType
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -3217,73 +3170,73 @@ type (
 	GeomFromWktType int8
 
 	GeomFromTextExpr struct {
-		Type         GeomFromWktType
 		WktText      Expr
 		Srid         Expr
 		AxisOrderOpt Expr
+		Type         GeomFromWktType
 	}
 
 	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
 	GeomFromWkbType int8
 
 	GeomFromWKBExpr struct {
-		Type         GeomFromWkbType
 		WkbBlob      Expr
 		Srid         Expr
 		AxisOrderOpt Expr
+		Type         GeomFromWkbType
 	}
 
 	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
 	GeomFormatType int8
 
 	GeomFormatExpr struct {
-		FormatType   GeomFormatType
 		Geom         Expr
 		AxisOrderOpt Expr
+		FormatType   GeomFormatType
 	}
 
 	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
-		Property GeomPropertyType
 		Geom     Expr
+		Property GeomPropertyType
 	}
 
 	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
-		Property   PointPropertyType
 		Point      Expr
 		ValueToSet Expr
+		Property   PointPropertyType
 	}
 
 	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
 	LinestrPropType int8
 
 	LinestrPropertyFuncExpr struct {
-		Property       LinestrPropType
 		Linestring     Expr
 		PropertyDefArg Expr
+		Property       LinestrPropType
 	}
 
 	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
 	PolygonPropType int8
 
 	PolygonPropertyFuncExpr struct {
-		Property       PolygonPropType
 		Polygon        Expr
 		PropertyDefArg Expr
+		Property       PolygonPropType
 	}
 
 	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
 	GeomCollPropType int8
 
 	GeomCollPropertyFuncExpr struct {
-		Property       GeomCollPropType
 		GeomColl       Expr
 		PropertyDefArg Expr
+		Property       GeomCollPropType
 	}
 
 	GeoHashFromLatLongExpr struct {
@@ -3301,9 +3254,9 @@ type (
 	GeomFromHashType int8
 
 	GeomFromGeoHashExpr struct {
-		GeomType GeomFromHashType
 		GeoHash  Expr
 		SridOpt  Expr
+		GeomType GeomFromHashType
 	}
 
 	GeoJSONFromGeomExpr struct {
@@ -3355,64 +3308,38 @@ type (
 	}
 
 	Count struct {
+		OverClause *OverClause
 		Args       []Expr
 		Distinct   bool
-		OverClause *OverClause
 	}
 
 	CountStar struct {
-		_ bool
-		// TL;DR; This makes sure that reference equality checks works as expected
-		//
-		// You're correct that this might seem a bit strange at first glance.
-		// It's a quirk of Go's handling of empty structs. In Go, two instances of an empty struct are considered
-		// identical, which can be problematic when using these as keys in maps.
-		// They would be treated as the same key and potentially lead to incorrect map behavior.
-		//
-		// Here's a brief example:
-		//
-		// ```golang
-		// func TestWeirdGo(t *testing.T) {
-		// 	type CountStar struct{}
-		//
-		// 	cs1 := &CountStar{}
-		// 	cs2 := &CountStar{}
-		//  if cs1 == cs2 {
-		// 	  panic("what the what!?")
-		//  }
-		// }
-		// ```
-		//
-		// In the above code, cs1 and cs2, despite being distinct variables, would be treated as the same object.
-		//
-		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
-		// This ensures that each instance of `CountStar` is treated as a separate object,
-		// even in the context of out semantic state which uses these objects as map keys.
 		OverClause *OverClause
+		_          bool
 	}
 
 	Avg struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Max struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Min struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Sum struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	BitAnd struct {
@@ -3467,11 +3394,11 @@ type (
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
-		Distinct  bool
+		Limit     *Limit
+		Separator string
 		Exprs     []Expr
 		OrderBy   OrderBy
-		Separator string
-		Limit     *Limit
+		Distinct  bool
 	}
 
 	// AnyValue is an aggregation function in Vitess, even if the MySQL manual explicitly says it's not
@@ -3525,17 +3452,17 @@ type (
 
 	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
 	IntervalDateExpr struct {
-		Syntax   IntervalExprSyntax
 		Date     Expr
 		Interval Expr
+		Syntax   IntervalExprSyntax
 		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
 	// These functions do not take any argument.
 	ArgumentLessWindowExpr struct {
-		Type       ArgumentLessWindowExprType
 		OverClause *OverClause
+		Type       ArgumentLessWindowExprType
 	}
 
 	// ArgumentLessWindowExprType is an enum to get types of ArgumentLessWindowExpr.
@@ -3543,10 +3470,10 @@ type (
 
 	// FirstOrLastValueExpr stands for the following window_functions: FIRST_VALUE, LAST_VALUE
 	FirstOrLastValueExpr struct {
-		Type                FirstOrLastValueExprType
 		Expr                Expr
 		NullTreatmentClause *NullTreatmentClause
 		OverClause          *OverClause
+		Type                FirstOrLastValueExprType
 	}
 
 	// FirstOrLastValueExprType is an enum to get types of FirstOrLastValueExpr.
@@ -3569,12 +3496,12 @@ type (
 
 	// LagLeadExpr stand for the following: LAG, LEAD
 	LagLeadExpr struct {
-		Type                LagLeadExprType
 		Expr                Expr
 		N                   Expr
 		Default             Expr
 		OverClause          *OverClause
 		NullTreatmentClause *NullTreatmentClause
+		Type                LagLeadExprType
 	}
 
 	// LagLeadExprType is an enum to get types of LagLeadExpr.
@@ -3602,9 +3529,9 @@ type (
 
 	// LockingFunc represents the advisory lock functions.
 	LockingFunc struct {
-		Type    LockingFuncType
 		Name    Expr
 		Timeout Expr
+		Type    LockingFuncType
 	}
 
 	// PerformanceSchemaType is an enum that get types of LockingFunc
@@ -3617,8 +3544,8 @@ type (
 	// For PS_THREAD_ID it means connection_id
 	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
 	PerformanceSchemaFuncExpr struct {
-		Type     PerformanceSchemaType
 		Argument Expr
+		Type     PerformanceSchemaType
 	}
 
 	// GTIDType is an enum that get types of GTIDFunc
@@ -3628,11 +3555,11 @@ type (
 	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
 	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
 	GTIDFuncExpr struct {
-		Type    GTIDType
 		Set1    Expr
 		Set2    Expr
 		Timeout Expr
 		Channel Expr
+		Type    GTIDType
 	}
 )
 
@@ -4128,14 +4055,12 @@ type Values []ValTuple
 
 // ValuesStatement represents a VALUES statement, as in VALUES ROW(1, 2), ROW(3, 4)
 type ValuesStatement struct {
-	With *With
-	// One but not both of these fields can be set.
-	Rows    Values
-	ListArg ListArg
-
+	With     *With
 	Comments *ParsedComments
-	Order    OrderBy
 	Limit    *Limit
+	ListArg  ListArg
+	Rows     Values
+	Order    OrderBy
 }
 
 // UpdateExprs represents a list of update expressions.

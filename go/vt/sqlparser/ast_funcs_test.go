@@ -29,10 +29,10 @@ import (
 
 func TestAddQueryHint(t *testing.T) {
 	tcs := []struct {
-		comments  Comments
 		queryHint string
-		expected  Comments
 		err       string
+		comments  Comments
+		expected  Comments
 	}{
 		{
 			comments:  Comments{},

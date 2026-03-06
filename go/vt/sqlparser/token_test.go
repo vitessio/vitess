@@ -26,8 +26,8 @@ import (
 func TestLiteralID(t *testing.T) {
 	testcases := []struct {
 		in  string
-		id  int
 		out string
+		id  int
 	}{{
 		in:  "`aa`",
 		id:  ID,
@@ -98,8 +98,8 @@ func tokenName(id int) string {
 func TestString(t *testing.T) {
 	testcases := []struct {
 		in   string
-		id   int
 		want string
+		id   int
 	}{{
 		in:   "''",
 		id:   STRING,
@@ -278,8 +278,8 @@ func TestExtractMySQLComment(t *testing.T) {
 func TestIntegerAndID(t *testing.T) {
 	testcases := []struct {
 		in  string
-		id  int
 		out string
+		id  int
 	}{{
 		in: "334",
 		id: INTEGRAL,

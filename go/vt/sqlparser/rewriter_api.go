@@ -105,12 +105,10 @@ type ApplyFunc func(*Cursor) bool
 // from the Node and Parent methods.
 type Cursor struct {
 	parent   SQLNode
-	replacer replacerFunc
 	node     SQLNode
-
-	// marks that the node has been replaced, and the new node should be visited
-	revisit bool
-	current *pathbuilder.ASTPathBuilder
+	replacer replacerFunc
+	current  *pathbuilder.ASTPathBuilder
+	revisit  bool
 }
 
 // Visitable is the interface that needs to be implemented by all nodes that live outside the `sqlparser` package,

@@ -633,13 +633,13 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
 	for _, el := range in.Columns {
 		if err := VisitRefOfColumnDefinition(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfColName(in.After, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -741,10 +741,10 @@ func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfColName(in.Column, f); err != nil {
+	if err := VisitExpr(in.DefaultVal, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.DefaultVal, f); err != nil {
+	if err := VisitRefOfColName(in.Column, f); err != nil {
 		return err
 	}
 	return nil
@@ -799,14 +799,6 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
-		return err
-	}
-	for _, el := range in.AlterOptions {
-		if err := VisitAlterOption(el, f); err != nil {
-			return err
-		}
-	}
 	if err := VisitRefOfPartitionSpec(in.PartitionSpec, f); err != nil {
 		return err
 	}
@@ -815,6 +807,14 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	for _, el := range in.AlterOptions {
+		if err := VisitAlterOption(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -826,19 +826,19 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.ViewName, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.Columns, f); err != nil {
-		return err
-	}
-	if err := VisitTableStatement(in.Select, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.ViewName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	return nil
@@ -851,19 +851,19 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfVindexSpec(in.VindexSpec, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfVindexSpec(in.VindexSpec, f); err != nil {
+	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
 		return err
 	}
 	for _, el := range in.VindexCols {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1115,13 +1115,13 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
+	if err := VisitExpr(in.Else, f); err != nil {
+		return err
+	}
 	for _, el := range in.Whens {
 		if err := VisitRefOfWhen(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitExpr(in.Else, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1225,10 +1225,10 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -1286,13 +1286,13 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitTableStatement(in.Subquery, f); err != nil {
+		return err
+	}
 	if err := VisitIdentifierCS(in.ID, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Columns, f); err != nil {
-		return err
-	}
-	if err := VisitTableStatement(in.Subquery, f); err != nil {
 		return err
 	}
 	return nil
@@ -1339,10 +1339,10 @@ func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitConstraintInfo(in.Details, f); err != nil {
 		return err
 	}
-	if err := VisitConstraintInfo(in.Details, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -1394,13 +1394,13 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	for _, el := range in.Args {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1441,7 +1441,7 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.Name, f); err != nil {
+	if err := VisitCompoundStatement(in.Body, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -1450,13 +1450,13 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
 	for _, el := range in.Params {
 		if err := VisitRefOfProcParameter(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitCompoundStatement(in.Body, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1468,7 +1468,7 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfTableSpec(in.TableSpec, f); err != nil {
@@ -1480,7 +1480,7 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableStatement(in.Select, f); err != nil {
+	if err := VisitTableName(in.Table, f); err != nil {
 		return err
 	}
 	return nil
@@ -1493,19 +1493,19 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.ViewName, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.Columns, f); err != nil {
-		return err
-	}
-	if err := VisitTableStatement(in.Select, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.ViewName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	return nil
@@ -1547,10 +1547,10 @@ func VisitRefOfDeclareCondition(in *DeclareCondition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitHandlerCondition(in.Condition, f); err != nil {
 		return err
 	}
-	if err := VisitHandlerCondition(in.Condition, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -1563,13 +1563,13 @@ func VisitRefOfDeclareHandler(in *DeclareHandler, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitCompoundStatement(in.Statement, f); err != nil {
+		return err
+	}
 	for _, el := range in.Conditions {
 		if err := VisitHandlerCondition(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitCompoundStatement(in.Statement, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1581,13 +1581,13 @@ func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+		return err
+	}
 	for _, el := range in.VarNames {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfColumnType(in.Type, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1625,6 +1625,12 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
 	for _, el := range in.TableExprs {
 		if err := VisitTableExpr(el, f); err != nil {
 			return err
@@ -1636,13 +1642,7 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitPartitions(in.Partitions, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfWhere(in.Where, f); err != nil {
-		return err
-	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	return nil
@@ -1726,10 +1726,10 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableNames(in.FromTables, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
 	return nil
@@ -1742,10 +1742,10 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableNames(in.FromTables, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
 	return nil
@@ -1923,13 +1923,13 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.Source, f); err != nil {
+	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
 		return err
 	}
 	if err := VisitIdentifierCI(in.IndexName, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
+	if err := VisitColumns(in.Source, f); err != nil {
 		return err
 	}
 	return nil
@@ -2211,15 +2211,15 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
 	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	return nil
@@ -2318,13 +2318,13 @@ func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
 	if err := VisitRefOfCompoundStatements(in.ThenStatements, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfCompoundStatements(in.ElseStatements, f); err != nil {
+		return err
+	}
 	for _, el := range in.ElseIfBlocks {
 		if err := VisitRefOfElseIfBlock(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfCompoundStatements(in.ElseStatements, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -2395,22 +2395,22 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitInsertRows(in.Rows, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfAliasedTableExpr(in.Table, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
+		return err
+	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Columns, f); err != nil {
-		return err
-	}
-	if err := VisitInsertRows(in.Rows, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
 		return err
 	}
 	if err := VisitOnDup(in.OnDup, f); err != nil {
@@ -3149,13 +3149,13 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
 	for _, el := range in.Columns {
 		if err := VisitRefOfColName(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitExpr(in.Expr, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -3499,10 +3499,10 @@ func VisitRefOfOverClause(in *OverClause, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.WindowName, f); err != nil {
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
+	if err := VisitIdentifierCI(in.WindowName, f); err != nil {
 		return err
 	}
 	return nil
@@ -3538,10 +3538,10 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitRefOfPartitionDefinitionOptions(in.Options, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfPartitionDefinitionOptions(in.Options, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -3592,13 +3592,13 @@ func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.ColList, f); err != nil {
-		return err
-	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfSubPartition(in.SubPartition, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ColList, f); err != nil {
 		return err
 	}
 	for _, el := range in.Definitions {
@@ -3616,13 +3616,13 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitPartitions(in.Names, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfLiteral(in.Number, f); err != nil {
 		return err
 	}
 	if err := VisitTableName(in.TableName, f); err != nil {
+		return err
+	}
+	if err := VisitPartitions(in.Names, f); err != nil {
 		return err
 	}
 	for _, el := range in.Definitions {
@@ -3744,13 +3744,13 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
-		return err
-	}
 	if err := VisitExpr(in.Statement, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -3763,10 +3763,10 @@ func VisitRefOfProcParameter(in *ProcParameter, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -4057,7 +4057,31 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Having, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfGroupBy(in.GroupBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSelectExprs(in.SelectExprs, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
+	if err := VisitNamedWindows(in.Windows, f); err != nil {
 		return err
 	}
 	for _, el := range in.From {
@@ -4065,31 +4089,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfSelectExprs(in.SelectExprs, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfWhere(in.Where, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfGroupBy(in.GroupBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfWhere(in.Having, f); err != nil {
-		return err
-	}
-	if err := VisitNamedWindows(in.Windows, f); err != nil {
-		return err
-	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLimit(in.Limit, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
 		return err
 	}
 	return nil
@@ -4192,16 +4192,16 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitTableName(in.Tbl, f); err != nil {
-		return err
-	}
-	if err := VisitIdentifierCS(in.DbName, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Tbl, f); err != nil {
+		return err
+	}
+	if err := VisitIdentifierCS(in.DbName, f); err != nil {
 		return err
 	}
 	return nil
@@ -4525,10 +4525,10 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.ColList, f); err != nil {
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitColumns(in.ColList, f); err != nil {
 		return err
 	}
 	return nil
@@ -4541,10 +4541,10 @@ func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitRefOfSubPartitionDefinitionOptions(in.Options, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfSubPartitionDefinitionOptions(in.Options, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -4690,6 +4690,9 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
+		return err
+	}
 	for _, el := range in.Columns {
 		if err := VisitRefOfColumnDefinition(el, f); err != nil {
 			return err
@@ -4706,9 +4709,6 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 		}
 	}
 	if err := VisitTableOptions(in.Options, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
 		return err
 	}
 	return nil
@@ -4789,22 +4789,22 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfWith(in.With, f); err != nil {
-		return err
-	}
 	if err := VisitTableStatement(in.Left, f); err != nil {
 		return err
 	}
 	if err := VisitTableStatement(in.Right, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	return nil
@@ -4833,6 +4833,12 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
 	for _, el := range in.TableExprs {
 		if err := VisitTableExpr(el, f); err != nil {
 			return err
@@ -4841,13 +4847,7 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitUpdateExprs(in.Exprs, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfWhere(in.Where, f); err != nil {
-		return err
-	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	return nil
@@ -4939,19 +4939,19 @@ func VisitRefOfVStream(in *VStream, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
-		return err
-	}
 	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
 		return err
 	}
 	return nil
@@ -5020,19 +5020,19 @@ func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
-	if err := VisitValues(in.Rows, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	if err := VisitListArg(in.ListArg, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+	if err := VisitValues(in.Rows, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.Order, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	return nil
@@ -5182,10 +5182,10 @@ func VisitRefOfWindowDefinition(in *WindowDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -5213,6 +5213,9 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfFrameClause(in.FrameClause, f); err != nil {
+		return err
+	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
@@ -5222,9 +5225,6 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 		}
 	}
 	if err := VisitOrderBy(in.OrderClause, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfFrameClause(in.FrameClause, f); err != nil {
 		return err
 	}
 	return nil
