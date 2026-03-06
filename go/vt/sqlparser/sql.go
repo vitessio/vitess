@@ -6,11 +6,11 @@ package sqlparser
 import (
 	__yyfmt__ "fmt"
 	__yyunsafe__ "unsafe"
+
+	"vitess.io/vitess/go/ptr"
 )
 
 //line sql.y:17
-
-import "vitess.io/vitess/go/ptr"
 
 func setParseTrees(yylex yyLexer, stmts []Statement) {
 	if len(stmts) > 1 && stmts[len(stmts)-1] == nil {
