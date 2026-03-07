@@ -43,9 +43,12 @@ type (
 	AggregateRule int8
 
 	ExprGeneratorConfig struct {
-		Type      string
-		NumCols   int
-		AggrRule  AggregateRule
+		Type string
+		// MaxCols = 0 indicates no limit
+		NumCols int
+		// AggrRule determines if the random expression can, cannot, or must be an aggregation expression
+		AggrRule AggregateRule
+		// SingleRow indicates that the query must have at most one row
 		SingleRow bool
 	}
 

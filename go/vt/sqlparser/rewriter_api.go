@@ -108,7 +108,8 @@ type Cursor struct {
 	node     SQLNode
 	replacer replacerFunc
 	current  *pathbuilder.ASTPathBuilder
-	revisit  bool
+	// marks that the node has been replaced, and the new node should be visited
+	revisit bool
 }
 
 // Visitable is the interface that needs to be implemented by all nodes that live outside the `sqlparser` package,
