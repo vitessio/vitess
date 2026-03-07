@@ -37,6 +37,7 @@ type LogStats struct {
 
 	Ctx                     context.Context
 	Method                  string
+	PlanType                string
 	TabletType              string
 	StmtType                string
 	SQL                     string
@@ -57,6 +58,7 @@ type LogStats struct {
 	MirrorSourceExecuteTime time.Duration
 	MirrorTargetExecuteTime time.Duration
 	MirrorTargetError       error
+	SlowQuery               bool
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
@@ -76,6 +78,12 @@ func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindV
 // SaveEndTime sets the end time of this request to now
 func (stats *LogStats) SaveEndTime() {
 	stats.EndTime = time.Now()
+}
+
+// MarkSlowQuery updates the slow-query marker using the configured threshold.
+// A non-positive threshold disables slow-query detection.
+func (stats *LogStats) MarkSlowQuery(threshold time.Duration) {
+	stats.SlowQuery = threshold > 0 && stats.TotalTime() >= threshold
 }
 
 // ImmediateCaller returns the immediate caller stored in LogStats.Ctx
@@ -197,6 +205,8 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Duration(stats.MirrorTargetExecuteTime)
 	log.Key("MirrorTargetError")
 	log.String(stats.MirrorTargetErrorStr())
+	log.Key("SlowQuery")
+	log.Bool(stats.SlowQuery)
 	log.Key("EmitReason")
 	log.String(emitReason)
 
