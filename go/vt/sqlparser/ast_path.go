@@ -20,8 +20,8 @@ package sqlparser
 type ASTStep uint16
 
 const (
-	RefOfAddColumnsAfter ASTStep = iota
-	RefOfAddColumnsColumnsOffset
+	RefOfAddColumnsColumnsOffset ASTStep = iota
+	RefOfAddColumnsAfter
 	RefOfAddConstraintDefinitionConstraintDefinition
 	RefOfAddIndexDefinitionIndexDefinition
 	RefOfAliasedExprExpr
@@ -32,26 +32,26 @@ const (
 	RefOfAliasedTableExprHints
 	RefOfAliasedTableExprColumns
 	RefOfAlterCheckName
-	RefOfAlterColumnDefaultVal
 	RefOfAlterColumnColumn
+	RefOfAlterColumnDefaultVal
 	RefOfAlterDatabaseComments
 	RefOfAlterDatabaseDBName
 	RefOfAlterIndexName
 	RefOfAlterMigrationRatio
+	RefOfAlterTableTable
+	RefOfAlterTableAlterOptionsOffset
 	RefOfAlterTablePartitionSpec
 	RefOfAlterTablePartitionOption
 	RefOfAlterTableComments
-	RefOfAlterTableTable
-	RefOfAlterTableAlterOptionsOffset
-	RefOfAlterViewSelect
-	RefOfAlterViewDefiner
-	RefOfAlterViewComments
 	RefOfAlterViewViewName
+	RefOfAlterViewDefiner
 	RefOfAlterViewColumns
-	RefOfAlterVschemaVindexSpec
-	RefOfAlterVschemaAutoIncSpec
+	RefOfAlterViewSelect
+	RefOfAlterViewComments
 	RefOfAlterVschemaTable
+	RefOfAlterVschemaVindexSpec
 	RefOfAlterVschemaVindexColsOffset
+	RefOfAlterVschemaAutoIncSpec
 	RefOfAnalyzeTable
 	RefOfAndExprLeft
 	RefOfAndExprRight
@@ -78,8 +78,8 @@ const (
 	RefOfCallProcName
 	RefOfCallProcParamsOffset
 	RefOfCaseExprExpr
-	RefOfCaseExprElse
 	RefOfCaseExprWhensOffset
+	RefOfCaseExprElse
 	RefOfCastExprExpr
 	RefOfCastExprType
 	RefOfChangeColumnOldColumn
@@ -90,58 +90,58 @@ const (
 	RefOfColNameName
 	RefOfColNameQualifier
 	RefOfCollateExprExpr
-	RefOfColumnDefinitionType
 	RefOfColumnDefinitionName
+	RefOfColumnDefinitionType
 	ColumnsOffset
-	RefOfCommonTableExprSubquery
 	RefOfCommonTableExprID
 	RefOfCommonTableExprColumns
+	RefOfCommonTableExprSubquery
 	RefOfComparisonExprLeft
 	RefOfComparisonExprRight
 	RefOfComparisonExprEscape
 	RefOfCompoundStatementsStatementsOffset
-	RefOfConstraintDefinitionDetails
 	RefOfConstraintDefinitionName
+	RefOfConstraintDefinitionDetails
 	RefOfConvertExprExpr
 	RefOfConvertExprType
 	RefOfConvertUsingExprExpr
-	RefOfCountOverClause
 	RefOfCountArgsOffset
+	RefOfCountOverClause
 	RefOfCountStarOverClause
 	RefOfCreateDatabaseComments
 	RefOfCreateDatabaseDBName
-	RefOfCreateProcedureBody
+	RefOfCreateProcedureName
 	RefOfCreateProcedureComments
 	RefOfCreateProcedureDefiner
-	RefOfCreateProcedureName
 	RefOfCreateProcedureParamsOffset
-	RefOfCreateTableSelect
+	RefOfCreateProcedureBody
+	RefOfCreateTableTable
 	RefOfCreateTableTableSpec
 	RefOfCreateTableOptLike
 	RefOfCreateTableComments
-	RefOfCreateTableTable
-	RefOfCreateViewSelect
-	RefOfCreateViewDefiner
-	RefOfCreateViewComments
+	RefOfCreateTableSelect
 	RefOfCreateViewViewName
+	RefOfCreateViewDefiner
 	RefOfCreateViewColumns
+	RefOfCreateViewSelect
+	RefOfCreateViewComments
 	RefOfCurTimeFuncExprName
 	RefOfDeallocateStmtComments
 	RefOfDeallocateStmtName
-	RefOfDeclareConditionCondition
 	RefOfDeclareConditionName
-	RefOfDeclareHandlerStatement
+	RefOfDeclareConditionCondition
 	RefOfDeclareHandlerConditionsOffset
-	RefOfDeclareVarType
+	RefOfDeclareHandlerStatement
 	RefOfDeclareVarVarNamesOffset
+	RefOfDeclareVarType
 	RefOfDeleteWith
 	RefOfDeleteComments
-	RefOfDeleteWhere
-	RefOfDeleteLimit
 	RefOfDeleteTableExprsOffset
 	RefOfDeleteTargets
 	RefOfDeletePartitions
+	RefOfDeleteWhere
 	RefOfDeleteOrderBy
+	RefOfDeleteLimit
 	RefOfDerivedTableSelect
 	RefOfDropColumnName
 	RefOfDropDatabaseComments
@@ -149,10 +149,10 @@ const (
 	RefOfDropKeyName
 	RefOfDropProcedureComments
 	RefOfDropProcedureName
-	RefOfDropTableComments
 	RefOfDropTableFromTables
-	RefOfDropViewComments
+	RefOfDropTableComments
 	RefOfDropViewFromTables
+	RefOfDropViewComments
 	RefOfElseIfBlockSearchCondition
 	RefOfElseIfBlockThenStatements
 	RefOfExecuteStmtName
@@ -170,9 +170,9 @@ const (
 	RefOfFirstOrLastValueExprNullTreatmentClause
 	RefOfFirstOrLastValueExprOverClause
 	RefOfFlushTableNames
-	RefOfForeignKeyDefinitionReferenceDefinition
-	RefOfForeignKeyDefinitionIndexName
 	RefOfForeignKeyDefinitionSource
+	RefOfForeignKeyDefinitionIndexName
+	RefOfForeignKeyDefinitionReferenceDefinition
 	RefOfFrameClauseStart
 	RefOfFrameClauseEnd
 	RefOfFramePointExpr
@@ -208,26 +208,26 @@ const (
 	RefOfGeomFromWKBExprAxisOrderOpt
 	RefOfGeomPropertyFuncExprGeom
 	RefOfGroupByExprsOffset
-	RefOfGroupConcatExprLimit
 	RefOfGroupConcatExprExprsOffset
 	RefOfGroupConcatExprOrderBy
+	RefOfGroupConcatExprLimit
 	RefOfHandlerConditionNamedName
 	RefOfHandlerConditionSQLStateSQLStateValue
 	RefOfIfStatementSearchCondition
 	RefOfIfStatementThenStatements
-	RefOfIfStatementElseStatements
 	RefOfIfStatementElseIfBlocksOffset
+	RefOfIfStatementElseStatements
 	RefOfIndexDefinitionInfo
 	RefOfIndexHintIndexesOffset
 	IndexHintsOffset
 	RefOfIndexInfoName
 	RefOfIndexInfoConstraintName
-	RefOfInsertRows
 	RefOfInsertComments
 	RefOfInsertTable
-	RefOfInsertRowAlias
 	RefOfInsertPartitions
 	RefOfInsertColumns
+	RefOfInsertRows
+	RefOfInsertRowAlias
 	RefOfInsertOnDup
 	RefOfInsertExprStr
 	RefOfInsertExprPos
@@ -312,8 +312,8 @@ const (
 	RefOfLocateExprPos
 	RefOfLockingFuncName
 	RefOfLockingFuncTimeout
-	RefOfMatchExprExpr
 	RefOfMatchExprColumnsOffset
+	RefOfMatchExprExpr
 	RefOfMaxArg
 	RefOfMaxOverClause
 	RefOfMemberOfExprValue
@@ -344,24 +344,24 @@ const (
 	RefOfOrderExpr
 	OrderByOffset
 	RefOfOrderByOptionCols
-	RefOfOverClauseWindowSpec
 	RefOfOverClauseWindowName
+	RefOfOverClauseWindowSpec
 	RefOfParenTableExprExprs
-	RefOfPartitionDefinitionOptions
 	RefOfPartitionDefinitionName
+	RefOfPartitionDefinitionOptions
 	RefOfPartitionDefinitionOptionsValueRange
 	RefOfPartitionDefinitionOptionsComment
 	RefOfPartitionDefinitionOptionsEngine
 	RefOfPartitionDefinitionOptionsDataDirectory
 	RefOfPartitionDefinitionOptionsIndexDirectory
 	RefOfPartitionDefinitionOptionsSubPartitionDefinitions
+	RefOfPartitionOptionColList
 	RefOfPartitionOptionExpr
 	RefOfPartitionOptionSubPartition
-	RefOfPartitionOptionColList
 	RefOfPartitionOptionDefinitionsOffset
+	RefOfPartitionSpecNames
 	RefOfPartitionSpecNumber
 	RefOfPartitionSpecTableName
-	RefOfPartitionSpecNames
 	RefOfPartitionSpecDefinitionsOffset
 	RefOfPartitionValueRangeRange
 	PartitionsOffset
@@ -373,11 +373,11 @@ const (
 	RefOfPolygonExprLinestringParamsOffset
 	RefOfPolygonPropertyFuncExprPolygon
 	RefOfPolygonPropertyFuncExprPropertyDefArg
+	RefOfPrepareStmtName
 	RefOfPrepareStmtStatement
 	RefOfPrepareStmtComments
-	RefOfPrepareStmtName
-	RefOfProcParameterType
 	RefOfProcParameterName
+	RefOfProcParameterType
 	RefOfReferenceDefinitionReferencedTable
 	RefOfReferenceDefinitionReferencedColumns
 	RefOfReferenceDefinitionMatch
@@ -415,17 +415,17 @@ const (
 	RefOfRowAliasColumns
 	RefOfSRollbackName
 	RefOfSavepointName
-	RefOfSelectComments
-	RefOfSelectInto
-	RefOfSelectLimit
-	RefOfSelectHaving
-	RefOfSelectGroupBy
-	RefOfSelectWhere
-	RefOfSelectSelectExprs
 	RefOfSelectWith
-	RefOfSelectWindows
 	RefOfSelectFromOffset
+	RefOfSelectComments
+	RefOfSelectSelectExprs
+	RefOfSelectWhere
+	RefOfSelectGroupBy
+	RefOfSelectHaving
+	RefOfSelectWindows
 	RefOfSelectOrderBy
+	RefOfSelectLimit
+	RefOfSelectInto
 	RefOfSelectExprsExprsOffset
 	RefOfSelectIntoVarListOffset
 	RefOfSetComments
@@ -434,10 +434,10 @@ const (
 	RefOfSetExprExpr
 	SetExprsOffset
 	RefOfShowInternal
-	RefOfShowBasicFilter
-	RefOfShowBasicLimit
 	RefOfShowBasicTbl
 	RefOfShowBasicDbName
+	RefOfShowBasicFilter
+	RefOfShowBasicLimit
 	RefOfShowBinlogEventsPosition
 	RefOfShowBinlogEventsLimit
 	RefOfShowCreateOp
@@ -461,10 +461,10 @@ const (
 	RefOfStreamComments
 	RefOfStreamSelectExpr
 	RefOfStreamTable
-	RefOfSubPartitionExpr
 	RefOfSubPartitionColList
-	RefOfSubPartitionDefinitionOptions
+	RefOfSubPartitionExpr
 	RefOfSubPartitionDefinitionName
+	RefOfSubPartitionDefinitionOptions
 	RefOfSubPartitionDefinitionOptionsComment
 	RefOfSubPartitionDefinitionOptionsEngine
 	RefOfSubPartitionDefinitionOptionsDataDirectory
@@ -480,30 +480,30 @@ const (
 	TableNameName
 	TableNameQualifier
 	TableNamesOffset
-	RefOfTableSpecPartitionOption
 	RefOfTableSpecColumnsOffset
 	RefOfTableSpecIndexesOffset
 	RefOfTableSpecConstraintsOffset
 	RefOfTableSpecOptions
+	RefOfTableSpecPartitionOption
 	RefOfTimestampDiffExprExpr1
 	RefOfTimestampDiffExprExpr2
 	RefOfTrimFuncExprTrimArg
 	RefOfTrimFuncExprStringArg
 	RefOfTruncateTableTable
 	RefOfUnaryExprExpr
+	RefOfUnionWith
 	RefOfUnionLeft
 	RefOfUnionRight
-	RefOfUnionWith
+	RefOfUnionOrderBy
 	RefOfUnionLimit
 	RefOfUnionInto
-	RefOfUnionOrderBy
 	RefOfUpdateWith
 	RefOfUpdateComments
-	RefOfUpdateWhere
-	RefOfUpdateLimit
 	RefOfUpdateTableExprsOffset
 	RefOfUpdateExprs
+	RefOfUpdateWhere
 	RefOfUpdateOrderBy
+	RefOfUpdateLimit
 	RefOfUpdateExprName
 	RefOfUpdateExprExpr
 	UpdateExprsOffset
@@ -513,20 +513,20 @@ const (
 	RefOfUseDBName
 	RefOfVExplainStmtStatement
 	RefOfVExplainStmtComments
-	RefOfVStreamSelectExpr
 	RefOfVStreamComments
+	RefOfVStreamSelectExpr
+	RefOfVStreamTable
 	RefOfVStreamWhere
 	RefOfVStreamLimit
-	RefOfVStreamTable
 	ValTupleOffset
 	ValuesOffset
 	RefOfValuesFuncExprName
 	RefOfValuesStatementWith
-	RefOfValuesStatementComments
-	RefOfValuesStatementLimit
-	RefOfValuesStatementListArg
 	RefOfValuesStatementRows
+	RefOfValuesStatementListArg
+	RefOfValuesStatementComments
 	RefOfValuesStatementOrder
+	RefOfValuesStatementLimit
 	RefOfVarPopArg
 	RefOfVarPopOverClause
 	RefOfVarSampArg
@@ -543,13 +543,13 @@ const (
 	RefOfWhenCond
 	RefOfWhenVal
 	RefOfWhereExpr
-	RefOfWindowDefinitionWindowSpec
 	RefOfWindowDefinitionName
+	RefOfWindowDefinitionWindowSpec
 	WindowDefinitionsOffset
-	RefOfWindowSpecificationFrameClause
 	RefOfWindowSpecificationName
 	RefOfWindowSpecificationPartitionClauseOffset
 	RefOfWindowSpecificationOrderClause
+	RefOfWindowSpecificationFrameClause
 	RefOfWithCTEsOffset
 	RefOfXorExprLeft
 	RefOfXorExprRight
@@ -561,11 +561,11 @@ const (
 	RefOfColumnTypeOptionsDefault
 	RefOfColumnTypeOptionsOnUpdate
 	RefOfColumnTypeOptionsAs
-	RefOfColumnTypeOptionsSRID
-	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsComment
-	RefOfColumnTypeOptionsEngineAttribute
 	RefOfColumnTypeOptionsReference
+	RefOfColumnTypeOptionsEngineAttribute
+	RefOfColumnTypeOptionsSecondaryEngineAttribute
+	RefOfColumnTypeOptionsSRID
 	SliceOfCompoundStatementOffset
 	SliceOfRefOfProcParameterOffset
 	SliceOfHandlerConditionOffset
@@ -575,11 +575,11 @@ const (
 	SliceOfRefOfJSONObjectParamOffset
 	SliceOfRefOfJtColumnDefinitionOffset
 	RefOfJtOrdinalColDefName
-	RefOfJtPathColDefPath
+	RefOfJtPathColDefName
 	RefOfJtPathColDefType
+	RefOfJtPathColDefPath
 	RefOfJtPathColDefEmptyOnResponse
 	RefOfJtPathColDefErrorOnResponse
-	RefOfJtPathColDefName
 	RefOfJtNestedPathColDefPath
 	RefOfJtNestedPathColDefColumnsOffset
 	SliceOfRefOfColNameOffset
@@ -596,8 +596,8 @@ const (
 	RefOfVindexParamKey
 	SliceOfVindexParamOffset
 	SliceOfRefOfCommonTableExprOffset
-	RefOfIndexColumnExpression
 	RefOfIndexColumnColumn
+	RefOfIndexColumnExpression
 	RefOfIndexOptionValue
 	RefOfTableAndLockTypeTable
 	RefOfRenameTablePairFromTable
@@ -607,10 +607,10 @@ const (
 
 func (s ASTStep) DebugString() string {
 	switch s {
-	case RefOfAddColumnsAfter:
-		return "(*AddColumns).After"
 	case RefOfAddColumnsColumnsOffset:
 		return "(*AddColumns).ColumnsOffset"
+	case RefOfAddColumnsAfter:
+		return "(*AddColumns).After"
 	case RefOfAddConstraintDefinitionConstraintDefinition:
 		return "(*AddConstraintDefinition).ConstraintDefinition"
 	case RefOfAddIndexDefinitionIndexDefinition:
@@ -631,10 +631,10 @@ func (s ASTStep) DebugString() string {
 		return "(*AliasedTableExpr).Columns"
 	case RefOfAlterCheckName:
 		return "(*AlterCheck).Name"
-	case RefOfAlterColumnDefaultVal:
-		return "(*AlterColumn).DefaultVal"
 	case RefOfAlterColumnColumn:
 		return "(*AlterColumn).Column"
+	case RefOfAlterColumnDefaultVal:
+		return "(*AlterColumn).DefaultVal"
 	case RefOfAlterDatabaseComments:
 		return "(*AlterDatabase).Comments"
 	case RefOfAlterDatabaseDBName:
@@ -643,34 +643,34 @@ func (s ASTStep) DebugString() string {
 		return "(*AlterIndex).Name"
 	case RefOfAlterMigrationRatio:
 		return "(*AlterMigration).Ratio"
+	case RefOfAlterTableTable:
+		return "(*AlterTable).Table"
+	case RefOfAlterTableAlterOptionsOffset:
+		return "(*AlterTable).AlterOptionsOffset"
 	case RefOfAlterTablePartitionSpec:
 		return "(*AlterTable).PartitionSpec"
 	case RefOfAlterTablePartitionOption:
 		return "(*AlterTable).PartitionOption"
 	case RefOfAlterTableComments:
 		return "(*AlterTable).Comments"
-	case RefOfAlterTableTable:
-		return "(*AlterTable).Table"
-	case RefOfAlterTableAlterOptionsOffset:
-		return "(*AlterTable).AlterOptionsOffset"
-	case RefOfAlterViewSelect:
-		return "(*AlterView).Select"
-	case RefOfAlterViewDefiner:
-		return "(*AlterView).Definer"
-	case RefOfAlterViewComments:
-		return "(*AlterView).Comments"
 	case RefOfAlterViewViewName:
 		return "(*AlterView).ViewName"
+	case RefOfAlterViewDefiner:
+		return "(*AlterView).Definer"
 	case RefOfAlterViewColumns:
 		return "(*AlterView).Columns"
-	case RefOfAlterVschemaVindexSpec:
-		return "(*AlterVschema).VindexSpec"
-	case RefOfAlterVschemaAutoIncSpec:
-		return "(*AlterVschema).AutoIncSpec"
+	case RefOfAlterViewSelect:
+		return "(*AlterView).Select"
+	case RefOfAlterViewComments:
+		return "(*AlterView).Comments"
 	case RefOfAlterVschemaTable:
 		return "(*AlterVschema).Table"
+	case RefOfAlterVschemaVindexSpec:
+		return "(*AlterVschema).VindexSpec"
 	case RefOfAlterVschemaVindexColsOffset:
 		return "(*AlterVschema).VindexColsOffset"
+	case RefOfAlterVschemaAutoIncSpec:
+		return "(*AlterVschema).AutoIncSpec"
 	case RefOfAnalyzeTable:
 		return "(*Analyze).Table"
 	case RefOfAndExprLeft:
@@ -723,10 +723,10 @@ func (s ASTStep) DebugString() string {
 		return "(*CallProc).ParamsOffset"
 	case RefOfCaseExprExpr:
 		return "(*CaseExpr).Expr"
-	case RefOfCaseExprElse:
-		return "(*CaseExpr).Else"
 	case RefOfCaseExprWhensOffset:
 		return "(*CaseExpr).WhensOffset"
+	case RefOfCaseExprElse:
+		return "(*CaseExpr).Else"
 	case RefOfCastExprExpr:
 		return "(*CastExpr).Expr"
 	case RefOfCastExprType:
@@ -747,18 +747,18 @@ func (s ASTStep) DebugString() string {
 		return "(*ColName).Qualifier"
 	case RefOfCollateExprExpr:
 		return "(*CollateExpr).Expr"
-	case RefOfColumnDefinitionType:
-		return "(*ColumnDefinition).Type"
 	case RefOfColumnDefinitionName:
 		return "(*ColumnDefinition).Name"
+	case RefOfColumnDefinitionType:
+		return "(*ColumnDefinition).Type"
 	case ColumnsOffset:
 		return "(Columns)[]Offset"
-	case RefOfCommonTableExprSubquery:
-		return "(*CommonTableExpr).Subquery"
 	case RefOfCommonTableExprID:
 		return "(*CommonTableExpr).ID"
 	case RefOfCommonTableExprColumns:
 		return "(*CommonTableExpr).Columns"
+	case RefOfCommonTableExprSubquery:
+		return "(*CommonTableExpr).Subquery"
 	case RefOfComparisonExprLeft:
 		return "(*ComparisonExpr).Left"
 	case RefOfComparisonExprRight:
@@ -767,90 +767,90 @@ func (s ASTStep) DebugString() string {
 		return "(*ComparisonExpr).Escape"
 	case RefOfCompoundStatementsStatementsOffset:
 		return "(*CompoundStatements).StatementsOffset"
-	case RefOfConstraintDefinitionDetails:
-		return "(*ConstraintDefinition).Details"
 	case RefOfConstraintDefinitionName:
 		return "(*ConstraintDefinition).Name"
+	case RefOfConstraintDefinitionDetails:
+		return "(*ConstraintDefinition).Details"
 	case RefOfConvertExprExpr:
 		return "(*ConvertExpr).Expr"
 	case RefOfConvertExprType:
 		return "(*ConvertExpr).Type"
 	case RefOfConvertUsingExprExpr:
 		return "(*ConvertUsingExpr).Expr"
-	case RefOfCountOverClause:
-		return "(*Count).OverClause"
 	case RefOfCountArgsOffset:
 		return "(*Count).ArgsOffset"
+	case RefOfCountOverClause:
+		return "(*Count).OverClause"
 	case RefOfCountStarOverClause:
 		return "(*CountStar).OverClause"
 	case RefOfCreateDatabaseComments:
 		return "(*CreateDatabase).Comments"
 	case RefOfCreateDatabaseDBName:
 		return "(*CreateDatabase).DBName"
-	case RefOfCreateProcedureBody:
-		return "(*CreateProcedure).Body"
+	case RefOfCreateProcedureName:
+		return "(*CreateProcedure).Name"
 	case RefOfCreateProcedureComments:
 		return "(*CreateProcedure).Comments"
 	case RefOfCreateProcedureDefiner:
 		return "(*CreateProcedure).Definer"
-	case RefOfCreateProcedureName:
-		return "(*CreateProcedure).Name"
 	case RefOfCreateProcedureParamsOffset:
 		return "(*CreateProcedure).ParamsOffset"
-	case RefOfCreateTableSelect:
-		return "(*CreateTable).Select"
+	case RefOfCreateProcedureBody:
+		return "(*CreateProcedure).Body"
+	case RefOfCreateTableTable:
+		return "(*CreateTable).Table"
 	case RefOfCreateTableTableSpec:
 		return "(*CreateTable).TableSpec"
 	case RefOfCreateTableOptLike:
 		return "(*CreateTable).OptLike"
 	case RefOfCreateTableComments:
 		return "(*CreateTable).Comments"
-	case RefOfCreateTableTable:
-		return "(*CreateTable).Table"
-	case RefOfCreateViewSelect:
-		return "(*CreateView).Select"
-	case RefOfCreateViewDefiner:
-		return "(*CreateView).Definer"
-	case RefOfCreateViewComments:
-		return "(*CreateView).Comments"
+	case RefOfCreateTableSelect:
+		return "(*CreateTable).Select"
 	case RefOfCreateViewViewName:
 		return "(*CreateView).ViewName"
+	case RefOfCreateViewDefiner:
+		return "(*CreateView).Definer"
 	case RefOfCreateViewColumns:
 		return "(*CreateView).Columns"
+	case RefOfCreateViewSelect:
+		return "(*CreateView).Select"
+	case RefOfCreateViewComments:
+		return "(*CreateView).Comments"
 	case RefOfCurTimeFuncExprName:
 		return "(*CurTimeFuncExpr).Name"
 	case RefOfDeallocateStmtComments:
 		return "(*DeallocateStmt).Comments"
 	case RefOfDeallocateStmtName:
 		return "(*DeallocateStmt).Name"
-	case RefOfDeclareConditionCondition:
-		return "(*DeclareCondition).Condition"
 	case RefOfDeclareConditionName:
 		return "(*DeclareCondition).Name"
-	case RefOfDeclareHandlerStatement:
-		return "(*DeclareHandler).Statement"
+	case RefOfDeclareConditionCondition:
+		return "(*DeclareCondition).Condition"
 	case RefOfDeclareHandlerConditionsOffset:
 		return "(*DeclareHandler).ConditionsOffset"
-	case RefOfDeclareVarType:
-		return "(*DeclareVar).Type"
+	case RefOfDeclareHandlerStatement:
+		return "(*DeclareHandler).Statement"
 	case RefOfDeclareVarVarNamesOffset:
 		return "(*DeclareVar).VarNamesOffset"
+	case RefOfDeclareVarType:
+		return "(*DeclareVar).Type"
 	case RefOfDeleteWith:
 		return "(*Delete).With"
 	case RefOfDeleteComments:
 		return "(*Delete).Comments"
-	case RefOfDeleteWhere:
-		return "(*Delete).Where"
-	case RefOfDeleteLimit:
-		return "(*Delete).Limit"
 	case RefOfDeleteTableExprsOffset:
 		return "(*Delete).TableExprsOffset"
 	case RefOfDeleteTargets:
 		return "(*Delete).Targets"
 	case RefOfDeletePartitions:
 		return "(*Delete).Partitions"
+	case RefOfDeleteWhere:
+		return "(*Delete).Where"
 	case RefOfDeleteOrderBy:
 		return "(*Delete).OrderBy"
+	case RefOfDeleteLimit:
+		return "(*Delete).Limit"
 	case RefOfDerivedTableSelect:
 		return "(*DerivedTable).Select"
 	case RefOfDropColumnName:
@@ -865,14 +865,14 @@ func (s ASTStep) DebugString() string {
 		return "(*DropProcedure).Comments"
 	case RefOfDropProcedureName:
 		return "(*DropProcedure).Name"
-	case RefOfDropTableComments:
-		return "(*DropTable).Comments"
 	case RefOfDropTableFromTables:
 		return "(*DropTable).FromTables"
-	case RefOfDropViewComments:
-		return "(*DropView).Comments"
+	case RefOfDropTableComments:
+		return "(*DropTable).Comments"
 	case RefOfDropViewFromTables:
 		return "(*DropView).FromTables"
+	case RefOfDropViewComments:
+		return "(*DropView).Comments"
 	case RefOfElseIfBlockSearchCondition:
 		return "(*ElseIfBlock).SearchCondition"
 	case RefOfElseIfBlockThenStatements:
@@ -907,12 +907,12 @@ func (s ASTStep) DebugString() string {
 		return "(*FirstOrLastValueExpr).OverClause"
 	case RefOfFlushTableNames:
 		return "(*Flush).TableNames"
-	case RefOfForeignKeyDefinitionReferenceDefinition:
-		return "(*ForeignKeyDefinition).ReferenceDefinition"
-	case RefOfForeignKeyDefinitionIndexName:
-		return "(*ForeignKeyDefinition).IndexName"
 	case RefOfForeignKeyDefinitionSource:
 		return "(*ForeignKeyDefinition).Source"
+	case RefOfForeignKeyDefinitionIndexName:
+		return "(*ForeignKeyDefinition).IndexName"
+	case RefOfForeignKeyDefinitionReferenceDefinition:
+		return "(*ForeignKeyDefinition).ReferenceDefinition"
 	case RefOfFrameClauseStart:
 		return "(*FrameClause).Start"
 	case RefOfFrameClauseEnd:
@@ -983,12 +983,12 @@ func (s ASTStep) DebugString() string {
 		return "(*GeomPropertyFuncExpr).Geom"
 	case RefOfGroupByExprsOffset:
 		return "(*GroupBy).ExprsOffset"
-	case RefOfGroupConcatExprLimit:
-		return "(*GroupConcatExpr).Limit"
 	case RefOfGroupConcatExprExprsOffset:
 		return "(*GroupConcatExpr).ExprsOffset"
 	case RefOfGroupConcatExprOrderBy:
 		return "(*GroupConcatExpr).OrderBy"
+	case RefOfGroupConcatExprLimit:
+		return "(*GroupConcatExpr).Limit"
 	case RefOfHandlerConditionNamedName:
 		return "(*HandlerConditionNamed).Name"
 	case RefOfHandlerConditionSQLStateSQLStateValue:
@@ -997,10 +997,10 @@ func (s ASTStep) DebugString() string {
 		return "(*IfStatement).SearchCondition"
 	case RefOfIfStatementThenStatements:
 		return "(*IfStatement).ThenStatements"
-	case RefOfIfStatementElseStatements:
-		return "(*IfStatement).ElseStatements"
 	case RefOfIfStatementElseIfBlocksOffset:
 		return "(*IfStatement).ElseIfBlocksOffset"
+	case RefOfIfStatementElseStatements:
+		return "(*IfStatement).ElseStatements"
 	case RefOfIndexDefinitionInfo:
 		return "(*IndexDefinition).Info"
 	case RefOfIndexHintIndexesOffset:
@@ -1011,18 +1011,18 @@ func (s ASTStep) DebugString() string {
 		return "(*IndexInfo).Name"
 	case RefOfIndexInfoConstraintName:
 		return "(*IndexInfo).ConstraintName"
-	case RefOfInsertRows:
-		return "(*Insert).Rows"
 	case RefOfInsertComments:
 		return "(*Insert).Comments"
 	case RefOfInsertTable:
 		return "(*Insert).Table"
-	case RefOfInsertRowAlias:
-		return "(*Insert).RowAlias"
 	case RefOfInsertPartitions:
 		return "(*Insert).Partitions"
 	case RefOfInsertColumns:
 		return "(*Insert).Columns"
+	case RefOfInsertRows:
+		return "(*Insert).Rows"
+	case RefOfInsertRowAlias:
+		return "(*Insert).RowAlias"
 	case RefOfInsertOnDup:
 		return "(*Insert).OnDup"
 	case RefOfInsertExprStr:
@@ -1191,10 +1191,10 @@ func (s ASTStep) DebugString() string {
 		return "(*LockingFunc).Name"
 	case RefOfLockingFuncTimeout:
 		return "(*LockingFunc).Timeout"
-	case RefOfMatchExprExpr:
-		return "(*MatchExpr).Expr"
 	case RefOfMatchExprColumnsOffset:
 		return "(*MatchExpr).ColumnsOffset"
+	case RefOfMatchExprExpr:
+		return "(*MatchExpr).Expr"
 	case RefOfMaxArg:
 		return "(*Max).Arg"
 	case RefOfMaxOverClause:
@@ -1255,16 +1255,16 @@ func (s ASTStep) DebugString() string {
 		return "(OrderBy)[]Offset"
 	case RefOfOrderByOptionCols:
 		return "(*OrderByOption).Cols"
-	case RefOfOverClauseWindowSpec:
-		return "(*OverClause).WindowSpec"
 	case RefOfOverClauseWindowName:
 		return "(*OverClause).WindowName"
+	case RefOfOverClauseWindowSpec:
+		return "(*OverClause).WindowSpec"
 	case RefOfParenTableExprExprs:
 		return "(*ParenTableExpr).Exprs"
-	case RefOfPartitionDefinitionOptions:
-		return "(*PartitionDefinition).Options"
 	case RefOfPartitionDefinitionName:
 		return "(*PartitionDefinition).Name"
+	case RefOfPartitionDefinitionOptions:
+		return "(*PartitionDefinition).Options"
 	case RefOfPartitionDefinitionOptionsValueRange:
 		return "(*PartitionDefinitionOptions).ValueRange"
 	case RefOfPartitionDefinitionOptionsComment:
@@ -1277,20 +1277,20 @@ func (s ASTStep) DebugString() string {
 		return "(*PartitionDefinitionOptions).IndexDirectory"
 	case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
 		return "(*PartitionDefinitionOptions).SubPartitionDefinitions"
+	case RefOfPartitionOptionColList:
+		return "(*PartitionOption).ColList"
 	case RefOfPartitionOptionExpr:
 		return "(*PartitionOption).Expr"
 	case RefOfPartitionOptionSubPartition:
 		return "(*PartitionOption).SubPartition"
-	case RefOfPartitionOptionColList:
-		return "(*PartitionOption).ColList"
 	case RefOfPartitionOptionDefinitionsOffset:
 		return "(*PartitionOption).DefinitionsOffset"
+	case RefOfPartitionSpecNames:
+		return "(*PartitionSpec).Names"
 	case RefOfPartitionSpecNumber:
 		return "(*PartitionSpec).Number"
 	case RefOfPartitionSpecTableName:
 		return "(*PartitionSpec).TableName"
-	case RefOfPartitionSpecNames:
-		return "(*PartitionSpec).Names"
 	case RefOfPartitionSpecDefinitionsOffset:
 		return "(*PartitionSpec).DefinitionsOffset"
 	case RefOfPartitionValueRangeRange:
@@ -1313,16 +1313,16 @@ func (s ASTStep) DebugString() string {
 		return "(*PolygonPropertyFuncExpr).Polygon"
 	case RefOfPolygonPropertyFuncExprPropertyDefArg:
 		return "(*PolygonPropertyFuncExpr).PropertyDefArg"
+	case RefOfPrepareStmtName:
+		return "(*PrepareStmt).Name"
 	case RefOfPrepareStmtStatement:
 		return "(*PrepareStmt).Statement"
 	case RefOfPrepareStmtComments:
 		return "(*PrepareStmt).Comments"
-	case RefOfPrepareStmtName:
-		return "(*PrepareStmt).Name"
-	case RefOfProcParameterType:
-		return "(*ProcParameter).Type"
 	case RefOfProcParameterName:
 		return "(*ProcParameter).Name"
+	case RefOfProcParameterType:
+		return "(*ProcParameter).Type"
 	case RefOfReferenceDefinitionReferencedTable:
 		return "(*ReferenceDefinition).ReferencedTable"
 	case RefOfReferenceDefinitionReferencedColumns:
@@ -1397,28 +1397,28 @@ func (s ASTStep) DebugString() string {
 		return "(*SRollback).Name"
 	case RefOfSavepointName:
 		return "(*Savepoint).Name"
-	case RefOfSelectComments:
-		return "(*Select).Comments"
-	case RefOfSelectInto:
-		return "(*Select).Into"
-	case RefOfSelectLimit:
-		return "(*Select).Limit"
-	case RefOfSelectHaving:
-		return "(*Select).Having"
-	case RefOfSelectGroupBy:
-		return "(*Select).GroupBy"
-	case RefOfSelectWhere:
-		return "(*Select).Where"
-	case RefOfSelectSelectExprs:
-		return "(*Select).SelectExprs"
 	case RefOfSelectWith:
 		return "(*Select).With"
-	case RefOfSelectWindows:
-		return "(*Select).Windows"
 	case RefOfSelectFromOffset:
 		return "(*Select).FromOffset"
+	case RefOfSelectComments:
+		return "(*Select).Comments"
+	case RefOfSelectSelectExprs:
+		return "(*Select).SelectExprs"
+	case RefOfSelectWhere:
+		return "(*Select).Where"
+	case RefOfSelectGroupBy:
+		return "(*Select).GroupBy"
+	case RefOfSelectHaving:
+		return "(*Select).Having"
+	case RefOfSelectWindows:
+		return "(*Select).Windows"
 	case RefOfSelectOrderBy:
 		return "(*Select).OrderBy"
+	case RefOfSelectLimit:
+		return "(*Select).Limit"
+	case RefOfSelectInto:
+		return "(*Select).Into"
 	case RefOfSelectExprsExprsOffset:
 		return "(*SelectExprs).ExprsOffset"
 	case RefOfSelectIntoVarListOffset:
@@ -1435,14 +1435,14 @@ func (s ASTStep) DebugString() string {
 		return "(SetExprs)[]Offset"
 	case RefOfShowInternal:
 		return "(*Show).Internal"
-	case RefOfShowBasicFilter:
-		return "(*ShowBasic).Filter"
-	case RefOfShowBasicLimit:
-		return "(*ShowBasic).Limit"
 	case RefOfShowBasicTbl:
 		return "(*ShowBasic).Tbl"
 	case RefOfShowBasicDbName:
 		return "(*ShowBasic).DbName"
+	case RefOfShowBasicFilter:
+		return "(*ShowBasic).Filter"
+	case RefOfShowBasicLimit:
+		return "(*ShowBasic).Limit"
 	case RefOfShowBinlogEventsPosition:
 		return "(*ShowBinlogEvents).Position"
 	case RefOfShowBinlogEventsLimit:
@@ -1489,14 +1489,14 @@ func (s ASTStep) DebugString() string {
 		return "(*Stream).SelectExpr"
 	case RefOfStreamTable:
 		return "(*Stream).Table"
-	case RefOfSubPartitionExpr:
-		return "(*SubPartition).Expr"
 	case RefOfSubPartitionColList:
 		return "(*SubPartition).ColList"
-	case RefOfSubPartitionDefinitionOptions:
-		return "(*SubPartitionDefinition).Options"
+	case RefOfSubPartitionExpr:
+		return "(*SubPartition).Expr"
 	case RefOfSubPartitionDefinitionName:
 		return "(*SubPartitionDefinition).Name"
+	case RefOfSubPartitionDefinitionOptions:
+		return "(*SubPartitionDefinition).Options"
 	case RefOfSubPartitionDefinitionOptionsComment:
 		return "(*SubPartitionDefinitionOptions).Comment"
 	case RefOfSubPartitionDefinitionOptionsEngine:
@@ -1527,8 +1527,6 @@ func (s ASTStep) DebugString() string {
 		return "(TableName).Qualifier"
 	case TableNamesOffset:
 		return "(TableNames)[]Offset"
-	case RefOfTableSpecPartitionOption:
-		return "(*TableSpec).PartitionOption"
 	case RefOfTableSpecColumnsOffset:
 		return "(*TableSpec).ColumnsOffset"
 	case RefOfTableSpecIndexesOffset:
@@ -1537,6 +1535,8 @@ func (s ASTStep) DebugString() string {
 		return "(*TableSpec).ConstraintsOffset"
 	case RefOfTableSpecOptions:
 		return "(*TableSpec).Options"
+	case RefOfTableSpecPartitionOption:
+		return "(*TableSpec).PartitionOption"
 	case RefOfTimestampDiffExprExpr1:
 		return "(*TimestampDiffExpr).Expr1"
 	case RefOfTimestampDiffExprExpr2:
@@ -1549,32 +1549,32 @@ func (s ASTStep) DebugString() string {
 		return "(*TruncateTable).Table"
 	case RefOfUnaryExprExpr:
 		return "(*UnaryExpr).Expr"
+	case RefOfUnionWith:
+		return "(*Union).With"
 	case RefOfUnionLeft:
 		return "(*Union).Left"
 	case RefOfUnionRight:
 		return "(*Union).Right"
-	case RefOfUnionWith:
-		return "(*Union).With"
+	case RefOfUnionOrderBy:
+		return "(*Union).OrderBy"
 	case RefOfUnionLimit:
 		return "(*Union).Limit"
 	case RefOfUnionInto:
 		return "(*Union).Into"
-	case RefOfUnionOrderBy:
-		return "(*Union).OrderBy"
 	case RefOfUpdateWith:
 		return "(*Update).With"
 	case RefOfUpdateComments:
 		return "(*Update).Comments"
-	case RefOfUpdateWhere:
-		return "(*Update).Where"
-	case RefOfUpdateLimit:
-		return "(*Update).Limit"
 	case RefOfUpdateTableExprsOffset:
 		return "(*Update).TableExprsOffset"
 	case RefOfUpdateExprs:
 		return "(*Update).Exprs"
+	case RefOfUpdateWhere:
+		return "(*Update).Where"
 	case RefOfUpdateOrderBy:
 		return "(*Update).OrderBy"
+	case RefOfUpdateLimit:
+		return "(*Update).Limit"
 	case RefOfUpdateExprName:
 		return "(*UpdateExpr).Name"
 	case RefOfUpdateExprExpr:
@@ -1593,16 +1593,16 @@ func (s ASTStep) DebugString() string {
 		return "(*VExplainStmt).Statement"
 	case RefOfVExplainStmtComments:
 		return "(*VExplainStmt).Comments"
-	case RefOfVStreamSelectExpr:
-		return "(*VStream).SelectExpr"
 	case RefOfVStreamComments:
 		return "(*VStream).Comments"
+	case RefOfVStreamSelectExpr:
+		return "(*VStream).SelectExpr"
+	case RefOfVStreamTable:
+		return "(*VStream).Table"
 	case RefOfVStreamWhere:
 		return "(*VStream).Where"
 	case RefOfVStreamLimit:
 		return "(*VStream).Limit"
-	case RefOfVStreamTable:
-		return "(*VStream).Table"
 	case ValTupleOffset:
 		return "(ValTuple)[]Offset"
 	case ValuesOffset:
@@ -1611,16 +1611,16 @@ func (s ASTStep) DebugString() string {
 		return "(*ValuesFuncExpr).Name"
 	case RefOfValuesStatementWith:
 		return "(*ValuesStatement).With"
-	case RefOfValuesStatementComments:
-		return "(*ValuesStatement).Comments"
-	case RefOfValuesStatementLimit:
-		return "(*ValuesStatement).Limit"
-	case RefOfValuesStatementListArg:
-		return "(*ValuesStatement).ListArg"
 	case RefOfValuesStatementRows:
 		return "(*ValuesStatement).Rows"
+	case RefOfValuesStatementListArg:
+		return "(*ValuesStatement).ListArg"
+	case RefOfValuesStatementComments:
+		return "(*ValuesStatement).Comments"
 	case RefOfValuesStatementOrder:
 		return "(*ValuesStatement).Order"
+	case RefOfValuesStatementLimit:
+		return "(*ValuesStatement).Limit"
 	case RefOfVarPopArg:
 		return "(*VarPop).Arg"
 	case RefOfVarPopOverClause:
@@ -1653,20 +1653,20 @@ func (s ASTStep) DebugString() string {
 		return "(*When).Val"
 	case RefOfWhereExpr:
 		return "(*Where).Expr"
-	case RefOfWindowDefinitionWindowSpec:
-		return "(*WindowDefinition).WindowSpec"
 	case RefOfWindowDefinitionName:
 		return "(*WindowDefinition).Name"
+	case RefOfWindowDefinitionWindowSpec:
+		return "(*WindowDefinition).WindowSpec"
 	case WindowDefinitionsOffset:
 		return "(WindowDefinitions)[]Offset"
-	case RefOfWindowSpecificationFrameClause:
-		return "(*WindowSpecification).FrameClause"
 	case RefOfWindowSpecificationName:
 		return "(*WindowSpecification).Name"
 	case RefOfWindowSpecificationPartitionClauseOffset:
 		return "(*WindowSpecification).PartitionClauseOffset"
 	case RefOfWindowSpecificationOrderClause:
 		return "(*WindowSpecification).OrderClause"
+	case RefOfWindowSpecificationFrameClause:
+		return "(*WindowSpecification).FrameClause"
 	case RefOfWithCTEsOffset:
 		return "(*With).CTEsOffset"
 	case RefOfXorExprLeft:
@@ -1689,16 +1689,16 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).OnUpdate"
 	case RefOfColumnTypeOptionsAs:
 		return "(*ColumnTypeOptions).As"
-	case RefOfColumnTypeOptionsSRID:
-		return "(*ColumnTypeOptions).SRID"
-	case RefOfColumnTypeOptionsSecondaryEngineAttribute:
-		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsComment:
 		return "(*ColumnTypeOptions).Comment"
-	case RefOfColumnTypeOptionsEngineAttribute:
-		return "(*ColumnTypeOptions).EngineAttribute"
 	case RefOfColumnTypeOptionsReference:
 		return "(*ColumnTypeOptions).Reference"
+	case RefOfColumnTypeOptionsEngineAttribute:
+		return "(*ColumnTypeOptions).EngineAttribute"
+	case RefOfColumnTypeOptionsSecondaryEngineAttribute:
+		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
+	case RefOfColumnTypeOptionsSRID:
+		return "(*ColumnTypeOptions).SRID"
 	case SliceOfCompoundStatementOffset:
 		return "([]CompoundStatement)[]Offset"
 	case SliceOfRefOfProcParameterOffset:
@@ -1717,16 +1717,16 @@ func (s ASTStep) DebugString() string {
 		return "([]*JtColumnDefinition)[]Offset"
 	case RefOfJtOrdinalColDefName:
 		return "(*JtOrdinalColDef).Name"
-	case RefOfJtPathColDefPath:
-		return "(*JtPathColDef).Path"
+	case RefOfJtPathColDefName:
+		return "(*JtPathColDef).Name"
 	case RefOfJtPathColDefType:
 		return "(*JtPathColDef).Type"
+	case RefOfJtPathColDefPath:
+		return "(*JtPathColDef).Path"
 	case RefOfJtPathColDefEmptyOnResponse:
 		return "(*JtPathColDef).EmptyOnResponse"
 	case RefOfJtPathColDefErrorOnResponse:
 		return "(*JtPathColDef).ErrorOnResponse"
-	case RefOfJtPathColDefName:
-		return "(*JtPathColDef).Name"
 	case RefOfJtNestedPathColDefPath:
 		return "(*JtNestedPathColDef).Path"
 	case RefOfJtNestedPathColDefColumnsOffset:
@@ -1759,10 +1759,10 @@ func (s ASTStep) DebugString() string {
 		return "([]VindexParam)[]Offset"
 	case SliceOfRefOfCommonTableExprOffset:
 		return "([]*CommonTableExpr)[]Offset"
-	case RefOfIndexColumnExpression:
-		return "(*IndexColumn).Expression"
 	case RefOfIndexColumnColumn:
 		return "(*IndexColumn).Column"
+	case RefOfIndexColumnExpression:
+		return "(*IndexColumn).Expression"
 	case RefOfIndexOptionValue:
 		return "(*IndexOption).Value"
 	case RefOfTableAndLockTypeTable:
@@ -1782,12 +1782,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 		step := path.nextPathStep()
 		path = path[2:]
 		switch step {
-		case RefOfAddColumnsAfter:
-			node = node.(*AddColumns).After
 		case RefOfAddColumnsColumnsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*AddColumns).Columns[idx]
+		case RefOfAddColumnsAfter:
+			node = node.(*AddColumns).After
 		case RefOfAddConstraintDefinitionConstraintDefinition:
 			node = node.(*AddConstraintDefinition).ConstraintDefinition
 		case RefOfAddIndexDefinitionIndexDefinition:
@@ -1808,10 +1808,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*AliasedTableExpr).Columns
 		case RefOfAlterCheckName:
 			node = node.(*AlterCheck).Name
-		case RefOfAlterColumnDefaultVal:
-			node = node.(*AlterColumn).DefaultVal
 		case RefOfAlterColumnColumn:
 			node = node.(*AlterColumn).Column
+		case RefOfAlterColumnDefaultVal:
+			node = node.(*AlterColumn).DefaultVal
 		case RefOfAlterDatabaseComments:
 			node = node.(*AlterDatabase).Comments
 		case RefOfAlterDatabaseDBName:
@@ -1820,38 +1820,38 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*AlterIndex).Name
 		case RefOfAlterMigrationRatio:
 			node = node.(*AlterMigration).Ratio
-		case RefOfAlterTablePartitionSpec:
-			node = node.(*AlterTable).PartitionSpec
-		case RefOfAlterTablePartitionOption:
-			node = node.(*AlterTable).PartitionOption
-		case RefOfAlterTableComments:
-			node = node.(*AlterTable).Comments
 		case RefOfAlterTableTable:
 			node = node.(*AlterTable).Table
 		case RefOfAlterTableAlterOptionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*AlterTable).AlterOptions[idx]
-		case RefOfAlterViewSelect:
-			node = node.(*AlterView).Select
-		case RefOfAlterViewDefiner:
-			node = node.(*AlterView).Definer
-		case RefOfAlterViewComments:
-			node = node.(*AlterView).Comments
+		case RefOfAlterTablePartitionSpec:
+			node = node.(*AlterTable).PartitionSpec
+		case RefOfAlterTablePartitionOption:
+			node = node.(*AlterTable).PartitionOption
+		case RefOfAlterTableComments:
+			node = node.(*AlterTable).Comments
 		case RefOfAlterViewViewName:
 			node = node.(*AlterView).ViewName
+		case RefOfAlterViewDefiner:
+			node = node.(*AlterView).Definer
 		case RefOfAlterViewColumns:
 			node = node.(*AlterView).Columns
-		case RefOfAlterVschemaVindexSpec:
-			node = node.(*AlterVschema).VindexSpec
-		case RefOfAlterVschemaAutoIncSpec:
-			node = node.(*AlterVschema).AutoIncSpec
+		case RefOfAlterViewSelect:
+			node = node.(*AlterView).Select
+		case RefOfAlterViewComments:
+			node = node.(*AlterView).Comments
 		case RefOfAlterVschemaTable:
 			node = node.(*AlterVschema).Table
+		case RefOfAlterVschemaVindexSpec:
+			node = node.(*AlterVschema).VindexSpec
 		case RefOfAlterVschemaVindexColsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*AlterVschema).VindexCols[idx]
+		case RefOfAlterVschemaAutoIncSpec:
+			node = node.(*AlterVschema).AutoIncSpec
 		case RefOfAnalyzeTable:
 			node = node.(*Analyze).Table
 		case RefOfAndExprLeft:
@@ -1906,12 +1906,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CallProc).Params[idx]
 		case RefOfCaseExprExpr:
 			node = node.(*CaseExpr).Expr
-		case RefOfCaseExprElse:
-			node = node.(*CaseExpr).Else
 		case RefOfCaseExprWhensOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*CaseExpr).Whens[idx]
+		case RefOfCaseExprElse:
+			node = node.(*CaseExpr).Else
 		case RefOfCastExprExpr:
 			node = node.(*CastExpr).Expr
 		case RefOfCastExprType:
@@ -1934,20 +1934,20 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ColName).Qualifier
 		case RefOfCollateExprExpr:
 			node = node.(*CollateExpr).Expr
-		case RefOfColumnDefinitionType:
-			node = node.(*ColumnDefinition).Type
 		case RefOfColumnDefinitionName:
 			node = node.(*ColumnDefinition).Name
+		case RefOfColumnDefinitionType:
+			node = node.(*ColumnDefinition).Type
 		case ColumnsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(Columns)[idx]
-		case RefOfCommonTableExprSubquery:
-			node = node.(*CommonTableExpr).Subquery
 		case RefOfCommonTableExprID:
 			node = node.(*CommonTableExpr).ID
 		case RefOfCommonTableExprColumns:
 			node = node.(*CommonTableExpr).Columns
+		case RefOfCommonTableExprSubquery:
+			node = node.(*CommonTableExpr).Subquery
 		case RefOfComparisonExprLeft:
 			node = node.(*ComparisonExpr).Left
 		case RefOfComparisonExprRight:
@@ -1958,90 +1958,86 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*CompoundStatements).Statements[idx]
-		case RefOfConstraintDefinitionDetails:
-			node = node.(*ConstraintDefinition).Details
 		case RefOfConstraintDefinitionName:
 			node = node.(*ConstraintDefinition).Name
+		case RefOfConstraintDefinitionDetails:
+			node = node.(*ConstraintDefinition).Details
 		case RefOfConvertExprExpr:
 			node = node.(*ConvertExpr).Expr
 		case RefOfConvertExprType:
 			node = node.(*ConvertExpr).Type
 		case RefOfConvertUsingExprExpr:
 			node = node.(*ConvertUsingExpr).Expr
-		case RefOfCountOverClause:
-			node = node.(*Count).OverClause
 		case RefOfCountArgsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*Count).Args[idx]
+		case RefOfCountOverClause:
+			node = node.(*Count).OverClause
 		case RefOfCountStarOverClause:
 			node = node.(*CountStar).OverClause
 		case RefOfCreateDatabaseComments:
 			node = node.(*CreateDatabase).Comments
 		case RefOfCreateDatabaseDBName:
 			node = node.(*CreateDatabase).DBName
-		case RefOfCreateProcedureBody:
-			node = node.(*CreateProcedure).Body
+		case RefOfCreateProcedureName:
+			node = node.(*CreateProcedure).Name
 		case RefOfCreateProcedureComments:
 			node = node.(*CreateProcedure).Comments
 		case RefOfCreateProcedureDefiner:
 			node = node.(*CreateProcedure).Definer
-		case RefOfCreateProcedureName:
-			node = node.(*CreateProcedure).Name
 		case RefOfCreateProcedureParamsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*CreateProcedure).Params[idx]
-		case RefOfCreateTableSelect:
-			node = node.(*CreateTable).Select
+		case RefOfCreateProcedureBody:
+			node = node.(*CreateProcedure).Body
+		case RefOfCreateTableTable:
+			node = node.(*CreateTable).Table
 		case RefOfCreateTableTableSpec:
 			node = node.(*CreateTable).TableSpec
 		case RefOfCreateTableOptLike:
 			node = node.(*CreateTable).OptLike
 		case RefOfCreateTableComments:
 			node = node.(*CreateTable).Comments
-		case RefOfCreateTableTable:
-			node = node.(*CreateTable).Table
-		case RefOfCreateViewSelect:
-			node = node.(*CreateView).Select
-		case RefOfCreateViewDefiner:
-			node = node.(*CreateView).Definer
-		case RefOfCreateViewComments:
-			node = node.(*CreateView).Comments
+		case RefOfCreateTableSelect:
+			node = node.(*CreateTable).Select
 		case RefOfCreateViewViewName:
 			node = node.(*CreateView).ViewName
+		case RefOfCreateViewDefiner:
+			node = node.(*CreateView).Definer
 		case RefOfCreateViewColumns:
 			node = node.(*CreateView).Columns
+		case RefOfCreateViewSelect:
+			node = node.(*CreateView).Select
+		case RefOfCreateViewComments:
+			node = node.(*CreateView).Comments
 		case RefOfCurTimeFuncExprName:
 			node = node.(*CurTimeFuncExpr).Name
 		case RefOfDeallocateStmtComments:
 			node = node.(*DeallocateStmt).Comments
 		case RefOfDeallocateStmtName:
 			node = node.(*DeallocateStmt).Name
-		case RefOfDeclareConditionCondition:
-			node = node.(*DeclareCondition).Condition
 		case RefOfDeclareConditionName:
 			node = node.(*DeclareCondition).Name
-		case RefOfDeclareHandlerStatement:
-			node = node.(*DeclareHandler).Statement
+		case RefOfDeclareConditionCondition:
+			node = node.(*DeclareCondition).Condition
 		case RefOfDeclareHandlerConditionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*DeclareHandler).Conditions[idx]
-		case RefOfDeclareVarType:
-			node = node.(*DeclareVar).Type
+		case RefOfDeclareHandlerStatement:
+			node = node.(*DeclareHandler).Statement
 		case RefOfDeclareVarVarNamesOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*DeclareVar).VarNames[idx]
+		case RefOfDeclareVarType:
+			node = node.(*DeclareVar).Type
 		case RefOfDeleteWith:
 			node = node.(*Delete).With
 		case RefOfDeleteComments:
 			node = node.(*Delete).Comments
-		case RefOfDeleteWhere:
-			node = node.(*Delete).Where
-		case RefOfDeleteLimit:
-			node = node.(*Delete).Limit
 		case RefOfDeleteTableExprsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2050,8 +2046,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Delete).Targets
 		case RefOfDeletePartitions:
 			node = node.(*Delete).Partitions
+		case RefOfDeleteWhere:
+			node = node.(*Delete).Where
 		case RefOfDeleteOrderBy:
 			node = node.(*Delete).OrderBy
+		case RefOfDeleteLimit:
+			node = node.(*Delete).Limit
 		case RefOfDerivedTableSelect:
 			node = node.(*DerivedTable).Select
 		case RefOfDropColumnName:
@@ -2066,14 +2066,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DropProcedure).Comments
 		case RefOfDropProcedureName:
 			node = node.(*DropProcedure).Name
-		case RefOfDropTableComments:
-			node = node.(*DropTable).Comments
 		case RefOfDropTableFromTables:
 			node = node.(*DropTable).FromTables
-		case RefOfDropViewComments:
-			node = node.(*DropView).Comments
+		case RefOfDropTableComments:
+			node = node.(*DropTable).Comments
 		case RefOfDropViewFromTables:
 			node = node.(*DropView).FromTables
+		case RefOfDropViewComments:
+			node = node.(*DropView).Comments
 		case RefOfElseIfBlockSearchCondition:
 			node = node.(*ElseIfBlock).SearchCondition
 		case RefOfElseIfBlockThenStatements:
@@ -2112,12 +2112,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*FirstOrLastValueExpr).OverClause
 		case RefOfFlushTableNames:
 			node = node.(*Flush).TableNames
-		case RefOfForeignKeyDefinitionReferenceDefinition:
-			node = node.(*ForeignKeyDefinition).ReferenceDefinition
-		case RefOfForeignKeyDefinitionIndexName:
-			node = node.(*ForeignKeyDefinition).IndexName
 		case RefOfForeignKeyDefinitionSource:
 			node = node.(*ForeignKeyDefinition).Source
+		case RefOfForeignKeyDefinitionIndexName:
+			node = node.(*ForeignKeyDefinition).IndexName
+		case RefOfForeignKeyDefinitionReferenceDefinition:
+			node = node.(*ForeignKeyDefinition).ReferenceDefinition
 		case RefOfFrameClauseStart:
 			node = node.(*FrameClause).Start
 		case RefOfFrameClauseEnd:
@@ -2192,14 +2192,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*GroupBy).Exprs[idx]
-		case RefOfGroupConcatExprLimit:
-			node = node.(*GroupConcatExpr).Limit
 		case RefOfGroupConcatExprExprsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*GroupConcatExpr).Exprs[idx]
 		case RefOfGroupConcatExprOrderBy:
 			node = node.(*GroupConcatExpr).OrderBy
+		case RefOfGroupConcatExprLimit:
+			node = node.(*GroupConcatExpr).Limit
 		case RefOfHandlerConditionNamedName:
 			node = node.(*HandlerConditionNamed).Name
 		case RefOfHandlerConditionSQLStateSQLStateValue:
@@ -2208,12 +2208,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*IfStatement).SearchCondition
 		case RefOfIfStatementThenStatements:
 			node = node.(*IfStatement).ThenStatements
-		case RefOfIfStatementElseStatements:
-			node = node.(*IfStatement).ElseStatements
 		case RefOfIfStatementElseIfBlocksOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*IfStatement).ElseIfBlocks[idx]
+		case RefOfIfStatementElseStatements:
+			node = node.(*IfStatement).ElseStatements
 		case RefOfIndexDefinitionInfo:
 			node = node.(*IndexDefinition).Info
 		case RefOfIndexHintIndexesOffset:
@@ -2228,18 +2228,18 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*IndexInfo).Name
 		case RefOfIndexInfoConstraintName:
 			node = node.(*IndexInfo).ConstraintName
-		case RefOfInsertRows:
-			node = node.(*Insert).Rows
 		case RefOfInsertComments:
 			node = node.(*Insert).Comments
 		case RefOfInsertTable:
 			node = node.(*Insert).Table
-		case RefOfInsertRowAlias:
-			node = node.(*Insert).RowAlias
 		case RefOfInsertPartitions:
 			node = node.(*Insert).Partitions
 		case RefOfInsertColumns:
 			node = node.(*Insert).Columns
+		case RefOfInsertRows:
+			node = node.(*Insert).Rows
+		case RefOfInsertRowAlias:
+			node = node.(*Insert).RowAlias
 		case RefOfInsertOnDup:
 			node = node.(*Insert).OnDup
 		case RefOfInsertExprStr:
@@ -2432,12 +2432,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*LockingFunc).Name
 		case RefOfLockingFuncTimeout:
 			node = node.(*LockingFunc).Timeout
-		case RefOfMatchExprExpr:
-			node = node.(*MatchExpr).Expr
 		case RefOfMatchExprColumnsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*MatchExpr).Columns[idx]
+		case RefOfMatchExprExpr:
+			node = node.(*MatchExpr).Expr
 		case RefOfMaxArg:
 			node = node.(*Max).Arg
 		case RefOfMaxOverClause:
@@ -2510,16 +2510,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(OrderBy)[idx]
 		case RefOfOrderByOptionCols:
 			node = node.(*OrderByOption).Cols
-		case RefOfOverClauseWindowSpec:
-			node = node.(*OverClause).WindowSpec
 		case RefOfOverClauseWindowName:
 			node = node.(*OverClause).WindowName
+		case RefOfOverClauseWindowSpec:
+			node = node.(*OverClause).WindowSpec
 		case RefOfParenTableExprExprs:
 			node = node.(*ParenTableExpr).Exprs
-		case RefOfPartitionDefinitionOptions:
-			node = node.(*PartitionDefinition).Options
 		case RefOfPartitionDefinitionName:
 			node = node.(*PartitionDefinition).Name
+		case RefOfPartitionDefinitionOptions:
+			node = node.(*PartitionDefinition).Options
 		case RefOfPartitionDefinitionOptionsValueRange:
 			node = node.(*PartitionDefinitionOptions).ValueRange
 		case RefOfPartitionDefinitionOptionsComment:
@@ -2532,22 +2532,22 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*PartitionDefinitionOptions).IndexDirectory
 		case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
 			node = node.(*PartitionDefinitionOptions).SubPartitionDefinitions
+		case RefOfPartitionOptionColList:
+			node = node.(*PartitionOption).ColList
 		case RefOfPartitionOptionExpr:
 			node = node.(*PartitionOption).Expr
 		case RefOfPartitionOptionSubPartition:
 			node = node.(*PartitionOption).SubPartition
-		case RefOfPartitionOptionColList:
-			node = node.(*PartitionOption).ColList
 		case RefOfPartitionOptionDefinitionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*PartitionOption).Definitions[idx]
+		case RefOfPartitionSpecNames:
+			node = node.(*PartitionSpec).Names
 		case RefOfPartitionSpecNumber:
 			node = node.(*PartitionSpec).Number
 		case RefOfPartitionSpecTableName:
 			node = node.(*PartitionSpec).TableName
-		case RefOfPartitionSpecNames:
-			node = node.(*PartitionSpec).Names
 		case RefOfPartitionSpecDefinitionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2576,16 +2576,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*PolygonPropertyFuncExpr).Polygon
 		case RefOfPolygonPropertyFuncExprPropertyDefArg:
 			node = node.(*PolygonPropertyFuncExpr).PropertyDefArg
+		case RefOfPrepareStmtName:
+			node = node.(*PrepareStmt).Name
 		case RefOfPrepareStmtStatement:
 			node = node.(*PrepareStmt).Statement
 		case RefOfPrepareStmtComments:
 			node = node.(*PrepareStmt).Comments
-		case RefOfPrepareStmtName:
-			node = node.(*PrepareStmt).Name
-		case RefOfProcParameterType:
-			node = node.(*ProcParameter).Type
 		case RefOfProcParameterName:
 			node = node.(*ProcParameter).Name
+		case RefOfProcParameterType:
+			node = node.(*ProcParameter).Type
 		case RefOfReferenceDefinitionReferencedTable:
 			node = node.(*ReferenceDefinition).ReferencedTable
 		case RefOfReferenceDefinitionReferencedColumns:
@@ -2660,30 +2660,30 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*SRollback).Name
 		case RefOfSavepointName:
 			node = node.(*Savepoint).Name
-		case RefOfSelectComments:
-			node = node.(*Select).Comments
-		case RefOfSelectInto:
-			node = node.(*Select).Into
-		case RefOfSelectLimit:
-			node = node.(*Select).Limit
-		case RefOfSelectHaving:
-			node = node.(*Select).Having
-		case RefOfSelectGroupBy:
-			node = node.(*Select).GroupBy
-		case RefOfSelectWhere:
-			node = node.(*Select).Where
-		case RefOfSelectSelectExprs:
-			node = node.(*Select).SelectExprs
 		case RefOfSelectWith:
 			node = node.(*Select).With
-		case RefOfSelectWindows:
-			node = node.(*Select).Windows
 		case RefOfSelectFromOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*Select).From[idx]
+		case RefOfSelectComments:
+			node = node.(*Select).Comments
+		case RefOfSelectSelectExprs:
+			node = node.(*Select).SelectExprs
+		case RefOfSelectWhere:
+			node = node.(*Select).Where
+		case RefOfSelectGroupBy:
+			node = node.(*Select).GroupBy
+		case RefOfSelectHaving:
+			node = node.(*Select).Having
+		case RefOfSelectWindows:
+			node = node.(*Select).Windows
 		case RefOfSelectOrderBy:
 			node = node.(*Select).OrderBy
+		case RefOfSelectLimit:
+			node = node.(*Select).Limit
+		case RefOfSelectInto:
+			node = node.(*Select).Into
 		case RefOfSelectExprsExprsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2706,14 +2706,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(SetExprs)[idx]
 		case RefOfShowInternal:
 			node = node.(*Show).Internal
-		case RefOfShowBasicFilter:
-			node = node.(*ShowBasic).Filter
-		case RefOfShowBasicLimit:
-			node = node.(*ShowBasic).Limit
 		case RefOfShowBasicTbl:
 			node = node.(*ShowBasic).Tbl
 		case RefOfShowBasicDbName:
 			node = node.(*ShowBasic).DbName
+		case RefOfShowBasicFilter:
+			node = node.(*ShowBasic).Filter
+		case RefOfShowBasicLimit:
+			node = node.(*ShowBasic).Limit
 		case RefOfShowBinlogEventsPosition:
 			node = node.(*ShowBinlogEvents).Position
 		case RefOfShowBinlogEventsLimit:
@@ -2762,14 +2762,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Stream).SelectExpr
 		case RefOfStreamTable:
 			node = node.(*Stream).Table
-		case RefOfSubPartitionExpr:
-			node = node.(*SubPartition).Expr
 		case RefOfSubPartitionColList:
 			node = node.(*SubPartition).ColList
-		case RefOfSubPartitionDefinitionOptions:
-			node = node.(*SubPartitionDefinition).Options
+		case RefOfSubPartitionExpr:
+			node = node.(*SubPartition).Expr
 		case RefOfSubPartitionDefinitionName:
 			node = node.(*SubPartitionDefinition).Name
+		case RefOfSubPartitionDefinitionOptions:
+			node = node.(*SubPartitionDefinition).Options
 		case RefOfSubPartitionDefinitionOptionsComment:
 			node = node.(*SubPartitionDefinitionOptions).Comment
 		case RefOfSubPartitionDefinitionOptionsEngine:
@@ -2806,8 +2806,6 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(TableNames)[idx]
-		case RefOfTableSpecPartitionOption:
-			node = node.(*TableSpec).PartitionOption
 		case RefOfTableSpecColumnsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2822,6 +2820,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*TableSpec).Constraints[idx]
 		case RefOfTableSpecOptions:
 			node = node.(*TableSpec).Options
+		case RefOfTableSpecPartitionOption:
+			node = node.(*TableSpec).PartitionOption
 		case RefOfTimestampDiffExprExpr1:
 			node = node.(*TimestampDiffExpr).Expr1
 		case RefOfTimestampDiffExprExpr2:
@@ -2834,34 +2834,34 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*TruncateTable).Table
 		case RefOfUnaryExprExpr:
 			node = node.(*UnaryExpr).Expr
+		case RefOfUnionWith:
+			node = node.(*Union).With
 		case RefOfUnionLeft:
 			node = node.(*Union).Left
 		case RefOfUnionRight:
 			node = node.(*Union).Right
-		case RefOfUnionWith:
-			node = node.(*Union).With
+		case RefOfUnionOrderBy:
+			node = node.(*Union).OrderBy
 		case RefOfUnionLimit:
 			node = node.(*Union).Limit
 		case RefOfUnionInto:
 			node = node.(*Union).Into
-		case RefOfUnionOrderBy:
-			node = node.(*Union).OrderBy
 		case RefOfUpdateWith:
 			node = node.(*Update).With
 		case RefOfUpdateComments:
 			node = node.(*Update).Comments
-		case RefOfUpdateWhere:
-			node = node.(*Update).Where
-		case RefOfUpdateLimit:
-			node = node.(*Update).Limit
 		case RefOfUpdateTableExprsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*Update).TableExprs[idx]
 		case RefOfUpdateExprs:
 			node = node.(*Update).Exprs
+		case RefOfUpdateWhere:
+			node = node.(*Update).Where
 		case RefOfUpdateOrderBy:
 			node = node.(*Update).OrderBy
+		case RefOfUpdateLimit:
+			node = node.(*Update).Limit
 		case RefOfUpdateExprName:
 			node = node.(*UpdateExpr).Name
 		case RefOfUpdateExprExpr:
@@ -2882,16 +2882,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*VExplainStmt).Statement
 		case RefOfVExplainStmtComments:
 			node = node.(*VExplainStmt).Comments
-		case RefOfVStreamSelectExpr:
-			node = node.(*VStream).SelectExpr
 		case RefOfVStreamComments:
 			node = node.(*VStream).Comments
+		case RefOfVStreamSelectExpr:
+			node = node.(*VStream).SelectExpr
+		case RefOfVStreamTable:
+			node = node.(*VStream).Table
 		case RefOfVStreamWhere:
 			node = node.(*VStream).Where
 		case RefOfVStreamLimit:
 			node = node.(*VStream).Limit
-		case RefOfVStreamTable:
-			node = node.(*VStream).Table
 		case ValTupleOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2904,16 +2904,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ValuesFuncExpr).Name
 		case RefOfValuesStatementWith:
 			node = node.(*ValuesStatement).With
-		case RefOfValuesStatementComments:
-			node = node.(*ValuesStatement).Comments
-		case RefOfValuesStatementLimit:
-			node = node.(*ValuesStatement).Limit
-		case RefOfValuesStatementListArg:
-			node = node.(*ValuesStatement).ListArg
 		case RefOfValuesStatementRows:
 			node = node.(*ValuesStatement).Rows
+		case RefOfValuesStatementListArg:
+			node = node.(*ValuesStatement).ListArg
+		case RefOfValuesStatementComments:
+			node = node.(*ValuesStatement).Comments
 		case RefOfValuesStatementOrder:
 			node = node.(*ValuesStatement).Order
+		case RefOfValuesStatementLimit:
+			node = node.(*ValuesStatement).Limit
 		case RefOfVarPopArg:
 			node = node.(*VarPop).Arg
 		case RefOfVarPopOverClause:
@@ -2948,16 +2948,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*When).Val
 		case RefOfWhereExpr:
 			node = node.(*Where).Expr
-		case RefOfWindowDefinitionWindowSpec:
-			node = node.(*WindowDefinition).WindowSpec
 		case RefOfWindowDefinitionName:
 			node = node.(*WindowDefinition).Name
+		case RefOfWindowDefinitionWindowSpec:
+			node = node.(*WindowDefinition).WindowSpec
 		case WindowDefinitionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(WindowDefinitions)[idx]
-		case RefOfWindowSpecificationFrameClause:
-			node = node.(*WindowSpecification).FrameClause
 		case RefOfWindowSpecificationName:
 			node = node.(*WindowSpecification).Name
 		case RefOfWindowSpecificationPartitionClauseOffset:
@@ -2966,6 +2964,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*WindowSpecification).PartitionClause[idx]
 		case RefOfWindowSpecificationOrderClause:
 			node = node.(*WindowSpecification).OrderClause
+		case RefOfWindowSpecificationFrameClause:
+			node = node.(*WindowSpecification).FrameClause
 		case RefOfWithCTEsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]

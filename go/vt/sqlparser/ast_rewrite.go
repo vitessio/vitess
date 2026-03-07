@@ -645,17 +645,6 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAddColumnsAfter))
-	}
-	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
-		parent.(*AddColumns).After = newNode.(*ColName)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -671,6 +660,15 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Columns) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAddColumnsAfter))
+	}
+	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+		parent.(*AddColumns).After = newNode.(*ColName)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -981,19 +979,19 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAlterColumnDefaultVal))
+		a.cur.current.AddStep(uint16(RefOfAlterColumnColumn))
 	}
-	if !a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
-		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
+	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
+		parent.(*AlterColumn).Column = newNode.(*ColName)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterColumnColumn))
+		a.cur.current.AddStep(uint16(RefOfAlterColumnDefaultVal))
 	}
-	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
-		parent.(*AlterColumn).Column = newNode.(*ColName)
+	if !a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
+		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1159,33 +1157,6 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionSpec))
-	}
-	if !a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
-		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionOption))
-	}
-	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
-		parent.(*AlterTable).PartitionOption = newNode.(*PartitionOption)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterTableComments))
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAlterTableTable))
 	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
@@ -1211,6 +1182,33 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.AlterOptions) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionSpec))
+	}
+	if !a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionOption))
+	}
+	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).PartitionOption = newNode.(*PartitionOption)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTableComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -1245,10 +1243,10 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAlterViewSelect))
+		a.cur.current.AddStep(uint16(RefOfAlterViewViewName))
 	}
-	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*AlterView).Select = newNode.(TableStatement)
+	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+		parent.(*AlterView).ViewName = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -1263,28 +1261,28 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterViewComments))
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterView).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterViewViewName))
-	}
-	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
-		parent.(*AlterView).ViewName = newNode.(TableName)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAlterViewColumns))
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewSelect))
+	}
+	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Select = newNode.(TableStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1321,28 +1319,19 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAlterVschemaVindexSpec))
-	}
-	if !a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
-		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfAlterVschemaAutoIncSpec))
-	}
-	if !a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
-		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAlterVschemaTable))
 	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).Table = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterVschemaVindexSpec))
+	}
+	if !a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
 	}) {
 		return false
 	}
@@ -1364,6 +1353,15 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.VindexCols) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterVschemaAutoIncSpec))
+	}
+	if !a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -2138,15 +2136,6 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCaseExprElse))
-	}
-	if !a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
-		parent.(*CaseExpr).Else = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Whens {
 		if a.collectPaths {
@@ -2163,6 +2152,15 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Whens) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCaseExprElse))
+	}
+	if !a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
+		parent.(*CaseExpr).Else = newNode.(Expr)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -2481,19 +2479,19 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfColumnDefinitionType))
+		a.cur.current.AddStep(uint16(RefOfColumnDefinitionName))
 	}
-	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
-		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfColumnDefinitionName))
+		a.cur.current.AddStep(uint16(RefOfColumnDefinitionType))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ColumnDefinition).Name = newNode.(IdentifierCI)
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
 	}) {
 		return false
 	}
@@ -2671,15 +2669,6 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfCommonTableExprSubquery))
-	}
-	if !a.rewriteTableStatement(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(TableStatement)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfCommonTableExprID))
 	}
 	if !a.rewriteIdentifierCS(node, node.ID, func(newNode, parent SQLNode) {
@@ -2693,6 +2682,15 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CommonTableExpr).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCommonTableExprSubquery))
+	}
+	if !a.rewriteTableStatement(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(TableStatement)
 	}) {
 		return false
 	}
@@ -2835,19 +2833,19 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionDetails))
+		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionName))
 	}
-	if !a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
-		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ConstraintDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionName))
+		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionDetails))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ConstraintDefinition).Name = newNode.(IdentifierCI)
+	if !a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
+		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 	}) {
 		return false
 	}
@@ -3003,17 +3001,6 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfCountOverClause))
-	}
-	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
-		parent.(*Count).OverClause = newNode.(*OverClause)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Args {
 		if a.collectPaths {
 			if x == 0 {
@@ -3029,6 +3016,15 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Args) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCountOverClause))
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Count).OverClause = newNode.(*OverClause)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -3152,10 +3148,10 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfCreateProcedureBody))
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureName))
 	}
-	if !a.rewriteCompoundStatement(node, node.Body, func(newNode, parent SQLNode) {
-		parent.(*CreateProcedure).Body = newNode.(CompoundStatement)
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Name = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -3179,15 +3175,6 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCreateProcedureName))
-	}
-	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*CreateProcedure).Name = newNode.(TableName)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
@@ -3204,6 +3191,15 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Params) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureBody))
+	}
+	if !a.rewriteCompoundStatement(node, node.Body, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Body = newNode.(CompoundStatement)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -3238,10 +3234,10 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfCreateTableSelect))
+		a.cur.current.AddStep(uint16(RefOfCreateTableTable))
 	}
-	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*CreateTable).Select = newNode.(TableStatement)
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Table = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -3274,10 +3270,10 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCreateTableTable))
+		a.cur.current.AddStep(uint16(RefOfCreateTableSelect))
 	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*CreateTable).Table = newNode.(TableName)
+	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Select = newNode.(TableStatement)
 	}) {
 		return false
 	}
@@ -3314,10 +3310,10 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfCreateViewSelect))
+		a.cur.current.AddStep(uint16(RefOfCreateViewViewName))
 	}
-	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*CreateView).Select = newNode.(TableStatement)
+	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+		parent.(*CreateView).ViewName = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -3332,28 +3328,28 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCreateViewComments))
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateView).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCreateViewViewName))
-	}
-	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
-		parent.(*CreateView).ViewName = newNode.(TableName)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfCreateViewColumns))
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewSelect))
+	}
+	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Select = newNode.(TableStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -3479,19 +3475,19 @@ func (a *application) rewriteRefOfDeclareCondition(parent SQLNode, node *Declare
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfDeclareConditionCondition))
+		a.cur.current.AddStep(uint16(RefOfDeclareConditionName))
 	}
-	if !a.rewriteHandlerCondition(node, node.Condition, func(newNode, parent SQLNode) {
-		parent.(*DeclareCondition).Condition = newNode.(HandlerCondition)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DeclareCondition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfDeclareConditionName))
+		a.cur.current.AddStep(uint16(RefOfDeclareConditionCondition))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*DeclareCondition).Name = newNode.(IdentifierCI)
+	if !a.rewriteHandlerCondition(node, node.Condition, func(newNode, parent SQLNode) {
+		parent.(*DeclareCondition).Condition = newNode.(HandlerCondition)
 	}) {
 		return false
 	}
@@ -3527,17 +3523,6 @@ func (a *application) rewriteRefOfDeclareHandler(parent SQLNode, node *DeclareHa
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfDeclareHandlerStatement))
-	}
-	if !a.rewriteCompoundStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		parent.(*DeclareHandler).Statement = newNode.(CompoundStatement)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Conditions {
 		if a.collectPaths {
 			if x == 0 {
@@ -3553,6 +3538,15 @@ func (a *application) rewriteRefOfDeclareHandler(parent SQLNode, node *DeclareHa
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Conditions) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeclareHandlerStatement))
+	}
+	if !a.rewriteCompoundStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*DeclareHandler).Statement = newNode.(CompoundStatement)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -3586,17 +3580,6 @@ func (a *application) rewriteRefOfDeclareVar(parent SQLNode, node *DeclareVar, r
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfDeclareVarType))
-	}
-	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
-		parent.(*DeclareVar).Type = newNode.(*ColumnType)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.VarNames {
 		if a.collectPaths {
 			if x == 0 {
@@ -3612,6 +3595,15 @@ func (a *application) rewriteRefOfDeclareVar(parent SQLNode, node *DeclareVar, r
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.VarNames) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeclareVarType))
+	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*DeclareVar).Type = newNode.(*ColumnType)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -3726,24 +3718,6 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfDeleteWhere))
-	}
-	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
-		parent.(*Delete).Where = newNode.(*Where)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfDeleteLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*Delete).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
@@ -3781,10 +3755,28 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteWhere))
+	}
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Delete).Where = newNode.(*Where)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfDeleteOrderBy))
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Delete).OrderBy = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Delete).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
@@ -4039,19 +4031,19 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfDropTableComments))
+		a.cur.current.AddStep(uint16(RefOfDropTableFromTables))
 	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropTable).Comments = newNode.(*ParsedComments)
+	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+		parent.(*DropTable).FromTables = newNode.(TableNames)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfDropTableFromTables))
+		a.cur.current.AddStep(uint16(RefOfDropTableComments))
 	}
-	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
-		parent.(*DropTable).FromTables = newNode.(TableNames)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4088,19 +4080,19 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfDropViewComments))
+		a.cur.current.AddStep(uint16(RefOfDropViewFromTables))
 	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropView).Comments = newNode.(*ParsedComments)
+	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+		parent.(*DropView).FromTables = newNode.(TableNames)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfDropViewFromTables))
+		a.cur.current.AddStep(uint16(RefOfDropViewComments))
 	}
-	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
-		parent.(*DropView).FromTables = newNode.(TableNames)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4649,10 +4641,10 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionReferenceDefinition))
+		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionSource))
 	}
-	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
+	if !a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -4667,10 +4659,10 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionSource))
+		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionReferenceDefinition))
 	}
-	if !a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
+	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
 	}) {
 		return false
 	}
@@ -5535,17 +5527,6 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfGroupConcatExprLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
@@ -5568,6 +5549,15 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGroupConcatExprLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
@@ -5882,15 +5872,6 @@ func (a *application) rewriteRefOfIfStatement(parent SQLNode, node *IfStatement,
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfIfStatementElseStatements))
-	}
-	if !a.rewriteRefOfCompoundStatements(node, node.ElseStatements, func(newNode, parent SQLNode) {
-		parent.(*IfStatement).ElseStatements = newNode.(*CompoundStatements)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.ElseIfBlocks {
 		if a.collectPaths {
@@ -5907,6 +5888,15 @@ func (a *application) rewriteRefOfIfStatement(parent SQLNode, node *IfStatement,
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.ElseIfBlocks) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfIfStatementElseStatements))
+	}
+	if !a.rewriteRefOfCompoundStatements(node, node.ElseStatements, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).ElseStatements = newNode.(*CompoundStatements)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -6126,15 +6116,6 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfInsertRows))
-	}
-	if !a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
-		parent.(*Insert).Rows = newNode.(InsertRows)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfInsertComments))
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
@@ -6153,15 +6134,6 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfInsertRowAlias))
-	}
-	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
-		parent.(*Insert).RowAlias = newNode.(*RowAlias)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfInsertPartitions))
 	}
 	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
@@ -6175,6 +6147,24 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*Insert).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertRows))
+	}
+	if !a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
+		parent.(*Insert).Rows = newNode.(InsertRows)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertRowAlias))
+	}
+	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
+		parent.(*Insert).RowAlias = newNode.(*RowAlias)
 	}) {
 		return false
 	}
@@ -8475,17 +8465,6 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfMatchExprExpr))
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*MatchExpr).Expr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -8501,6 +8480,15 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node.Columns) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfMatchExprExpr))
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*MatchExpr).Expr = newNode.(Expr)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -9566,19 +9554,19 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfOverClauseWindowSpec))
+		a.cur.current.AddStep(uint16(RefOfOverClauseWindowName))
 	}
-	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
-		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
+	if !a.rewriteIdentifierCI(node, node.WindowName, func(newNode, parent SQLNode) {
+		parent.(*OverClause).WindowName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfOverClauseWindowName))
+		a.cur.current.AddStep(uint16(RefOfOverClauseWindowSpec))
 	}
-	if !a.rewriteIdentifierCI(node, node.WindowName, func(newNode, parent SQLNode) {
-		parent.(*OverClause).WindowName = newNode.(IdentifierCI)
+	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
+		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
 	}
@@ -9686,19 +9674,19 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptions))
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionName))
 	}
-	if !a.rewriteRefOfPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionName))
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptions))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).Name = newNode.(IdentifierCI)
+	if !a.rewriteRefOfPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
 	}) {
 		return false
 	}
@@ -9851,6 +9839,15 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionOptionColList))
+	}
+	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).ColList = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfPartitionOptionExpr))
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
@@ -9864,15 +9861,6 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	}
 	if !a.rewriteRefOfSubPartition(node, node.SubPartition, func(newNode, parent SQLNode) {
 		parent.(*PartitionOption).SubPartition = newNode.(*SubPartition)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfPartitionOptionColList))
-	}
-	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
-		parent.(*PartitionOption).ColList = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -9928,6 +9916,15 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionSpecNames))
+	}
+	if !a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
+		parent.(*PartitionSpec).Names = newNode.(Partitions)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfPartitionSpecNumber))
 	}
 	if !a.rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
@@ -9941,15 +9938,6 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	}
 	if !a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).TableName = newNode.(TableName)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfPartitionSpecNames))
-	}
-	if !a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
-		parent.(*PartitionSpec).Names = newNode.(Partitions)
 	}) {
 		return false
 	}
@@ -10328,6 +10316,15 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPrepareStmtName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfPrepareStmtStatement))
 	}
 	if !a.rewriteExpr(node, node.Statement, func(newNode, parent SQLNode) {
@@ -10341,15 +10338,6 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*PrepareStmt).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfPrepareStmtName))
-	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -10386,19 +10374,19 @@ func (a *application) rewriteRefOfProcParameter(parent SQLNode, node *ProcParame
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfProcParameterType))
+		a.cur.current.AddStep(uint16(RefOfProcParameterName))
 	}
-	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
-		parent.(*ProcParameter).Type = newNode.(*ColumnType)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ProcParameter).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfProcParameterName))
+		a.cur.current.AddStep(uint16(RefOfProcParameterType))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ProcParameter).Name = newNode.(IdentifierCI)
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ProcParameter).Type = newNode.(*ColumnType)
 	}) {
 		return false
 	}
@@ -11292,82 +11280,10 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfSelectComments))
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Select).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectInto))
-	}
-	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
-		parent.(*Select).Into = newNode.(*SelectInto)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*Select).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectHaving))
-	}
-	if !a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
-		parent.(*Select).Having = newNode.(*Where)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectGroupBy))
-	}
-	if !a.rewriteRefOfGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
-		parent.(*Select).GroupBy = newNode.(*GroupBy)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectWhere))
-	}
-	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
-		parent.(*Select).Where = newNode.(*Where)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectSelectExprs))
-	}
-	if !a.rewriteRefOfSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
-		parent.(*Select).SelectExprs = newNode.(*SelectExprs)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfSelectWith))
 	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*Select).With = newNode.(*With)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSelectWindows))
-	}
-	if !a.rewriteNamedWindows(node, node.Windows, func(newNode, parent SQLNode) {
-		parent.(*Select).Windows = newNode.(NamedWindows)
 	}) {
 		return false
 	}
@@ -11392,10 +11308,82 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if a.collectPaths && len(node.From) > 0 {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Select).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectSelectExprs))
+	}
+	if !a.rewriteRefOfSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+		parent.(*Select).SelectExprs = newNode.(*SelectExprs)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectWhere))
+	}
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Select).Where = newNode.(*Where)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectGroupBy))
+	}
+	if !a.rewriteRefOfGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+		parent.(*Select).GroupBy = newNode.(*GroupBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectHaving))
+	}
+	if !a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
+		parent.(*Select).Having = newNode.(*Where)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectWindows))
+	}
+	if !a.rewriteNamedWindows(node, node.Windows, func(newNode, parent SQLNode) {
+		parent.(*Select).Windows = newNode.(NamedWindows)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfSelectOrderBy))
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Select).OrderBy = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Select).Limit = newNode.(*Limit)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectInto))
+	}
+	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
+		parent.(*Select).Into = newNode.(*SelectInto)
 	}) {
 		return false
 	}
@@ -11714,24 +11702,6 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfShowBasicFilter))
-	}
-	if !a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
-		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfShowBasicLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*ShowBasic).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfShowBasicTbl))
 	}
 	if !a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
@@ -11745,6 +11715,24 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}
 	if !a.rewriteIdentifierCS(node, node.DbName, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).DbName = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfShowBasicFilter))
+	}
+	if !a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfShowBasicLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
@@ -12742,19 +12730,19 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfSubPartitionExpr))
+		a.cur.current.AddStep(uint16(RefOfSubPartitionColList))
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*SubPartition).Expr = newNode.(Expr)
+	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
+		parent.(*SubPartition).ColList = newNode.(Columns)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSubPartitionColList))
+		a.cur.current.AddStep(uint16(RefOfSubPartitionExpr))
 	}
-	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
-		parent.(*SubPartition).ColList = newNode.(Columns)
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*SubPartition).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -12791,19 +12779,19 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptions))
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionName))
 	}
-	if !a.rewriteRefOfSubPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
-		parent.(*SubPartitionDefinition).Options = newNode.(*SubPartitionDefinitionOptions)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionName))
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptions))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*SubPartitionDefinition).Name = newNode.(IdentifierCI)
+	if !a.rewriteRefOfSubPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinition).Options = newNode.(*SubPartitionDefinitionOptions)
 	}) {
 		return false
 	}
@@ -13274,17 +13262,6 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfTableSpecPartitionOption))
-	}
-	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
-		parent.(*TableSpec).PartitionOption = newNode.(*PartitionOption)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -13345,6 +13322,15 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	if !a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTableSpecPartitionOption))
+	}
+	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
+		parent.(*TableSpec).PartitionOption = newNode.(*PartitionOption)
 	}) {
 		return false
 	}
@@ -13590,6 +13576,15 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUnionWith))
+	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Union).With = newNode.(*With)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfUnionLeft))
 	}
 	if !a.rewriteTableStatement(node, node.Left, func(newNode, parent SQLNode) {
@@ -13608,10 +13603,10 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfUnionWith))
+		a.cur.current.AddStep(uint16(RefOfUnionOrderBy))
 	}
-	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
-		parent.(*Union).With = newNode.(*With)
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Union).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
@@ -13630,15 +13625,6 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Union).Into = newNode.(*SelectInto)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfUnionOrderBy))
-	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*Union).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
@@ -13724,24 +13710,6 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfUpdateWhere))
-	}
-	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
-		parent.(*Update).Where = newNode.(*Where)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfUpdateLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*Update).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
@@ -13770,10 +13738,28 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateWhere))
+	}
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Update).Where = newNode.(*Where)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfUpdateOrderBy))
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Update).OrderBy = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Update).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
@@ -14054,6 +14040,15 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVStreamComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VStream).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfVStreamSelectExpr))
 	}
 	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
@@ -14063,10 +14058,10 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfVStreamComments))
+		a.cur.current.AddStep(uint16(RefOfVStreamTable))
 	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*VStream).Comments = newNode.(*ParsedComments)
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*VStream).Table = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -14085,15 +14080,6 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*VStream).Limit = newNode.(*Limit)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfVStreamTable))
-	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*VStream).Table = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -14306,19 +14292,10 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfValuesStatementComments))
+		a.cur.current.AddStep(uint16(RefOfValuesStatementRows))
 	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ValuesStatement).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfValuesStatementLimit))
-	}
-	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
-		parent.(*ValuesStatement).Limit = newNode.(*Limit)
+	if !a.rewriteValues(node, node.Rows, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Rows = newNode.(Values)
 	}) {
 		return false
 	}
@@ -14333,10 +14310,10 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfValuesStatementRows))
+		a.cur.current.AddStep(uint16(RefOfValuesStatementComments))
 	}
-	if !a.rewriteValues(node, node.Rows, func(newNode, parent SQLNode) {
-		parent.(*ValuesStatement).Rows = newNode.(Values)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -14346,6 +14323,15 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}
 	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Order = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
@@ -14812,19 +14798,19 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfWindowDefinitionWindowSpec))
+		a.cur.current.AddStep(uint16(RefOfWindowDefinitionName))
 	}
-	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
-		parent.(*WindowDefinition).WindowSpec = newNode.(*WindowSpecification)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*WindowDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfWindowDefinitionName))
+		a.cur.current.AddStep(uint16(RefOfWindowDefinitionWindowSpec))
 	}
-	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*WindowDefinition).Name = newNode.(IdentifierCI)
+	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
+		parent.(*WindowDefinition).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
 	}
@@ -14909,15 +14895,6 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfWindowSpecificationFrameClause))
-	}
-	if !a.rewriteRefOfFrameClause(node, node.FrameClause, func(newNode, parent SQLNode) {
-		parent.(*WindowSpecification).FrameClause = newNode.(*FrameClause)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfWindowSpecificationName))
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
@@ -14950,6 +14927,15 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}
 	if !a.rewriteOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).OrderClause = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWindowSpecificationFrameClause))
+	}
+	if !a.rewriteRefOfFrameClause(node, node.FrameClause, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).FrameClause = newNode.(*FrameClause)
 	}) {
 		return false
 	}
