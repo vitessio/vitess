@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -889,6 +890,141 @@ func TestComQueryMulti(t *testing.T) {
 			assert.Equal(t, len(tt.queryResponses), idx)
 		})
 	}
+}
+
+func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	prepare := &mysql.PrepareData{
+		PrepareStmt: "select id from user where id = 1",
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(context.Background(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select 1", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Zero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
 func TestGracefulShutdown(t *testing.T) {

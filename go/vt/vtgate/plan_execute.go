@@ -482,6 +482,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.QueryType.String()
+	logStats.PlanType = plan.Type.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
@@ -511,6 +512,7 @@ func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine
 	execStart := time.Now()
 	if plan != nil {
 		logStats.StmtType = plan.QueryType.String()
+		logStats.PlanType = plan.Type.String()
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart
