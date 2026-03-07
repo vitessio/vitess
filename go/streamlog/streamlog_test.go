@@ -60,9 +60,7 @@ func TestHTTP(t *testing.T) {
 
 	go func() {
 		err := servenv.HTTPServe(l)
-		if err != nil {
-			t.Errorf("http serve returned unexpected error: %v", err)
-		}
+		require.NoError(t, err)
 	}()
 
 	logger := New[*logMessage]("logger", 1)
@@ -73,39 +71,31 @@ func TestHTTP(t *testing.T) {
 
 	// Subscribe.
 	resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}()
 	body := bufio.NewReader(resp.Body)
-	if sz := len(logger.subscribed); sz != 1 {
-		t.Errorf("want 1, got %d", sz)
-	}
+	assert.Len(t, logger.subscribed, 1)
 
 	// Send some messages.
 	for i := range 10 {
 		msg := fmt.Sprint("msg", i)
 		logger.Send(&logMessage{msg})
 		val, err := body.ReadString('\n')
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		if i == 0 && val == "val1\n" {
 			// the value that was sent has been in the
 			// channels and was actually processed after the
 			// subscription took effect. This is fine.
 			val, err = body.ReadString('\n')
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 		}
-		if want := msg + "\n"; val != want {
-			t.Errorf("want %q, got %q", msg, val)
-		}
+		assert.Equal(t, msg+"\n", val)
 	}
 
 	// Shutdown.
@@ -117,19 +107,16 @@ func TestHTTP(t *testing.T) {
 	// send multiple messages to detect the client has gone away.
 	// 4 seems to be a minimum, but doesn't always work. So 10 it is.
 	logger.mu.Lock()
-	if want, got := 1, len(logger.subscribed); want != got {
-		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
-	}
+	assert.Len(t, logger.subscribed, 1)
 	logger.mu.Unlock()
+
 	for range 10 {
 		logger.Send(&logMessage{"val3"})
 		// Allow time for propagation (loopback interface - expected to be fast).
 		time.Sleep(1 * time.Millisecond)
 	}
 	logger.mu.Lock()
-	if want, got := 0, len(logger.subscribed); want != got {
-		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
-	}
+	assert.Len(t, logger.subscribed, 0)
 	logger.mu.Unlock()
 }
 
@@ -143,18 +130,14 @@ func TestChannel(t *testing.T) {
 			logger.Unsubscribe(ch)
 		}
 	}()
-	if sz := len(logger.subscribed); sz != 1 {
-		t.Errorf("want 1, got %d", sz)
-	}
+	assert.Len(t, logger.subscribed, 1)
 
 	// Send/receive some messages, one at a time.
 	for i := range 10 {
 		msg := fmt.Sprint("msg", i)
 		done := make(chan struct{})
 		go func() {
-			if want, got := msg+"\n", (<-ch).Format(nil); got != want {
-				t.Errorf("Unexpected message in log. got: %q, want: %q", got, want)
-			}
+			assert.Equal(t, msg+"\n", (<-ch).Format(nil))
 			close(done)
 		}()
 		logger.Send(&logMessage{msg})
@@ -188,18 +171,14 @@ func TestChannel(t *testing.T) {
 		t.Errorf("Bad results length: got %d, want %d", len(got), len(want))
 	} else {
 		for i := range want {
-			if want[i]+"\n" != got[i] {
-				t.Errorf("Unexpected result in log: got %q, want %q", got[i], want[i]+"\n")
-			}
+			assert.Equal(t, want[i]+"\n", got[i])
 		}
 	}
 
 	// Shutdown.
 	logger.Unsubscribe(ch)
 	ch = nil
-	if sz := len(logger.subscribed); sz != 0 {
-		t.Errorf("want 0, got %d", sz)
-	}
+	assert.Len(t, logger.subscribed, 0)
 }
 
 func TestFile(t *testing.T) {
@@ -210,9 +189,7 @@ func TestFile(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)
 	defer logger.Unsubscribe(logChan)
-	if err != nil {
-		t.Errorf("error enabling file logger: %v", err)
-	}
+	require.NoError(t, err)
 
 	logger.Send(&logMessage{"test 1"})
 	logger.Send(&logMessage{"test 2"})
@@ -223,9 +200,7 @@ func TestFile(t *testing.T) {
 	want := "test 1\ntest 2\n"
 	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
-	}
+	assert.Equal(t, want, got)
 
 	// Rename and send another log which should go to the renamed file
 	rotatedPath := path.Join(dir, "test.log.1")
@@ -237,9 +212,7 @@ func TestFile(t *testing.T) {
 	want = "test 1\ntest 2\ntest 3\n"
 	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
-	}
+	assert.Equal(t, want, got)
 
 	// Send the rotate signal which should reopen the original file path
 	// for new logs to go to
@@ -254,16 +227,12 @@ func TestFile(t *testing.T) {
 	want = "test 1\ntest 2\ntest 3\n"
 	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
-	}
+	assert.Equal(t, want, got)
 
 	want = "test 4\n"
 	contents, _ = os.ReadFile(logPath)
 	got = string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
-	}
+	assert.Equal(t, want, got)
 }
 
 func TestShouldSampleQuery(t *testing.T) {

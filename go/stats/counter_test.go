@@ -32,23 +32,15 @@ func TestCounter(t *testing.T) {
 		gotv = v.(*Counter)
 	})
 	v := NewCounter("Int", "help")
-	if gotname != "Int" {
-		t.Errorf("want Int, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "Int", gotname)
+	assert.Equal(t, v, gotv)
+
 	v.Add(1)
-	if v.Get() != 1 {
-		t.Errorf("want 1, got %v", v.Get())
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.Get())
-	}
+	assert.Equal(t, int64(1), v.Get())
+	assert.Equal(t, "1", v.String())
+
 	v.Reset()
-	if v.Get() != 0 {
-		t.Errorf("want 0, got %v", v.Get())
-	}
+	assert.Equal(t, int64(0), v.Get())
 }
 
 func TestGaugeFunc(t *testing.T) {
@@ -63,15 +55,10 @@ func TestGaugeFunc(t *testing.T) {
 	v := NewGaugeFunc("name", "help", func() int64 {
 		return 1
 	})
-	if gotname != "name" {
-		t.Errorf("want name, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.String())
-	}
+
+	assert.Equal(t, "name", gotname)
+	assert.Equal(t, v, gotv)
+	assert.Equal(t, "1", v.String())
 }
 
 func TestGaugeFloat64(t *testing.T) {
