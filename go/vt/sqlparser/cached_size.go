@@ -680,6 +680,8 @@ func (cached *CharExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
+	// field Charset string
+	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
 	// field Exprs []vitess.io/vitess/go/vt/sqlparser.Expr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
@@ -689,8 +691,6 @@ func (cached *CharExpr) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Charset string
-	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
 	return size
 }
 
@@ -777,14 +777,14 @@ func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(96)
 	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Options *vitess.io/vitess/go/vt/sqlparser.ColumnTypeOptions
 	size += cached.Options.CachedSize(true)
 	// field Length *int
 	size += hack.RuntimeAllocSize(int64(8))
 	// field Scale *int
 	size += hack.RuntimeAllocSize(int64(8))
+	// field Type string
+	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
 	size += cached.Charset.CachedSize(false)
 	// field EnumValues []string
@@ -2319,12 +2319,12 @@ func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
-	// field CharacterSet string
-	size += hack.RuntimeAllocSize(int64(len(cached.CharacterSet)))
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CharacterSet string
+	size += hack.RuntimeAllocSize(int64(len(cached.CharacterSet)))
 	return size
 }
 
@@ -3597,6 +3597,8 @@ func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
+	// field _directives *vitess.io/vitess/go/vt/sqlparser.CommentDirectives
+	size += cached._directives.CachedSize(true)
 	// field comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.comments)) * int64(16))
@@ -3604,8 +3606,6 @@ func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field _directives *vitess.io/vitess/go/vt/sqlparser.CommentDirectives
-	size += cached._directives.CachedSize(true)
 	return size
 }
 
@@ -3945,14 +3945,14 @@ func (cached *QueryHints) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Workload string
-	size += hack.RuntimeAllocSize(int64(len(cached.Workload)))
 	// field ForeignKeyChecks *bool
 	size += hack.RuntimeAllocSize(int64(1))
-	// field Priority string
-	size += hack.RuntimeAllocSize(int64(len(cached.Priority)))
 	// field Timeout *int
 	size += hack.RuntimeAllocSize(int64(8))
+	// field Workload string
+	size += hack.RuntimeAllocSize(int64(len(cached.Workload)))
+	// field Priority string
+	size += hack.RuntimeAllocSize(int64(len(cached.Priority)))
 	return size
 }
 
@@ -4197,10 +4197,10 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field UUID string
-	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	// field UUID string
+	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	return size
 }
 
@@ -4508,12 +4508,12 @@ func (cached *ShowFilter) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
-	// field Like string
-	size += hack.RuntimeAllocSize(int64(len(cached.Like)))
 	// field Filter vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Filter.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Like string
+	size += hack.RuntimeAllocSize(int64(len(cached.Like)))
 	return size
 }
 
@@ -4545,10 +4545,10 @@ func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field UUID string
-	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	// field UUID string
+	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	return size
 }
 

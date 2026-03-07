@@ -194,9 +194,9 @@ func TestAndExpressions(t *testing.T) {
 		},
 	}
 	testcases := []struct {
+		expectedOutput Expr
 		name           string
 		expressions    []Expr
-		expectedOutput Expr
 	}{
 		{
 			name:           "empty input",

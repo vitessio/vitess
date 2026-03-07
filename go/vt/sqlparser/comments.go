@@ -565,12 +565,12 @@ func checkDirective(stmt Statement, key string) bool {
 }
 
 type QueryHints struct {
-	IgnoreMaxMemoryRows bool
-	Consolidator        querypb.ExecuteOptions_Consolidator
-	Workload            string
 	ForeignKeyChecks    *bool
-	Priority            string
 	Timeout             *int
+	Workload            string
+	Priority            string
+	Consolidator        querypb.ExecuteOptions_Consolidator
+	IgnoreMaxMemoryRows bool
 }
 
 func BuildQueryHints(stmt Statement) (qh QueryHints, err error) {

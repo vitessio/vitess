@@ -144,9 +144,9 @@ const (
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
+	Filter *ShowFilter
 	Full   string
 	DbName string
-	Filter *ShowFilter
 }
 
 // ValType specifies the type for Literal.

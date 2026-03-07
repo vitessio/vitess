@@ -25,9 +25,9 @@ import (
 
 func TestEmptyErrorAndComments(t *testing.T) {
 	testcases := []struct {
+		err    error
 		input  string
 		output string
-		err    error
 	}{
 		{
 			input:  "select 1",

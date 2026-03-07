@@ -173,8 +173,8 @@ func TestGenerateQuery(t *testing.T) {
 func TestParseAndBind(t *testing.T) {
 	testcases := []struct {
 		in    string
-		binds []*querypb.BindVariable
 		out   string
+		binds []*querypb.BindVariable
 	}{
 		{
 			in:  "select * from tbl",
@@ -223,10 +223,10 @@ func TestParseAndBind(t *testing.T) {
 
 func TestCastBindVars(t *testing.T) {
 	testcases := []struct {
-		typ   sqltypes.Type
-		size  int
 		binds map[string]*querypb.BindVariable
 		out   string
+		size  int
+		typ   sqltypes.Type
 	}{
 		{
 			typ:   sqltypes.Decimal,

@@ -196,15 +196,15 @@ type (
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// RenameColumn is used to change the column definition in alter table command
@@ -440,8 +440,8 @@ type (
 	CreateDatabase struct {
 		Comments      *ParsedComments
 		DBName        IdentifierCS
-		IfNotExists   bool
 		CreateOptions []DatabaseOption
+		IfNotExists   bool
 		FullyParsed   bool
 	}
 
@@ -449,16 +449,16 @@ type (
 	AlterDatabase struct {
 		Comments            *ParsedComments
 		DBName              IdentifierCS
-		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
+		UpdateDataDirectory bool
 		FullyParsed         bool
 	}
 
 	// Flush represents a FLUSH statement.
 	Flush struct {
-		IsLocal      bool
 		FlushOptions []string
 		TableNames   TableNames
+		IsLocal      bool
 		WithLock     bool
 		ForExport    bool
 	}
@@ -496,8 +496,8 @@ type (
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
@@ -512,8 +512,8 @@ type (
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -754,8 +754,8 @@ type (
 
 	// Analyze represents the Analyze statement.
 	Analyze struct {
-		IsLocal bool
 		Table   TableName
+		IsLocal bool
 	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
@@ -2237,23 +2237,24 @@ type ColumnDefinition struct {
 // ColumnType represents a sql type in a CREATE TABLE statement
 // All optional fields are nil if not specified
 type ColumnType struct {
-	// The base type string
-	Type string
-
 	// Generic field options.
 	Options *ColumnTypeOptions
 
 	// Numeric field options
-	Length   *int
-	Unsigned bool
-	Zerofill bool
-	Scale    *int
+	Length *int
+	Scale  *int
+
+	// The base type string
+	Type string
 
 	// Text field options
 	Charset ColumnCharset
 
 	// Enum and Set column definition values
 	EnumValues []string
+
+	Unsigned bool
+	Zerofill bool
 }
 
 // ColumnCharset exists because in the type definition it's possible
@@ -2405,8 +2406,8 @@ type (
 
 // ShowFilter is show tables filter
 type ShowFilter struct {
-	Like   string
 	Filter Expr
+	Like   string
 }
 
 // Comments represents a list of comments.
@@ -2420,8 +2421,8 @@ func (c Comments) Parsed() *ParsedComments {
 }
 
 type ParsedComments struct {
-	comments    Comments
 	_directives *CommentDirectives
+	comments    Comments
 }
 
 type SelectExprs struct {
@@ -2528,8 +2529,8 @@ type (
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
-		Lateral bool
 		Select  TableStatement
+		Lateral bool
 	}
 )
 
@@ -2715,9 +2716,10 @@ type (
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
-		IsBetween bool
 		Left      Expr
-		From, To  Expr
+		From      Expr
+		To        Expr
+		IsBetween bool
 	}
 
 	// RangeCondOperator is an enum for RangeCond.Operator
@@ -2744,8 +2746,8 @@ type (
 
 	// Literal represents a fixed value.
 	Literal struct {
-		Type ValType
 		Val  string
+		Type ValType
 	}
 
 	// Argument represents bindvariable expression
@@ -2808,8 +2810,8 @@ type (
 
 	// IntroducerExpr represents a unary value expression.
 	IntroducerExpr struct {
-		CharacterSet string
 		Expr         Expr
+		CharacterSet string
 	}
 
 	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
@@ -2922,8 +2924,8 @@ type (
 
 	// CharExpr represents a CHAR function expression
 	CharExpr struct {
-		Exprs   []Expr
 		Charset string
+		Exprs   []Expr
 	}
 
 	// Default represents a DEFAULT expression.
@@ -2965,8 +2967,8 @@ type (
 	// Offset is an AST type that is used during planning and never produced by the parser
 	// it is the column offset from the incoming result stream
 	Offset struct {
-		V        int
 		Original Expr
+		V        int
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -3361,7 +3363,7 @@ type (
 	}
 
 	CountStar struct {
-		_ bool
+		OverClause *OverClause
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
 		// You're correct that this might seem a bit strange at first glance.
@@ -3388,31 +3390,31 @@ type (
 		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
 		// This ensures that each instance of `CountStar` is treated as a separate object,
 		// even in the context of out semantic state which uses these objects as map keys.
-		OverClause *OverClause
+		_ bool
 	}
 
 	Avg struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Max struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Min struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Sum struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	BitAnd struct {

@@ -31,23 +31,21 @@ const (
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
+	partialDDL          Statement
+	LastError           error
+	parser              *Parser
+	BindVars            map[string]struct{}
+	specialComment      *Tokenizer
+	lastToken           string
+	buf                 string
+	ParseTrees          []Statement
+	lastTokenType       int
+	Pos                 int
+	posVarIndex         int
 	AllowComments       bool
+	multi               bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
-	LastError           error
-	ParseTrees          []Statement
-	BindVars            map[string]struct{}
-
-	lastTokenType  int
-	lastToken      string
-	posVarIndex    int
-	partialDDL     Statement
-	multi          bool
-	specialComment *Tokenizer
-
-	Pos    int
-	buf    string
-	parser *Parser
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -98,8 +96,8 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 // PositionedErr holds context related to parser errors
 type PositionedErr struct {
 	Err  string
-	Pos  int
 	Near string
+	Pos  int
 }
 
 func (p PositionedErr) Error() string {

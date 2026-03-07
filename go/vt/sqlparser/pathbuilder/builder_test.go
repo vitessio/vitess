@@ -25,8 +25,8 @@ import (
 func TestASTPathBuilderAddStep(t *testing.T) {
 	tests := []struct {
 		name     string
-		steps    []uint16
 		wantPath string
+		steps    []uint16
 	}{
 		{
 			name:     "single step",
@@ -53,9 +53,9 @@ func TestASTPathBuilderAddStep(t *testing.T) {
 func TestASTPathBuilderAddStepOffset(t *testing.T) {
 	tests := []struct {
 		name     string
+		wantPath string
 		steps    []uint16
 		offsets  []int
-		wantPath string
 	}{
 		{
 			name:     "single step",
@@ -91,9 +91,9 @@ func TestASTPathBuilderAddStepOffset(t *testing.T) {
 func TestASTPathBuilderPop(t *testing.T) {
 	tests := []struct {
 		name     string
+		wantPath string
 		steps    []uint16
 		offsets  []int
-		wantPath string
 	}{
 		{
 			name:     "single step",
