@@ -97,7 +97,7 @@ func getTextFromWikipedia(lang testutil.Lang, article string) (string, error) {
 		return "", err
 	}
 
-	var chunks []string
+	chunks := make([]string, 0, len(response.Query.Pages))
 	for _, page := range response.Query.Pages {
 		chunks = append(chunks, page.Extract)
 	}
@@ -213,7 +213,7 @@ func main() {
 
 		var total int
 		var collationNames []string
-		var interestingCollations []collations.ID
+		interestingCollations := make([]collations.ID, 0, len(rootCollations)+len(collationsForLanguage[lang]))
 		interestingCollations = append(interestingCollations, rootCollations...)
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 

@@ -409,7 +409,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				// client keeps track of its replication position by updating the set
 				// of GTIDs it's seen, we must commit an empty transaction so the client
 				// can update its position.
-				statements = nil
+				statements = nil //nolint:prealloc // nil signals "not in transaction"
 				fallthrough
 			case binlogdatapb.BinlogTransaction_Statement_BL_COMMIT:
 				if err = commit(ev.Timestamp()); err != nil {

@@ -62,7 +62,7 @@ func encodeString(in string) string {
 }
 
 func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
-	var res []*engine.GroupByParams
+	res := make([]*engine.GroupByParams, 0, len(pkCols))
 	for _, col := range pkCols {
 		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, CollationEnv: collationEnv})
 	}

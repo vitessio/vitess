@@ -403,7 +403,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		if err != nil {
 			return err
 		}
-		args := []string{
+		args := []string{ //nolint:prealloc
 			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 		}

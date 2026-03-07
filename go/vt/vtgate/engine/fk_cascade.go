@@ -100,7 +100,7 @@ func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCu
 		Type: querypb.Type_TUPLE,
 	}
 	for _, row := range selectionRes.Rows {
-		var tupleValues []sqltypes.Value
+		tupleValues := make([]sqltypes.Value, 0, len(child.Cols))
 
 		for _, colIdx := range child.Cols {
 			tupleValues = append(tupleValues, row[colIdx])
@@ -185,8 +185,8 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 
 // Inputs implements the Primitive interface.
 func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
-	var inputs []Primitive
-	var inputsMap []map[string]any
+	var inputs []Primitive         //nolint:prealloc
+	var inputsMap []map[string]any //nolint:prealloc
 	inputs = append(inputs, fkc.Selection)
 	inputsMap = append(inputsMap, map[string]any{
 		inputName: "Selection",

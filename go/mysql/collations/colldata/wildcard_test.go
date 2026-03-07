@@ -366,7 +366,7 @@ func BenchmarkWildcardMatching(b *testing.B) {
 		m2    WildcardPattern
 	}
 
-	var patterns []bench
+	patterns := make([]bench, 0, len(wildcardTestCases))
 	for _, tc := range wildcardTestCases {
 		patterns = append(patterns, bench{
 			input: []byte(tc.in),

@@ -42,7 +42,7 @@ var _ Operator = (*FkVerify)(nil)
 
 // Inputs implements the Operator interface
 func (fkv *FkVerify) Inputs() []Operator {
-	inputs := []Operator{fkv.Input}
+	inputs := []Operator{fkv.Input} //nolint:prealloc
 	for _, v := range fkv.Verify {
 		inputs = append(inputs, v.Op)
 	}

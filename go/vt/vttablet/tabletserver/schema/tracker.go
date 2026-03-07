@@ -280,7 +280,7 @@ func MustReloadSchemaOnDDL(sql string, dbname string, parser *sqlparser.Parser) 
 	case sqlparser.DBDDLStatement:
 		return false
 	case sqlparser.DDLStatement:
-		tables := []sqlparser.TableName{stmt.GetTable()}
+		tables := []sqlparser.TableName{stmt.GetTable()} //nolint:prealloc
 		tables = append(tables, stmt.GetToTables()...)
 		for _, table := range tables {
 			if table.IsEmpty() {

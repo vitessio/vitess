@@ -68,10 +68,10 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() safehtml.HTML {
 		Extra string
 	}
 
-	var tLinks []link
 	if tcs.TabletsStats != nil {
 		sort.Sort(tcs.TabletsStats)
 	}
+	tLinks := make([]link, 0, len(tcs.TabletsStats))
 	for _, ts := range tcs.TabletsStats {
 		color := "green"
 		extra := ""

@@ -157,11 +157,12 @@ func (bs *CephBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 	bucket := alterBucketName(dir)
 
 	// List prefixes that begin with dir (i.e. list subdirs).
-	var subdirs []string
-	searchPrefix := objName(dir, "")
-
 	doneCh := make(chan struct{})
-	for object := range c.ListObjects(bucket, searchPrefix, false, doneCh) {
+	searchPrefix := objName(dir, "")
+	objects := c.ListObjects(bucket, searchPrefix, false, doneCh)
+	var subdirs []string
+
+	for object := range objects {
 		if object.Err != nil {
 			_, err := c.BucketExists(bucket)
 			if err != nil {
@@ -232,10 +233,11 @@ func (bs *CephBackupStorage) RemoveBackup(ctx context.Context, dir, name string)
 	bucket := alterBucketName(dir)
 
 	fullName := objName(dir, name, "")
-	var arr []string
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	for object := range c.ListObjects(bucket, fullName, true, doneCh) {
+	objects := c.ListObjects(bucket, fullName, true, doneCh)
+	arr := make([]string, 0, len(objects))
+	for object := range objects {
 		if object.Err != nil {
 			return object.Err
 		}

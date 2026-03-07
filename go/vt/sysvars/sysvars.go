@@ -301,8 +301,8 @@ func SupportsSetVar(name string) bool {
 
 // GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
 func GetInterestingVariables() []string {
-	var res []string
 	// Add all the vitess aware variables
+	var res []string
 	for _, variable := range VitessAware {
 		res = append(res, variable.Name)
 	}
