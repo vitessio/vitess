@@ -23,7 +23,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && apt-g
     ant \
     ca-certificates \
     curl \
-    default-jdk-headless \
+    default-jre-headless \
     g++ \
     git \
     gnupg \
