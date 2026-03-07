@@ -3067,6 +3067,10 @@ func (f *fakeMysqlConnection) KillConnection(ctx context.Context, connID uint32)
 	return nil
 }
 
+func (f *fakeMysqlConnection) SetQueryWasSlow(slow bool) {
+	f.Log = append(f.Log, fmt.Sprintf("slow query: %t", slow))
+}
+
 var _ vtgateservice.MySQLConnection = (*fakeMysqlConnection)(nil)
 
 func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqltypes.Result, error) {
