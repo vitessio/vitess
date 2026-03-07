@@ -18,8 +18,10 @@ package vtgate
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -77,9 +79,52 @@ func TestQueryExecutionsByTable_OnError(t *testing.T) {
 		"queryExecutionsByTable counter should not be incremented on execution error")
 }
 
+func TestSlowQueriesCounter(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestSharded})
+	initialCount := getTotalSlowQueryCount()
+
+	_, err := executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, initialCount, getTotalSlowQueryCount(), "fast query should not increment slow query count")
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "slow query should increment slow query count")
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	slowQueryThreshold = 0
+	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "disabled slow query threshold should not increment slow query count")
+}
+
 // getCurrentQueryExecutionsByTableCounts returns the current values of all queryExecutionsByTable counters
 func getCurrentQueryExecutionsByTableCounts() map[string]int64 {
 	// queryExecutionsByTable is a global variable, so we can use its Counts() method
 	// to get all counter values. The keys are already formatted as "query.table"
 	return queryExecutionsByTable.Counts()
+}
+
+func getTotalSlowQueryCount() int64 {
+	var total int64
+	for _, count := range slowQueries.Counts() {
+		total += count
+	}
+	return total
 }

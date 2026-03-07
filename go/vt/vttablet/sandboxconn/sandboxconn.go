@@ -83,6 +83,7 @@ type SandboxConn struct {
 	ReserveCount                atomic.Int64
 	ReleaseCount                atomic.Int64
 	GetSchemaCount              atomic.Int64
+	ExecDelayResponse           time.Duration
 	GetSchemaDelayResponse      time.Duration
 
 	queriesRequireLocking bool
@@ -320,6 +321,9 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
+	if sbc.ExecDelayResponse > 0 {
+		time.Sleep(sbc.ExecDelayResponse)
+	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
@@ -345,6 +349,9 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 	if err != nil {
 		sbc.sExecMu.Unlock()
 		return err
+	}
+	if sbc.ExecDelayResponse > 0 {
+		time.Sleep(sbc.ExecDelayResponse)
 	}
 	parse, _ := sbc.parser.Parse(query)
 
