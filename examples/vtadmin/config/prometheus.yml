@@ -1,0 +1,17 @@
+# Prometheus configuration for VTAdmin demo cluster
+#
+# Collects metrics from all Vitess components:
+# - vtctld: Topology server
+# - vtgate: Query router
+# - vttablets: Database tablets
+#
+# Scrape interval: 10 seconds
+# Metrics accessible at: http://localhost:9090
+
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: 'vitess'
+    static_configs:
+      - targets: ['vtctld:8080', 'vtgate:8080', 'vttablet101:8080', 'vttablet102:8080', 'vttablet201:8080', 'vttablet202:8080', 'vttablet301:8080', 'vttablet302:8080']

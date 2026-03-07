@@ -18,6 +18,31 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 | `npm run lint:fix` | Run all of the linters and fix errors (where possible) in place. Note that this will overwrite your files so you may want to consider committing your work beforehand! |
 | `npm run build` | Generates a build of vtadmin-web for production and outputs the files to the `vitess/web/vtadmin/build` folder. In most cases, you won't need to run this locally, but it _can_ be useful for debugging production-specific issues. See the vite documentation about [testing the build locally](https://vitejs.dev/guide/static-deploy.html#testing-the-app-locally) for more information. |
 
+## Dashboards
+
+VTAdmin can be configured to link to external dashboards (e.g., Grafana, PMM) for clusters, gates and tablets. These links are configured via environment variables.
+
+The variables accept template strings with placeholders that are replaced with the relevant entity's data.
+
+| Variable | Description | Supported Placeholders |
+|---|---|---|
+| `VITE_VITESS_MONITORING_CLUSTER_TEMPLATE` | URL template for cluster metrics. | `{cluster}`, `{cluster_id}`, `{id}` |
+| `VITE_VITESS_MONITORING_VTTABLET_TEMPLATE` | URL template for tablet metrics. | `{cluster}`, `{keyspace}`, `{shard}`, `{alias}`, `{hostname}`, `{type}`, `{cell}` |
+| `VITE_VITESS_MONITORING_VTGATE_TEMPLATE` | URL template for VTGate metrics. | `{cluster}`, `{cluster_id}`, `{cell}`, `{hostname}`, `{pool}` |
+| `VITE_MYSQL_MONITORING_TEMPLATE` | URL template for MySQL metrics (e.g., PMM). Adds a "Metrics" column to Tablets and Gates views. | `{cluster}`, `{keyspace}`, `{shard}`, `{alias}`, `{hostname}`, `{type}`, `{cell}`, `{pool}` |
+| `VITE_VITESS_MONITORING_DASHBOARD_TITLE` | Title for the Vitess monitoring column/link. Defaults to "Vt Monitoring Dashboard". | N/A |
+| `VITE_MYSQL_MONITORING_DASHBOARD_TITLE` | Title for the MySQL monitoring column/link. Defaults to "DB Monitoring Dashboard". | N/A |
+
+### Example Configuration
+
+Create a `.env.local` file in `web/vtadmin/` to test locally:
+
+```bash
+VITE_VITESS_MONITORING_CLUSTER_TEMPLATE="https://grafana.example.com/d/cluster?var-cluster={cluster}"
+VITE_VITESS_MONITORING_VTTABLET_TEMPLATE="https://grafana.example.com/d/tablet?var-alias={alias}"
+VITE_MYSQL_MONITORING_TEMPLATE="https://pmm.example.com/graph/d/mysql?var-host={hostname}"
+```
+
 ## Toolchain
 
 - [React](https://reactjs.org/)
