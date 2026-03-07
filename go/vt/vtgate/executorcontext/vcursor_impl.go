@@ -91,6 +91,9 @@ type (
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
 		WarmingReadsChannel chan bool
+
+		SortBufferSize int64
+		SortTmpDir     string
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -397,6 +400,14 @@ func (vc *VCursorImpl) SQLMode() string {
 // MaxMemoryRows returns the maxMemoryRows flag value.
 func (vc *VCursorImpl) MaxMemoryRows() int {
 	return vc.config.MaxMemoryRows
+}
+
+func (vc *VCursorImpl) SortBufferSize() int64 {
+	return vc.config.SortBufferSize
+}
+
+func (vc *VCursorImpl) SortTmpDir() string {
+	return vc.config.SortTmpDir
 }
 
 // ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
