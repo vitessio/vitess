@@ -98,11 +98,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	}
 
 	buf.WriteByte(' ')
-	if node.Distinct {
-		buf.literal(UnionStr)
-	} else {
-		buf.literal(UnionAllStr)
-	}
+	buf.literal(node.setOpStr())
 	buf.WriteByte(' ')
 
 	if requiresParen(node.Right) {

@@ -1415,6 +1415,27 @@ func (node *Union) IsDistinct() bool {
 	return node.Distinct
 }
 
+// setOpStr returns the string representation of the set operation with distinct/all qualifier
+func (node *Union) setOpStr() string {
+	switch node.SetOp {
+	case ExceptSetOp:
+		if node.Distinct {
+			return ExceptStr
+		}
+		return ExceptAllStr
+	case IntersectSetOp:
+		if node.Distinct {
+			return IntersectStr
+		}
+		return IntersectAllStr
+	default:
+		if node.Distinct {
+			return UnionStr
+		}
+		return UnionAllStr
+	}
+}
+
 // GetColumnCount implements the SelectStatement interface
 func (node *Union) GetColumnCount() int {
 	return node.Left.GetColumnCount()

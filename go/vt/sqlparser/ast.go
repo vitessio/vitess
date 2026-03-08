@@ -330,7 +330,7 @@ type (
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
-	// Union represents a UNION statement.
+	// Union represents a UNION, EXCEPT, or INTERSECT statement.
 	Union struct {
 		With     *With
 		Left     TableStatement
@@ -340,6 +340,16 @@ type (
 		Limit    *Limit
 		Lock     Lock
 		Into     *SelectInto
+		SetOp    SetOpType
+	}
+
+	// SetOpType represents the type of set operation (UNION, EXCEPT, INTERSECT)
+	SetOpType int8
+
+	// SetOp carries the set operation type and distinct flag from the parser
+	SetOp struct {
+		Type     SetOpType
+		Distinct bool
 	}
 
 	// VStream represents a VSTREAM statement.
