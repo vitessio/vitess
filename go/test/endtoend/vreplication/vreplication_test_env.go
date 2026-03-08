@@ -48,9 +48,11 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace " + defaultSourceKs,
+	"Lock keyspace " + defaultTargetKs,
 	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", defaultTargetKs),
+	"Unlock keyspace " + defaultTargetKs,
 	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }
