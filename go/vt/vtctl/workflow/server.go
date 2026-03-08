@@ -3018,7 +3018,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return defaultErrorHandler(ts.Logger(), "workflow validation failed", err)
 	}
 
-	// For switching reads, locking the source keyspace is sufficient.
+	// For switching reads, we need to lock both source and target keyspaces.
+	// The target lock is needed because we update denied tables when removing
+	// mirror rules.
 	// We need to hold the keyspace locks longer than the command timeout.
 	ksLockTTL, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
@@ -3028,18 +3030,29 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		ksLockTTL = DefaultTimeout
 	}
 
-	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
+	// Lock source keyspace first.
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
-	defer unlock(&err)
+	defer sourceUnlock(&err)
+
+	// Lock target keyspace second.
+	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
+	if lockErr != nil {
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+	}
+	defer targetUnlock(&err)
+
 	confirmKeyspaceLocksHeld := func() error {
 		if req.DryRun { // We don't actually take locks
 			return nil
 		}
 		if err := topo.CheckKeyspaceLocked(ctx, ts.SourceKeyspaceName()); err != nil {
 			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.SourceKeyspaceName())
+		}
+		if err := topo.CheckKeyspaceLocked(ctx, ts.TargetKeyspaceName()); err != nil {
+			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.TargetKeyspaceName())
 		}
 		return nil
 	}

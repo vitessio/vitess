@@ -1584,8 +1584,32 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 	// Update allowReads on existing denied tables based on whether mirroring
 	// is enabled for this workflow. Don't create new denied table records -
 	// they should already exist from the MoveTables workflow setup.
+	//
+	// Mirrored queries are SELECT queries regardless of tablet type, so we need
+	// to allow reads to bypass denied tables whenever ANY mirroring is active
+	// for this workflow (PRIMARY, REPLICA, or RDONLY).
+	allowReads := false
+	for _, table := range ts.Tables() {
+		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+			fromTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			toTable := fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), table)
+			if targets, ok := mrs[fromTable]; ok {
+				if _, ok := targets[toTable]; ok {
+					allowReads = true
+					break
+				}
+			}
+		}
+		if allowReads {
+			break
+		}
+	}
+
 	if err := ts.setTargetDeniedTables(ctx, setTargetDeniedTablesOpts{
-		allowReads: percent > 0,
+		allowReads: allowReads,
 	}); err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to update target denied tables: %v", err)
 	}

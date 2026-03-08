@@ -1684,8 +1684,10 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + targetKeyspaceName,
 				"Unlock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + targetKeyspaceName,
@@ -1723,8 +1725,10 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + targetKeyspaceName,
+				"Lock keyspace " + sourceKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + sourceKeyspaceName,
 				"Unlock keyspace " + targetKeyspaceName,
 				"Lock keyspace " + targetKeyspaceName,
 				"Lock keyspace " + sourceKeyspaceName,
@@ -1762,9 +1766,11 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", sourceKeyspaceName),
+				"Unlock keyspace " + targetKeyspaceName,
 				"Unlock keyspace " + sourceKeyspaceName,
 			},
 		},
@@ -2176,6 +2182,45 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", otherKs, table1): 25.0,
 				},
 			},
+		},
+		{
+			name: "removing one read mirror type preserves AllowReads when another read type remains",
+			mirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 25.0,
+				},
+			},
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+				Percent:     0.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 25.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
 		},
 		{
 			name: "does not overwrite unrelated mirror rules",
