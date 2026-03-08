@@ -1072,9 +1072,12 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 // writeEndResult concludes the sending of a Result.
 // if more is set to true, then it means there are more results afterwords
 func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warnings uint16) error {
+	return c.writeEndResultWithFlags(c.StatusFlags, more, affectedRows, lastInsertID, warnings)
+}
+
+func (c *Conn) writeEndResultWithFlags(flags uint16, more bool, affectedRows, lastInsertID uint64, warnings uint16) error {
 	// Send either an EOF, or an OK packet.
 	// See doc.go.
-	flags := c.StatusFlags
 	if more {
 		flags |= ServerMoreResultsExists
 	}
