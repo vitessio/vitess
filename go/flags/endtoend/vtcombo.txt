@@ -342,11 +342,11 @@ Flags:
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --semi-sync-monitor-interval duration                              How frequently the semi-sync monitor checks if the primary is blocked on semi-sync ACKs (default 10s)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
-      --slow-query-threshold duration                                    Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.
       --serving-state-grace-period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard-sync-retry-delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown-grace-period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
       --skip-user-metrics                                                If true, user based stats are not recorded.
+      --slow-query-threshold duration                                    Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv-topo-cache-refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)

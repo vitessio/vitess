@@ -1270,6 +1270,64 @@ func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte
 	return packet
 }
 
+func createComStmtResetPacket(stmtID uint32) []byte {
+	packet := []byte{0, 0, 0, 0, ComStmtReset, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint32(packet[5:], stmtID)
+	return packet
+}
+
+type slowQueryTestHandler struct {
+	testRun
+	queryResults map[string]*sqltypes.Result
+	slowQueries  map[string]bool
+}
+
+func (h slowQueryTestHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	query = strings.TrimSpace(query)
+	query = strings.TrimSuffix(query, ";")
+	query = strings.TrimSpace(query)
+	result, ok := h.queryResults[query]
+	if !ok {
+		return fmt.Errorf("unexpected query: %s", query)
+	}
+	if h.slowQueries[query] {
+		c.StatusFlags |= ServerQueryWasSlow
+	} else {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}
+	return callback(result)
+}
+
+func (h slowQueryTestHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	queries, err := h.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	if len(queries) == 0 {
+		return sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)
+	}
+	for i, query := range queries {
+		firstPacket := true
+		err = h.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h slowQueryTestHandler) WarningCount(*Conn) uint16 {
+	return 0
+}
+
+func (h slowQueryTestHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
 type testRun struct {
 	UnimplementedHandler
 	paramCounts uint16
@@ -1439,4 +1497,128 @@ func TestWritePacketHeader(t *testing.T) {
 
 		assert.Equal(t, uint8(3), sConn.sequence)
 	})
+}
+
+func TestMultiQueryProtocolUsesCurrentSlowFlagForOKOnlyStatements(t *testing.T) {
+	testCases := []struct {
+		name       string
+		firstSlow  bool
+		secondSlow bool
+	}{
+		{name: "slow-then-fast", firstSlow: true, secondSlow: false},
+		{name: "fast-then-slow", firstSlow: false, secondSlow: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = true
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			handler := slowQueryTestHandler{
+				queryResults: map[string]*sqltypes.Result{
+					"select 1":            selectRowsResult,
+					"update t set id = 2": {RowsAffected: 1},
+				},
+				slowQueries: map[string]bool{
+					"select 1":            tc.firstSlow,
+					"update t set id = 2": tc.secondSlow,
+				},
+			}
+
+			err := cConn.WriteComQuery("select 1; update t set id = 2")
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			result, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.True(t, more)
+			assert.Equal(t, tc.firstSlow, result.StatusFlags&ServerQueryWasSlow != 0)
+
+			result, more, _, err = cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.False(t, more)
+			assert.Equal(t, tc.secondSlow, result.StatusFlags&ServerQueryWasSlow != 0)
+			assert.Zero(t, sConn.StatusFlags&ServerQueryWasSlow)
+		})
+	}
+}
+
+func TestQueryWasSlowFlagDoesNotLeakToLaterCommands(t *testing.T) {
+	testCases := []struct {
+		name          string
+		prepareServer func(*Conn)
+		writeCommand  func(*Conn) error
+	}{
+		{
+			name: "com_ping",
+			prepareServer: func(sConn *Conn) {
+				sConn.listener = &Listener{}
+			},
+			writeCommand: func(cConn *Conn) error {
+				cConn.sequence = 0
+				return cConn.writePacket([]byte{0, 0, 0, 0, ComPing})
+			},
+		},
+		{
+			name: "com_stmt_reset",
+			prepareServer: func(sConn *Conn) {
+				sConn.PrepareData[1] = &PrepareData{
+					StatementID: 1,
+					ParamsCount: 1,
+					BindVars:    map[string]*querypb.BindVariable{"v1": nil},
+				}
+			},
+			writeCommand: func(cConn *Conn) error {
+				cConn.sequence = 0
+				return cConn.writePacket(createComStmtResetPacket(1))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			handler := slowQueryTestHandler{
+				queryResults: map[string]*sqltypes.Result{
+					"select 1": selectRowsResult,
+				},
+				slowQueries: map[string]bool{
+					"select 1": true,
+				},
+			}
+
+			err := cConn.WriteComQuery("select 1")
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			result, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.False(t, more)
+			assert.NotZero(t, result.StatusFlags&ServerQueryWasSlow)
+			assert.Zero(t, sConn.StatusFlags&ServerQueryWasSlow)
+
+			tc.prepareServer(sConn)
+			err = tc.writeCommand(cConn)
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			data, err := cConn.ReadPacket()
+			require.NoError(t, err)
+			var ok PacketOK
+			require.NoError(t, cConn.parseOKPacket(&ok, data))
+			assert.Zero(t, ok.statusFlags&ServerQueryWasSlow)
+		})
+	}
 }

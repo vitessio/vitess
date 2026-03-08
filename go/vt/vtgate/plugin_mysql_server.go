@@ -423,21 +423,9 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 
 	fillInTxStatusFlags(c, session)
 	for idx, res := range queryResults {
-		if idx == 0 {
-			if len(mysqlCtx.slowQueryStates) > 0 {
-				setSlowQueryStatus(c, mysqlCtx.slowQueryStates[0])
-			}
-		} else if idx-1 < len(mysqlCtx.slowQueryStates) {
-			// The mysql server emits the previous result's EOF packet when the
-			// next result starts, so keep the previous statement's slow status in
-			// place until the next callback begins.
-			setSlowQueryStatus(c, mysqlCtx.slowQueryStates[idx-1])
-		}
+		setSlowQueryStatus(c, idx < len(mysqlCtx.slowQueryStates) && mysqlCtx.slowQueryStates[idx])
 		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
 			return callbackErr
-		}
-		if idx < len(mysqlCtx.slowQueryStates) {
-			setSlowQueryStatus(c, mysqlCtx.slowQueryStates[idx])
 		}
 	}
 	return nil

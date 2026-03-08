@@ -170,6 +170,22 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	}
 }
 
+func (sbc *SandboxConn) waitForExecDelay(ctx context.Context) error {
+	if sbc.ExecDelayResponse <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(sbc.ExecDelayResponse)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // ResetCounter resets the counters in the sandboxconn.
 func (sbc *SandboxConn) ResetCounter() {
 	sbc.ExecCount.Store(0)
@@ -321,8 +337,8 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	if sbc.ExecDelayResponse > 0 {
-		time.Sleep(sbc.ExecDelayResponse)
+	if err := sbc.waitForExecDelay(ctx); err != nil {
+		return nil, err
 	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
@@ -350,8 +366,9 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	if sbc.ExecDelayResponse > 0 {
-		time.Sleep(sbc.ExecDelayResponse)
+	if err := sbc.waitForExecDelay(ctx); err != nil {
+		sbc.sExecMu.Unlock()
+		return err
 	}
 	parse, _ := sbc.parser.Parse(query)
 
