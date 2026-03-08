@@ -483,14 +483,14 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		// Confirm shard targeting works before we switch any traffic.
 		// Everything should be routed to the source keyspace (customer).
 
-		log.Infof("Testing reverse route (target->source) for shard being switched")
+		log.Info("Testing reverse route (target->source) for shard being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 		require.NoError(t, err)
 		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
 
-		log.Infof("Testing reverse route (target->source) for shard NOT being switched")
+		log.Info("Testing reverse route (target->source) for shard NOT being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 		require.NoError(t, err)
 		_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
@@ -579,17 +579,17 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	currentCustomerCount = getCustomerCount(t, "")
 	t.Run("Switch sequence traffic forward and reverse and validate workflows still exist and sequence routing works", func(t *testing.T) {
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("SwitchTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 
 		wfSeq.reverseTraffic()
-		log.Infof("ReverseTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("ReverseTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Info("SwitchTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
 
 		insertCustomers(t)
 

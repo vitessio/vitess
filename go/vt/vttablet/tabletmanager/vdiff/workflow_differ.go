@@ -124,8 +124,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	matchedDiffs := int64(0)
 
 	maxRows := min(int(dr.ExtraRowsSource), int(maxExtraRowsToCompare))
-	log.Infof("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d",
-		dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
+	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 
 	// Find the matching extra rows
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
@@ -144,8 +143,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	}
 
 	if matchedDiffs == 0 {
-		log.Infof("No matching extra rows found for table %s in vdiff %s, checked %d rows",
-			dr.TableName, maxRows, wd.ct.uuid)
+		log.Info(fmt.Sprintf("No matching extra rows found for table %s in vdiff %s, checked %d rows", dr.TableName, wd.ct.uuid, maxRows))
 	} else {
 		// Now remove the matching extra rows
 		newExtraRowsSourceDiffs := make([]*RowDiff, 0, int64(len(dr.ExtraRowsSourceDiffs))-matchedDiffs)
@@ -178,8 +176,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		// We do not update `ProcessedRows` here, because any extra target or source rows are already included in it.
 		// We do not update `MismatchedRows`, because extra target or source rows are not counted as mismatches.
 
-		log.Infof("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d",
-			dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
+		log.Info(fmt.Sprintf("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d", dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 	}
 
 	// Trim the extra rows diffs to the maxReportSampleRows value. Note we need to do this after updating
@@ -227,7 +224,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
 	}
 
-	log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+	log.Info(fmt.Sprintf("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
 		return err
 	}
@@ -257,22 +254,22 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		if err := td.initialize(ctx); err != nil { // Setup the consistent snapshots
 			return err
 		}
-		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		log.Info(fmt.Sprintf("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 		diffTimer = time.NewTimer(maxDiffRuntime)
 		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions, wd.opts.ReportOptions, diffTimer.C)
 		if diffErr == nil { // We finished the diff successfully
 			break
 		}
-		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
+		log.Error(fmt.Sprintf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr))
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}
 	}
-	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport)
+	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
 
 	if diffReport.ExtraRowsSource > 0 || diffReport.ExtraRowsTarget > 0 {
 		if err := wd.reconcileExtraRows(diffReport, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
-			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
+			log.Error(fmt.Sprintf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err))
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
 	}
@@ -283,7 +280,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		}
 	}
 
-	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, diffReport)
+	log.Info(fmt.Sprintf("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, diffReport))
 	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, diffReport); err != nil {
 		return err
 	}
@@ -347,7 +344,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 				td.table.Name, wd.ct.vde.thisTablet.Alias)
 		}
 
-		log.Infof("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		log.Info(fmt.Sprintf("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
 			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
 				return err
@@ -358,7 +355,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
 		}
-		log.Infof("Completed diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		log.Info(fmt.Sprintf("Completed diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 	}
 	if err := wd.markIfCompleted(ctx, dbClient); err != nil {
 		return err
@@ -490,11 +487,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 				wd.ct.vde.dbName,
 				tableName,
 			)
-			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
+			log.Info(fmt.Sprintf("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query))
 			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 				return err
 			}
-			log.Infof("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName)
+			log.Info(fmt.Sprintf("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName))
 		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {

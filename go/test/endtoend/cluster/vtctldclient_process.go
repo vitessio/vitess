@@ -51,7 +51,7 @@ type VtctldClientProcess struct {
 func VtctldClientProcessInstance(grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldClientProcess {
 	version, err := GetMajorVersion("vtctld") // `vtctldclient` does not have a --version flag, so we assume both vtctl/vtctldclient have the same version
 	if err != nil {
-		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+		log.Warn(fmt.Sprintf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err))
 	}
 
 	base := VtProcessInstance("vtctldclient", "vtctldclient", topoPort, hostname)
@@ -69,7 +69,7 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommand(args ...string) (err err
 	output, err := vtctldclient.ExecuteCommandWithOutput(args...)
 	if output != "" {
 		if err != nil {
-			log.Errorf("Output:\n%v", output)
+			log.Error(fmt.Sprintf("Output:\n%v", output))
 		}
 	}
 	return err
@@ -104,7 +104,7 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 		)
 		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
 		if !vtctldclient.Quiet {
-			log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i+1, retries)
+			log.Info(fmt.Sprintf("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i+1, retries))
 		}
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
@@ -229,7 +229,7 @@ func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, S
 		"--wait-replicas-timeout", "30s",
 	)
 	if err != nil {
-		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+		log.Error(fmt.Sprintf("error in PlannedReparentShard output %s, err %s", output, err.Error()))
 	}
 	return err
 }
@@ -242,7 +242,7 @@ func (vtctldclient *VtctldClientProcess) InitializeShard(keyspace string, shard 
 		"--wait-replicas-timeout", "31s",
 		"--new-primary", fmt.Sprintf("%s-%d", cell, uid))
 	if err != nil {
-		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+		log.Error(fmt.Sprintf("error in PlannedReparentShard output %s, err %s", output, err.Error()))
 	}
 	return err
 }
@@ -255,7 +255,7 @@ func (vtctldclient *VtctldClientProcess) InitShardPrimary(keyspace string, shard
 		fmt.Sprintf("%s/%s", keyspace, shard),
 		fmt.Sprintf("%s-%d", cell, uid))
 	if err != nil {
-		log.Errorf("error in InitShardPrimary output %s, err %s", output, err.Error())
+		log.Error(fmt.Sprintf("error in InitShardPrimary output %s, err %s", output, err.Error()))
 	}
 	return err
 }
@@ -272,7 +272,7 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 	}
 	output, err = vtctldclient.ExecuteCommandWithOutput(args...)
 	if err != nil {
-		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
+		log.Error(fmt.Sprintf("CreateKeyspace returned err: %s, output: %s", err, output))
 	}
 	return err
 }

@@ -98,8 +98,8 @@ var (
 	mysqlctlArg = []string{
 		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword,
 	}
-	vttabletLogFileName = "vttablet.INFO"
-	tokenRenewalString  = "Vault client status: token renewed"
+	vttabletLogFileNameSuffix = "-vttablet-stderr.txt"
+	tokenRenewalString        = "Vault client status: token renewed"
 )
 
 func TestVaultAuth(t *testing.T) {
@@ -149,7 +149,7 @@ func TestVaultAuth(t *testing.T) {
 	time.Sleep(30 * time.Second)
 	// Check the log for the Vault token renewal message
 	//   If we don't see it, that is a test failure
-	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
+	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, primary.VttabletProcess.TabletPath+vttabletLogFileNameSuffix))
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
@@ -183,17 +183,17 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 	setup.Stdout = logFile
 
 	setup.Env = append(setup.Env, os.Environ()...)
-	log.Infof("Running Vault setup command: %v", strings.Join(setup.Args, " "))
+	log.Info(fmt.Sprintf("Running Vault setup command: %v", strings.Join(setup.Args, " ")))
 	err := setup.Start()
 	if err != nil {
-		log.Errorf("Error during Vault setup: %v", err)
+		log.Error(fmt.Sprintf("Error during Vault setup: %v", err))
 	}
 
 	setup.Wait()
 	var secretID, roleID string
 	file, err := os.Open(logFilePath)
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	defer file.Close()
 
@@ -206,7 +206,7 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 
 	return roleID, secretID

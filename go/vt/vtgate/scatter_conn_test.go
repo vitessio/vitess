@@ -17,10 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"fmt"
+	"log/slog"
 	"testing"
 
-	"github.com/aws/smithy-go/ptr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -162,21 +161,21 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			fetchLastInsertID:  true,
 			expectSessionNil:   true,
 
-			expectFetchLastID: ptr.Bool(true),
+			expectFetchLastID: new(true),
 		},
 		{
 			name:               "session options set, fetchLastInsertID = false",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  false,
 			expectSessionNil:   false,
-			expectFetchLastID:  ptr.Bool(false),
+			expectFetchLastID:  new(false),
 		},
 		{
 			name:               "session options set, fetchLastInsertID = true",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  true,
 			expectSessionNil:   false,
-			expectFetchLastID:  ptr.Bool(true),
+			expectFetchLastID:  new(true),
 		},
 	}
 
@@ -274,14 +273,14 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
-	original := log.Errorf
+	original := log.Error
 	defer func() {
-		log.Errorf = original
+		log.Error = original
 	}()
 
 	var logMessage string
-	log.Errorf = func(format string, args ...any) {
-		logMessage = fmt.Sprintf(format, args...)
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logMessage = msg
 	}
 
 	assert.Panics(t, func() {

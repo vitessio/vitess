@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"slices"
 	"sort"
@@ -117,7 +118,8 @@ type TabletGateway struct {
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
 	filters, err := discovery.NewVTGateHealthCheckFilters()
 	if err != nil {
-		log.Exit(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, filters)
 }
@@ -131,7 +133,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 			var err error
 			topoServer, err = serv.GetTopoServer()
 			if err != nil {
-				log.Exitf("Unable to create new TabletGateway: %v", err)
+				log.Error(fmt.Sprintf("Unable to create new TabletGateway: %v", err))
+				os.Exit(1)
 			}
 		}
 		hc = createHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, topoServer, localCell, CellsToWatch)
@@ -181,7 +184,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 func (gw *TabletGateway) setupBalancer() {
 	// Check for conflicting flags
 	if balancerEnabled && balancerModeFlag != "" {
-		log.Exitf("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
+		log.Error("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
+		os.Exit(1)
 	}
 
 	// Determine the effective mode: new flag takes precedence, then deprecated flag, then default
@@ -190,7 +194,7 @@ func (gw *TabletGateway) setupBalancer() {
 		gw.balancerMode = balancer.ParseMode(balancerModeFlag)
 	} else if balancerEnabled {
 		// Deprecated flag for backwards compatibility
-		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
+		log.Warn("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
 		gw.balancerMode = balancer.ModePreferCell
 	} else {
 		// Default: no flags set
@@ -205,17 +209,19 @@ func (gw *TabletGateway) setupBalancer() {
 
 	// Validate mode-specific requirements
 	if gw.balancerMode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
-		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
+		log.Error("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
+		os.Exit(1)
 	}
 
 	// Create the balancer for prefer-cell or random modes
 	var err error
 	gw.balancer, err = balancer.NewTabletBalancer(gw.balancerMode, gw.localCell, balancerVtgateCells)
 	if err != nil {
-		log.Exitf("Failed to create tablet balancer: %v", err)
+		log.Error(fmt.Sprintf("Failed to create tablet balancer: %v", err))
+		os.Exit(1)
 	}
 
-	log.Infof("Tablet balancer enabled with mode: %s", gw.balancerMode)
+	log.Info(fmt.Sprintf("Tablet balancer enabled with mode: %s", gw.balancerMode))
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -240,7 +246,7 @@ func (gw *TabletGateway) RegisterStats() {
 
 // WaitForTablets is part of the Gateway interface.
 func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) (err error) {
-	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
+	log.Info(fmt.Sprintf("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait))
 	ctx, cancel := context.WithTimeout(ctx, initialTabletTimeout)
 	defer cancel()
 
@@ -248,12 +254,12 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 		switch err {
 		case nil:
 			// Log so we know everything is fine.
-			log.Infof("Waiting for tablets completed")
+			log.Info("Waiting for tablets completed")
 		case context.DeadlineExceeded:
 			// In this scenario, we were able to reach the
 			// topology service, but some tablets may not be
 			// ready. We just warn and keep going.
-			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			log.Warn(fmt.Sprintf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait))
 			err = nil
 		}
 	}()
@@ -378,7 +384,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// replica queries, so it doesn't make any sense to check for resharding or reparenting in that case.
 			if kev := gw.kev; kev != nil && target.TabletType == topodatapb.TabletType_PRIMARY {
 				if kev.TargetIsBeingResharded(ctx, target) {
-					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
+					log.V(2).Info(fmt.Sprintf("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack()))
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}

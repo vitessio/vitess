@@ -108,12 +108,13 @@ func (tm *TabletManager) RestoreBackup(
 	defer tm.unlock()
 
 	var (
-		err       error
-		startTime time.Time
+		err          error
+		startTime    time.Time
+		backupEngine string
 	)
 
 	defer func() {
-		tm.invokeRestoreDoneHook(startTime, err)
+		tm.invokeRestoreDoneHook(startTime, err, backupEngine)
 	}()
 
 	startTime = time.Now()
@@ -124,7 +125,7 @@ func (tm *TabletManager) RestoreBackup(
 		RestoreToTimestamp:   protoutil.TimeToProto(restoreToTimetamp),
 		AllowedBackupEngines: allowedBackupEngines,
 	}
-	err = tm.restoreBackupLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
+	backupEngine, err = tm.restoreBackupLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
@@ -132,23 +133,23 @@ func (tm *TabletManager) RestoreBackup(
 	return nil
 }
 
-func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
+func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) (string, error) {
 	tablet := tm.Tablet()
 	// Try to restore. Depending on the reason for failure, we may be ok.
-	// If we're not ok, return an error and the tm will log.Fatalf,
-	// causing the process to be restarted and the restore retried.
+	// If we're not ok, return an error and the tm will exit the process,
+	// causing it to be restarted and the restore retried.
 
 	keyspace := tablet.Keyspace
 	keyspaceInfo, err := tm.TopoServer.GetKeyspace(ctx, keyspace)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
 	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
 		if keyspaceInfo.BaseKeyspace == "" {
-			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
+			return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
 		logger.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
@@ -177,12 +178,12 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore-to-pos and --restore-to-timestamp are mutually exclusive")
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore-to-pos and --restore-to-timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
 		pos, _, err := replication.DecodePositionMySQL56(request.RestoreToPos)
 		if err != nil {
-			return vterrors.Wrapf(err, "restore failed: unable to decode --restore-to-pos: %s", request.RestoreToPos)
+			return "", vterrors.Wrapf(err, "restore failed: unable to decode --restore-to-pos: %s", request.RestoreToPos)
 		}
 		params.RestoreToPos = pos
 	}
@@ -195,11 +196,11 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 
 	if ok, err := rsm.start(ctx); !ok || err != nil {
 		if err != nil {
-			return vterrors.Wrap(err, "failed to start restore")
+			return "", vterrors.Wrap(err, "failed to start restore")
 		}
 		// Restore cannot be started for a benign reason, e.g. mysqld already
 		// has data.
-		return nil
+		return "", nil
 	}
 
 	// Loop until a backup exists, unless we were told to give up immediately.
@@ -219,10 +220,10 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			break
 		}
 
-		log.Infof("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval)
+		log.Info(fmt.Sprintf("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval))
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return "", ctx.Err()
 		case <-time.After(waitForBackupInterval):
 		}
 	}
@@ -259,7 +260,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 		if err := rsm.abort(); err != nil {
 			logger.Errorf("Failed to abort restore: %v", err)
 		}
-		return vterrors.Wrap(err, "can't restore backup")
+		return "", vterrors.Wrap(err, "can't restore backup")
 	}
 
 	if params.IsIncrementalRecovery() && !params.DryRun {
@@ -269,10 +270,15 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 
 	if err := rsm.finish(ctx, replCmd); err != nil {
-		return vterrors.Wrap(err, "failed to finish restore")
+		return "", vterrors.Wrap(err, "failed to finish restore")
 	}
 
-	return nil
+	var backupEngine string
+	if backupManifest != nil {
+		backupEngine = backupManifest.BackupMethod
+	}
+
+	return backupEngine, nil
 }
 
 func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
@@ -287,7 +293,7 @@ func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Lo
 	)
 
 	defer func() {
-		tm.invokeRestoreDoneHook(startTime, err)
+		tm.invokeRestoreDoneHook(startTime, err, "")
 	}()
 
 	startTime = time.Now()
@@ -400,7 +406,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 	return nil
 }
 
-func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error) {
+func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, backupEngine string) {
 	stopTime := time.Now()
 
 	h := hook.NewSimpleHook("vttablet_restore_done")
@@ -408,6 +414,10 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error) {
 	h.ExtraEnv["TM_RESTORE_DATA_START_TS"] = startTime.UTC().Format(time.RFC3339)
 	h.ExtraEnv["TM_RESTORE_DATA_STOP_TS"] = stopTime.UTC().Format(time.RFC3339)
 	h.ExtraEnv["TM_RESTORE_DATA_DURATION"] = stopTime.Sub(startTime).String()
+
+	if backupEngine != "" {
+		h.ExtraEnv["TM_RESTORE_DATA_BACKUP_ENGINE"] = backupEngine
+	}
 
 	if err != nil {
 		h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
@@ -423,7 +433,7 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error) {
 		case hook.HOOK_DOES_NOT_EXIST:
 			log.Info("No vttablet_restore_done hook.")
 		default:
-			log.Warning("vttablet_restore_done hook failed")
+			log.Warn("vttablet_restore_done hook failed")
 		}
 	}()
 }

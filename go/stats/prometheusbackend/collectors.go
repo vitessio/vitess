@@ -17,6 +17,7 @@ limitations under the License.
 package prometheusbackend
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,7 +57,7 @@ func (mc *metricFuncCollector) Describe(ch chan<- *prometheus.Desc) {
 func (mc *metricFuncCollector) Collect(ch chan<- prometheus.Metric) {
 	metric, err := prometheus.NewConstMetric(mc.desc, mc.vt, float64(mc.f()))
 	if err != nil {
-		log.Errorf("Error adding metric: %s", mc.desc)
+		log.Error(fmt.Sprintf("Error adding metric: %s", mc.desc))
 	} else {
 		ch <- metric
 	}
@@ -93,7 +94,7 @@ func (c *countersWithSingleLabelCollector) Collect(ch chan<- prometheus.Metric) 
 	for tag, val := range c.counters.Counts() {
 		metric, err := prometheus.NewConstMetric(c.desc, c.vt, float64(val), tag)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -131,7 +132,7 @@ func (g *gaugesWithSingleLabelCollector) Collect(ch chan<- prometheus.Metric) {
 	for tag, val := range g.gauges.Counts() {
 		metric, err := prometheus.NewConstMetric(g.desc, g.vt, float64(val), tag)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", g.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", g.desc))
 		} else {
 			ch <- metric
 		}
@@ -168,7 +169,7 @@ func (c *metricWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 		value := float64(val)
 		metric, err := prometheus.NewConstMetric(c.desc, prometheus.CounterValue, value, labelValues...)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -205,7 +206,7 @@ func (c *gaugesWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 		value := float64(val)
 		metric, err := prometheus.NewConstMetric(c.desc, prometheus.GaugeValue, value, labelValues...)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -244,7 +245,7 @@ func (c *metricsFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metri
 		value := float64(val)
 		metric, err := prometheus.NewConstMetric(c.desc, c.vt, value, labelValues...)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -290,7 +291,7 @@ func (c *timingsCollector) Collect(ch chan<- prometheus.Metric) {
 			makeCumulativeBuckets(c.cutoffs,
 				his.Buckets()), cat)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -349,7 +350,7 @@ func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
 			makeCumulativeBuckets(c.cutoffs, his.Buckets()),
 			labelValues...)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}
@@ -393,7 +394,7 @@ func (c *histogramCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(c.h.Total()),
 		makeCumulativeBuckets(c.cutoffs, c.h.Buckets()))
 	if err != nil {
-		log.Errorf("Error adding metric: %s", c.desc)
+		log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 	} else {
 		ch <- metric
 	}
@@ -428,7 +429,7 @@ func (c *stringMapFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Met
 		labelValues := append(strings.Split(lvs, "."), val)
 		metric, err := prometheus.NewConstMetric(c.desc, prometheus.GaugeValue, 1.0, labelValues...)
 		if err != nil {
-			log.Errorf("Error adding metric: %s", c.desc)
+			log.Error(fmt.Sprintf("Error adding metric: %s", c.desc))
 		} else {
 			ch <- metric
 		}

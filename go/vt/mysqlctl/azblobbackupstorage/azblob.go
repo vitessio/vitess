@@ -135,7 +135,7 @@ func azInternalCredentials() (string, string, error) {
 
 	var actKey string
 	if keyFile := accountKeyFile.Get(); keyFile != "" {
-		log.Infof("Getting Azure Storage Account key from file: %s", keyFile)
+		log.Info("Getting Azure Storage Account key from file: " + keyFile)
 		dat, err := os.ReadFile(keyFile)
 		if err != nil {
 			return "", "", err
@@ -173,11 +173,12 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			Log: func(level pipeline.LogLevel, message string) {
 				switch level {
 				case pipeline.LogFatal, pipeline.LogPanic:
-					log.Fatal(message)
+					log.Error(message)
+					os.Exit(1)
 				case pipeline.LogError:
 					log.Error(message)
 				case pipeline.LogWarning:
-					log.Warning(message)
+					log.Warn(message)
 				case pipeline.LogInfo, pipeline.LogDebug:
 					log.Info(message)
 				}
@@ -303,7 +304,7 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	return resp.Body(azblob.RetryReaderOptions{
 		MaxRetryRequests: defaultRetryCount,
 		NotifyFailedRead: func(failureCount int, lastError error, offset int64, count int64, willRetry bool) {
-			log.Warningf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", containerName, objName(bh.dir, ""), filename, lastError)
+			log.Warn(fmt.Sprintf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", containerName, objName(bh.dir, ""), filename, lastError))
 		},
 		TreatEarlyCloseAsError: true,
 	}), nil
@@ -330,7 +331,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 		searchPrefix = objName(dir, "")
 	}
 
-	log.Infof("ListBackups: [azblob] container: %s, directory: %v", containerName, searchPrefix)
+	log.Info(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %v", containerName, searchPrefix))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -389,7 +390,7 @@ func (bs *AZBlobBackupStorage) StartBackup(ctx context.Context, dir, name string
 
 // RemoveBackup implements BackupStorage.
 func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Infof("ListBackups: [azblob] container: %s, directory: %s", containerName, objName(dir, ""))
+	log.Info(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %s", containerName, objName(dir, "")))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -430,7 +431,7 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 			return err
 		}
 
-		log.Infof("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/"))
+		log.Info(fmt.Sprintf("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/")))
 		_, err = containerURL.NewBlobURL(strings.TrimSuffix(searchPrefix, "/")).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 		if err == nil {
 			break

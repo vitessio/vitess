@@ -634,7 +634,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
 			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
-				log.Errorf("failed to reload schema %v", err)
+				log.Error(fmt.Sprintf("failed to reload schema %v", err))
 			}
 		}()
 	}
@@ -694,7 +694,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			// Someone reset the id underneath us.
 			if t.SequenceInfo.LastVal != nextID {
 				if nextID < t.SequenceInfo.LastVal {
-					log.Warningf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal)
+					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal))
 					nextID = t.SequenceInfo.LastVal
 				}
 				t.SequenceInfo.NextVal = nextID
@@ -815,7 +815,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser()))
+		log.Warn(fmt.Sprintf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())))
 	}
 	return nil
 }

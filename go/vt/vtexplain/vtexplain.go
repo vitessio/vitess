@@ -259,21 +259,21 @@ func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]s
 		} else {
 			stmt, err = parser.Parse(sql)
 			if err != nil {
-				log.Errorf("ERROR: failed to parse sql: %s, got error: %v", sql, err)
+				log.Error(fmt.Sprintf("ERROR: failed to parse sql: %s, got error: %v", sql, err))
 				continue
 			}
 		}
 		ddl, ok := stmt.(sqlparser.DDLStatement)
 		if !ok {
-			log.Infof("ignoring non-DDL statement: %s", sql)
+			log.Info("ignoring non-DDL statement: " + sql)
 			continue
 		}
 		if ddl.GetAction() != sqlparser.CreateDDLAction {
-			log.Infof("ignoring %s table statement", ddl.GetAction().ToString())
+			log.Info(fmt.Sprintf("ignoring %s table statement", ddl.GetAction().ToString()))
 			continue
 		}
 		if ddl.GetTableSpec() == nil && ddl.GetOptLike() == nil {
-			log.Errorf("invalid create table statement: %s", sql)
+			log.Error("invalid create table statement: " + sql)
 			continue
 		}
 		parsedDDLs = append(parsedDDLs, ddl)

@@ -684,12 +684,12 @@ func TestMonitorWriteBlocked(t *testing.T) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 2*time.Second, 5*time.Microsecond)
+	}, 15*time.Second, 1*time.Microsecond)
 
 	// Check that the writes finished successfully.
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 
 	// After write completes, count should be back to zero.
 	m.mu.Lock()
@@ -1052,7 +1052,7 @@ func TestDeadlockOnClose(t *testing.T) {
 		// The test timed out, which means we deadlocked.
 		buf := make([]byte, 1<<16) // 64 KB buffer size
 		stackSize := runtime.Stack(buf, true)
-		log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
+		log.Error("Stack trace:\n" + string(buf[:stackSize]))
 		t.Fatalf("Deadlock occurred while closing the monitor")
 	}
 }

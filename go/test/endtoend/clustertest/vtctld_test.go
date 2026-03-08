@@ -119,7 +119,7 @@ func testTabletStatus(t *testing.T) {
 	respByte, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	result := string(respByte)
-	log.Infof("Tablet status response: %v", result)
+	log.Info(fmt.Sprintf("Tablet status response: %v", result))
 	assert.True(t, strings.Contains(result, `/debug/health`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }

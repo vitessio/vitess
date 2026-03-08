@@ -67,12 +67,12 @@ func init() {
 		panic("could not parse MySQL version: " + err.Error())
 	}
 	MySQLVersion = fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
-	log.Infof("MySQL version: %s", MySQLVersion)
+	log.Info("MySQL version: " + MySQLVersion)
 	CollationEnv = collations.NewEnvironment(MySQLVersion)
 	// utf8mb4_general_ci is the default for MySQL 5.7 and
 	// utf8mb4_0900_ai_ci is the default for MySQL 8.0.
 	DefaultCollationID = CollationEnv.DefaultConnectionCharset()
-	log.Infof("Default collation ID: %d", DefaultCollationID)
+	log.Info(fmt.Sprintf("Default collation ID: %d", DefaultCollationID))
 }
 
 // Env contains all the env vars for a test against a mysql instance.
@@ -85,6 +85,7 @@ type Env struct {
 
 	TabletEnv    tabletenv.Env
 	TopoServ     *topo.Server
+	topoFactory  *memorytopo.Factory
 	SrvTopo      srvtopo.Server
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
@@ -104,7 +105,7 @@ func Init(ctx context.Context) (*Env, error) {
 		Cells:        []string{"cell1"},
 	}
 
-	te.TopoServ = memorytopo.NewServer(ctx, te.Cells...)
+	te.TopoServ, te.topoFactory = memorytopo.NewServerAndFactory(ctx, te.Cells...)
 	if err := te.TopoServ.CreateKeyspace(ctx, te.KeyspaceName, &topodatapb.Keyspace{}); err != nil {
 		return nil, err
 	}
@@ -259,4 +260,24 @@ func (te *Env) HasCapability(cap ServerCapability) bool {
 		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
 	}
 	return false
+}
+
+// AddCell adds a new cell to the test environment. It checks whether
+// the cell already exists, if not, it creates it.
+func (te *Env) AddCell(ctx context.Context, cell string) error {
+	// Check if cell already exists
+	_, err := te.TopoServ.GetCellInfo(ctx, cell, false)
+	if err == nil {
+		return nil
+	}
+	if !topo.IsErrType(err, topo.NoNode) {
+		return err
+	}
+
+	te.topoFactory.AddCell(cell)
+	if err := te.TopoServ.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
+		return err
+	}
+	te.Cells = append(te.Cells, cell)
+	return nil
 }

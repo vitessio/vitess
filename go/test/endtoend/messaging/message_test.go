@@ -596,7 +596,7 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
-				log.Infof("Message stream ended: %v", err)
+				log.Info(fmt.Sprintf("Message stream ended: %v", err))
 				return
 			}
 

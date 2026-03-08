@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -98,7 +99,7 @@ func (h *historian) Open() error {
 
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDB(ctx); err != nil {
-		log.Errorf("Historian failed to open: %v", err)
+		log.Error(fmt.Sprintf("Historian failed to open: %v", err))
 		return err
 	}
 
@@ -143,7 +144,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.V(2).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
+	log.V(2).Info(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -156,7 +157,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.V(2).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
+		log.V(2).Info(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
 	}
 	return t, nil
 }
@@ -181,7 +182,7 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	}
 
 	if err != nil {
-		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
+		log.Info(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
 		return nil
 	}
 	for _, row := range tableData.Rows {
@@ -232,8 +233,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
-		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
+	log.V(vl).Info(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -287,7 +287,7 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.Infof("Schema not found in cache for %s with pos %s", tableName, pos)
+		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s", tableName, pos))
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry

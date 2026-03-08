@@ -56,14 +56,14 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 		}
 		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
-			log.Errorf("Error in connection - %v\n", err)
+			log.Error(fmt.Sprintf("Error in connection - %v\n", err))
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
 		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
 		if err != nil {
-			log.Errorf("Error in selecting - %v\n", err)
+			log.Error(fmt.Sprintf("Error in selecting - %v\n", err))
 			conn.Close()
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -79,7 +79,7 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
 		conn.Close()
 		if err != nil {
-			log.Errorf("Error in cleanup deletion - %v\n", err)
+			log.Error(fmt.Sprintf("Error in cleanup deletion - %v\n", err))
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -109,7 +109,7 @@ func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 	wg.Go(func() {
 		_, err := utils.ExecAllowError(t, conn, "commit")
 		if err != nil {
-			log.Errorf("Error in commit - %v", err)
+			log.Error(fmt.Sprintf("Error in commit - %v", err))
 		}
 	})
 }

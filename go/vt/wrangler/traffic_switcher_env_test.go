@@ -517,8 +517,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		}
 		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
-		log.Infof("Adding streamInfoKs2 invariant for shard %s,  client %s,rows %q",
-			shard, tme.dbTargetClients[i].name, streamExtInfoRows)
+		log.Info(fmt.Sprintf("Adding streamInfoKs2 invariant for shard %s,  client %s,rows %q", shard, tme.dbTargetClients[i].name, streamExtInfoRows))
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -776,7 +775,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.targetPrimaries {
-		log.Infof("Adding as targetPrimary %s", primary.Tablet.Alias)
+		log.Info(fmt.Sprintf("Adding as targetPrimary %s", primary.Tablet.Alias))
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
@@ -785,7 +784,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.additionalPrimaries {
-		log.Infof("Adding as additionalPrimary %s", primary.Tablet.Alias)
+		log.Info(fmt.Sprintf("Adding as additionalPrimary %s", primary.Tablet.Alias))
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbAdditionalClients = append(tme.dbTargetClients, dbclient)
 	}

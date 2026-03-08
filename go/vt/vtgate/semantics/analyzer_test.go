@@ -941,6 +941,9 @@ func TestInvalidQueries(t *testing.T) {
 		err:  &UnionWithSQLCalcFoundRowsError{},
 		serr: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
 	}, {
+		sql: "select 1 union select *, m from t1",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 1, SecondProj: 2},
+	}, {
 		sql:  "select * from (select sql_calc_found_rows id from a) as t",
 		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}, {

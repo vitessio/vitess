@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -180,7 +181,9 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 }
 
-// fullPath returns the full path of the entry, based on its type
+// fullPath returns the full path of the entry, based on its type.
+// It validates that the resolved path does not escape the base directory
+// via path traversal (e.g. "../../" sequences in fe.Name).
 func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
 	var root string
@@ -197,7 +200,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
-	return path.Join(fe.ParentPath, root, fe.Name), nil
+	return fileutil.SafePathJoin(path.Join(fe.ParentPath, root), fe.Name)
 }
 
 // open attempts to open the file
@@ -382,7 +385,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
-	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
+	log.Info(fmt.Sprintf("ReadBinlogFilesTimestampsResponse: %+v", resp))
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
 		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
@@ -440,7 +443,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "can't get super_read_only status")
 	}
-	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
+	log.Info(fmt.Sprintf("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly))
 
 	// get the replication position
 	if sourceIsPrimary {
@@ -653,6 +656,13 @@ func (be *BuiltinBackupEngine) backupFiles(
 		if err != nil {
 			return err
 		}
+		// Propagate retry results back to the original entries so the
+		// manifest records correct hashes and metadata.
+		for i, fe := range newFEs {
+			if fe.Name != "" {
+				fes[i] = fe
+			}
+		}
 	}
 
 	// Backup the MANIFEST file and apply retry logic.
@@ -700,7 +710,7 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctxCancel.Done():
-				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				log.Error(fmt.Sprintf("Context canceled or timed out during %q backup", fe.Name))
 				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1229,7 +1239,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+				log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", fe.Name))
 				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1322,10 +1332,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		externalDecompressorCmd := ExternalDecompressorCmd
-		if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-			externalDecompressorCmd = bm.ExternalDecompressor
-		}
+		externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 		if externalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
 				deCompressionEngine = externalDecompressorCmd

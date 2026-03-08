@@ -12,6 +12,10 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
+func testRequireTabletAliasEqual(t *testing.T, expected, got *topodatapb.TabletAlias) {
+	require.True(t, topoproto.TabletAliasEqual(expected, got), "expected %v, got %v", expected, got)
+}
+
 func TestSaveAndReadTablet(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
@@ -20,14 +24,14 @@ func TestSaveAndReadTablet(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		tabletAlias  string
+		tabletAlias  *topodatapb.TabletAlias
 		tablet       *topodatapb.Tablet
 		tabletWanted *topodatapb.Tablet
 		err          string
 	}{
 		{
 			name:        "Success with primary type",
-			tabletAlias: "zone1-0000000100",
+			tabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -47,7 +51,7 @@ func TestSaveAndReadTablet(t *testing.T) {
 			tabletWanted: nil,
 		}, {
 			name:        "Success with replica type",
-			tabletAlias: "zone1-0000000100",
+			tabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -63,7 +67,7 @@ func TestSaveAndReadTablet(t *testing.T) {
 			tabletWanted: nil,
 		}, {
 			name:         "No tablet found",
-			tabletAlias:  "zone1-190734",
+			tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 190734},
 			tablet:       nil,
 			tabletWanted: nil,
 			err:          ErrTabletAliasNil.Error(),
@@ -87,7 +91,7 @@ func TestSaveAndReadTablet(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, topotools.TabletEquality(tt.tabletWanted, readTable))
-			require.Equal(t, tt.tabletAlias, topoproto.TabletAliasString(readTable.Alias))
+			testRequireTabletAliasEqual(t, tt.tabletAlias, readTable.Alias)
 		})
 	}
 }

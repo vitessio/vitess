@@ -30,6 +30,7 @@ var TableNames = []string{
 	"topology_recovery_steps",
 	"database_instance_stale_binlog_coordinates",
 	"vitess_tablet",
+	"primary_health",
 	"vitess_keyspace",
 	"vitess_shard",
 }
@@ -288,6 +289,16 @@ CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
 	`
 CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
 	`,
+	`
+DROP TABLE IF EXISTS primary_health
+`,
+	`
+CREATE TABLE primary_health (
+	alias varchar(256) NOT NULL,
+	health_state text NOT NULL,
+	last_updated timestamp not null default (''),
+	PRIMARY KEY (alias)
+)`,
 	`
 DROP TABLE IF EXISTS vitess_keyspace
 `,

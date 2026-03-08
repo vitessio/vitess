@@ -40,7 +40,7 @@ func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory)
 	}
 
 	factories[name] = factory
-	log.Infof("Registered throttling strategy: %s", name)
+	log.Info(fmt.Sprintf("Registered throttling strategy: %s", name))
 }
 
 // Get retrieves a strategy factory by name.
@@ -63,13 +63,13 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 	// NoOpStrategy must always be available—even before any registration happens—so the registry itself can safely fall back on it.
 	factory, ok := Get(cfg.GetStrategy())
 	if !ok {
-		log.Warningf("Unknown strategy %s, using NoOp", cfg.GetStrategy())
+		log.Warn(fmt.Sprintf("Unknown strategy %s, using NoOp", cfg.GetStrategy()))
 		return &NoOpStrategy{}
 	}
 
 	strategy, err := factory.New(deps, cfg)
 	if err != nil {
-		log.Errorf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err)
+		log.Error(fmt.Sprintf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err))
 		return &NoOpStrategy{}
 	}
 

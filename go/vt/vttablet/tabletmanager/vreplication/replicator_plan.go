@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -409,11 +408,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// present. So we have to account for this by unsetting the data bit so
 						// that the column's current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
-						escapedName := sqlescape.EscapeID(field.Name)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
-							fmt.Appendf(nil, afterVals[i].RawStr(), escapedName)))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())

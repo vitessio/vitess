@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+      uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
       with:
         egress-policy: audit
 
@@ -52,9 +52,11 @@ jobs:
             - 'proto/*.proto'
             - 'web/vtadmin/src/proto/**'
             - '.github/workflows/check_make_vtadmin_web_proto.yml'
+            - 'web/vtadmin/package.json'
+            - 'web/vtadmin/package-lock.json'
 
     - name: Set up Go
-      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       if: steps.changes.outputs.proto_changes == 'true'
       with:
         go-version-file: go.mod

@@ -117,7 +117,7 @@ export const CreateSchemaMigration = () => {
 
     const isValid = !!selectedCluster && !!formData.keyspace && !!formData.sql && !!formData.ddlStrategy;
 
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -249,12 +249,12 @@ export const CreateSchemaMigration = () => {
 
                     <div className="my-8">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating...' : 'Create Schema Migration Request'}
+                            {mutation.isPending ? 'Creating...' : 'Create Schema Migration Request'}
                         </button>
                     </div>
                 </form>
 
-                {mutation.isError && !mutation.isLoading && (
+                {mutation.isError && !mutation.isPending && (
                     <ErrorDialog
                         errorDescription={mutation.error.message}
                         errorTitle="Error Creating Schema Migration Request"

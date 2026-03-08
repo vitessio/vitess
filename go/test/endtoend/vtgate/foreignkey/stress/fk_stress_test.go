@@ -1155,7 +1155,7 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tcase *testCase, sleepInterval time.Duration) {
-	log.Infof("Running single connection on %s", tableName)
+	log.Info("Running single connection on " + tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1178,7 +1178,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tc
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -1187,8 +1187,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tc
 
 // populateTables randomly populates all test tables. This is done sequentially.
 func populateTables(t *testing.T, tcase *testCase) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1345,13 +1345,13 @@ func testSelectTableMetrics(
 	writeMetrics[tableName].mu.Lock()
 	defer writeMetrics[tableName].mu.Unlock()
 
-	log.Infof("%s %s", tableName, writeMetrics[tableName].String())
+	log.Info(fmt.Sprintf("%s %s", tableName, writeMetrics[tableName].String()))
 
 	rs := queryTablet(t, tablet, fmt.Sprintf(selectCountRowsStatement, tableName), "")
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 	assert.NotZero(t, numRows)

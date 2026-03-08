@@ -343,14 +343,14 @@ func (db *LocalCluster) Setup() error {
 		}
 	}
 
-	log.Infof("LocalCluster environment: %+v", db.Env)
+	log.Info(fmt.Sprintf("LocalCluster environment: %+v", db.Env))
 
 	// Set up topo manager if we are using a remote topo server
 	if db.ExternalTopoImplementation != "" {
 		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
-		log.Infof("Initializing Topo Manager: %+v", db.topo)
+		log.Info(fmt.Sprintf("Initializing Topo Manager: %+v", db.topo))
 		if err := db.topo.Setup(); err != nil {
-			log.Errorf("Failed to set up Topo Manager: %v", err)
+			log.Error(fmt.Sprintf("Failed to set up Topo Manager: %v", err))
 			return err
 		}
 	}
@@ -363,11 +363,11 @@ func (db *LocalCluster) Setup() error {
 	initializing := !db.PersistentMode || !dirExist(db.mysql.TabletDir())
 
 	if initializing {
-		log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+		log.Info(fmt.Sprintf("Initializing MySQL Manager (%T)...", db.mysql))
 		if err := db.mysql.Setup(); err != nil {
-			log.Errorf("Mysqlctl failed to start: %s", err)
+			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.Errorf("stderr: %s", err.Stderr)
+				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
 			return err
 		}
@@ -376,26 +376,26 @@ func (db *LocalCluster) Setup() error {
 			return err
 		}
 	} else {
-		log.Infof("Starting MySQL Manager (%T)...", db.mysql)
+		log.Info(fmt.Sprintf("Starting MySQL Manager (%T)...", db.mysql))
 		if err := db.mysql.Start(); err != nil {
-			log.Errorf("Mysqlctl failed to start: %s", err)
+			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.Errorf("stderr: %s", err.Stderr)
+				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
 			return err
 		}
 	}
 
 	mycfg, _ := json.Marshal(db.mysql.Params(""))
-	log.Infof("MySQL up: %s", mycfg)
+	log.Info(fmt.Sprintf("MySQL up: %s", mycfg))
 
 	if !db.OnlyMySQL {
-		log.Infof("Starting vtcombo...")
+		log.Info("Starting vtcombo...")
 		db.vt, _ = VtcomboProcess(db.Env, &db.Config, db.mysql)
 		if err := db.vt.WaitStart(); err != nil {
 			return err
 		}
-		log.Infof("vtcombo up: %s", db.vt.Address())
+		log.Info("vtcombo up: " + db.vt.Address())
 	}
 
 	if initializing {
@@ -437,9 +437,9 @@ func (db *LocalCluster) TearDown() error {
 	if err := db.mysql.TearDown(); err != nil {
 		errors = append(errors, fmt.Sprintf("mysql: %s", err))
 
-		log.Errorf("failed to shutdown MySQL: %s", err)
+		log.Error(fmt.Sprintf("failed to shutdown MySQL: %s", err))
 		if err, ok := err.(*exec.ExitError); ok {
-			log.Errorf("stderr: %s", err.Stderr)
+			log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 		}
 	}
 
@@ -582,7 +582,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 
 	for _, cmd := range sql {
-		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
+		log.Info(fmt.Sprintf("Execute(%s): \"%s\"", dbname, cmd))
 		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
@@ -603,7 +603,7 @@ func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Resul
 	}
 	defer conn.Close()
 
-	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	log.Info(fmt.Sprintf("ExecuteFetch(%s): \"%s\"", dbname, sql))
 	rs, err := conn.ExecuteFetch(sql, -1, true)
 	return rs, err
 }
@@ -656,7 +656,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info(e)
+		log.Info(fmt.Sprint(e))
 	})
 
 	return err
@@ -665,10 +665,10 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
-	log.Infof("Reloading keyspace schema %v", args)
+	log.Info(fmt.Sprintf("Reloading keyspace schema %v", args))
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info(e)
+		log.Info(fmt.Sprint(e))
 	})
 
 	return err

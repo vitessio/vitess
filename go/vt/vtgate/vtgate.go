@@ -297,7 +297,8 @@ func Init(
 ) *VTGate {
 	ts, err := serv.GetTopoServer()
 	if err != nil {
-		log.Fatalf("Unable to get Topo server: %v", err)
+		log.Error(fmt.Sprintf("Unable to get Topo server: %v", err))
+		os.Exit(1)
 	}
 
 	// We need to get the keyspaces and rebuild the keyspace graphs
@@ -309,21 +310,24 @@ func Init(
 	} else {
 		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
 		if err != nil {
-			log.Fatalf("Unable to get all keyspaces: %v", err)
+			log.Error(fmt.Sprintf("Unable to get all keyspaces: %v", err))
+			os.Exit(1)
 		}
 	}
 	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
 	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
-		log.Fatalf("rebuildTopoGraphs failed: %v", err)
+		log.Error(fmt.Sprintf("rebuildTopoGraphs failed: %v", err))
+		os.Exit(1)
 	}
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
-	// we can't go on much further, so we log.Fatal out.
+	// we can't go on much further, so we exit the process.
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
-		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
+		log.Error(fmt.Sprintf("tabletGateway.WaitForTablets failed: %v", err))
+		os.Exit(1)
 	}
 
 	dynamicConfig := NewDynamicViperConfig()
@@ -331,16 +335,18 @@ func Init(
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if discovery.FilteringKeyspaces() {
-		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
+		log.Info(fmt.Sprintf("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch))
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
 		if err != nil {
-			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+			log.Error(fmt.Sprintf("Unable to construct SrvTopo server: %v", err.Error()))
+			os.Exit(1)
 		}
 	}
 
 	if _, err := schema.ParseDDLStrategy(defaultDDLStrategy); err != nil {
-		log.Fatalf("Invalid value for -ddl-strategy: %v", err.Error())
+		log.Error(fmt.Sprintf("Invalid value for -ddl-strategy: %v", err.Error()))
+		os.Exit(1)
 	}
 	tc := NewTxConn(gw, dynamicConfig)
 	// ScatterConn depends on TxConn to perform forced rollbacks.
@@ -362,7 +368,8 @@ func Init(
 	})
 	// This should never happen.
 	if !created {
-		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
+		log.Error("Failed to create a new sidecar database identifier cache during init as one already existed!")
+		os.Exit(1)
 	}
 
 	var si SchemaInfo // default nil
@@ -386,7 +393,8 @@ func Init(
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
+		log.Error(fmt.Sprintf("error initializing query logger: %v", err))
+		os.Exit(1)
 	}
 
 	// connect the schema tracker with the vschema manager
@@ -438,7 +446,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		switch {
 		case err == nil:
 		case topo.IsErrType(err, topo.NoNode):
-			log.Infof("Rebuilding Serving Keyspace %v", ks)
+			log.Info(fmt.Sprintf("Rebuilding Serving Keyspace %v", ks))
 			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
 			}
@@ -452,7 +460,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 	case err == nil:
 		for _, ks := range keyspaces {
 			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
-				log.Infof("Rebuilding Serving Vschema")
+				log.Info("Rebuilding Serving Vschema")
 				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 					return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
 				}
@@ -461,7 +469,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
-		log.Infof("Rebuilding Serving Vschema")
+		log.Info("Rebuilding Serving Vschema")
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 			return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
@@ -475,11 +483,11 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
-		log.Warningf("Unable to get all keyspaces: %v", err)
+		log.Warn(fmt.Sprintf("Unable to get all keyspaces: %v", err))
 		return
 	}
 	if len(keyspaces) == 0 {
-		log.Infof("No keyspace to load")
+		log.Info("No keyspace to load")
 	}
 	for _, keyspace := range keyspaces {
 		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
@@ -489,7 +497,7 @@ func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, s
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
 	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
-		log.Warningf("Unable to resolve destination: %v", err)
+		log.Warn(fmt.Sprintf("Unable to resolve destination: %v", err))
 		return
 	}
 
@@ -497,7 +505,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 	for {
 		select {
 		case <-timeout:
-			log.Warningf("Unable to get initial schema reload for keyspace: %s", keyspace)
+			log.Warn("Unable to get initial schema reload for keyspace: " + keyspace)
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
@@ -836,7 +844,7 @@ func formatError(err error) error {
 // HandlePanic recovers from panics, and logs / increment counters
 func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}

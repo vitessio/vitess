@@ -15,7 +15,6 @@
  */
 
 @import './style/fonts.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -249,7 +248,6 @@ table tbody td[rowSpan] {
         @apply select-none;
         @apply whitespace-nowrap;
         @apply w-min;
-
         @apply focus:ring-vtblue-50;
         @apply focus:ring-offset-1;
         @apply focus:ring-2;
@@ -351,6 +349,7 @@ table tbody td[rowSpan] {
     .toggle {
         height: 19px;
         width: 37px;
+
         @apply relative;
         @apply inline-flex;
         @apply flex-shrink-0;
@@ -375,6 +374,7 @@ table tbody td[rowSpan] {
     .toggle-button {
         height: 15px;
         width: 15px;
+
         @apply pointer-events-none;
         @apply inline-block;
         @apply rounded-full;

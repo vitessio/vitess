@@ -49,7 +49,6 @@ func GetShards(ctx context.Context, ts *topo.Server, keyspace string, shardSubse
 			return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
 		}
 	}
-	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
-		keyspace, len(shardSubset), len(allShards), shardSubset)
+	log.Info(fmt.Sprintf("Selecting subset of shards in keyspace %s: %d from %d :: %+v", keyspace, len(shardSubset), len(allShards), shardSubset))
 	return shardSubset, nil
 }

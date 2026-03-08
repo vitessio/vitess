@@ -166,7 +166,7 @@ func (te *TxEngine) transition(state txEngineState) {
 		return
 	}
 
-	log.Infof("TxEngine transition: %v", state)
+	log.Info(fmt.Sprintf("TxEngine transition: %v", state))
 
 	// When we are transitioning from read write state, we should close all transactions.
 	if te.state == AcceptingReadAndWrite {
@@ -215,7 +215,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 
 	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-		log.Errorf("Could not open TwoPC engine: %v", err)
+		log.Error(fmt.Sprintf("Could not open TwoPC engine: %v", err))
 		return
 	}
 
@@ -230,26 +230,26 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-		log.Errorf("Could not prepare transactions: %v", err)
+		log.Error(fmt.Sprintf("Could not prepare transactions: %v", err))
 	}
 }
 
 // Close will disregard common rules for when to kill transactions
 // and wait forever for transactions to wrap up
 func (te *TxEngine) Close() {
-	log.Infof("TxEngine - started Close. Acquiring stateLock lock")
+	log.Info("TxEngine - started Close. Acquiring stateLock lock")
 	te.stateLock.Lock()
-	log.Infof("TxEngine - acquired stateLock")
+	log.Info("TxEngine - acquired stateLock")
 	defer func() {
 		te.state = NotServing
 		te.stateLock.Unlock()
 	}()
 	if te.state == NotServing {
-		log.Infof("TxEngine - state is not serving already")
+		log.Info("TxEngine - state is not serving already")
 		return
 	}
 
-	log.Infof("TxEngine - starting shutdown")
+	log.Info("TxEngine - starting shutdown")
 	te.shutdownLocked()
 	log.Info("TxEngine: closed")
 }
@@ -342,17 +342,17 @@ func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f fun
 // the transactions are rolled back if they're not resolved
 // by that time.
 func (te *TxEngine) shutdownLocked() {
-	log.Infof("TxEngine - called shutdownLocked")
+	log.Info("TxEngine - called shutdownLocked")
 	immediate := te.state != AcceptingReadAndWrite
 
 	// Unlock, wait for all begin requests to complete, and relock.
 	te.state = Transitioning
 	te.stateLock.Unlock()
-	log.Infof("TxEngine - waiting for begin requests")
+	log.Info("TxEngine - waiting for begin requests")
 	te.beginRequests.Wait()
-	log.Infof("TxEngine - acquiring state lock again")
+	log.Info("TxEngine - acquiring state lock again")
 	te.stateLock.Lock()
-	log.Infof("TxEngine - state lock acquired again")
+	log.Info("TxEngine - state lock acquired again")
 
 	poolEmpty := make(chan bool)
 	rollbackDone := make(chan bool)
@@ -393,28 +393,28 @@ func (te *TxEngine) shutdownLocked() {
 	// It is important to note, that we aren't rolling back prepared transactions here.
 	// That is happneing in the same place where we are killing queries. This will block
 	// until either all prepared transactions get resolved or rollbacked.
-	log.Infof("TxEngine - waiting for empty txPool")
+	log.Info("TxEngine - waiting for empty txPool")
 	te.txPool.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
 	close(poolEmpty)
 	// Make sure the goroutine has returned.
-	log.Infof("TxEngine - making sure the goroutine has returned")
+	log.Info("TxEngine - making sure the goroutine has returned")
 	<-rollbackDone
 
 	// We stop the transaction watcher so late, because if the user isn't running
 	// with any shutdown grace period, we still want the watcher to run while we are waiting
 	// for resolving transactions.
-	log.Infof("TxEngine - stop transaction watcher")
+	log.Info("TxEngine - stop transaction watcher")
 	te.stopTransactionWatcher()
 
 	// Mark the prepared pool closed.
-	log.Infof("TxEngine - closing the txPool")
+	log.Info("TxEngine - closing the txPool")
 	te.txPool.Close()
-	log.Infof("TxEngine - closing twoPC")
+	log.Info("TxEngine - closing twoPC")
 	te.twoPC.Close()
-	log.Infof("TxEngine - closing the prepared pool")
+	log.Info("TxEngine - closing the prepared pool")
 	te.preparedPool.Close()
-	log.Infof("TxEngine - finished shutdownLocked")
+	log.Info("TxEngine - finished shutdownLocked")
 }
 
 // prepareFromRedo replays and prepares the transactions
@@ -469,7 +469,7 @@ func (te *TxEngine) prepareFromRedo() error {
 	}
 
 	te.txPool.AdjustLastID(maxID)
-	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", preparedCounter, failedCounter)
+	log.Info(fmt.Sprintf("TwoPC: Prepared %d transactions, and registered %d failures.", preparedCounter, failedCounter))
 	return vterrors.Aggregate(allErrs)
 }
 
@@ -520,7 +520,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error, metricName string) (fail bool) {
 	state := RedoStateFailed
 	if isRetryableError(receivedErr) {
-		log.Infof("retryable error for dtid: %s", dtid)
+		log.Info("retryable error for dtid: " + dtid)
 		state = RedoStatePrepared
 	} else {
 		fail = true
@@ -533,18 +533,18 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
 	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
-		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
+		log.Error(fmt.Sprintf("markFailed: Begin failed for dtid %s: %v", dtid, err))
 		return
 	}
 	defer te.txPool.RollbackAndRelease(ctx, conn)
 
 	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, state, receivedErr.Error()); err != nil {
-		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
+		log.Error(fmt.Sprintf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err))
 		return
 	}
 
 	if _, err = te.txPool.Commit(ctx, conn); err != nil {
-		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
+		log.Error(fmt.Sprintf("markFailed: Commit failed for dtid %s: %v", dtid, err))
 	}
 	return
 }
@@ -599,7 +599,7 @@ func (te *TxEngine) startTransactionWatcher() {
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
-			log.Errorf("Error reading prepared transactions: %v", err)
+			log.Error(fmt.Sprintf("Error reading prepared transactions: %v", err))
 		}
 		te.env.Stats().Unresolved.Set("ResourceManager", count)
 
@@ -607,7 +607,7 @@ func (te *TxEngine) startTransactionWatcher() {
 		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("TransactionWatcherFail", 1)
-			log.Errorf("Error reading unresolved transactions: %v", err)
+			log.Error(fmt.Sprintf("Error reading unresolved transactions: %v", err))
 			return
 		}
 		te.env.Stats().Unresolved.Set("MetadataManager", count)

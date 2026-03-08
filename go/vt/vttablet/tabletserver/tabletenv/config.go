@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -158,7 +159,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in client error messages")
 	fs.IntVar(&currentConfig.TruncateErrorLen, "queryserver-config-truncate-error-len", defaultConfig.TruncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
-	utils.SetFlagBoolVar(fs, &currentConfig.WatchReplication, "watch-replication-stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
+	utils.SetFlagBoolVar(fs, &currentConfig.WatchReplication, "watch-replication-stream", false, "(Deprecated and ignored) When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
+	_ = fs.MarkDeprecated("watch-replication-stream", "please use --track-schema-versions instead, --watch-replication-stream is ignored and will be removed in v25")
 	utils.SetFlagBoolVar(fs, &currentConfig.TrackSchemaVersions, "track-schema-versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 
@@ -291,7 +293,8 @@ func Init() {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
+		log.Error(fmt.Sprintf("Invalid querylog-format value %v: must be either text or json", logFormat))
+		os.Exit(1)
 	}
 
 	if queryLogHandler != "" {
@@ -339,7 +342,7 @@ type TabletConfig struct {
 	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval        time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
 	SchemaChangeReloadTimeout   time.Duration `json:"schemaChangeReloadTimeout,omitempty"`
-	WatchReplication            bool          `json:"watchReplication,omitempty"`
+	WatchReplication            bool          `json:"watchReplication,omitempty"` // Ignored and unused, remove in v25
 	TrackSchemaVersions         bool          `json:"trackSchemaVersions,omitempty"`
 	SchemaVersionMaxAgeSeconds  int64         `json:"schemaVersionMaxAgeSeconds,omitempty"`
 	TerseErrors                 bool          `json:"terseErrors,omitempty"`

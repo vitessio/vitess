@@ -750,10 +750,10 @@ func TestFkFuzzTest(t *testing.T) {
 
 						// We encountered an error while running the fuzzer. Let's print out the information!
 						if fz.firstFailureInfo != nil {
-							log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
+							log.Error(fmt.Sprintf("Failing query - %v", fz.firstFailureInfo.queryToFail))
 							for idx, table := range fkTables {
-								log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
-								log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+								log.Error(fmt.Sprintf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows))
+								log.Error(fmt.Sprintf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows))
 							}
 						}
 

@@ -145,7 +145,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
 		if int64(i) >= dataColumns.Count {
-			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
+			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
 			return nil
 		}
 		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {

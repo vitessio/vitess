@@ -18,6 +18,7 @@ package txthrottler
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -86,7 +87,7 @@ const TxThrottlerName = "TransactionThrottler"
 func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
-		log.Errorf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err)
+		log.Error(fmt.Sprintf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err))
 		cells = []string{target.Cell}
 	}
 	return cells
@@ -175,13 +176,9 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get(),
-			)
+			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get()))
 		} else {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get(),
-			)
+			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get()))
 		}
 	}
 
@@ -353,7 +350,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 			return
 		case <-cellsUpdateTicks:
 			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
-				log.Errorf("txThrottler: failed to update cell list: %+v", err)
+				log.Error(fmt.Sprintf("txThrottler: failed to update cell list: %+v", err))
 			}
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)

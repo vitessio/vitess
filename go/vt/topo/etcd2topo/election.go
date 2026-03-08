@@ -18,6 +18,7 @@ package etcd2topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -82,7 +83,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 		}
 		if ld != nil {
 			if err := ld.Unlock(context.Background()); err != nil {
-				log.Errorf("failed to unlock electionPath %v: %v", electionPath, err)
+				log.Error(fmt.Sprintf("failed to unlock electionPath %v: %v", electionPath, err))
 			}
 		}
 		lockCancel()

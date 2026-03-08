@@ -69,8 +69,8 @@ func TestEngineOpen(t *testing.T) {
 				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, tt.state, optionsJS),
 			)
 
-			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", initialQR, nil)
-			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending') and db_name = "+encodeString(vdiffDBName), initialQR, nil)
+			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
@@ -84,7 +84,7 @@ func TestEngineOpen(t *testing.T) {
 			), nil)
 
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
-			shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = 1", vdiffenv.dbClient)
+			shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = 1 and db_name = 'vttest'", vdiffenv.dbClient)
 
 			vdenv.vde.Open(context.Background(), vdiffenv.vre)
 			defer vdenv.vde.Close()
@@ -124,14 +124,14 @@ func TestVDiff(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|", UUID, vdenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, optionsJS),
 	)
 
-	vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", controllerQR, nil)
+	vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), controllerQR, nil)
 	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", vdiffenv.workflow, vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|workflow|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|options",
 		"int64|varbinary|blob|varbinary|varbinary|int64|int64|varbinary|varbinary|int64|int64|varbinary|varbinary|varbinary|int64|varbinary|int64|int64|int64|varchar|int64|varchar",
 	),
 		fmt.Sprintf("1|%s|%s|%s||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1|{}", vdiffenv.workflow, vreplSource, vdiffSourceGtid, vdiffDBName),
 	), nil)
-	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = 1", singleRowAffected, nil)
+	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = 1 and db_name = 'vttest'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: started')", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
@@ -193,7 +193,7 @@ func TestVDiff(t *testing.T) {
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff_table set state = 'completed' where vdiff_id = 1 and table_name = 't1'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`insert into _vt.vdiff_log(vdiff_id, message) values (1, 'completed: table \'t1\'')`, singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("select table_name as table_name from _vt.vdiff_table where vdiff_id = 1 and state != 'completed' order by table_name", singleRowAffected, nil)
-	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'completed', last_error = left('', 1024) , completed_at = utc_timestamp() where id = 1", singleRowAffected, nil)
+	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'completed', last_error = left('', 1024) , completed_at = utc_timestamp() where id = 1 and db_name = 'vttest'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: completed')", singleRowAffected, nil)
 
 	vdenv.vde.mu.Lock()
@@ -243,7 +243,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'", tt.retryQueryResults, nil)
+			vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true' and db_name = "+encodeString(vdiffDBName), tt.retryQueryResults, nil)
 
 			// Right now this only supports a single row as with multiple rows we have
 			// multiple controllers in separate goroutines and the order is not
@@ -255,8 +255,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			for _, row := range tt.retryQueryResults.Rows {
 				id := row[0].ToString()
 				if tt.expectRetry {
-					vdiffenv.dbClient.ExpectRequestRE("update _vt.vdiff as vd left join _vt.vdiff_table as vdt on \\(vd.id = vdt.vdiff_id\\) set vd.state = 'pending'.*", singleRowAffected, nil)
-					vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = "+id, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					vdiffenv.dbClient.ExpectRequestRE("update _vt.vdiff as vd left join _vt.vdiff_table as vdt on \\(vd.id = vdt.vdiff_id\\) set vd.state = 'pending'[\\s\\S]*vd.db_name[\\s\\S]*", singleRowAffected, nil)
+					vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = "+id+" and db_name = "+encodeString(vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						vdiffTestCols,
 						vdiffTestColTypes,
 					),
@@ -270,7 +270,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 					), nil)
 
 					// At this point we know that we kicked off the expected retry so we can short circuit the vdiff.
-					shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = "+id, vdiffenv.dbClient)
+					shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = "+id+" and db_name = 'vttest'", vdiffenv.dbClient)
 
 					expectedControllerCnt++
 				}

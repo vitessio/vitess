@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"strings"
@@ -957,7 +958,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 		{
 			name:         "gtid mismatch",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:          "GTIDSet Mismatch aa",
+			msg:          vterrors.GTIDSetMismatch + " aa",
 			shouldRetry:  true,
 			ignoreTablet: true,
 		},
@@ -995,6 +996,13 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			msg:          "vttablet: rpc error: code = Unknown desc = Cannot replicate because the source purged required binary logs. Replicate the missing transactions from elsewhere, or provision a new replica from backup. Consider increasing the source's binary log expiration period. Missing transactions are: 013c5ddc-dd89-11ed-b3a1-125a006436b9:305627275-305627280 (errno 1789) (sqlstate HY000)",
 			shouldRetry:  true,
 			ignoreTablet: true,
+		},
+		{
+			name:         "non-ephemeral sql error",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)",
+			shouldRetry:  false,
+			ignoreTablet: false,
 		},
 	}
 
@@ -2257,7 +2265,9 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
 	logger := logutil.NewMemoryLogger()
-	log.Warningf = logger.Warningf
+	log.Warn = func(msg string, _ ...slog.Attr) {
+		logger.Warningf("%s", msg)
+	}
 
 	cell := "aa"
 	ks := "TestVStream"

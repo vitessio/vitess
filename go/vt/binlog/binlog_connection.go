@@ -75,7 +75,7 @@ func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
 		cp:       cp,
 		serverID: serverIDPool.Get(),
 	}
-	log.Infof("new binlog connection: serverID=%d", bc.serverID)
+	log.Info(fmt.Sprintf("new binlog connection: serverID=%d", bc.serverID))
 	return bc, nil
 }
 
@@ -121,9 +121,9 @@ func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (rep
 func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, binlogFilename string, startPos replication.Position) (<-chan mysql.BinlogEvent, <-chan error, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
-	log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
+	log.Info(fmt.Sprintf("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID))
 	if err := bc.SendBinlogDumpCommand(bc.serverID, binlogFilename, startPos); err != nil {
-		log.Errorf("couldn't send binlog dump command: %v", err)
+		log.Error(fmt.Sprintf("couldn't send binlog dump command: %v", err))
 		return nil, nil, err
 	}
 
@@ -158,10 +158,10 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
-					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
+					log.Info(fmt.Sprintf("connection closed during binlog stream (possibly intentional): %v", err))
 					return
 				}
-				log.Errorf("read error while streaming binlog events: %v", err)
+				log.Error(fmt.Sprintf("read error while streaming binlog events: %v", err))
 				return
 			}
 
@@ -248,7 +248,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 		}
 	}
 
-	log.Errorf("couldn't find an old enough binlog to match timestamp >= %v (looked at %v files)", timestamp, len(binlogs.Rows))
+	log.Error(fmt.Sprintf("couldn't find an old enough binlog to match timestamp >= %v (looked at %v files)", timestamp, len(binlogs.Rows)))
 	return "", ErrBinlogUnavailable
 }
 
@@ -285,7 +285,7 @@ func (bc *BinlogConnection) getBinlogTimeStamp(filename string) (blTimestamp int
 // The ID for the binlog connection is recycled back into the pool.
 func (bc *BinlogConnection) Close() {
 	if bc.Conn != nil {
-		log.Infof("closing binlog socket to unblock reads")
+		log.Info("closing binlog socket to unblock reads")
 		bc.Conn.Close()
 
 		// bc.cancel is set at the beginning of the StartBinlogDump*
@@ -293,13 +293,13 @@ func (bc *BinlogConnection) Close() {
 		// Note we also may error out before adding 1 to bc.wg,
 		// but then the Wait() still works.
 		if bc.cancel != nil {
-			log.Infof("waiting for binlog dump thread to end")
+			log.Info("waiting for binlog dump thread to end")
 			bc.cancel()
 			bc.wg.Wait()
 			bc.cancel = nil
 		}
 
-		log.Infof("closing binlog MySQL client with serverID %v. Will recycle ID.", bc.serverID)
+		log.Info(fmt.Sprintf("closing binlog MySQL client with serverID %v. Will recycle ID.", bc.serverID))
 		bc.Conn = nil
 		serverIDPool.Put(bc.serverID)
 	}

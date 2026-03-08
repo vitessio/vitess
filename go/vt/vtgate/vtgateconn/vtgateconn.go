@@ -229,7 +229,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	defer dialersM.Unlock()
 
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists, overwriting it", name)
+		log.Warn(fmt.Sprintf("Dialer %s already exists, overwriting it", name))
 	}
 	dialers[name] = dialer
 }

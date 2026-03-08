@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-import { render, screen } from '@testing-library/react';
-import { renderHook } from '@testing-library/react-hooks';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import * as httpAPI from '../../api/http';
 
@@ -45,17 +44,16 @@ describe('QueryLoadingPlaceholder', () => {
 
     it('renders only when loading', async () => {
         (httpAPI.fetchClusters as any).mockResolvedValueOnce({ clusters: [] });
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
 
         const { rerender } = render(<QueryLoadingPlaceholder query={result.current} />);
 
-        await waitFor(() => result.current.isLoading);
-
+        // Initially the query should be loading
         let placeholder = screen.queryByRole('status');
         expect(placeholder).not.toBeNull();
         expect(placeholder?.textContent).toEqual('Loading...');
 
-        await waitFor(() => result.current.isSuccess);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
         rerender(<QueryLoadingPlaceholder query={result.current} />);
         placeholder = screen.queryByRole('status');

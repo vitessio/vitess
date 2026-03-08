@@ -18,6 +18,7 @@ package zk2topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"time"
 
@@ -106,36 +107,36 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		}
 
 		// Regardless of the reason, try to cleanup.
-		log.Warningf("Failed to obtain lock: %v", err)
+		log.Warn(fmt.Sprintf("Failed to obtain lock: %v", err))
 
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
 
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warningf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err)
+			log.Warn(fmt.Sprintf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err))
 		}
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)
 		children, _, err := zs.conn.Children(cleanupCtx, dir)
 		if err != nil {
-			log.Warningf("Failed to get children of %v: %v", dir, err)
+			log.Warn(fmt.Sprintf("Failed to get children of %v: %v", dir, err))
 			return nil, errToReturn
 		}
 
 		if len(children) == 0 {
-			log.Warningf("No other locks present, you may just try again now.")
+			log.Warn("No other locks present, you may just try again now.")
 			return nil, errToReturn
 		}
 
 		childPath := path.Join(dir, children[0])
 		data, _, err := zs.conn.Get(cleanupCtx, childPath)
 		if err != nil {
-			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
+			log.Warn(fmt.Sprintf("Failed to get first locks node %v (may have just ended): %v", childPath, err))
 			return nil, errToReturn
 		}
 
-		log.Warningf("------ Most likely blocking lock: %v\n%v", childPath, string(data))
+		log.Warn(fmt.Sprintf("------ Most likely blocking lock: %v\n%v", childPath, string(data)))
 		return nil, errToReturn
 	}
 

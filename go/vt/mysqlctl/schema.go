@@ -504,7 +504,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("BeforeSchema differs: %v", msg)
+				log.Warn(fmt.Sprintf("BeforeSchema differs: %v", msg))
 			}
 
 			// let's see if the schema was already applied
@@ -522,7 +522,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 			}
 
 			if change.Force {
-				log.Warningf("BeforeSchema differs, applying anyway")
+				log.Warn("BeforeSchema differs, applying anyway")
 			} else {
 				return nil, errors.New("BeforeSchema differs")
 			}
@@ -565,10 +565,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("AfterSchema differs: %v", msg)
+				log.Warn(fmt.Sprintf("AfterSchema differs: %v", msg))
 			}
 			if change.Force {
-				log.Warningf("AfterSchema differs, not reporting error")
+				log.Warn("AfterSchema differs, not reporting error")
 			} else {
 				return nil, errors.New("AfterSchema differs")
 			}
