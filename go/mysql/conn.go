@@ -1278,6 +1278,9 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			kontinue = false
 		}
 	}()
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 	queryStart := time.Now()
 	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
 	c.recycleReadPacket()
@@ -1488,10 +1491,15 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	needsEndPacket := false
 	callbackCalled := false
 	res := execSuccess
+	previousStatusFlags := c.StatusFlags
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		currentStatusFlags := c.StatusFlags
 		callbackCalled = true
-		flag := c.StatusFlags
+		flag := currentStatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
 		}
@@ -1499,7 +1507,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && needsEndPacket {
-			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
+			if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return err
 			}
@@ -1521,6 +1529,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			// So we reset the needsEndPacket variable to signify we haven't sent the last
 			// packet for this query.
 			needsEndPacket = true
+			previousStatusFlags = currentStatusFlags
 			if len(qr.QueryResult.Fields) == 0 {
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
@@ -1636,6 +1645,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 		flag := c.StatusFlags
