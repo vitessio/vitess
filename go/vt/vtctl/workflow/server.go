@@ -3037,12 +3037,16 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 	defer sourceUnlock(&err)
 
-	// Lock target keyspace second.
-	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
-	if lockErr != nil {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+	// Lock target keyspace second, but only if it's different from source.
+	// For reshard operations, source and target keyspaces are the same.
+	var targetUnlock func(*error)
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
+		if lockErr != nil {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+		}
+		defer targetUnlock(&err)
 	}
-	defer targetUnlock(&err)
 
 	confirmKeyspaceLocksHeld := func() error {
 		if req.DryRun { // We don't actually take locks
@@ -3051,8 +3055,11 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if err := topo.CheckKeyspaceLocked(ctx, ts.SourceKeyspaceName()); err != nil {
 			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.SourceKeyspaceName())
 		}
-		if err := topo.CheckKeyspaceLocked(ctx, ts.TargetKeyspaceName()); err != nil {
-			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.TargetKeyspaceName())
+		// Only check target keyspace lock if it's different from source (not a reshard).
+		if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+			if err := topo.CheckKeyspaceLocked(ctx, ts.TargetKeyspaceName()); err != nil {
+				return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.TargetKeyspaceName())
+			}
 		}
 		return nil
 	}
