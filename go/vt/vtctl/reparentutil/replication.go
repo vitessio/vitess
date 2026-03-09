@@ -18,11 +18,7 @@ package reparentutil
 
 import (
 	"context"
-<<<<<<< HEAD
-=======
 	"errors"
-	"fmt"
->>>>>>> db9c49fc8f (`EmergencyReparentShard`: require stop replication error to be from `PRIMARY` (#19515))
 	"sync"
 	"time"
 

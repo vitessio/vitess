@@ -428,14 +428,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			waitForAllTablets: true,
 			shouldErr:         false,
-<<<<<<< HEAD
-		}, {
-			name:       "timing check with wait for all tablets",
-=======
 		},
 		{
 			name:       "primary timeout with wait for all tablets",
->>>>>>> db9c49fc8f (`EmergencyReparentShard`: require stop replication error to be from `PRIMARY` (#19515))
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
