@@ -175,9 +175,11 @@ This applies to **both** the No conflicts flow and the conflict resolution flow.
 A backport PR only exists because CI passed on the upstream PR. Any CI failure on the backport is a strong signal that our changes introduced a problem.
 
 1. Poll all CI checks with `gh pr checks <number> --repo vitessio/vitess` every 60 seconds.
-2. **On each poll**, check for any newly failed checks. Don't wait for all checks to complete — handle failures as soon as they appear:
-   a. Check if the upstream PR had the same failure — a discrepancy is unexpected and points to our changes.
-   b. Check the recent success rate of the failed job on the target branch to assess flakiness:
+2. **On each poll**, check for any newly failed checks. Handle failures as soon as they appear — don't wait for all checks to complete.
+3. For each failed check, **always investigate the failure first** before deciding to rerun:
+   a. Check the CI logs to understand why it failed.
+   b. Check if the upstream PR had the same failure — a discrepancy is unexpected and points to a problem with the backport.
+   c. Check the recent success rate of the failed job on the target branch to assess flakiness:
       ```
       # Get the e2e workflow ID
       workflow_id=$(gh api repos/vitessio/vitess/actions/workflows --jq '.workflows[] | select(.name | test("Cluster")) | .id' | head -1)
@@ -193,6 +195,6 @@ A backport PR only exists because CI passed on the upstream PR. Any CI failure o
       done < <(gh api "repos/vitessio/vitess/actions/workflows/$workflow_id/runs?branch=<base-branch>&per_page=10" --jq '.workflow_runs[].id')
       ```
       Report the success rate to the user (e.g., "vtgate_reservedconn: 7/10 passed recently on release-22.0").
-   c. If our changes **did not** cause the failure (e.g., flaky test, infra issue), rerun the failed CI job **immediately** and continue polling. **Do not investigate the root cause** — our job is to resolve backports, not debug unrelated CI failures.
-   d. If our changes **caused** the failure, investigate the error from the CI logs, propose and apply fixes, push, then continue polling to verify the fix resolved it.
-3. Continue polling until all checks have passed (including reruns).
+   d. If the failure is unrelated to the backport (e.g., flaky test, infra issue), rerun the failed CI job and continue polling.
+   e. If the backport caused the failure, propose and apply fixes, push, then continue polling to verify the fix resolved it.
+4. Continue polling until all checks have passed (including reruns).
