@@ -1882,9 +1882,8 @@
         "OperatorType": "Distinct",
         "Collations": [
           "0: utf8mb4_0900_ai_ci",
-          "(1:2)"
+          "1"
         ],
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -1893,14 +1892,13 @@
                 "OperatorType": "Projection",
                 "Expressions": [
                   "'count_a' as tab",
-                  ":0 as num",
-                  ":1 as weight_string(num)"
+                  ":0 as num"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "sum_count(0|1) AS num",
+                    "Aggregates": "sum_count(0) AS num",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -1909,8 +1907,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select COUNT(user_id) as num, weight_string(COUNT(user_id)) from user_metadata where 1 != 1",
-                        "Query": "select COUNT(user_id) as num, weight_string(COUNT(user_id)) from user_metadata"
+                        "FieldQuery": "select COUNT(user_id) as num from user_metadata where 1 != 1",
+                        "Query": "select COUNT(user_id) as num from user_metadata"
                       }
                     ]
                   }
@@ -1920,14 +1918,13 @@
                 "OperatorType": "Projection",
                 "Expressions": [
                   "'count_b' as tab",
-                  ":0 as num",
-                  ":1 as weight_string(num)"
+                  ":0 as num"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "sum_count(0|1) AS num",
+                    "Aggregates": "sum_count(0) AS num",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -1936,8 +1933,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select COUNT(user_id) as num, weight_string(COUNT(user_id)) from user_extra where 1 != 1",
-                        "Query": "select COUNT(user_id) as num, weight_string(COUNT(user_id)) from user_extra"
+                        "FieldQuery": "select COUNT(user_id) as num from user_extra where 1 != 1",
+                        "Query": "select COUNT(user_id) as num from user_extra"
                       }
                     ]
                   }
