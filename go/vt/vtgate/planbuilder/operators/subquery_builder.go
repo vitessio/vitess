@@ -501,4 +501,3 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	sqe.new = expr
 	return sqe
 }
-
