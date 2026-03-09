@@ -383,7 +383,19 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	var newSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
+		argName := sqe.cols[idx]
+		filterType := sqe.pullOutCode[idx]
+		// If an existing subquery already uses this argument name with a different
+		// pullout context, we need a distinct name to avoid bind variable conflicts.
+		for _, existing := range sqb.Inner {
+			if existing.ArgName == argName && existing.FilterType != filterType {
+				newName := ctx.ReservedVars.ReserveSubQuery()
+				sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
+				argName = newName
+				break
+			}
+		}
+		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		newSubqs = append(newSubqs, sqInner)
 	}
 
@@ -425,7 +437,17 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
 		sqName := ctx.GetReservedArgumentFor(sq)
+		// If the same subquery AST appears in a different pullout context
+		// (e.g., scalar value vs IN), we need a distinct bind variable name
+		// to avoid conflicts when the planner rewrites arguments later.
+		for i, existingName := range sqe.cols {
+			if existingName == sqName && sqe.pullOutCode[i] != t {
+				sqName = ctx.ReservedVars.ReserveSubQuery()
+				break
+			}
+		}
 		sqe.cols = append(sqe.cols, sqName)
+		sqe.pullOutCode = append(sqe.pullOutCode, t)
 		if isDML {
 			if t.NeedsListArg() {
 				cursor.Replace(sqlparser.NewListArg(sqName))
@@ -446,10 +468,8 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 				return true
 			}
 			replaceWithArg(cursor, node, *t)
-			sqe.pullOutCode = append(sqe.pullOutCode, *t)
 		case *sqlparser.ExistsExpr:
 			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
 		}
 		return true
 	}).(sqlparser.Expr)
@@ -458,4 +478,29 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	}
 	sqe.new = expr
 	return sqe
+}
+
+// replaceSubqueryArgName rewrites all references to oldName in the expression
+// to use newName. In non-DML mode subqueries are replaced with ColName nodes;
+// in DML mode they become Argument or ListArg nodes.
+func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML bool) sqlparser.Expr {
+	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		if isDML {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.Argument:
+				if node.Name == oldName {
+					cursor.Replace(sqlparser.NewArgument(newName))
+				}
+			case sqlparser.ListArg:
+				if string(node) == oldName {
+					cursor.Replace(sqlparser.NewListArg(newName))
+				}
+			}
+		} else {
+			if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
+				cursor.Replace(sqlparser.NewColName(newName))
+			}
+		}
+		return true
+	}).(sqlparser.Expr)
 }
