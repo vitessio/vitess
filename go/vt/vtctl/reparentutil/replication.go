@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
