@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/icrowley/fake"
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -90,8 +90,8 @@ func TestInsertUpdateDelete(t *testing.T) {
 		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?,
 		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
 
-	textValue := fake.FullName()
-	largeComment := fake.Paragraph()
+	textValue := gofakeit.Name()
+	largeComment := gofakeit.LoremIpsumParagraph(1, 5, 20, " ")
 
 	location, _ := time.LoadLocation("Local")
 	// inserting multiple rows into test table
@@ -194,7 +194,7 @@ func TestAutoIncColumns(t *testing.T) {
 		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 		time.Now(),
 		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
-		1, 1, 1, 1, 1, 1, 1, 1, 1, jsonExample, fake.DomainName(), fake.Paragraph(),
+		1, 1, 1, 1, 1, 1, 1, 1, 1, jsonExample, gofakeit.DomainName(), gofakeit.LoremIpsumParagraph(1, 5, 20, " "),
 		-(1 << 7), (1 << 7) - 1, 1, -1,
 		-(1 << 15), (1 << 15) - 1, 1, -1,
 		-(1 << 23), (1 << 23) - 1, 1, -1,

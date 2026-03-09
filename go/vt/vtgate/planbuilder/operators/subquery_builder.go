@@ -380,28 +380,38 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	if sqe == nil {
 		return nil, nil
 	}
-	var newSubqs []*SubQuery
+	var allSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
 		argName := sqe.cols[idx]
 		filterType := sqe.pullOutCode[idx]
-		// If an existing subquery already uses this argument name with a different
-		// pullout context, we need a distinct name to avoid bind variable conflicts.
-		for _, existing := range sqb.Inner {
-			if existing.ArgName == argName && existing.FilterType != filterType {
-				newName := ctx.ReservedVars.ReserveSubQuery()
-				sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
-				argName = newName
-				break
+		if existing := sqb.findByArgName(argName); existing != nil {
+			if existing.FilterType == filterType {
+				// Same subquery, same context — reuse the existing operator.
+				allSubqs = append(allSubqs, existing)
+				continue
 			}
+			// Same subquery AST but different pullout context (e.g., scalar vs IN).
+			// We need a distinct bind variable name to avoid conflicts.
+			newName := ctx.ReservedVars.ReserveSubQuery()
+			sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
+			argName = newName
 		}
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
-		newSubqs = append(newSubqs, sqInner)
+		allSubqs = append(allSubqs, sqInner)
+		sqb.Inner = append(sqb.Inner, sqInner)
 	}
 
-	sqb.Inner = append(sqb.Inner, newSubqs...)
+	return sqe.new, allSubqs
+}
 
-	return sqe.new, newSubqs
+func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
+	for _, sq := range sqb.Inner {
+		if sq.ArgName == name {
+			return sq
+		}
+	}
+	return nil
 }
 
 // subqueryExtraction holds the result of extracting subqueries from an expression.
