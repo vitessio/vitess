@@ -1266,14 +1266,14 @@ func (e *Executor) initConnectionWaitTimeout(ctx context.Context, conn *connpool
 // After LOCK TABLES, lockConn executes no queries until DROP sentry — MySQL's wait_timeout counts
 // down only while a connection is idle (no query executing), so this is the window we must cover.
 // The idle period spans:
-//   - waitForRenameProcess()         up to CutOverThreshold
-//   - waitForPos()                   up to CutOverThreshold
-//   - stop vreplication (gRPC)       up to grpcTimeout
-//   - waitForRenameProcess() again   up to CutOverThreshold
+//   - waitForRenameProcess()         up to CutOverThreshold (5-30s)
+//   - waitForPos()                   up to CutOverThreshold (5-30s)
+//   - stop vreplication (gRPC)       up to grpcTimeout (30s)
+//   - waitForRenameProcess() again   up to CutOverThreshold (5-30s)
 //
-// Total: 3*CutOverThreshold + grpcTimeout. We add two extra CutOverThresholds as headroom.
+// Total: 3*CutOverThreshold + grpcTimeout. We add an extra CutOverThreshold + 60s as headroom.
 func lockConnWaitTimeout(cutOverThreshold time.Duration) time.Duration {
-	return 5*cutOverThreshold + grpcTimeout
+	return 4*cutOverThreshold + grpcTimeout + time.Minute
 }
 
 // initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
