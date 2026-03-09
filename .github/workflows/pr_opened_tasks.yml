@@ -103,13 +103,13 @@ jobs:
             --repo ${{ github.repository }} \
             --add-label "NeedsWebsiteDocsUpdate,NeedsDescriptionUpdate,NeedsIssue,NeedsBackportReason"
 
-   labeler:
-     if: github.repository == 'vitessio/vitess'
-     needs: add_initial_labels
-     permissions:
-       contents: read
-       pull-requests: write
-     runs-on: ubuntu-latest
-     steps:
-     - name: Run actions/labeler
-       uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+  labeler:
+    if: github.repository == 'vitessio/vitess'
+    needs: add_initial_labels
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run actions/labeler
+        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
