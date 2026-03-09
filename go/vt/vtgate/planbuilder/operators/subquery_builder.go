@@ -343,16 +343,29 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	if sqe == nil {
 		return nil, nil
 	}
-	var newSubqs []*SubQuery
+	var allSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
-		newSubqs = append(newSubqs, sqInner)
+		argName := sqe.cols[idx]
+		if existing := sqb.findByArgName(argName); existing != nil {
+			allSubqs = append(allSubqs, existing)
+			continue
+		}
+		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, sqe.pullOutCode[idx], true)
+		allSubqs = append(allSubqs, sqInner)
+		sqb.Inner = append(sqb.Inner, sqInner)
 	}
 
-	sqb.Inner = append(sqb.Inner, newSubqs...)
+	return sqe.new, allSubqs
+}
 
-	return sqe.new, newSubqs
+func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
+	for _, sq := range sqb.Inner {
+		if sq.ArgName == name {
+			return sq
+		}
+	}
+	return nil
 }
 
 type subqueryExtraction struct {
