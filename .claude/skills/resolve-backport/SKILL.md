@@ -155,6 +155,10 @@ The backport branch may be based on a stale version of the release branch. **Alw
   git commit --signoff -m "resolve conflicts for backport of #<upstream-number>"
   ```
 - Push the branch (force push is expected after rebase): `git push --force-with-lease`
+- Add a PR comment summarizing the conflict resolution. Include which files had conflicts, how they were resolved, and any notable decisions (e.g., keeping functions from prior backports, adapting code to the release branch context):
+  ```
+  gh pr comment <number> --repo vitessio/vitess --body "<summary>"
+  ```
 - Report progress to the user with a link to the PR.
 - Poll all CI checks every 60 seconds until all checks complete. If we just pushed, wait at least 4 minutes before starting to poll (CI needs time to start). For any failed check, follow the **Handling CI failures** process below.
 - Once all CI passes:
