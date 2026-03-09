@@ -21,11 +21,12 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
 
 ### No conflicts flow
 1. If the PR has no assignees, assign to yourself: `gh pr edit <number> --repo vitessio/vitess --add-assignee "@me"`
-2. If the PR is a draft, mark as ready: `gh pr ready <number> --repo vitessio/vitess`
-3. Enable auto-merge: `gh pr merge <number> --repo vitessio/vitess --squash --auto`
-4. Poll all CI checks every 60 seconds until all checks complete. For any failed check, follow the **Handling CI failures** process below.
-5. Once all CI passes, approve the PR (if not already approved — check with `gh pr view <number> --repo vitessio/vitess --json reviews` first): `gh pr review <number> --repo vitessio/vitess --approve`
-6. Report completion and stop — do not continue to Step 2.
+2. Poll all CI checks every 60 seconds until all checks complete. For any failed check, follow the **Handling CI failures** process below.
+3. Once all CI passes:
+   a. If the PR is a draft, mark as ready: `gh pr ready <number> --repo vitessio/vitess`
+   b. Enable auto-merge: `gh pr merge <number> --repo vitessio/vitess --squash --auto`
+   c. Approve the PR (if not already approved — check with `gh pr view <number> --repo vitessio/vitess --json reviews` first): `gh pr review <number> --repo vitessio/vitess --approve`
+4. Report completion and stop — do not continue to Step 2.
 
 ## Step 2: Gather context
 
@@ -173,8 +174,8 @@ This applies to **both** the No conflicts flow and the conflict resolution flow.
 
 A backport PR only exists because CI passed on the upstream PR. Any CI failure on the backport is a strong signal that our changes introduced a problem.
 
-1. Poll all CI checks with `gh pr checks <number> --repo vitessio/vitess` every 60 seconds until all checks complete.
-2. For any failed check:
+1. Poll all CI checks with `gh pr checks <number> --repo vitessio/vitess` every 60 seconds.
+2. **On each poll**, check for any newly failed checks. Don't wait for all checks to complete — handle failures as soon as they appear:
    a. Check if the upstream PR had the same failure — a discrepancy is unexpected and points to our changes.
    b. Check the recent success rate of the failed job on the target branch to assess flakiness:
       ```
@@ -192,5 +193,6 @@ A backport PR only exists because CI passed on the upstream PR. Any CI failure o
       done < <(gh api "repos/vitessio/vitess/actions/workflows/$workflow_id/runs?branch=<base-branch>&per_page=10" --jq '.workflow_runs[].id')
       ```
       Report the success rate to the user (e.g., "vtgate_reservedconn: 7/10 passed recently on release-22.0").
-   c. If our changes **did not** cause the failure (e.g., flaky test, infra issue), rerun the failed CI job and continue polling. **Do not investigate the root cause** — our job is to resolve backports, not debug unrelated CI failures.
-   d. If our changes **caused** the failure, investigate the error from the CI logs, propose and apply fixes, push, then poll every 60 seconds to verify the fix resolved it.
+   c. If our changes **did not** cause the failure (e.g., flaky test, infra issue), rerun the failed CI job **immediately** and continue polling. **Do not investigate the root cause** — our job is to resolve backports, not debug unrelated CI failures.
+   d. If our changes **caused** the failure, investigate the error from the CI logs, propose and apply fixes, push, then continue polling to verify the fix resolved it.
+3. Continue polling until all checks have passed (including reruns).
