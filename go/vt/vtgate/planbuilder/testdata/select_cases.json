@@ -5576,7 +5576,8 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra"
+                "Query": "select count(*) from user_extra",
+                "Table": "user_extra"
               }
             ]
           },
@@ -5590,6 +5591,7 @@
             },
             "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where 1 != 1",
             "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where id = 1",
+            "Table": "`user`",
             "Values": [
               "1"
             ],
