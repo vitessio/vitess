@@ -386,7 +386,9 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		argName := sqe.cols[idx]
 		filterType := sqe.pullOutCode[idx]
 		if existing := sqb.findByArgName(argName); existing != nil {
-			// Same subquery, same context — reuse the existing operator.
+			// A name match guarantees a FilterType match: extractSubQueries
+			// already assigned fresh names for any same-name/different-opcode
+			// conflicts, so identical names here imply identical contexts.
 			allSubqs = append(allSubqs, existing)
 			continue
 		}
