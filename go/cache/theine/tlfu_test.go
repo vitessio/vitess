@@ -33,7 +33,7 @@ func TestTlfu(t *testing.T) {
 	require.Equal(t, 0, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
 
-	var entries []*Entry[StringKey, string]
+	entries := make([]*Entry[StringKey, string], 0, 200)
 	for i := range 200 {
 		e := NewEntry(StringKey(strconv.Itoa(i)), "", 1)
 		evicted := tlfu.Set(e)
@@ -78,7 +78,7 @@ func TestTlfu(t *testing.T) {
 	require.Equal(t, StringKey("1a"), evicted.key)
 	require.Equal(t, 998, tlfu.slru.probation.len)
 
-	var entries2 []*Entry[StringKey, string]
+	entries2 := make([]*Entry[StringKey, string], 0, 1000)
 	for i := range 1000 {
 		e := NewEntry(StringKey(fmt.Sprintf("%d*", i)), "", 1)
 		tlfu.Set(e)

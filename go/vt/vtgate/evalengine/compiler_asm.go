@@ -4615,7 +4615,7 @@ func (asm *assembler) Fn_IS_IPV6() {
 func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, args int) {
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
-		var buf []byte
+		var buf []byte //nolint:prealloc
 		for i := range args {
 			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
 			buf = append(buf, arg.bytes...)

@@ -252,14 +252,13 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 }
 
 func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
-	var result []JoinPredicate
+	result := make([]JoinPredicate, 0, len(joinPredicates))
 	for _, predicate := range joinPredicates {
 		lhs := createColumn(ctx, predicate.lhs)
 		rhs := createColumn(ctx, predicate.rhs)
 		if lhs == nil || rhs == nil {
 			continue
 		}
-
 		result = append(result, newJoinPredicate(*lhs, *rhs, predicate.uses))
 	}
 

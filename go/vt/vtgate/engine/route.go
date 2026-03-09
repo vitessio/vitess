@@ -390,7 +390,7 @@ func (route *Route) description() PrimitiveDescription {
 		other["SysTableTableSchema"] = sysTabSchema
 	}
 	if len(route.SysTableTableName) != 0 {
-		var sysTableName []string
+		sysTableName := make([]string, 0, len(route.SysTableTableName))
 		for k, v := range route.SysTableTableName {
 			sysTableName = append(sysTableName, k+":"+sqlparser.String(v))
 		}

@@ -56,7 +56,7 @@ func (e *ExecStmt) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (e *ExecStmt) description() PrimitiveDescription {
-	var params []string
+	var params []string //nolint:prealloc // nil vs empty matters for JSON serialization
 	for _, p := range e.Params {
 		params = append(params, p.Name.Lowered())
 	}

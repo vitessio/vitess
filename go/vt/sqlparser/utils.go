@@ -170,7 +170,7 @@ func (p *Parser) ReplaceTableQualifiersMultiQuery(multiQuery, olddb, newdb strin
 	if err != nil {
 		return multiQuery, err
 	}
-	var modifiedQueries []string
+	modifiedQueries := make([]string, 0, len(queries))
 	for _, query := range queries {
 		// Replace any provided sidecar database qualifiers with the correct one.
 		query, err := p.ReplaceTableQualifiers(query, olddb, newdb)

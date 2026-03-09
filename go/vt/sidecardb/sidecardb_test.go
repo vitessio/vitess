@@ -93,7 +93,7 @@ func TestInitErrors(t *testing.T) {
 	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), getDDLCount())
 	require.Equal(t, int64(len(schemaErrors)), getDDLErrorCount())
 
-	var want []string
+	want := make([]string, 0, len(schemaErrors))
 	for _, e := range schemaErrors {
 		want = append(want, e.errorValue)
 	}

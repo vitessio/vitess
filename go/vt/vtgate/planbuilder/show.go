@@ -639,7 +639,7 @@ func buildWarnings() (engine.Primitive, error) {
 }
 
 func buildPluginsPlan() (engine.Primitive, error) {
-	var rows [][]sqltypes.Value
+	var rows [][]sqltypes.Value //nolint:prealloc
 	rows = append(rows, buildVarCharRow(
 		"InnoDB",
 		"ACTIVE",
@@ -652,7 +652,7 @@ func buildPluginsPlan() (engine.Primitive, error) {
 }
 
 func buildEnginesPlan() (engine.Primitive, error) {
-	var rows [][]sqltypes.Value
+	var rows [][]sqltypes.Value //nolint:prealloc
 	rows = append(rows, buildVarCharRow(
 		"InnoDB",
 		"DEFAULT",
@@ -667,9 +667,9 @@ func buildEnginesPlan() (engine.Primitive, error) {
 
 func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
-	var rows [][]sqltypes.Value
+	rows := make([][]sqltypes.Value, 0, len(vs.Keyspaces))
 	for ksName, ks := range vs.Keyspaces {
-		var row []sqltypes.Value
+		var row []sqltypes.Value //nolint:prealloc
 		row = append(row, sqltypes.NewVarChar(ksName))
 		row = append(row, sqltypes.NewVarChar(strconv.FormatBool(ks.Keyspace.Sharded)))
 		fkMode, _ := vschema.ForeignKeyMode(ksName)
@@ -696,7 +696,7 @@ func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, erro
 		return nil, vterrors.VT05003(ks.Name)
 	}
 
-	var tables []string
+	tables := make([]string, 0, len(schemaKs.Tables))
 	for name := range schemaKs.Tables {
 		tables = append(tables, name)
 	}

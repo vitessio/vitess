@@ -166,7 +166,7 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 	// Remove keyspace qualifier from columns and tables.
 	sqlparser.RemoveKeyspace(explain.Statement)
 
-	var tables []string
+	tables := make([]string, 0, len(ctx.SemTable.Tables))
 	for _, table := range ctx.SemTable.Tables {
 		name, err := table.Name()
 		if err != nil {

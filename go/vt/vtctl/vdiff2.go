@@ -299,18 +299,19 @@ func getStructFieldNames(s any) []string {
 }
 
 func displayListings(listings []*VDiffListing) string {
-	var strArray2 [][]string
-	var strArray []string
-	str := ""
-
 	if len(listings) == 0 {
 		return ""
 	}
+
+	var str string
 	fields := getStructFieldNames(VDiffListing{})
+	strArray := make([]string, 0, len(fields))
+	strArray2 := make([][]string, 0, len(listings))
+
 	strArray = append(strArray, fields...)
 	strArray2 = append(strArray2, strArray)
 	for _, listing := range listings {
-		strArray = nil
+		strArray = strArray[:0]
 		v := reflect.ValueOf(*listing)
 		for _, field := range fields {
 			strArray = append(strArray, v.FieldByName(field).String())

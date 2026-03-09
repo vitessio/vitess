@@ -202,9 +202,9 @@ func exec(client *QueryClient, query string, bv map[string]*querypb.BindVariable
 
 // RowsToStrings converts qr.Rows to [][]string.
 func RowsToStrings(qr *sqltypes.Result) [][]string {
-	var result [][]string
+	result := make([][]string, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
-		var srow []string
+		srow := make([]string, 0, len(row))
 		for _, cell := range row {
 			srow = append(srow, cell.ToString())
 		}

@@ -15,6 +15,7 @@ linters:
     - nolintlint
     - nosprintfhostport
     - perfsprint
+    - prealloc
     - sqlclosecheck
     - staticcheck
     - whitespace
@@ -125,6 +126,9 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - prealloc
+        path: _test\.go$
+      - linters:
           - errcheck
         path: ^go/vt/proto/
       - linters:
@@ -149,6 +153,7 @@ linters:
       - linters:
           - errcheck
           - nosprintfhostport
+          - prealloc
           - sqlclosecheck
         path: ^go/test/
       - linters:
@@ -211,6 +216,15 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/zkctl
+      - linters:
+          - prealloc
+        path: ^go/vt/vtgate/evalengine/testcases
+      - linters:
+          - prealloc
+        path: ^go/vt/vtgate/semantics/info_schema\.go$
+      - linters:
+          - prealloc # TODO: enable prealloc on go/tools/*
+        path: ^go/tools
     paths:
       - examples$
 formatters:

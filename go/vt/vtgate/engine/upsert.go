@@ -93,8 +93,8 @@ func (u *Upsert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 
 // Inputs implements Primitive interface type.
 func (u *Upsert) Inputs() ([]Primitive, []map[string]any) {
-	var inputs []Primitive
-	var inputsMap []map[string]any
+	inputs := make([]Primitive, 0, len(u.Upserts))
+	inputsMap := make([]map[string]any, 0, len(u.Upserts))
 	for i, up := range u.Upserts {
 		inputs = append(inputs, up.Insert, up.Update)
 		inputsMap = append(inputsMap,

@@ -231,7 +231,7 @@ func (st *SemTable) GetChildForeignKeysForTable(tbl sqlparser.TableName) ([]vind
 
 // GetChildForeignKeysList gets the child foreign keys as a list.
 func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
-	var childFkInfos []vindexes.ChildFKInfo
+	var childFkInfos []vindexes.ChildFKInfo //nolint:prealloc
 	for _, infos := range st.childForeignKeysInvolved {
 		childFkInfos = append(childFkInfos, infos...)
 	}
@@ -258,7 +258,7 @@ func (st *SemTable) GetParentForeignKeysForTableSet(target TableSet) (fks []vind
 
 // GetParentForeignKeysList gets the parent foreign keys as a list.
 func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
-	var parentFkInfos []vindexes.ParentFKInfo
+	var parentFkInfos []vindexes.ParentFKInfo //nolint:prealloc
 	for _, infos := range st.parentForeignKeysInvolved {
 		parentFkInfos = append(parentFkInfos, infos...)
 	}

@@ -3420,7 +3420,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Log unknown Vindex params as warnings.
-	var vdxNames []string
+	vdxNames := make([]string, 0, len(ksVs.Vindexes))
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
 	}
@@ -4101,14 +4101,13 @@ func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.
 		Charset: collations.CollationBinaryID,
 		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	}}
-	var row2 []sqltypes.Value
 	for tabletAlias, result := range results {
 		if qr.Fields == nil {
 			qr.Fields = append(qr.Fields, defaultFields...)
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			row2 = nil
+			var row2 []sqltypes.Value //nolint:prealloc
 			row2 = append(row2, sqltypes.NewVarBinary(tabletAlias))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)

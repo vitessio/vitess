@@ -163,7 +163,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	// Prepare the update expressions list
 	ueMap := prepareUpdateExpressionList(ctx, upd)
 
-	var updOps []dmlOp
+	updOps := make([]dmlOp, 0, len(ctx.SemTable.DMLTargets.Constituents()))
 	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createUpdateOpWithTarget(ctx, upd, target, ueMap[target])
 		updOps = append(updOps, op)
@@ -464,9 +464,8 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 		return parentOp
 	}
 
-	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
-
+	fkChildren := make([]*FkChild, 0, len(childFks))
 	for _, fk := range childFks {
 		// We should have already filtered out update restrict foreign keys.
 		if fk.OnUpdate.IsRestrict() {
@@ -774,11 +773,11 @@ func createFKVerifyOp(
 		return childOp
 	}
 
-	var Verify []*VerifyOp
+	verify := make([]*VerifyOp, 0, len(parentFks)+len(restrictChildFks))
 	// This validates that new values exists on the parent table.
 	for _, fk := range parentFks {
 		op := createFkVerifyOpForParentFKForUpdate(ctx, updatedTable, updStmt, fk)
-		Verify = append(Verify, &VerifyOp{
+		verify = append(verify, &VerifyOp{
 			Op:  op,
 			Typ: engine.ParentVerify,
 		})
@@ -786,15 +785,14 @@ func createFKVerifyOp(
 	// This validates that the old values don't exist on the child table.
 	for _, fk := range restrictChildFks {
 		op := createFkVerifyOpForChildFKForUpdate(ctx, updatedTable, updStmt, fk)
-
-		Verify = append(Verify, &VerifyOp{
+		verify = append(verify, &VerifyOp{
 			Op:  op,
 			Typ: engine.ChildVerify,
 		})
 	}
 
 	return &FkVerify{
-		Verify: Verify,
+		Verify: verify,
 		Input:  childOp,
 	}
 }

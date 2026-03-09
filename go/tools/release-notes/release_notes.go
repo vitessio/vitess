@@ -264,7 +264,7 @@ func groupPRs(pris []pullRequestInformation) prsByType {
 }
 
 func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
-	var data []sortedPRType
+	data := make([]sortedPRType, 0, len(prPerType))
 	for typeKey, typeElem := range prPerType {
 		newPrType := sortedPRType{
 			Name: typeKey,

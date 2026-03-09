@@ -364,7 +364,7 @@ func (rp *RoutingParameters) equal(ctx context.Context, vcursor VCursor, bindVar
 
 func (rp *RoutingParameters) equalMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	var rowValue []sqltypes.Value
+	rowValue := make([]sqltypes.Value, 0, len(rp.Values))
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
 		if err != nil {
@@ -442,8 +442,8 @@ func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bi
 }
 
 func (rp *RoutingParameters) multiEqualMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	var multiColValues [][]sqltypes.Value
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	multiColValues := make([][]sqltypes.Value, 0, len(rp.Values))
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
 		if err != nil {
@@ -528,7 +528,7 @@ func resolveShardsMultiCol(ctx context.Context, vcursor VCursor, vindex vindexes
 // and eliminates duplicates, returning the values to be used for each column for a multi column
 // vindex in each shard.
 func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*querypb.Value {
-	var shardsIds [][][]*querypb.Value
+	shardsIds := make([][][]*querypb.Value, 0, len(shardsValues))
 	for _, shardValues := range shardsValues {
 		// shardValues -> [[0,1], [0,2], [0,3]]
 		// shardIds -> [[0,0,0], [1,2,3]]
@@ -606,10 +606,10 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 
 func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]any, error) {
 	// gather values from all the column in the vindex
-	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
 	isSingleVal := map[int]any{}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	multiColValues := make([][]sqltypes.Value, 0, len(values))
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)
 		if err != nil {
@@ -635,7 +635,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 		so that the vindex can map them into correct destination.
 	*/
 
-	var rowColValues [][]sqltypes.Value
+	rowColValues := make([][]sqltypes.Value, 0, len(multiColValues[0])+(len(multiColValues)-1))
 	for _, firstCol := range multiColValues[0] {
 		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
 	}
@@ -649,7 +649,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 // convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
 // all combination of left and right side.
 func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
-	var allCombinations [][]sqltypes.Value
+	var allCombinations [][]sqltypes.Value //nolint:prealloc
 	for _, firstPart := range left {
 		for _, secondPart := range right {
 			allCombinations = append(allCombinations, append(firstPart, secondPart))

@@ -217,7 +217,7 @@ func newSession(
 	shards []string,
 	tabletType topodatapb.TabletType,
 ) *vtgatepb.Session {
-	shardSessions := make([]*vtgatepb.Session_ShardSession, len(shards))
+	shardSessions := make([]*vtgatepb.Session_ShardSession, 0, len(shards))
 	for _, shard := range shards {
 		shardSessions = append(shardSessions, &vtgatepb.Session_ShardSession{
 			Target: &querypb.Target{
