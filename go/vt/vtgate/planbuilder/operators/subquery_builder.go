@@ -376,7 +376,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.Clone(expr)
-	sqe := extractSubQueries(ctx, expr, isDML)
+	sqe := extractSubQueries(ctx, expr, isDML, sqb.Inner)
 	if sqe == nil {
 		return nil, nil
 	}
@@ -386,16 +386,9 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		argName := sqe.cols[idx]
 		filterType := sqe.pullOutCode[idx]
 		if existing := sqb.findByArgName(argName); existing != nil {
-			if existing.FilterType == filterType {
-				// Same subquery, same context — reuse the existing operator.
-				allSubqs = append(allSubqs, existing)
-				continue
-			}
-			// Same subquery AST but different pullout context (e.g., scalar vs IN).
-			// We need a distinct bind variable name to avoid conflicts.
-			newName := ctx.ReservedVars.ReserveSubQuery()
-			sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
-			argName = newName
+			// Same subquery, same context — reuse the existing operator.
+			allSubqs = append(allSubqs, existing)
+			continue
 		}
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
@@ -442,19 +435,36 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 }
 
 // extractSubQueries recursively walks an expression tree to find and extract all subqueries.
-// Replaces subqueries with arguments (for DML) or column names (for SELECT). Returns nil if no subqueries found.
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
+// Replaces subqueries with arguments (for DML) or column names (for SELECT).
+// existing is the set of already-created SubQuery operators from prior expressions sharing
+// the same SubQueryBuilder, used to detect cross-expression name conflicts.
+// Returns nil if no subqueries found.
+func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool, existing []*SubQuery) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
 		sqName := ctx.GetReservedArgumentFor(sq)
 		// If the same subquery AST appears in a different pullout context
 		// (e.g., scalar value vs IN), we need a distinct bind variable name
 		// to avoid conflicts when the planner rewrites arguments later.
+		// Check both previously extracted subqueries from this expression
+		// and existing operators from prior expressions.
+		needsNewName := false
 		for i, existingName := range sqe.cols {
 			if existingName == sqName && sqe.pullOutCode[i] != t {
-				sqName = ctx.ReservedVars.ReserveSubQuery()
+				needsNewName = true
 				break
 			}
+		}
+		if !needsNewName {
+			for _, ex := range existing {
+				if ex.ArgName == sqName && ex.FilterType != t {
+					needsNewName = true
+					break
+				}
+			}
+		}
+		if needsNewName {
+			sqName = ctx.ReservedVars.ReserveSubQuery()
 		}
 		sqe.cols = append(sqe.cols, sqName)
 		sqe.pullOutCode = append(sqe.pullOutCode, t)
@@ -490,29 +500,3 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	return sqe
 }
 
-// replaceSubqueryArgName rewrites all references to oldName in the expression
-// to use newName. In non-DML mode subqueries are replaced with ColName nodes;
-// in DML mode they become Argument or ListArg nodes.
-func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML bool) sqlparser.Expr {
-	if isDML {
-		return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-			switch node := cursor.Node().(type) {
-			case *sqlparser.Argument:
-				if node.Name == oldName {
-					cursor.Replace(sqlparser.NewArgument(newName))
-				}
-			case sqlparser.ListArg:
-				if string(node) == oldName {
-					cursor.Replace(sqlparser.NewListArg(newName))
-				}
-			}
-			return true
-		}).(sqlparser.Expr)
-	}
-	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
-			cursor.Replace(sqlparser.NewColName(newName))
-		}
-		return true
-	}).(sqlparser.Expr)
-}
