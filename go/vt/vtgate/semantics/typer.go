@@ -60,9 +60,9 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			}
 		}
 
-		if code, ok := opcode.SupportedWindowFunctions[name]; ok {
+		if code, ok := opcode.SupportedWindowFunctions[strings.ToLower(name)]; ok {
 			t.m[node] = code.ResolveType(inputType, t.collationEnv)
-		} else if code, ok := opcode.SupportedAggregates[name]; ok {
+		} else if code, ok := opcode.SupportedAggregates[strings.ToLower(name)]; ok {
 			// Functions like SUM() implement both WindowFunc and AggrFunc.
 			// If an OVER clause is present, it's acting as a window function.
 			t.m[node] = code.ResolveType(inputType, t.collationEnv)
