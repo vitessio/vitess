@@ -17,9 +17,12 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"path"
 	"strings"
@@ -1147,6 +1150,127 @@ func TestBinlogDumpACL(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "COM_BINLOG_DUMP is not supported")
 	})
+}
+
+func TestBinlogStreamCallback_SpanningPacketClosesOnError(t *testing.T) {
+	// When a MySQL packet spans multiple gRPC responses and the stream
+	// errors mid-packet, streamBinlogDumpResponse must close the connection
+	// without writing an ERR packet. Writing an ERR packet mid-packet would
+	// corrupt the client stream since the client is still expecting the
+	// remaining payload bytes.
+
+	// Create a writable mysql.Conn backed by a pipe, capturing all bytes
+	// written so we can verify no ERR packet was sent.
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response where a MySQL packet spans the response boundary.
+	// The packet header declares a 1000-byte payload, but only 500 bytes
+	// are present in this response.
+	pktPayloadLen := 1000
+	availablePayload := 500
+
+	raw := make([]byte, mysql.PacketHeaderSize+availablePayload)
+	// MySQL packet header: 3-byte little-endian length + 1-byte sequence
+	raw[0] = byte(pktPayloadLen & 0xFF)
+	raw[1] = byte((pktPayloadLen >> 8) & 0xFF)
+	raw[2] = byte((pktPayloadLen >> 16) & 0xFF)
+	raw[3] = 0 // sequence number
+
+	// Simulate: callback processes the spanning response, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err) // streamBinlogDumpResponse returns nil after handling the error
+
+	// Close the write end so the capture goroutine finishes.
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The only bytes written should be the partial MySQL packet:
+	// 4-byte header + 500 bytes payload = 504 bytes.
+	// If an ERR packet was incorrectly written, there would be additional bytes.
+	expectedBytes := mysql.PacketHeaderSize + availablePayload
+	assert.Equal(t, expectedBytes, written.Len(),
+		"only the partial packet should be written; extra bytes indicate a spurious ERR packet")
+}
+
+func TestBinlogStreamCallback_CompletePacketWritesErrOnError(t *testing.T) {
+	// When a complete MySQL packet has been written and the stream errors
+	// at a clean message boundary, streamBinlogDumpResponse should write
+	// an ERR packet so the client knows what happened.
+
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response containing a complete, small MySQL packet.
+	payload := []byte{0x00, 0xAA, 0xBB, 0xCC}
+	raw := make([]byte, mysql.PacketHeaderSize+len(payload))
+	raw[0] = byte(len(payload))
+	raw[1] = 0
+	raw[2] = 0
+	raw[3] = 0 // sequence number
+	copy(raw[mysql.PacketHeaderSize:], payload)
+
+	// Simulate: callback processes the complete packet, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err)
+
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The written bytes should contain the original packet PLUS an ERR packet.
+	originalPacketSize := mysql.PacketHeaderSize + len(payload)
+	assert.Greater(t, written.Len(), originalPacketSize,
+		"an ERR packet should be written after the complete packet")
+
+	// Verify the extra bytes start with a MySQL packet header whose payload
+	// begins with the ERR marker (0xFF).
+	errPacketStart := written.Bytes()[originalPacketSize:]
+	require.GreaterOrEqual(t, len(errPacketStart), mysql.PacketHeaderSize+1,
+		"ERR packet too short")
+	assert.Equal(t, byte(mysql.ErrPacket), errPacketStart[mysql.PacketHeaderSize],
+		"first payload byte of the error response should be the ERR packet marker")
 }
 
 func TestGracefulShutdownWithTransaction(t *testing.T) {

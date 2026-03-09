@@ -673,6 +673,7 @@ func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStream
 			bufOffset = remaining
 			packetLength = 0
 			written = 0
+			state.inProgressMessage = false
 		}
 
 		for len(buf)-bufOffset > 0 {
@@ -696,6 +697,7 @@ func (vh *vtgateHandler) binlogStreamCallback(c *mysql.Conn, state *binlogStream
 			} else {
 				// Packet spans multiple responses — write header and first chunk directly.
 				packetLength = pktLen
+				state.inProgressMessage = true
 				if err := c.WritePacketHeader(pktLen); err != nil {
 					return err
 				}
