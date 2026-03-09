@@ -71,6 +71,7 @@ var (
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)
 	lastMultiExecQuery       = ""
+	lastMultiExecQueryMu     sync.Mutex
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
@@ -521,8 +522,16 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 		}
 		results = append(results, qr)
 	}
+	lastMultiExecQueryMu.Lock()
 	lastMultiExecQuery = query
+	lastMultiExecQueryMu.Unlock()
 	return results, nil
+}
+
+func getLastMultiExecQuery() string {
+	lastMultiExecQueryMu.Lock()
+	defer lastMultiExecQueryMu.Unlock()
+	return lastMultiExecQuery
 }
 
 func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
