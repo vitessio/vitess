@@ -16,8 +16,13 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
   - If the PR is unassigned, continue.
   - If the PR is assigned to the current user (`gh api user --jq .login`), continue.
   - If the PR is assigned to someone else, **ask the user** if they still want to proceed (someone else may already be working on it). Stop if the user says no.
-- If the PR has a `Merge Conflict` label, extract the upstream PR number from the PR body using regex: `#(\d+)` and continue to Step 2.
-- If the PR does **not** have a `Merge Conflict` label, skip to the **No conflicts** flow below.
+- Determine if the PR has conflicts. Don't rely solely on the `Merge Conflict` label — it may have been removed prematurely. Check the actual mergeable state:
+  ```
+  gh pr view <number> --repo vitessio/vitess --json mergeable --jq .mergeable
+  ```
+  If the result is `CONFLICTING`, or if the PR has a `Merge Conflict` label, treat it as conflicting.
+- If the PR has conflicts, extract the upstream PR number from the PR body using regex: `#(\d+)` and continue to Step 2.
+- If the PR has no conflicts, skip to the **No conflicts** flow below.
 
 ### No conflicts flow
 1. If the PR has no assignees, assign to yourself: `gh pr edit <number> --repo vitessio/vitess --add-assignee "@me"`
