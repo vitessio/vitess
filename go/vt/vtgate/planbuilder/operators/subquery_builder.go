@@ -494,8 +494,8 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 // to use newName. In non-DML mode subqueries are replaced with ColName nodes;
 // in DML mode they become Argument or ListArg nodes.
 func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML bool) sqlparser.Expr {
-	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		if isDML {
+	if isDML {
+		return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.Argument:
 				if node.Name == oldName {
@@ -506,10 +506,12 @@ func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML 
 					cursor.Replace(sqlparser.NewListArg(newName))
 				}
 			}
-		} else {
-			if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
-				cursor.Replace(sqlparser.NewColName(newName))
-			}
+			return true
+		}).(sqlparser.Expr)
+	}
+	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
+			cursor.Replace(sqlparser.NewColName(newName))
 		}
 		return true
 	}).(sqlparser.Expr)
