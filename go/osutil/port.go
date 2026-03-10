@@ -28,7 +28,7 @@ import (
 const (
 	// portFileTimeout is how long port reservations remain valid in the port file.
 	// Acts as a safety net for processes that crash without calling UnreservePorts.
-	portFileTimeout = 5 * time.Minute
+	portFileTimeout = 1 * time.Hour
 )
 
 // PortReservation represents an inclusive range of reserved TCP ports.
