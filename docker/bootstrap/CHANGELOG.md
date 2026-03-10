@@ -213,7 +213,6 @@ List of changes between bootstrap image versions.
 - Exclude Go module cache from image
 - Remove Maven from base image (CVE-2024-47554)
 
-
 ## [52] - 2026-02-08
 ### Changes
 - Update build to golang 1.25.7
@@ -225,4 +224,4 @@ List of changes between bootstrap image versions.
 ## [54] - 2026-03-10
 ### Changes
 - Update build to golang 1.26.1
-- Use default-jre-headless instead of default-jdk-headless
+- Use default-jre-headless instead of default-jdk-headless. A full Java Development Kit is not needed.
