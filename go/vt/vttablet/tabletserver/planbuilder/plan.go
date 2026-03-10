@@ -61,7 +61,6 @@ const (
 	// PlanOtherAdmin is for statements like repair, lock table, etc.
 	PlanOtherAdmin
 	PlanSelectNoLimit
-	PlanSelectStream
 	// PlanMessageStream is for "stream" statements.
 	PlanMessageStream
 	PlanSavepoint
@@ -100,7 +99,6 @@ var planName = []string{
 	"OtherRead",
 	"OtherAdmin",
 	"SelectNoLimit",
-	"SelectStream",
 	"MessageStream",
 	"Savepoint",
 	"Release",
@@ -265,26 +263,66 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
-func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
-	plan := &Plan{
-		PlanID:      PlanSelectStream,
-		FullQuery:   GenerateFullQuery(statement),
-		Permissions: BuildPermissions(statement),
-	}
+// It shares analysis logic with Build but does not add safety LIMITs.
+func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string) (*Plan, error) {
+	var plan *Plan
+	var err error
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		if hasLockFunc(stmt) {
-			plan.NeedsReservedConn = true
-		}
-		plan.Table = lookupTables(stmt.From, tables)
-	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+		plan, err = buildBaseSelectPlan(env, stmt, tables)
+	case *sqlparser.Union:
+		plan = analyzeUnion(stmt, true) // no LIMIT for streaming
+	case *sqlparser.Show:
+		plan, err = analyzeShow(stmt, dbName)
+	case *sqlparser.CallProc:
+		plan = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}
+	case sqlparser.Explain:
+		plan = &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
 	case *sqlparser.Analyze:
-		plan.PlanID = PlanOtherRead
+		plan = &Plan{PlanID: PlanOtherRead, FullQuery: GenerateFullQuery(stmt)}
+	case *sqlparser.Insert:
+		plan, err = analyzeInsert(stmt, tables)
+	case *sqlparser.Update:
+		plan = buildBaseUpdatePlan(stmt, tables)
+	case *sqlparser.Delete:
+		plan = buildBaseDeletePlan(stmt, tables)
+	case *sqlparser.Set:
+		plan = analyzeSet(stmt)
+	case sqlparser.DDLStatement:
+		plan, err = analyzeDDL(stmt)
+	case *sqlparser.AlterMigration:
+		plan = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}
+	case *sqlparser.RevertMigration:
+		plan = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}
+	case *sqlparser.ShowMigrationLogs:
+		plan = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}
+	case *sqlparser.ShowThrottledApps:
+		plan = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}
+	case *sqlparser.ShowThrottlerStatus:
+		plan = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}
+	case *sqlparser.OtherAdmin:
+		plan = &Plan{PlanID: PlanOtherAdmin}
+	case *sqlparser.Savepoint:
+		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}
+	case *sqlparser.Release:
+		plan = &Plan{PlanID: PlanRelease}
+	case *sqlparser.SRollback:
+		plan = &Plan{PlanID: PlanSRollback, FullStmt: stmt}
+	case *sqlparser.Load:
+		plan = &Plan{PlanID: PlanLoad}
+	case *sqlparser.Flush:
+		plan, err = analyzeFlush(stmt, tables)
+	case *sqlparser.UnlockTables:
+		plan = &Plan{PlanID: PlanUnlockTables}
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
+	}
+	if err != nil {
+		return nil, err
 	}
 	plan.AllTables = lookupAllTables(statement, tables)
+	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
 }
 

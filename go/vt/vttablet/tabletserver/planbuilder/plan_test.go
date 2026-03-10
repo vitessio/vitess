@@ -202,7 +202,7 @@ func TestStreamPlan(t *testing.T) {
 		var err error
 		statement, err := parser.Parse(tcase.input)
 		if err == nil {
-			plan, err = BuildStreaming(statement, testSchema)
+			plan, err = BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 		}
 		var out string
 		if err != nil {

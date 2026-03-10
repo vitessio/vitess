@@ -357,16 +357,40 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return reqThrottledErr
 	}
 
+	// Handle plans that don't use generic SQL execution.
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanNextval:
+		result, err := qre.execNextval()
+		if err != nil {
+			return err
+		}
+		return callback(result)
+	case p.PlanShowMigrations:
+		result, err := qre.execShowMigrations(nil)
+		if err != nil {
+			return err
+		}
+		return callback(result)
+	}
+
+	switch qre.plan.PlanID {
+	case p.PlanSelect:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -375,7 +399,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
 			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()

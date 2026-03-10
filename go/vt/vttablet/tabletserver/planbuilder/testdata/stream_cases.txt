@@ -1,7 +1,7 @@
 # select
 "select * from a"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions":[{"TableName":"a","Role":0}],
   "FullQuery": "select * from a"
@@ -10,7 +10,7 @@
 # select join
 "select * from a join b"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Select",
   "TableName": "",
   "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a join b"
@@ -19,7 +19,7 @@
 # select for update
 "select * from a for update"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions":[{"TableName":"a","Role":0}],
   "FullQuery": "select * from a for update"
@@ -28,7 +28,7 @@
 # union
 "select * from a union select * from b"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Select",
   "TableName": "",
   "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a union select * from b"
@@ -37,7 +37,7 @@
 # show
 "show tables"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Show",
   "TableName": "",
   "FullQuery": "show tables"
 }
@@ -45,7 +45,7 @@
 # show table status
 "show table status"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Show",
   "TableName": "",
   "FullQuery": "show table status"
 }
@@ -53,15 +53,14 @@
 # show binary log status
 "show binary log status"
 {
-  "PlanID": "SelectStream",
-  "TableName": "",
-  "FullQuery": "show binary log status"
+  "PlanID": "OtherRead",
+  "TableName": ""
 }
 
 # other
 "desc foo"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Select",
   "TableName": "",
   "FullQuery": "explain foo"
 }
@@ -119,7 +118,8 @@
       "Role": 1
     }
   ],
-  "FullQuery": "update a set b = 1 where eid = 2"
+  "FullQuery": "update a set b = 1 where eid = 2",
+  "WhereClause": " where eid = 2"
 }
 
 # delete
@@ -147,7 +147,8 @@
       "Role": 1
     }
   ],
-  "FullQuery": "delete from a where eid = 1"
+  "FullQuery": "delete from a where eid = 1",
+  "WhereClause": " where eid = 1"
 }
 
 # ddl - alter table
@@ -208,7 +209,7 @@
 # named locks are unsafe with server-side connection pooling, plan is generated with NeedReservedConn set to true
 "select get_lock('foo', 10) from dual"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "SelectLockFunc",
   "TableName": "dual",
   "Permissions": [
     {
