@@ -28,16 +28,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeUnion(stmt *sqlparser.Union, noRowslimit bool) *Plan {
-	if noRowslimit {
-		return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
-	}
-	return &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
+func analyzeUnion(stmt *sqlparser.Union) *Plan {
+	return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
 }
 
-// buildBaseSelectPlan performs shared SELECT analysis: impossible WHERE, nextval, lock func detection.
-// It is used by both Build (via analyzeSelect) and BuildStreaming.
-func buildBaseSelectPlan(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (*Plan, error) {
+// analyzeSelect performs SELECT analysis: impossible WHERE, nextval, lock func detection.
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
 		PlanID:    PlanSelect,
 		FullQuery: GenerateFullQuery(sel),
@@ -75,34 +71,8 @@ func buildBaseSelectPlan(env *vtenv.Environment, sel *sqlparser.Select, tables m
 	return plan, nil
 }
 
-func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table, noRowsLimit bool) (*Plan, error) {
-	plan, err := buildBaseSelectPlan(env, sel, tables)
-	if err != nil {
-		return nil, err
-	}
-
-	// Apply LIMIT and noRowsLimit overrides for non-streaming Build().
-	// PlanSelectImpossible and PlanSelectLockFunc take precedence over PlanSelectNoLimit.
-	// PlanNextval doesn't use a FullQuery, so no LIMIT is needed.
-	switch plan.PlanID {
-	case PlanSelect:
-		if noRowsLimit {
-			plan.PlanID = PlanSelectNoLimit
-		} else {
-			plan.FullQuery = GenerateLimitQuery(sel)
-		}
-	case PlanSelectImpossible, PlanSelectLockFunc:
-		if !noRowsLimit {
-			plan.FullQuery = GenerateLimitQuery(sel)
-		}
-	}
-
-	return plan, nil
-}
-
-// buildBaseUpdatePlan builds the core UPDATE plan without safety LIMIT.
-// It is used by both Build (via analyzeUpdate) and BuildStreaming.
-func buildBaseUpdatePlan(upd *sqlparser.Update, tables map[string]*schema.Table) *Plan {
+// analyzeUpdate builds an UPDATE plan without safety LIMIT.
+func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) *Plan {
 	plan := &Plan{
 		PlanID:    PlanUpdate,
 		FullQuery: GenerateFullQuery(upd),
@@ -119,28 +89,8 @@ func buildBaseUpdatePlan(upd *sqlparser.Update, tables map[string]*schema.Table)
 	return plan
 }
 
-// analyzeUpdate builds an UPDATE plan with safety LIMIT for non-streaming Build().
-func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (*Plan, error) {
-	plan := buildBaseUpdatePlan(upd, tables)
-
-	// Situations when we pass-through:
-	// PassthroughDMLs flag is set.
-	// plan.Table==nil: it's likely a multi-table statement. MySQL doesn't allow limit clauses for multi-table dmls.
-	// If there's an explicit Limit.
-	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil {
-		return plan, nil
-	}
-
-	plan.PlanID = PlanUpdateLimit
-	upd.Limit = execLimit
-	plan.FullQuery = GenerateFullQuery(upd)
-	upd.Limit = nil
-	return plan, nil
-}
-
-// buildBaseDeletePlan builds the core DELETE plan without safety LIMIT.
-// It is used by both Build (via analyzeDelete) and BuildStreaming.
-func buildBaseDeletePlan(del *sqlparser.Delete, tables map[string]*schema.Table) *Plan {
+// analyzeDelete builds a DELETE plan without safety LIMIT.
+func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) *Plan {
 	plan := &Plan{
 		PlanID:    PlanDelete,
 		FullQuery: GenerateFullQuery(del),
@@ -154,20 +104,6 @@ func buildBaseDeletePlan(del *sqlparser.Delete, tables map[string]*schema.Table)
 	}
 
 	return plan
-}
-
-// analyzeDelete builds a DELETE plan with safety LIMIT for non-streaming Build().
-func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (*Plan, error) {
-	plan := buildBaseDeletePlan(del, tables)
-
-	if PassthroughDMLs || plan.Table == nil || del.Limit != nil {
-		return plan, nil
-	}
-	plan.PlanID = PlanDeleteLimit
-	del.Limit = execLimit
-	plan.FullQuery = GenerateFullQuery(del)
-	del.Limit = nil
-	return plan, nil
 }
 
 func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan *Plan, err error) {

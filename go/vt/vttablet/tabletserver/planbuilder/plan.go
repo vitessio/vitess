@@ -200,65 +200,51 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
+// It calls BuildStreaming for the base plan, then applies Build-specific
+// overrides: safety LIMITs for SELECT/UNION/UPDATE/DELETE.
 func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, noRowsLimit bool) (plan *Plan, err error) {
-	switch stmt := statement.(type) {
-	case *sqlparser.Union:
-		plan = analyzeUnion(stmt, noRowsLimit)
-	case *sqlparser.Select:
-		plan, err = analyzeSelect(env, stmt, tables, noRowsLimit)
-	case *sqlparser.Insert:
-		plan, err = analyzeInsert(stmt, tables)
-	case *sqlparser.Update:
-		plan, err = analyzeUpdate(stmt, tables)
-	case *sqlparser.Delete:
-		plan, err = analyzeDelete(stmt, tables)
-	case *sqlparser.Set:
-		plan = analyzeSet(stmt)
-	case sqlparser.DDLStatement:
-		plan, err = analyzeDDL(stmt)
-	case *sqlparser.AlterMigration:
-		plan = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}
-	case *sqlparser.RevertMigration:
-		plan = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}
-	case *sqlparser.ShowMigrationLogs:
-		plan = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}
-	case *sqlparser.ShowThrottledApps:
-		plan = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}
-	case *sqlparser.ShowThrottlerStatus:
-		plan = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}
-	case *sqlparser.Show:
-		plan, err = analyzeShow(stmt, dbName)
-	case *sqlparser.Analyze, sqlparser.Explain:
-		// Analyze and Explain are treated as read-only queries.
-		// We send down a string, and get a table result back.
-		plan = &Plan{
-			PlanID:    PlanSelect,
-			FullQuery: GenerateFullQuery(stmt),
-		}
-	case *sqlparser.OtherAdmin:
-		plan = &Plan{PlanID: PlanOtherAdmin}
-	case *sqlparser.Savepoint:
-		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}
-	case *sqlparser.Release:
-		plan = &Plan{PlanID: PlanRelease}
-	case *sqlparser.SRollback:
-		plan = &Plan{PlanID: PlanSRollback, FullStmt: stmt}
-	case *sqlparser.Load:
-		plan = &Plan{PlanID: PlanLoad}
-	case *sqlparser.Flush:
-		plan, err = analyzeFlush(stmt, tables)
-	case *sqlparser.UnlockTables:
-		plan = &Plan{PlanID: PlanUnlockTables}
-	case *sqlparser.CallProc:
-		plan = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}
-	default:
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
-	}
+	plan, err = BuildStreaming(env, statement, tables, dbName)
 	if err != nil {
 		return nil, err
 	}
-	plan.AllTables = lookupAllTables(statement, tables)
-	plan.Permissions = BuildPermissions(statement)
+
+	// Apply Build-specific overrides: safety LIMITs and plan type adjustments.
+	switch stmt := statement.(type) {
+	case *sqlparser.Select:
+		switch plan.PlanID {
+		case PlanSelect:
+			if noRowsLimit {
+				plan.PlanID = PlanSelectNoLimit
+			} else {
+				plan.FullQuery = GenerateLimitQuery(stmt)
+			}
+		case PlanSelectImpossible, PlanSelectLockFunc:
+			if !noRowsLimit {
+				plan.FullQuery = GenerateLimitQuery(stmt)
+			}
+		}
+	case *sqlparser.Union:
+		if !noRowsLimit {
+			plan.FullQuery = GenerateLimitQuery(stmt)
+		}
+	case *sqlparser.Update:
+		if !PassthroughDMLs && plan.Table != nil && stmt.Limit == nil {
+			plan.PlanID = PlanUpdateLimit
+			stmt.Limit = execLimit
+			plan.FullQuery = GenerateFullQuery(stmt)
+			stmt.Limit = nil
+		}
+	case *sqlparser.Delete:
+		if !PassthroughDMLs && plan.Table != nil && stmt.Limit == nil {
+			plan.PlanID = PlanDeleteLimit
+			stmt.Limit = execLimit
+			plan.FullQuery = GenerateFullQuery(stmt)
+			stmt.Limit = nil
+		}
+	case *sqlparser.Analyze:
+		// Build treats ANALYZE as PlanSelect; BuildStreaming uses PlanOtherRead.
+		plan.PlanID = PlanSelect
+	}
 	return plan, nil
 }
 
@@ -270,9 +256,9 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		plan, err = buildBaseSelectPlan(env, stmt, tables)
+		plan, err = analyzeSelect(env, stmt, tables)
 	case *sqlparser.Union:
-		plan = analyzeUnion(stmt, true) // no LIMIT for streaming
+		plan = analyzeUnion(stmt)
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.CallProc:
@@ -284,9 +270,9 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
-		plan = buildBaseUpdatePlan(stmt, tables)
+		plan = analyzeUpdate(stmt, tables)
 	case *sqlparser.Delete:
-		plan = buildBaseDeletePlan(stmt, tables)
+		plan = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
 		plan = analyzeSet(stmt)
 	case sqlparser.DDLStatement:
