@@ -125,7 +125,7 @@ func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilen
 
 // sendBinlogDumpGTIDCommand is part of the Flavor interface.
 // Note: nonBlock is not supported for MariaDB as it uses a different protocol (COM_BINLOG_DUMP).
-func (mariadbFlavor) sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position, nonBlock bool) error {
+func (mariadbFlavor) sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, _ uint64, startPos replication.Position, nonBlock bool) error {
 	// Tell the server that we understand GTIDs by setting
 	// mariadb_slave_capability to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
 	if _, err := c.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
