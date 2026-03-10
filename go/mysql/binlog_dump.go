@@ -37,6 +37,7 @@ const (
 )
 
 func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32, err error) {
+	// Minimum: 1 (cmd) + 4 (pos) + 2 (flags) + 4 (server-id) = 11 bytes
 	pos := 1
 
 	binlogPos, pos, ok := readUint32(data, pos)
@@ -44,6 +45,9 @@ func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32
 		return logFile, binlogPos, readPacketErr
 	}
 
+	if pos+6 > len(data) { // 2 (flags) + 4 (server-id)
+		return logFile, binlogPos, readPacketErr
+	}
 	pos += 2 // flags
 	pos += 4 // server-id
 
@@ -55,6 +59,10 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 	// see https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 	pos := 1
 
+	// Need at least 2 (flags) + 4 (server-id) bytes
+	if pos+6 > len(data) {
+		return logFile, logPos, position, nonBlock, readPacketErr
+	}
 	flags2 := binary.LittleEndian.Uint16(data[pos : pos+2])
 	pos += 2 // flags
 	pos += 4 // server-id

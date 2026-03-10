@@ -1061,6 +1061,86 @@ func TestParseComBinlogDumpGTID(t *testing.T) {
 	require.Equal(t, "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8", position.String())
 }
 
+func TestParseComBinlogDumpGTID_Truncated(t *testing.T) {
+	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
+
+	// Valid packet for reference (from TestParseComBinlogDumpGTID above).
+	valid, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e303030303031040000000000000030000000010000000000000024bcf1e201e011ee8c9c0242ac120002010000000000000001000000000000000900000000000000")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"command only", []byte{0x1e}},
+		{"truncated flags", []byte{0x1e, 0x01}},
+		{"truncated server-id", []byte{0x1e, 0x01, 0x00, 0x00, 0x00}},
+		{"missing filename len", valid[:7]},
+		{"filename len exceeds data", func() []byte {
+			// Set filename_len to 255 but provide no filename bytes
+			d := make([]byte, 12)
+			copy(d, valid[:7])
+			d[7] = 0xFF
+			d[8] = 0x00
+			d[9] = 0x00
+			d[10] = 0x00
+			return d
+		}()},
+		{"truncated after filename", func() []byte {
+			// Include filename but truncate before logPos
+			fnLen := int(valid[7]) | int(valid[8])<<8 | int(valid[9])<<16 | int(valid[10])<<24
+			return valid[:11+fnLen]
+		}()},
+		{"truncated gtid data size", func() []byte {
+			// Include filename + logPos but truncate before dataSize
+			fnLen := int(valid[7]) | int(valid[8])<<8 | int(valid[9])<<16 | int(valid[10])<<24
+			return valid[:11+fnLen+8]
+		}()},
+		{"gtid data size exceeds data", func() []byte {
+			// Valid up to dataSize, but set dataSize larger than remaining bytes
+			d := make([]byte, len(valid))
+			copy(d, valid)
+			// dataSize is at offset 11 + fileNameLen + 8
+			fnLen := int(d[7]) | int(d[8])<<8 | int(d[9])<<16 | int(d[10])<<24
+			dsOff := 11 + fnLen + 8
+			d[dsOff] = 0xFF // dataSize = 255, but not that many bytes remain
+			d[dsOff+1] = 0x00
+			d[dsOff+2] = 0x00
+			d[dsOff+3] = 0x00
+			return d
+		}()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, _, err := sConn.parseComBinlogDumpGTID(tt.data)
+			assert.Error(t, err, "expected error for truncated packet")
+		})
+	}
+}
+
+func TestParseComBinlogDump_Truncated(t *testing.T) {
+	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"command only", []byte{ComBinlogDump}},
+		{"truncated binlogPos", []byte{ComBinlogDump, 0x01, 0x02}},
+		{"truncated flags+server-id", []byte{ComBinlogDump, 0x04, 0x00, 0x00, 0x00}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := sConn.parseComBinlogDump(tt.data)
+			assert.Error(t, err, "expected error for truncated packet")
+		})
+	}
+}
+
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func randSeq(n int) string {
