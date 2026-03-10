@@ -467,6 +467,7 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 		}
 		if needsNewName {
 			sqName = ctx.ReservedVars.ReserveSubQuery()
+			ctx.ReservedArguments[sq] = sqName
 		}
 		sqe.cols = append(sqe.cols, sqName)
 		sqe.pullOutCode = append(sqe.pullOutCode, t)
