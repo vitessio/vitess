@@ -164,6 +164,9 @@ func (c *Conn) WritePacketPayload(payload []byte) error {
 // The caller is responsible for sending zero-length terminators when needed.
 func (c *Conn) WritePacketDirect(payload []byte) error {
 	length := len(payload)
+	if length > MaxPacketSize {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "WritePacketDirect: payload size %d exceeds maximum packet size %d", length, MaxPacketSize)
+	}
 
 	var w io.Writer
 	c.bufMu.Lock()

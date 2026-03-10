@@ -375,6 +375,10 @@ func (c *Conn) FlushWriteBuffer() error {
 // WritePacketHeader writes the 4-byte MySQL packet header for a packet
 // whose payload will be written incrementally via WritePacketRaw calls.
 func (c *Conn) WritePacketHeader(payloadLength int) error {
+	if payloadLength > MaxPacketSize {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "WritePacketHeader: payload size %d exceeds maximum packet size %d", payloadLength, MaxPacketSize)
+	}
+
 	var w io.Writer
 	c.bufMu.Lock()
 	if c.bufferedWriter != nil {
