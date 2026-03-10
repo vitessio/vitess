@@ -1131,11 +1131,11 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		return false
 	}
 	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
-		c.WriteErrorPacketFromError(err)
+		c.writeErrorPacketFromError(err)
 		return false
 	}
 	if err := c.writeOKPacket(&PacketOK{}); err != nil {
-		c.WriteErrorPacketFromError(err)
+		c.writeErrorPacketFromError(err)
 	}
 	return true
 }
@@ -1147,14 +1147,14 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
 		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
 			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
 		}
 		return false
 	}
 	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
 		log.Error(fmt.Sprintf("conn %v: ComBinlogDump failed: %v", c.ID(), err))
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
 			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
 		}
 		return false
@@ -1169,7 +1169,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	logFile, logPos, position, nonBlock, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
 			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
 		}
 		return false
@@ -1183,7 +1183,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	}()
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, nonBlock); err != nil {
 		log.Error(fmt.Sprintf("conn %v: ComBinlogDumpGTID failed: %v", c.ID(), err))
-		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
 			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
 		}
 		return false
@@ -1199,7 +1199,7 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	c.PrepareData = make(map[uint32]*PrepareData)
 	err := c.writeOKPacket(&PacketOK{})
 	if err != nil {
-		c.WriteErrorPacketFromError(err)
+		c.writeErrorPacketFromError(err)
 	}
 }
 
