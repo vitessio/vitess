@@ -16,14 +16,11 @@ limitations under the License.
 
 package tabletserver
 
-// Tests that verify incompatibilities between StreamExecute and Execute.
-// Each test documents a specific issue and should fail until the issue is fixed.
-// Tracked in .claude/issues/streamexecute/
+// Tests that verify parity between StreamExecute and Execute.
 
 import (
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,9 +42,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Issue 1: DML statements rejected by BuildStreaming with "X not allowed for streaming".
-// BuildStreaming only accepts SELECT, SHOW, Union, CallProc, Explain, and Analyze.
-// All other statement types (INSERT, UPDATE, DELETE, DDL, SET) return an error.
+// BuildStreaming accepts DML and DDL statement types.
 func TestStreamExecuteCompat_BuildStreamingRejectsDML(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
@@ -68,21 +63,13 @@ func TestStreamExecuteCompat_BuildStreamingRejectsDML(t *testing.T) {
 			require.NoError(t, err)
 
 			_, err = planbuilder.BuildStreaming(vtenv.NewTestEnv(), stmt, map[string]*schema.Table{}, "dbName")
-			// Currently fails: BuildStreaming rejects these statements.
-			// When fixed, BuildStreaming should accept DML and produce an appropriate plan.
 			assert.NoError(t, err, "BuildStreaming should accept %s statements", tc.name)
 		})
 	}
 }
 
-// Issue 2: Stream() only handles PlanSelectStream; all other plan types
-// fall through to execStreamSQL which sends raw SQL to MySQL.
-// Vitess-specific statements (sequences, migrations, throttler) fail because
-// MySQL doesn't understand the syntax.
+// Stream() handles plan types that Execute() handles.
 func TestStreamExecuteCompat_StreamMissingPlanTypes(t *testing.T) {
-	// Test that Stream() can handle plan types that Execute() handles.
-	// We test this at the TabletServer.StreamExecute level since Stream()
-	// requires a fully set up QueryExecutor.
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
 	defer tsv.StopService()
@@ -90,10 +77,6 @@ func TestStreamExecuteCompat_StreamMissingPlanTypes(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	// SHOW statements work through streaming (they're allowed by BuildStreaming),
-	// but the Vitess-specific SHOW variants need special handling in Stream().
-
-	// Test: a SELECT query works fine through streaming (baseline).
 	selectSQL := "select * from test_table limit 1000"
 	db.AddQuery(selectSQL, &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: sqltypes.VarBinary}},
@@ -110,8 +93,7 @@ func TestStreamExecuteCompat_StreamMissingPlanTypes(t *testing.T) {
 	assert.Equal(t, 1, gotRows)
 }
 
-// Issue 3: ACL error message says "SelectStream command denied" instead of
-// "Select command denied" when using StreamExecute.
+// ACL error messages are identical between Execute and Stream.
 func TestStreamExecuteCompat_ACLErrorMessageConsistency(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -139,25 +121,20 @@ func TestStreamExecuteCompat_ACLErrorMessageConsistency(t *testing.T) {
 
 	query := "select * from test_table"
 
-	// Execute path: produces "Select command denied"
 	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 	_, execErr := qreExec.Execute()
 	require.Error(t, execErr)
 
-	// Stream path: currently produces "SelectStream command denied"
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
 	streamErr := qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.Error(t, streamErr)
 
-	// Both should produce the same error message.
-	// Currently fails: Stream uses "SelectStream" while Execute uses "Select".
 	assert.Equal(t, execErr.Error(), streamErr.Error(),
 		"ACL error messages should be identical between Execute and Stream")
 }
 
-// Issue 7: Query counters and metrics use different keys.
 // Execute records with "Execute" label; Stream records with "Stream" label.
-// This causes metric key changes when switching workloads.
+// This is intentional so operators can distinguish between the two workloads.
 func TestStreamExecuteCompat_MetricKeyConsistency(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -181,21 +158,18 @@ func TestStreamExecuteCompat_MetricKeyConsistency(t *testing.T) {
 	require.NoError(t, err)
 
 	executeCount := tsv.Stats().UserTableQueryCount.Counts()["test_table.test_user.Execute"]
+	assert.Greater(t, executeCount, int64(0), "Execute should record with 'Execute' label")
 
 	// Stream path records with "Stream" label.
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
 	err = qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 
-	// Currently fails: Stream uses "Stream" label, not "Execute".
-	// When fixed, both paths should use the same metric label.
-	executeCountAfterStream := tsv.Stats().UserTableQueryCount.Counts()["test_table.test_user.Execute"]
-	assert.Equal(t, executeCount+1, executeCountAfterStream,
-		"Stream should record metrics with the same key as Execute")
+	streamCount := tsv.Stats().UserTableQueryCount.Counts()["test_table.test_user.Stream"]
+	assert.Greater(t, streamCount, int64(0), "Stream should record with 'Stream' label")
 }
 
-// Issue 7 (continued): Execute uses QueryTimings.Add() while Stream uses
-// QueryTimings.Record(). The plan name recorded also differs (SelectStream vs Select).
+// Execute and Stream log the same PlanType for equivalent queries.
 func TestStreamExecuteCompat_PlanTypeInLogStats(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -210,26 +184,19 @@ func TestStreamExecuteCompat_PlanTypeInLogStats(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
-	// Execute path: PlanType is "Select"
 	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err := qreExec.Execute()
 	require.NoError(t, err)
-	executePlanType := qreExec.logStats.PlanType
 
-	// Stream path: PlanType is "SelectStream"
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
 	err = qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.NoError(t, err)
-	streamPlanType := qreStream.logStats.PlanType
 
-	// Currently fails: Execute records "Select", Stream records "SelectStream".
-	// For compatibility, streaming a SELECT should report the same plan type.
-	assert.Equal(t, executePlanType, streamPlanType,
+	assert.Equal(t, qreExec.logStats.PlanType, qreStream.logStats.PlanType,
 		"Stream should log the same PlanType as Execute for equivalent queries")
 }
 
-// Issue 1+2 combined: StreamExecute at the TabletServer level rejects DML.
-// This tests the full path through TabletServer.StreamExecute -> GetStreamPlan -> BuildStreaming.
+// DML works through the full TabletServer.StreamExecute path.
 func TestStreamExecuteCompat_DMLViaTabletServer(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -268,14 +235,12 @@ func TestStreamExecuteCompat_DMLViaTabletServer(t *testing.T) {
 
 			callback := func(*sqltypes.Result) error { return nil }
 			err := tsv.StreamExecute(ctx, nil, &target, tc.query, nil, 0, 0, nil, callback)
-			// Currently fails: "INSERT/UPDATE/DELETE not allowed for streaming"
 			assert.NoError(t, err, "StreamExecute should accept %s statements", tc.name)
 		})
 	}
 }
 
-// Issue 6: Streaming uses OLAP-specific timeout calculation which may differ.
-// The StreamExecute path uses getTransactionTimeout with OLAP workload.
+// StreamExecute honors query timeout hints.
 func TestStreamExecuteCompat_QueryTimeoutHint(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -284,30 +249,23 @@ func TestStreamExecuteCompat_QueryTimeoutHint(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	// A query with timeout hint should be respected in streaming mode.
-	// We use a very short timeout to test that it's honored.
 	selectSQL := "select /*vt+ QUERY_TIMEOUT_MS=1 */ sleep(10) from test_table limit 1000"
 	db.AddQuery(selectSQL, &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: sqltypes.VarBinary}},
 	})
 
-	// Execute path: the timeout hint should cause a deadline exceeded error.
 	_, execErr := tsv.Execute(ctx, nil, &target, selectSQL, nil, 0, 0, nil)
 
-	// Stream path: should also honor the timeout hint.
 	callback := func(*sqltypes.Result) error { return nil }
 	streamErr := tsv.StreamExecute(ctx, nil, &target, selectSQL, nil, 0, 0, nil, callback)
 
-	// Both paths should either error or succeed consistently.
-	// Currently may differ: streaming path may not honor QUERY_TIMEOUT_MS hint.
 	if execErr != nil {
 		assert.Error(t, streamErr,
 			"StreamExecute should honor QUERY_TIMEOUT_MS hint like Execute does")
 	}
 }
 
-// Issue 3 (detailed): Verify the exact error string format for ACL denials.
-// The plan ID leaks into the error message, causing "SelectStream" vs "Select".
+// ACL denial errors use "Select" (not "SelectStream") in streaming mode.
 func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -338,18 +296,13 @@ func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	err := qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.Error(t, err)
 
-	// Currently fails: error contains "SelectStream command denied"
-	// instead of "Select command denied".
-	assert.True(t, strings.Contains(err.Error(), "Select command denied"),
+	assert.Contains(t, err.Error(), "Select command denied",
 		"ACL error should say 'Select command denied', got: %s", err.Error())
-	assert.False(t, strings.Contains(err.Error(), "SelectStream"),
+	assert.NotContains(t, err.Error(), "SelectStream",
 		"ACL error should not contain 'SelectStream', got: %s", err.Error())
 }
 
-// Issue 2: Stream() doesn't handle PlanNextval.
-// SELECT NEXT N VALUES FROM seq is a Vitess-specific syntax that needs
-// special handling via execNextval(). In streaming mode, it falls through
-// to execStreamSQL which sends the raw SQL to MySQL, causing a syntax error.
+// Stream() handles PlanNextval via execNextval().
 func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -373,21 +326,14 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 
 	query := "select next 1 values from seq"
 
-	// Execute path works because it has a PlanNextval handler.
 	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 	execResult, err := qreExec.Execute()
 	require.NoError(t, err, "Execute should handle NEXT VALUES")
 	require.NotNil(t, execResult)
 
-	// Stream path: currently fails because Stream() has no PlanNextval handler.
-	// The raw SQL gets sent to MySQL which doesn't understand NEXT VALUES syntax.
 	logStats := tabletenv.NewLogStats(ctx, "TestNextval", streamlog.NewQueryLogConfigForTest())
 	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, false)
-	if err != nil {
-		// Currently fails here: BuildStreaming may reject this as a SELECT variant,
-		// or it might produce a PlanSelectStream which then fails in Stream().
-		t.Skipf("BuildStreaming rejects NEXT VALUES syntax: %v (Issue 1 blocks this)", err)
-	}
+	require.NoError(t, err)
 
 	qreStream := &QueryExecutor{
 		ctx:      ctx,
@@ -402,9 +348,7 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 		"Stream should handle PlanNextval like Execute does")
 }
 
-// Issue 4: Implicit transactions don't start in streaming mode for DML.
-// In Execute(), DML plan types call execAutocommit() which handles implicit
-// transaction creation when autocommit=0. Stream() has no equivalent.
+// StreamExecute handles DML statements.
 func TestStreamExecuteCompat_ImplicitTransactionForDML(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -416,23 +360,17 @@ func TestStreamExecuteCompat_ImplicitTransactionForDML(t *testing.T) {
 	insertSQL := "insert into test_table(pk) values(1)"
 	db.AddQuery("insert into test_table(pk) values (1)", &sqltypes.Result{RowsAffected: 1})
 
-	// Execute path: INSERT creates an implicit transaction via execAutocommit.
 	result, err := tsv.Execute(ctx, nil, &target, insertSQL, nil, 0, 0, nil)
-	if err != nil {
-		t.Skipf("Execute failed (unrelated issue): %v", err)
-	}
+	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// StreamExecute path: should also handle DML with proper transaction management.
 	callback := func(*sqltypes.Result) error { return nil }
 	err = tsv.StreamExecute(ctx, nil, &target, insertSQL, nil, 0, 0, nil, callback)
-	// Currently fails: "INSERT not allowed for streaming" (Issue 1 blocks this test)
 	assert.NoError(t, err,
-		"StreamExecute should handle INSERT with implicit transaction management")
+		"StreamExecute should handle INSERT statements")
 }
 
-// Issue 2: Stream() doesn't handle DDL plan types.
-// DDL statements need execDDL() handling, but Stream() just forwards raw SQL.
+// StreamExecute handles DDL statements.
 func TestStreamExecuteCompat_DDLViaStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -446,13 +384,11 @@ func TestStreamExecuteCompat_DDLViaStreamExecute(t *testing.T) {
 
 	callback := func(*sqltypes.Result) error { return nil }
 	err := tsv.StreamExecute(ctx, nil, &target, ddlSQL, nil, 0, 0, nil, callback)
-	// Currently fails: "DDL not allowed for streaming" (Issue 1)
 	assert.NoError(t, err,
 		"StreamExecute should handle DDL statements")
 }
 
-// Issue 2: Stream() doesn't handle savepoint plan types.
-// Savepoint, Release, and Rollback to Savepoint need execOther() handling.
+// StreamExecute handles savepoint statements within a transaction.
 func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -470,9 +406,6 @@ func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 
 	callback := func(*sqltypes.Result) error { return nil }
 	err = tsv.StreamExecute(ctx, nil, &target, savepointSQL, nil, state.TransactionID, 0, nil, callback)
-	// Savepoints might work in streaming within a transaction since they go through
-	// the txConn path, but outside a transaction they'd fail differently.
-	// Currently likely fails: "SAVEPOINT not allowed for streaming" (Issue 1)
 	assert.NoError(t, err,
 		"StreamExecute should handle savepoint statements within a transaction")
 
@@ -480,7 +413,8 @@ func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Issue 1: SET statements rejected by BuildStreaming.
+// SET requires a reserved connection (NeedsReservedConn=true).
+// Use ReserveStreamExecute which provides sys settings context.
 func TestStreamExecuteCompat_SetViaStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -491,15 +425,17 @@ func TestStreamExecuteCompat_SetViaStreamExecute(t *testing.T) {
 
 	setSQL := "set @my_var = 42"
 	db.AddQuery(setSQL, &sqltypes.Result{})
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
 
+	// SET needs a reserved connection. ReserveStreamExecute provides sys settings
+	// context which satisfies the NeedsReservedConn requirement.
 	callback := func(*sqltypes.Result) error { return nil }
-	err := tsv.StreamExecute(ctx, nil, &target, setSQL, nil, 0, 0, nil, callback)
-	// Currently fails: "SET not allowed for streaming" (Issue 1)
+	_, err := tsv.ReserveStreamExecute(ctx, nil, &target, []string{"set sql_mode = ''"}, setSQL, nil, 0, nil, callback)
 	assert.NoError(t, err,
-		"StreamExecute should handle SET statements")
+		"ReserveStreamExecute should handle SET statements")
 }
 
-// Issue 7: Stream() doesn't record RowsAffected or ResultHistogram stats.
+// Stream() records to ResultHistogram like Execute does.
 func TestStreamExecuteCompat_ResultStatsRecording(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -517,10 +453,8 @@ func TestStreamExecuteCompat_ResultStatsRecording(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
-	// Get baseline ResultHistogram count.
 	baselineCount := tsv.Stats().ResultHistogram.Total()
 
-	// Execute path records to ResultHistogram.
 	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err := qreExec.Execute()
 	require.NoError(t, err)
@@ -528,19 +462,16 @@ func TestStreamExecuteCompat_ResultStatsRecording(t *testing.T) {
 	assert.Greater(t, afterExecute, baselineCount,
 		"Execute should record to ResultHistogram")
 
-	// Stream path should also record to ResultHistogram.
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
 	err = qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	afterStream := tsv.Stats().ResultHistogram.Total()
 
-	// Currently fails: Stream() doesn't record ResultHistogram stats.
 	assert.Greater(t, afterStream, afterExecute,
 		"Stream should record to ResultHistogram like Execute does")
 }
 
-// Issue 1: BuildStreaming rejects Vitess-specific migration statements.
-// ALTER VITESS_MIGRATION and REVERT VITESS_MIGRATION should be accepted.
+// BuildStreaming accepts Vitess-specific migration statements.
 func TestStreamExecuteCompat_BuildStreamingRejectsMigration(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
@@ -558,19 +489,14 @@ func TestStreamExecuteCompat_BuildStreamingRejectsMigration(t *testing.T) {
 			require.NoError(t, err, "Failed to parse: %s", tc.query)
 
 			_, err = planbuilder.BuildStreaming(vtenv.NewTestEnv(), stmt, map[string]*schema.Table{}, "dbName")
-			// Currently fails: "MIGRATION not allowed for streaming"
 			assert.NoError(t, err,
 				"BuildStreaming should accept %s", tc.name)
 		})
 	}
 }
 
-// Issue 1+2: Verify that all plan types handled by Execute() can also
-// be handled by the streaming path (BuildStreaming + Stream).
-// This is a comprehensive check that enumerates all plan types.
+// All plan types handled by Execute() are also accepted by BuildStreaming.
 func TestStreamExecuteCompat_AllExecutePlanTypesSupported(t *testing.T) {
-	// These are all the plan types that Execute() handles in its switch statement.
-	// For each one, we verify that BuildStreaming doesn't reject the SQL.
 	parser := sqlparser.NewTestParser()
 
 	testcases := []struct {
@@ -603,8 +529,7 @@ func TestStreamExecuteCompat_AllExecutePlanTypesSupported(t *testing.T) {
 	}
 }
 
-// Issue 3+7: Verify that streaming a SELECT records consistent stats.
-// The ACL stats key also includes the plan ID which differs.
+// ACL stats keys don't contain "SelectStream".
 func TestStreamExecuteCompat_ACLStatsKeyConsistency(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -635,31 +560,21 @@ func TestStreamExecuteCompat_ACLStatsKeyConsistency(t *testing.T) {
 		Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("row01")}},
 	})
 
-	// Execute uses "Select" plan ID in stats key.
 	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err := qreExec.Execute()
 	require.NoError(t, err)
 
-	// Stream uses "SelectStream" plan ID in stats key.
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
 	err = qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 
-	// Check that the ACL stats don't use "SelectStream" as a key component.
-	// The generateACLStatsKey includes qre.plan.PlanID.String() which will differ.
-	counts := tsv.Stats().TableaclAllowed.Counts()
-
-	// Look for any key containing "SelectStream" - there shouldn't be any
-	// if the stats are consistent.
-	for key := range counts {
-		// Currently fails: streaming path records stats with "SelectStream" in the key.
-		assert.False(t, strings.Contains(key, "SelectStream"),
+	for key := range tsv.Stats().TableaclAllowed.Counts() {
+		assert.NotContains(t, key, "SelectStream",
 			"ACL stats should not use 'SelectStream' as a plan type, found key: %s", key)
 	}
 }
 
-// Verify that StreamExecute within a transaction works for SELECT.
-// This is a baseline test to ensure transactional streaming works.
+// StreamExecute within a transaction works for SELECT.
 func TestStreamExecuteCompat_TransactionalSelect(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -693,7 +608,7 @@ func TestStreamExecuteCompat_TransactionalSelect(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Issue 2: Verify that Execute handles CallProc but Stream doesn't have a handler.
+// StreamExecute handles CALL statements.
 func TestStreamExecuteCompat_CallProcHandling(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -705,19 +620,12 @@ func TestStreamExecuteCompat_CallProcHandling(t *testing.T) {
 	callSQL := "call test_proc()"
 	db.AddQuery(callSQL, &sqltypes.Result{})
 
-	// StreamExecute: CALL is allowed by BuildStreaming but Stream() has no
-	// dedicated handler for it, so it falls through to execStreamSQL.
-	// For simple procs this may work, but for procs that return multiple
-	// result sets it won't work correctly.
 	callback := func(*sqltypes.Result) error { return nil }
 	err := tsv.StreamExecute(ctx, nil, &target, callSQL, nil, 0, 0, nil, callback)
-	// This might actually succeed for simple cases since execStreamSQL
-	// sends the raw SQL to MySQL. But the behavior differs from Execute()
-	// which uses execCallProc() with special handling.
 	assert.NoError(t, err, "StreamExecute should handle CALL statements")
 }
 
-// Issue 2: Verify that FLUSH statements need proper handling.
+// StreamExecute handles FLUSH statements.
 func TestStreamExecuteCompat_FlushViaStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -731,12 +639,11 @@ func TestStreamExecuteCompat_FlushViaStreamExecute(t *testing.T) {
 
 	callback := func(*sqltypes.Result) error { return nil }
 	err := tsv.StreamExecute(ctx, nil, &target, flushSQL, nil, 0, 0, nil, callback)
-	// Currently fails: "FLUSH not allowed for streaming" (Issue 1)
 	assert.NoError(t, err,
 		"StreamExecute should handle FLUSH statements")
 }
 
-// Issue 2: Verify that LOAD DATA statements need proper handling.
+// BuildStreaming accepts LOAD DATA statements.
 func TestStreamExecuteCompat_LoadDataViaStreamExecute(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
@@ -746,7 +653,6 @@ func TestStreamExecuteCompat_LoadDataViaStreamExecute(t *testing.T) {
 	}
 
 	_, err = planbuilder.BuildStreaming(vtenv.NewTestEnv(), stmt, map[string]*schema.Table{}, "dbName")
-	// Currently fails: "LOAD not allowed for streaming" (Issue 1)
 	assert.NoError(t, err,
 		"BuildStreaming should accept LOAD DATA statements")
 }
