@@ -2983,86 +2983,6 @@ func (x *VStreamResultsResponse) GetRows() []*query.Row {
 	return nil
 }
 
-// BinlogDumpRequest is the payload for COM_BINLOG_DUMP (file/position-based replication).
-// This is the older protocol that uses binlog filename and position.
-type BinlogDumpRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId *query.VTGateCallerID  `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target            *query.Target          `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	// Binlog filename to start streaming from (e.g., "binlog.000001")
-	BinlogFilename string `protobuf:"bytes,4,opt,name=binlog_filename,json=binlogFilename,proto3" json:"binlog_filename,omitempty"`
-	// Position within the binlog file (32-bit for COM_BINLOG_DUMP)
-	BinlogPosition uint32 `protobuf:"varint,5,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *BinlogDumpRequest) Reset() {
-	*x = BinlogDumpRequest{}
-	mi := &file_binlogdata_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BinlogDumpRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BinlogDumpRequest) ProtoMessage() {}
-
-func (x *BinlogDumpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BinlogDumpRequest.ProtoReflect.Descriptor instead.
-func (*BinlogDumpRequest) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *BinlogDumpRequest) GetEffectiveCallerId() *vtrpc.CallerID {
-	if x != nil {
-		return x.EffectiveCallerId
-	}
-	return nil
-}
-
-func (x *BinlogDumpRequest) GetImmediateCallerId() *query.VTGateCallerID {
-	if x != nil {
-		return x.ImmediateCallerId
-	}
-	return nil
-}
-
-func (x *BinlogDumpRequest) GetTarget() *query.Target {
-	if x != nil {
-		return x.Target
-	}
-	return nil
-}
-
-func (x *BinlogDumpRequest) GetBinlogFilename() string {
-	if x != nil {
-		return x.BinlogFilename
-	}
-	return ""
-}
-
-func (x *BinlogDumpRequest) GetBinlogPosition() uint32 {
-	if x != nil {
-		return x.BinlogPosition
-	}
-	return 0
-}
-
 // BinlogDumpGTIDRequest is the payload for COM_BINLOG_DUMP_GTID (GTID-based replication).
 // This is the newer protocol (MySQL 5.6+) that uses GTID sets.
 type BinlogDumpGTIDRequest struct {
@@ -3087,7 +3007,7 @@ type BinlogDumpGTIDRequest struct {
 
 func (x *BinlogDumpGTIDRequest) Reset() {
 	*x = BinlogDumpGTIDRequest{}
-	mi := &file_binlogdata_proto_msgTypes[32]
+	mi := &file_binlogdata_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3099,7 +3019,7 @@ func (x *BinlogDumpGTIDRequest) String() string {
 func (*BinlogDumpGTIDRequest) ProtoMessage() {}
 
 func (x *BinlogDumpGTIDRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[32]
+	mi := &file_binlogdata_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3112,7 +3032,7 @@ func (x *BinlogDumpGTIDRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BinlogDumpGTIDRequest.ProtoReflect.Descriptor instead.
 func (*BinlogDumpGTIDRequest) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{32}
+	return file_binlogdata_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *BinlogDumpGTIDRequest) GetEffectiveCallerId() *vtrpc.CallerID {
@@ -3165,7 +3085,7 @@ func (x *BinlogDumpGTIDRequest) GetNonBlock() bool {
 }
 
 // BinlogDumpResponse streams raw MySQL packet data.
-// Used by both BinlogDump and BinlogDumpGTID RPCs.
+// Used by the BinlogDumpGTID RPC.
 type BinlogDumpResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Raw MySQL response stream containing one or more full packets,
@@ -3179,7 +3099,7 @@ type BinlogDumpResponse struct {
 
 func (x *BinlogDumpResponse) Reset() {
 	*x = BinlogDumpResponse{}
-	mi := &file_binlogdata_proto_msgTypes[33]
+	mi := &file_binlogdata_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3191,7 +3111,7 @@ func (x *BinlogDumpResponse) String() string {
 func (*BinlogDumpResponse) ProtoMessage() {}
 
 func (x *BinlogDumpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[33]
+	mi := &file_binlogdata_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3204,7 +3124,7 @@ func (x *BinlogDumpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BinlogDumpResponse.ProtoReflect.Descriptor instead.
 func (*BinlogDumpResponse) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{33}
+	return file_binlogdata_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *BinlogDumpResponse) GetRaw() []byte {
@@ -3228,7 +3148,7 @@ type BinlogTransaction_Statement struct {
 
 func (x *BinlogTransaction_Statement) Reset() {
 	*x = BinlogTransaction_Statement{}
-	mi := &file_binlogdata_proto_msgTypes[34]
+	mi := &file_binlogdata_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3240,7 +3160,7 @@ func (x *BinlogTransaction_Statement) String() string {
 func (*BinlogTransaction_Statement) ProtoMessage() {}
 
 func (x *BinlogTransaction_Statement) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[34]
+	mi := &file_binlogdata_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3287,7 +3207,7 @@ type RowChange_Bitmap struct {
 
 func (x *RowChange_Bitmap) Reset() {
 	*x = RowChange_Bitmap{}
-	mi := &file_binlogdata_proto_msgTypes[38]
+	mi := &file_binlogdata_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3299,7 +3219,7 @@ func (x *RowChange_Bitmap) String() string {
 func (*RowChange_Bitmap) ProtoMessage() {}
 
 func (x *RowChange_Bitmap) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[38]
+	mi := &file_binlogdata_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3567,13 +3487,7 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x06fields\x18\x01 \x03(\v2\f.query.FieldR\x06fields\x12\x12\n" +
 	"\x04gtid\x18\x03 \x01(\tR\x04gtid\x12\x1e\n" +
 	"\x04rows\x18\x04 \x03(\v2\n" +
-	".query.RowR\x04rows\"\x94\x02\n" +
-	"\x11BinlogDumpRequest\x12?\n" +
-	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
-	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
-	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
-	"\x0fbinlog_filename\x18\x04 \x01(\tR\x0ebinlogFilename\x12'\n" +
-	"\x0fbinlog_position\x18\x05 \x01(\rR\x0ebinlogPosition\"\xd0\x02\n" +
+	".query.RowR\x04rows\"\xd0\x02\n" +
 	"\x15BinlogDumpGTIDRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -3662,7 +3576,7 @@ func file_binlogdata_proto_rawDescGZIP() []byte {
 }
 
 var file_binlogdata_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_binlogdata_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_binlogdata_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_binlogdata_proto_goTypes = []any{
 	(OnDDLAction)(0),                          // 0: binlogdata.OnDDLAction
 	(VReplicationWorkflowType)(0),             // 1: binlogdata.VReplicationWorkflowType
@@ -3703,48 +3617,47 @@ var file_binlogdata_proto_goTypes = []any{
 	(*TableLastPK)(nil),                       // 36: binlogdata.TableLastPK
 	(*VStreamResultsRequest)(nil),             // 37: binlogdata.VStreamResultsRequest
 	(*VStreamResultsResponse)(nil),            // 38: binlogdata.VStreamResultsResponse
-	(*BinlogDumpRequest)(nil),                 // 39: binlogdata.BinlogDumpRequest
-	(*BinlogDumpGTIDRequest)(nil),             // 40: binlogdata.BinlogDumpGTIDRequest
-	(*BinlogDumpResponse)(nil),                // 41: binlogdata.BinlogDumpResponse
-	(*BinlogTransaction_Statement)(nil),       // 42: binlogdata.BinlogTransaction.Statement
-	nil,                                       // 43: binlogdata.Rule.ConvertEnumToTextEntry
-	nil,                                       // 44: binlogdata.Rule.ConvertCharsetEntry
-	nil,                                       // 45: binlogdata.Rule.ConvertIntToEnumEntry
-	(*RowChange_Bitmap)(nil),                  // 46: binlogdata.RowChange.Bitmap
-	nil,                                       // 47: binlogdata.VStreamOptions.ConfigOverridesEntry
-	(*query.EventToken)(nil),                  // 48: query.EventToken
-	(*topodata.KeyRange)(nil),                 // 49: topodata.KeyRange
-	(topodata.TabletType)(0),                  // 50: topodata.TabletType
-	(*query.Row)(nil),                         // 51: query.Row
-	(*query.Field)(nil),                       // 52: query.Field
-	(*vtrpc.CallerID)(nil),                    // 53: vtrpc.CallerID
-	(*query.VTGateCallerID)(nil),              // 54: query.VTGateCallerID
-	(*query.Target)(nil),                      // 55: query.Target
-	(*query.QueryResult)(nil),                 // 56: query.QueryResult
+	(*BinlogDumpGTIDRequest)(nil),             // 39: binlogdata.BinlogDumpGTIDRequest
+	(*BinlogDumpResponse)(nil),                // 40: binlogdata.BinlogDumpResponse
+	(*BinlogTransaction_Statement)(nil),       // 41: binlogdata.BinlogTransaction.Statement
+	nil,                                       // 42: binlogdata.Rule.ConvertEnumToTextEntry
+	nil,                                       // 43: binlogdata.Rule.ConvertCharsetEntry
+	nil,                                       // 44: binlogdata.Rule.ConvertIntToEnumEntry
+	(*RowChange_Bitmap)(nil),                  // 45: binlogdata.RowChange.Bitmap
+	nil,                                       // 46: binlogdata.VStreamOptions.ConfigOverridesEntry
+	(*query.EventToken)(nil),                  // 47: query.EventToken
+	(*topodata.KeyRange)(nil),                 // 48: topodata.KeyRange
+	(topodata.TabletType)(0),                  // 49: topodata.TabletType
+	(*query.Row)(nil),                         // 50: query.Row
+	(*query.Field)(nil),                       // 51: query.Field
+	(*vtrpc.CallerID)(nil),                    // 52: vtrpc.CallerID
+	(*query.VTGateCallerID)(nil),              // 53: query.VTGateCallerID
+	(*query.Target)(nil),                      // 54: query.Target
+	(*query.QueryResult)(nil),                 // 55: query.QueryResult
 }
 var file_binlogdata_proto_depIdxs = []int32{
-	42, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
-	48, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
-	49, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
+	41, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
+	47, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
+	48, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
 	8,  // 3: binlogdata.StreamKeyRangeRequest.charset:type_name -> binlogdata.Charset
 	9,  // 4: binlogdata.StreamKeyRangeResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
 	8,  // 5: binlogdata.StreamTablesRequest.charset:type_name -> binlogdata.Charset
 	9,  // 6: binlogdata.StreamTablesResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
-	43, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
-	44, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
-	45, // 9: binlogdata.Rule.convert_int_to_enum:type_name -> binlogdata.Rule.ConvertIntToEnumEntry
+	42, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
+	43, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
+	44, // 9: binlogdata.Rule.convert_int_to_enum:type_name -> binlogdata.Rule.ConvertIntToEnumEntry
 	15, // 10: binlogdata.Filter.rules:type_name -> binlogdata.Rule
 	7,  // 11: binlogdata.Filter.field_event_mode:type_name -> binlogdata.Filter.FieldEventMode
-	50, // 12: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
-	49, // 13: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
+	49, // 12: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
+	48, // 13: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
 	16, // 14: binlogdata.BinlogSource.filter:type_name -> binlogdata.Filter
 	0,  // 15: binlogdata.BinlogSource.on_ddl:type_name -> binlogdata.OnDDLAction
-	51, // 16: binlogdata.RowChange.before:type_name -> query.Row
-	51, // 17: binlogdata.RowChange.after:type_name -> query.Row
-	46, // 18: binlogdata.RowChange.data_columns:type_name -> binlogdata.RowChange.Bitmap
-	46, // 19: binlogdata.RowChange.json_partial_values:type_name -> binlogdata.RowChange.Bitmap
+	50, // 16: binlogdata.RowChange.before:type_name -> query.Row
+	50, // 17: binlogdata.RowChange.after:type_name -> query.Row
+	45, // 18: binlogdata.RowChange.data_columns:type_name -> binlogdata.RowChange.Bitmap
+	45, // 19: binlogdata.RowChange.json_partial_values:type_name -> binlogdata.RowChange.Bitmap
 	18, // 20: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
-	52, // 21: binlogdata.FieldEvent.fields:type_name -> query.Field
+	51, // 21: binlogdata.FieldEvent.fields:type_name -> query.Field
 	36, // 22: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
 	21, // 23: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
 	5,  // 24: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
@@ -3756,55 +3669,52 @@ var file_binlogdata_proto_depIdxs = []int32{
 	22, // 30: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
 	24, // 31: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
 	35, // 32: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
-	52, // 33: binlogdata.MinimalTable.fields:type_name -> query.Field
+	51, // 33: binlogdata.MinimalTable.fields:type_name -> query.Field
 	26, // 34: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
-	47, // 35: binlogdata.VStreamOptions.config_overrides:type_name -> binlogdata.VStreamOptions.ConfigOverridesEntry
+	46, // 35: binlogdata.VStreamOptions.config_overrides:type_name -> binlogdata.VStreamOptions.ConfigOverridesEntry
 	4,  // 36: binlogdata.VStreamOptions.event_types:type_name -> binlogdata.VEventType
-	53, // 37: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 38: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 39: binlogdata.VStreamRequest.target:type_name -> query.Target
+	52, // 37: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 38: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 39: binlogdata.VStreamRequest.target:type_name -> query.Target
 	16, // 40: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
 	36, // 41: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
 	28, // 42: binlogdata.VStreamRequest.options:type_name -> binlogdata.VStreamOptions
 	25, // 43: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
-	53, // 44: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 45: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 46: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
-	56, // 47: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
+	52, // 44: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 45: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 46: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
+	55, // 47: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
 	28, // 48: binlogdata.VStreamRowsRequest.options:type_name -> binlogdata.VStreamOptions
-	52, // 49: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
-	52, // 50: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
-	51, // 51: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
-	51, // 52: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
-	53, // 53: binlogdata.VStreamTablesRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 54: binlogdata.VStreamTablesRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 55: binlogdata.VStreamTablesRequest.target:type_name -> query.Target
+	51, // 49: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
+	51, // 50: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
+	50, // 51: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
+	50, // 52: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
+	52, // 53: binlogdata.VStreamTablesRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 54: binlogdata.VStreamTablesRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 55: binlogdata.VStreamTablesRequest.target:type_name -> query.Target
 	28, // 56: binlogdata.VStreamTablesRequest.options:type_name -> binlogdata.VStreamOptions
-	52, // 57: binlogdata.VStreamTablesResponse.fields:type_name -> query.Field
-	52, // 58: binlogdata.VStreamTablesResponse.pkfields:type_name -> query.Field
-	51, // 59: binlogdata.VStreamTablesResponse.rows:type_name -> query.Row
-	51, // 60: binlogdata.VStreamTablesResponse.lastpk:type_name -> query.Row
+	51, // 57: binlogdata.VStreamTablesResponse.fields:type_name -> query.Field
+	51, // 58: binlogdata.VStreamTablesResponse.pkfields:type_name -> query.Field
+	50, // 59: binlogdata.VStreamTablesResponse.rows:type_name -> query.Row
+	50, // 60: binlogdata.VStreamTablesResponse.lastpk:type_name -> query.Row
 	36, // 61: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
-	56, // 62: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
-	53, // 63: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 64: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 65: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
-	52, // 66: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
-	51, // 67: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
-	53, // 68: binlogdata.BinlogDumpRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 69: binlogdata.BinlogDumpRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 70: binlogdata.BinlogDumpRequest.target:type_name -> query.Target
-	53, // 71: binlogdata.BinlogDumpGTIDRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	54, // 72: binlogdata.BinlogDumpGTIDRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	55, // 73: binlogdata.BinlogDumpGTIDRequest.target:type_name -> query.Target
-	6,  // 74: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
-	8,  // 75: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
-	14, // 76: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
-	77, // [77:77] is the sub-list for method output_type
-	77, // [77:77] is the sub-list for method input_type
-	77, // [77:77] is the sub-list for extension type_name
-	77, // [77:77] is the sub-list for extension extendee
-	0,  // [0:77] is the sub-list for field type_name
+	55, // 62: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
+	52, // 63: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 64: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 65: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
+	51, // 66: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
+	50, // 67: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
+	52, // 68: binlogdata.BinlogDumpGTIDRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 69: binlogdata.BinlogDumpGTIDRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 70: binlogdata.BinlogDumpGTIDRequest.target:type_name -> query.Target
+	6,  // 71: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
+	8,  // 72: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
+	14, // 73: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
+	74, // [74:74] is the sub-list for method output_type
+	74, // [74:74] is the sub-list for method input_type
+	74, // [74:74] is the sub-list for extension type_name
+	74, // [74:74] is the sub-list for extension extendee
+	0,  // [0:74] is the sub-list for field type_name
 }
 
 func init() { file_binlogdata_proto_init() }
@@ -3818,7 +3728,7 @@ func file_binlogdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_binlogdata_proto_rawDesc), len(file_binlogdata_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   40,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

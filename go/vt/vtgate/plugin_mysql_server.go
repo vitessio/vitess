@@ -612,7 +612,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// - @master_heartbeat_period / @source_heartbeat_period: Controls heartbeat frequency
 	// - @master_binlog_checksum / @source_binlog_checksum: Controls checksum algorithm
 	// Implementation requires:
-	// 1. Add heartbeat_period_ns and binlog_checksum fields to BinlogDumpRequest proto
+	// 1. Add heartbeat_period_ns and binlog_checksum fields to BinlogDumpGTIDRequest proto
 	// 2. Extract user-defined variables from session.UserDefinedVariables here
 	// 3. Apply variables in vttablet's BinlogDump before sending COM_BINLOG_DUMP_GTID
 	// See: https://dev.mysql.com/doc/refman/8.0/en/replication-options-replica.html
