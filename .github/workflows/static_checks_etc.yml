@@ -149,7 +149,7 @@ jobs:
 
       - name: Install yamllint
         if: steps.changes.outputs.github == 'true'
-        run: pip install yamllint==1.38.0
+        run: pip3 install yamllint==1.38.0 --hash=sha256:cba56bcde1fdd01c1deb3f945e69764c291a6530 # v1.38.0
 
       - name: check_go_versions
         run:

@@ -151,7 +151,7 @@ jobs:
           steps.changes.outputs.unit_tests == 'true' &&
           github.base_ref == 'main'
         run: |
-          pip3 install --user launchable~=1.0 > /dev/null
+          pip3 install --user launchable==1.121.2 > /dev/null
           launchable verify || true
           launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
