@@ -94,7 +94,7 @@ var AuthorizedBinlogUsers = viperutil.Configure(
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterBinlogACLFlags(fs *pflag.FlagSet) {
-	fs.String("binlog-dump-authorized-users", "", "List of users authorized to execute binlog dump operations, or '%' to allow all users.")
+	fs.String("binlog-dump-authorized-users", "", "Comma-separated list of users authorized to execute binlog dump operations, or '%' to allow all users.")
 	viperutil.BindFlags(fs, AuthorizedBinlogUsers)
 }
 
