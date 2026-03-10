@@ -893,10 +893,8 @@ func (conn *gRPCQueryClient) BinlogDumpGTID(ctx context.Context, request *binlog
 		if err := stream.RecvMsg(r); err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if err := send(r); err != nil {
 			if err == io.EOF {
