@@ -66,9 +66,140 @@
   "FullQuery": "explain foo"
 }
 
-# dml
+# insert
+"insert into a(eid, id) values (1, 2)"
+{
+  "PlanID": "Insert",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into a(eid, id) values (1, 2)"
+}
+
+# insert with on duplicate key
+"insert into a(eid, id) values (1, 2) on duplicate key update id = 3"
+{
+  "PlanID": "Insert",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update id = 3"
+}
+
+# update
 "update a set b = 1"
-"UPDATE not allowed for streaming"
+{
+  "PlanID": "Update",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update a set b = 1"
+}
+
+# update with where clause
+"update a set b = 1 where eid = 2"
+{
+  "PlanID": "Update",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update a set b = 1 where eid = 2"
+}
+
+# delete
+"delete from a"
+{
+  "PlanID": "Delete",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from a"
+}
+
+# delete with where clause
+"delete from a where eid = 1"
+{
+  "PlanID": "Delete",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from a where eid = 1"
+}
+
+# ddl - alter table
+"alter table a add column phone varchar(20)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a add column phone varchar(20)"
+}
+
+# ddl - drop table
+"drop table a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop table a"
+}
+
+# ddl - create table
+"create table test_table (id int primary key)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "test_table",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create table test_table (\n\tid int primary key\n)"
+}
+
+# set user-defined variable
+"set @udv = 10"
+{
+  "PlanID": "Set",
+  "TableName": "",
+  "FullQuery": "set @udv = 10",
+  "NeedsReservedConn": true
+}
 
 # syntax error
 "syntax error"
@@ -88,10 +219,6 @@
   "FullQuery": "select get_lock('foo', 10) from dual",
   "NeedsReservedConn": true
 }
-
-# set statement unsafe with pooling
-"set @udv = 10"
-"SET not allowed for streaming"
 
 # analyze statement
 "analyze table a"
