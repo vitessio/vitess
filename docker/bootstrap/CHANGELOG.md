@@ -225,3 +225,4 @@ List of changes between bootstrap image versions.
 ## [54] - 2026-03-10
 ### Changes
 - Update build to golang 1.26.1
+- Use default-jre-headless instead of default-jdk-headless
