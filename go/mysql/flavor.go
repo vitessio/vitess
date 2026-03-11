@@ -114,7 +114,7 @@ type flavor interface {
 	// is set and GTIDs are not provided).
 	// If nonBlock is true, the server will return EOF when it reaches the end
 	// of the binlog instead of blocking and waiting for new events.
-	sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, nonBlock bool) error
+	sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, flags uint16) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -367,10 +367,10 @@ func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, bin
 // SendBinlogDumpGTIDCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP_GTID command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-// If nonBlock is true, the server will return EOF when it reaches the end
-// of the binlog instead of blocking and waiting for new events.
-func (c *Conn) SendBinlogDumpGTIDCommand(serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, nonBlock bool) error {
-	return c.flavor.sendBinlogDumpGTIDCommand(c, serverID, binlogFilename, binlogPos, startPos, nonBlock)
+// flags is the raw 2-byte flags field from COM_BINLOG_DUMP_GTID
+// (e.g., BinlogDumpNonBlock = 0x01).
+func (c *Conn) SendBinlogDumpGTIDCommand(serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, flags uint16) error {
+	return c.flavor.sendBinlogDumpGTIDCommand(c, serverID, binlogFilename, binlogPos, startPos, flags)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used

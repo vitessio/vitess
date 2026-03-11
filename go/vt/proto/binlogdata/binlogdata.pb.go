@@ -2990,17 +2990,19 @@ type BinlogDumpGTIDRequest struct {
 	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
 	ImmediateCallerId *query.VTGateCallerID  `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
 	Target            *query.Target          `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	// Optional binlog filename (used with BinlogThroughPosition flag)
+	// Optional binlog filename
 	BinlogFilename string `protobuf:"bytes,4,opt,name=binlog_filename,json=binlogFilename,proto3" json:"binlog_filename,omitempty"`
 	// Position within the binlog file (64-bit for COM_BINLOG_DUMP_GTID)
 	BinlogPosition uint64 `protobuf:"varint,5,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
 	// GTID set in string format (e.g., "uuid:1-5,uuid2:1-3")
 	// vttablet will convert to SIDBlock for MySQL
 	GtidSet string `protobuf:"bytes,6,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
-	// If true, MySQL will return EOF when it reaches the end of the binlog
-	// instead of blocking and waiting for new events. This corresponds to
-	// the BINLOG_DUMP_NON_BLOCK flag (0x01) in COM_BINLOG_DUMP_GTID.
-	NonBlock      bool `protobuf:"varint,7,opt,name=non_block,json=nonBlock,proto3" json:"non_block,omitempty"`
+	// Raw 2-byte flags field from COM_BINLOG_DUMP_GTID, passed through to MySQL.
+	// Known flags:
+	//
+	//	BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
+	//	USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
+	Flags         uint32 `protobuf:"varint,7,opt,name=flags,proto3" json:"flags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3077,11 +3079,11 @@ func (x *BinlogDumpGTIDRequest) GetGtidSet() string {
 	return ""
 }
 
-func (x *BinlogDumpGTIDRequest) GetNonBlock() bool {
+func (x *BinlogDumpGTIDRequest) GetFlags() uint32 {
 	if x != nil {
-		return x.NonBlock
+		return x.Flags
 	}
-	return false
+	return 0
 }
 
 // BinlogDumpResponse streams raw MySQL packet data.
@@ -3487,15 +3489,15 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x06fields\x18\x01 \x03(\v2\f.query.FieldR\x06fields\x12\x12\n" +
 	"\x04gtid\x18\x03 \x01(\tR\x04gtid\x12\x1e\n" +
 	"\x04rows\x18\x04 \x03(\v2\n" +
-	".query.RowR\x04rows\"\xd0\x02\n" +
+	".query.RowR\x04rows\"\xc9\x02\n" +
 	"\x15BinlogDumpGTIDRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
 	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
 	"\x0fbinlog_filename\x18\x04 \x01(\tR\x0ebinlogFilename\x12'\n" +
 	"\x0fbinlog_position\x18\x05 \x01(\x04R\x0ebinlogPosition\x12\x19\n" +
-	"\bgtid_set\x18\x06 \x01(\tR\agtidSet\x12\x1b\n" +
-	"\tnon_block\x18\a \x01(\bR\bnonBlock\"&\n" +
+	"\bgtid_set\x18\x06 \x01(\tR\agtidSet\x12\x14\n" +
+	"\x05flags\x18\a \x01(\rR\x05flags\"&\n" +
 	"\x12BinlogDumpResponse\x12\x10\n" +
 	"\x03raw\x18\x01 \x01(\fR\x03raw*>\n" +
 	"\vOnDDLAction\x12\n" +

@@ -108,13 +108,13 @@ func TestComBinlogDumpGTID(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, // data-size is zero, no GTID payload
 		}
 		assert.Equal(t, expectedData, data)
-		logFile, logPos, pos, nonBlock, err := sConn.parseComBinlogDumpGTID(data)
+		logFile, logPos, pos, flags, err := sConn.parseComBinlogDumpGTID(data)
 		require.NoError(t, err, "parseComBinlogDumpGTID failed: %v", err)
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.True(t, pos.IsZero())
 		// flags 0x0d0e does not have BinlogDumpNonBlock (0x01) set
-		assert.False(t, nonBlock)
+		assert.Zero(t, flags&BinlogDumpNonBlock)
 	})
 
 	sConn.sequence = 0
@@ -122,7 +122,6 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	t.Run("WriteComBinlogDumpGTID", func(t *testing.T) {
 		// Write ComBinlogDumpGTID packet, read it, compare.
 		var flags uint16 = 0x0d0e
-		assert.Equal(t, flags, flags|BinlogThroughGTID)
 		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
 		require.NoError(t, err)
 		sidBlock := gtidSet.SIDBlock()
@@ -146,13 +145,13 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		}
 		expectedData = append(expectedData, sidBlock...) // data
 		assert.Equal(t, expectedData, data)
-		logFile, logPos, pos, nonBlock, err := sConn.parseComBinlogDumpGTID(data)
+		logFile, logPos, pos, flags, err := sConn.parseComBinlogDumpGTID(data)
 		require.NoError(t, err, "parseComBinlogDumpGTID failed: %v", err)
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.Equal(t, gtidSet, pos.GTIDSet)
 		// flags 0x0d0e does not have BinlogDumpNonBlock (0x01) set
-		assert.False(t, nonBlock)
+		assert.Zero(t, flags&BinlogDumpNonBlock)
 	})
 
 	sConn.sequence = 0

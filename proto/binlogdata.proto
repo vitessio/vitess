@@ -617,7 +617,7 @@ message BinlogDumpGTIDRequest {
   query.VTGateCallerID immediate_caller_id = 2;
   query.Target target = 3;
 
-  // Optional binlog filename (used with BinlogThroughPosition flag)
+  // Optional binlog filename
   string binlog_filename = 4;
   // Position within the binlog file (64-bit for COM_BINLOG_DUMP_GTID)
   uint64 binlog_position = 5;
@@ -625,10 +625,11 @@ message BinlogDumpGTIDRequest {
   // vttablet will convert to SIDBlock for MySQL
   string gtid_set = 6;
 
-  // If true, MySQL will return EOF when it reaches the end of the binlog
-  // instead of blocking and waiting for new events. This corresponds to
-  // the BINLOG_DUMP_NON_BLOCK flag (0x01) in COM_BINLOG_DUMP_GTID.
-  bool non_block = 7;
+  // Raw 2-byte flags field from COM_BINLOG_DUMP_GTID, passed through to MySQL.
+  // Known flags:
+  //   BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
+  //   USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
+  uint32 flags = 7;
 }
 
 // BinlogDumpResponse streams raw MySQL packet data.

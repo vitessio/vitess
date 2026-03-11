@@ -892,7 +892,7 @@ func (m *BinlogDumpGTIDRequest) CloneVT() *BinlogDumpGTIDRequest {
 	r.BinlogFilename = m.BinlogFilename
 	r.BinlogPosition = m.BinlogPosition
 	r.GtidSet = m.GtidSet
-	r.NonBlock = m.NonBlock
+	r.Flags = m.Flags
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3392,13 +3392,8 @@ func (m *BinlogDumpGTIDRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.NonBlock {
-		i--
-		if m.NonBlock {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+	if m.Flags != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Flags))
 		i--
 		dAtA[i] = 0x38
 	}
@@ -4586,8 +4581,8 @@ func (m *BinlogDumpGTIDRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.NonBlock {
-		n += 2
+	if m.Flags != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Flags))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -11548,9 +11543,9 @@ func (m *BinlogDumpGTIDRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field NonBlock", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Flags", wireType)
 			}
-			var v int
+			m.Flags = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -11560,12 +11555,11 @@ func (m *BinlogDumpGTIDRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.Flags |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.NonBlock = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -1165,7 +1165,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	c.recycleReadPacket()
 	kontinue = true
 
-	logFile, logPos, position, nonBlock, err := c.parseComBinlogDumpGTID(data)
+	logFile, logPos, position, flags, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
@@ -1180,7 +1180,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 			kontinue = false
 		}
 	}()
-	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, nonBlock); err != nil {
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, flags); err != nil {
 		log.Error(fmt.Sprintf("conn %v: ComBinlogDumpGTID failed: %v", c.ID(), err))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
 			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))

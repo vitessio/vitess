@@ -267,7 +267,7 @@ func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) 
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 

@@ -876,7 +876,7 @@ func (conn *gRPCQueryClient) BinlogDumpGTID(ctx context.Context, request *binlog
 			BinlogFilename:    request.BinlogFilename,
 			BinlogPosition:    request.BinlogPosition,
 			GtidSet:           request.GtidSet,
-			NonBlock:          request.NonBlock,
+			Flags:             request.Flags,
 		}
 		stream, err := conn.c.BinlogDumpGTID(ctx, req)
 		if err != nil {

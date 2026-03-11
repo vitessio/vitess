@@ -502,7 +502,7 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 //   - "keyspace:shard" (e.g., "commerce:0") — routes via health check, defaults to primary
 //   - "keyspace:shard@type" (e.g., "commerce:-80@primary") — routes via health check
 //   - "keyspace:shard@type|alias" (e.g., "commerce:-80@primary|zone1-100") — routes to specific tablet
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	// Check for shutdown before starting a long-lived stream
 	if c.IsShuttingDown() {
 		c.MarkForClose()
@@ -601,7 +601,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	request := &binlogdatapb.BinlogDumpGTIDRequest{
 		BinlogFilename: logFile,
 		BinlogPosition: logPos,
-		NonBlock:       nonBlock,
+		Flags:          uint32(flags),
 		Target:         target,
 	}
 	if gtidSet != nil {

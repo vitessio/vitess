@@ -1381,7 +1381,7 @@ func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdata
 	startPos := replication.Position{GTIDSet: gtidSet}
 
 	// Send the binlog dump command to MySQL using GTID
-	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition, startPos, request.NonBlock); err != nil {
+	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition, startPos, uint16(request.Flags)); err != nil {
 		return vterrors.Wrapf(err, "failed to send binlog dump command")
 	}
 

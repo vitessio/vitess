@@ -42333,8 +42333,8 @@ export namespace binlogdata {
         /** BinlogDumpGTIDRequest gtid_set */
         gtid_set?: (string|null);
 
-        /** BinlogDumpGTIDRequest non_block */
-        non_block?: (boolean|null);
+        /** BinlogDumpGTIDRequest flags */
+        flags?: (number|null);
     }
 
     /** Represents a BinlogDumpGTIDRequest. */
@@ -42364,8 +42364,8 @@ export namespace binlogdata {
         /** BinlogDumpGTIDRequest gtid_set. */
         public gtid_set: string;
 
-        /** BinlogDumpGTIDRequest non_block. */
-        public non_block: boolean;
+        /** BinlogDumpGTIDRequest flags. */
+        public flags: number;
 
         /**
          * Creates a new BinlogDumpGTIDRequest instance using the specified properties.

@@ -102,7 +102,7 @@ func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos ui
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -965,7 +965,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not authorized to perform binlog dump operations")
 	})
@@ -974,7 +974,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		// Clear any previous target
 		vh.session(mysqlConn).TargetString = ""
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no target specified")
 	})
@@ -989,7 +989,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		vh.session(mysqlConn).TargetString = targetString
 		mysqlConn.User = "testuser"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -999,7 +999,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1011,7 +1011,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "test binlog error")
 	})
@@ -1024,7 +1024,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000001", 4, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000001", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1039,14 +1039,14 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
 		require.NoError(t, err)
 
-		err = vh.ComBinlogDumpGTID(mysqlConn, "", 0, gtidSet, false)
+		err = vh.ComBinlogDumpGTID(mysqlConn, "", 0, gtidSet, 0)
 		require.NoError(t, err)
 	})
 
 	t.Run("invalid tablet alias in target", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|invalid-alias"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		// The error could be about parsing the alias or not finding the tablet
 		assert.True(t, strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "not found"),
@@ -1057,7 +1057,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		// Use a valid format but non-existent alias
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|aa-9999999"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
@@ -1065,7 +1065,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	t.Run("file position rejected without tablet alias", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tablet targeting")
 	})
@@ -1073,7 +1073,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	t.Run("non-default position rejected without tablet alias", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tablet targeting")
 	})
@@ -1085,7 +1085,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 1234, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 1234, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1095,7 +1095,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 }
@@ -1142,7 +1142,7 @@ func TestBinlogDumpACL(t *testing.T) {
 	t.Run("binlog dump disabled globally", func(t *testing.T) {
 		enableBinlogDump.Set(false)
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "binlog dump is disabled")
 	})
@@ -1152,7 +1152,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		// Don't set any authorized users (empty = no one authorized)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not authorized to perform binlog dump")
 		assert.Contains(t, err.Error(), "cdcuser")
@@ -1162,7 +1162,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		enableBinlogDump.Set(true)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcuser,otheruser"))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1170,7 +1170,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		enableBinlogDump.Set(true)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
 		require.NoError(t, err)
 	})
 

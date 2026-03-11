@@ -66,7 +66,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	t.Logf("Connected successfully, connection ID: %d", binlogConn.ConnectionID)
 
 	// Start binlog dump with no initial GTID - will start from current position
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, nil)
 	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP_GTID")
 
 	// Channel to receive packets and errors
@@ -156,7 +156,7 @@ func TestBinlogDumpGTID_NoTarget(t *testing.T) {
 	defer conn.Close()
 
 	// Try to send COM_BINLOG_DUMP_GTID without setting a target
-	err = conn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
+	err = conn.WriteComBinlogDumpGTID(1, "", 4, 0, nil)
 	require.NoError(t, err)
 
 	// Server should send an error packet when no target is specified
@@ -196,7 +196,7 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	defer binlogConn.Close()
 
 	// Start binlog dump FIRST (with no GTID = starts from current position)
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, nil)
 	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP_GTID")
 
 	t.Log("Binlog dump started")
@@ -389,7 +389,7 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 
 	// Start binlog dump from the saved GTID position
 	sidBlock := gtidToSIDBlock(t, startGTID)
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, sidBlock)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, sidBlock)
 	require.NoError(t, err)
 
 	// Read packets - should only get packets after startGTID
@@ -435,7 +435,7 @@ func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 	// Send COM_BINLOG_DUMP_GTID with invalid GTID data
 	// We'll send garbage bytes as the SID block
 	invalidSIDBlock := []byte("not-a-valid-gtid-format")
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, invalidSIDBlock)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, invalidSIDBlock)
 	require.NoError(t, err)
 
 	// Should receive an error packet
@@ -502,7 +502,7 @@ func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 	futureGTIDSet, err := replication.ParseMysql56GTIDSet(futureGTID)
 	require.NoError(t, err)
 	sidBlock := futureGTIDSet.SIDBlock()
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, sidBlock)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, sidBlock)
 	require.NoError(t, err)
 
 	// MySQL should return an error because the requested GTID includes transactions
@@ -562,8 +562,8 @@ func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
 	defer binlogConn.Close()
 
 	// Start binlog dump with NONBLOCK flag - should return EOF when caught up
-	// Flags: BinlogDumpNonBlock (0x01) | BinlogThroughGTID (0x04) = 0x05
-	flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+	// Flags: BinlogDumpNonBlock (0x01)
+	flags := uint16(mysql.BinlogDumpNonBlock)
 	sidBlock := gtidToSIDBlock(t, currentGTID)
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
 	require.NoError(t, err)
@@ -652,7 +652,7 @@ func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 	defer binlogConn.Close()
 
 	// Start binlog dump with NONBLOCK flag from BEFORE the inserts
-	flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+	flags := uint16(mysql.BinlogDumpNonBlock)
 	sidBlock := gtidToSIDBlock(t, startGTID)
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
 	require.NoError(t, err)
@@ -733,8 +733,8 @@ func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
 	defer binlogConn.Close()
 
 	// Start binlog dump WITHOUT nonBlock flag - should block when caught up
-	// Flags: only BinlogThroughGTID (0x04), NOT BinlogDumpNonBlock
-	flags := uint16(mysql.BinlogThroughGTID)
+	// Flags: no BinlogDumpNonBlock — should block when caught up
+	flags := uint16(0)
 	sidBlock := gtidToSIDBlock(t, currentGTID)
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
 	require.NoError(t, err)
@@ -939,7 +939,7 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 		require.NoError(t, err)
 		defer binlogConn.Close()
 
-		flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+		flags := uint16(mysql.BinlogDumpNonBlock)
 		err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
 		require.NoError(t, err)
 
@@ -1008,7 +1008,7 @@ func TestBinlogDumpGTID_ShardTargeting(t *testing.T) {
 	defer binlogConn.Close()
 
 	// Start binlog dump with no initial GTID - will start from current position
-	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, 0, nil)
 	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP_GTID with shard-level target")
 
 	// Channel to receive packets and errors

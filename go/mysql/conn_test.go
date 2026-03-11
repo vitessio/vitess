@@ -1052,12 +1052,12 @@ func TestParseComBinlogDumpGTID(t *testing.T) {
 	input, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e303030303031040000000000000030000000010000000000000024bcf1e201e011ee8c9c0242ac120002010000000000000001000000000000000900000000000000")
 	require.NoError(t, err)
 
-	logFile, logPos, position, nonBlock, err := sConn.parseComBinlogDumpGTID(input)
+	logFile, logPos, position, flags, err := sConn.parseComBinlogDumpGTID(input)
 	require.NoError(t, err)
 
 	require.Equal(t, "vt_0000000100-bin.000001", logFile)
 	require.Equal(t, uint64(4), logPos)
-	require.True(t, nonBlock)
+	require.NotZero(t, flags&BinlogDumpNonBlock)
 	require.Equal(t, "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8", position.String())
 }
 
@@ -1255,7 +1255,7 @@ func (t testRun) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error 
 	panic("implement me")
 }
 
-func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	panic("implement me")
 }
 

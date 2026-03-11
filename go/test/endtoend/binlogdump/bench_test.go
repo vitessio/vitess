@@ -131,7 +131,7 @@ func BenchmarkBinlogDumpThroughput(b *testing.B) {
 			require.NoError(b, err)
 			sidBlock := startGTIDSet.SIDBlock()
 
-			flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+			flags := uint16(mysql.BinlogDumpNonBlock)
 
 			// Helper: dump from startGTID to EOF via MySQL protocol, return total bytes and packet count.
 			dumpToEOF := func(b *testing.B, conn *mysql.Conn, setBinlogChecksum bool) (totalBytes int64, packets int) {
