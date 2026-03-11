@@ -260,6 +260,8 @@ Flags:
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb-uri string                                              URI of opentsdb /api/put method
+      --otel-endpoint string                                             OpenTelemetry collector endpoint (host:port for gRPC) (default "localhost:4317")
+      --otel-insecure                                                    use insecure connection to OpenTelemetry collector (default true)
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
@@ -397,7 +399,7 @@ Flags:
       --topocustomrule-path string                                       path for customrules file. Disabled if empty.
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-rate float                                      sampling rate for traces (0.0 to 1.0) (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --track-schema-versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --transaction-limit-by-component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
