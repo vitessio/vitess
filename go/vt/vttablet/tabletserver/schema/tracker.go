@@ -88,28 +88,17 @@ func (tr *Tracker) Open() {
 }
 
 // Close disables the tracker functionality
-func (tr *Tracker) Close(ctx context.Context) {
+func (tr *Tracker) Close() {
 	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	if tr.cancel == nil {
-		tr.mu.Unlock()
 		return
 	}
 
 	tr.cancel()
 	tr.cancel = nil
-	tr.mu.Unlock()
-
-	done := make(chan struct{})
-	go func() {
-		tr.wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-		log.Info("Schema Tracker: closed")
-	case <-ctx.Done():
-		log.Warn(fmt.Sprintf("Schema Tracker: close cancelled by context: %v", ctx.Err()))
-	}
+	tr.wg.Wait()
+	log.Info("Schema Tracker: closed")
 }
 
 // Enable forces tracking to be on or off.
@@ -121,7 +110,7 @@ func (tr *Tracker) Enable(enabled bool) {
 	if enabled {
 		tr.Open()
 	} else {
-		tr.Close(context.Background())
+		tr.Close()
 	}
 }
 

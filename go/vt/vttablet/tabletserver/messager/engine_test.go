@@ -69,7 +69,7 @@ var (
 
 func TestEngineSchemaChanged(t *testing.T) {
 	engine := newTestEngine()
-	defer engine.Close(context.Background())
+	defer engine.Close()
 
 	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil, true)
 	got := extractManagerNames(engine.managers)
@@ -131,7 +131,7 @@ func TestSubscribe(t *testing.T) {
 	}
 
 	// After close, Subscribe should return a closed channel.
-	engine.Close(context.Background())
+	engine.Close()
 	_, err = engine.Subscribe(context.Background(), "t1", nil)
 	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		t.Errorf("Subscribed on closed engine error code: %v, want %v", got, want)
@@ -140,7 +140,7 @@ func TestSubscribe(t *testing.T) {
 
 func TestEngineGenerate(t *testing.T) {
 	engine := newTestEngine()
-	defer engine.Close(context.Background())
+	defer engine.Close()
 	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil, true)
 
 	if _, err := engine.GetGenerator("t1"); err != nil {
@@ -175,7 +175,7 @@ func newEngineReceiver() (f func(qr *sqltypes.Result) error, ch chan *sqltypes.R
 // functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229.
 func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
 	engine := newTestEngine()
-	defer engine.Close(context.Background())
+	defer engine.Close()
 	se := engine.se
 
 	wg := sync.WaitGroup{}
@@ -185,7 +185,7 @@ func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for range 100 {
-			engine.Close(context.Background())
+			engine.Close()
 			engine.Open()
 		}
 	}()

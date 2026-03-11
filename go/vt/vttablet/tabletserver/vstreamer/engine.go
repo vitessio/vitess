@@ -175,7 +175,7 @@ func (vse *Engine) IsOpen() bool {
 }
 
 // Close closes the Engine service.
-func (vse *Engine) Close(_ context.Context) {
+func (vse *Engine) Close() {
 	func() {
 		if atomic.LoadInt32(&vse.isOpen) == 0 {
 			return

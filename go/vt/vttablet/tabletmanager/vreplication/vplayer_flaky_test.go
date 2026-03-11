@@ -2915,7 +2915,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"commit",
 	))
 
-	streamerEngine.Close(context.Background())
+	streamerEngine.Close()
 	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set message='vstream ended'",
 	))

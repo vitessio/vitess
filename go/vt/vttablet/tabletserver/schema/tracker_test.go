@@ -88,7 +88,7 @@ func TestTracker(t *testing.T) {
 	tracker.Open()
 	<-vs.done
 	cancel()
-	tracker.Close(context.Background())
+	tracker.Close()
 	final := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	require.Equal(t, initial+1, final)
 	require.True(t, initialSchemaInserted)
@@ -131,7 +131,7 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	tracker.Open()
 	<-vs.done
 	cancel()
-	tracker.Close(context.Background())
+	tracker.Close()
 	require.False(t, initialSchemaInserted)
 }
 

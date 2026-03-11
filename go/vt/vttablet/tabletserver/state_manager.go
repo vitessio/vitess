@@ -177,7 +177,7 @@ type (
 
 	subComponent interface {
 		Open()
-		Close(ctx context.Context)
+		Close()
 	}
 
 	txThrottler interface {
@@ -187,7 +187,7 @@ type (
 
 	onlineDDLExecutor interface {
 		Open() error
-		Close(ctx context.Context)
+		Close()
 	}
 
 	lagThrottler interface {
@@ -197,7 +197,7 @@ type (
 
 	tableGarbageCollector interface {
 		Open() error
-		Close(ctx context.Context)
+		Close()
 	}
 
 	queryThrottler interface {
@@ -506,31 +506,12 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	cancel := sm.terminateAllQueries(nil)
 	defer cancel()
 
-	var closeCtx context.Context
-	var closeCancel context.CancelFunc
-	if sm.shutdownGracePeriod > 0 {
-		closeCtx, closeCancel = context.WithTimeout(context.Background(), sm.shutdownGracePeriod)
-	} else {
-		closeCtx, closeCancel = context.Background(), func() {}
-	}
-	defer closeCancel()
-
-	sm.ddle.Close(closeCtx)
-	sm.tableGC.Close(closeCtx)
-	sm.messager.Close(closeCtx)
-	sm.tracker.Close(closeCtx)
+	sm.ddle.Close()
+	sm.tableGC.Close()
+	sm.messager.Close()
+	sm.tracker.Close()
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
-
-	if err := closeCtx.Err(); err != nil && sm.mysqld != nil && sm.mysqld.IsMySQLLocal() {
-		// Close timed out. Check if MySQL is actually down (errno 2002).
-		// closeCtx is already expired, so we create a fresh context for the probe.
-		probeCtx, probeCancel := context.WithTimeout(context.Background(), sm.shutdownGracePeriod)
-		defer probeCancel()
-		if sm.mysqld.IsLocalMySQLDown(probeCtx) {
-			log.Warn("Component close timed out (MySQL is down), proceeding with transition")
-		}
-	}
 
 	if err := sm.connect(wantTabletType, true); err != nil {
 		return err
@@ -585,21 +566,21 @@ func (sm *stateManager) unserveCommon() {
 	defer cancel()
 
 	log.Info("Started online ddl executor close")
-	sm.ddle.Close(context.Background())
+	sm.ddle.Close()
 	log.Info("Finished online ddl executor close. Started table garbage collector close")
-	sm.tableGC.Close(context.Background())
+	sm.tableGC.Close()
 	log.Info("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
 	log.Info("Finished lag throttler close. Started messager close")
 	sm.qThrottler.Close()
 	log.Info("Finished query throttler close. Started query throttler close")
-	sm.messager.Close(context.Background())
+	sm.messager.Close()
 	log.Info("Finished messager close. Started txEngine close")
 	sm.te.Close()
 	log.Info("Finished txEngine close. Killing all OLAP queries")
 	sm.olapql.TerminateAll()
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
-	sm.tracker.Close(context.Background())
+	sm.tracker.Close()
 	log.Info("Finished tracker close. Started wait for requests")
 	sm.handleShutdownGracePeriod(&wg)
 	log.Info("Finished handling grace period. Finished execution of unserveCommon")
@@ -660,7 +641,7 @@ func (sm *stateManager) closeAll() {
 	sm.unserveCommon()
 	sm.txThrottler.Close()
 	sm.qe.Close()
-	sm.vstreamer.Close(context.Background())
+	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)

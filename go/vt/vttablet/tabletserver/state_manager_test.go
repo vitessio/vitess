@@ -937,7 +937,7 @@ func (te *testSubcomponent) Open() {
 	te.state = testStateOpen
 }
 
-func (te *testSubcomponent) Close(ctx context.Context) {
+func (te *testSubcomponent) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
@@ -967,7 +967,7 @@ func (te *testOnlineDDLExecutor) Open() error {
 	return nil
 }
 
-func (te *testOnlineDDLExecutor) Close(ctx context.Context) {
+func (te *testOnlineDDLExecutor) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
@@ -1025,7 +1025,7 @@ func (te *testTableGC) Open() error {
 	return nil
 }
 
-func (te *testTableGC) Close(ctx context.Context) {
+func (te *testTableGC) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }

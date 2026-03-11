@@ -94,7 +94,7 @@ func (me *Engine) Open() {
 }
 
 // Close closes the Engine service.
-func (me *Engine) Close(_ context.Context) {
+func (me *Engine) Close() {
 	log.Info("messager Engine - started execution of Close. Acquiring mu lock")
 	me.mu.Lock()
 	log.Info("messager Engine - acquired mu lock")

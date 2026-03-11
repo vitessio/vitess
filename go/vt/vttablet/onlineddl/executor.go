@@ -305,7 +305,7 @@ func (e *Executor) Open() error {
 }
 
 // Close frees resources
-func (e *Executor) Close(ctx context.Context) {
+func (e *Executor) Close() {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
 	if atomic.LoadInt64(&e.isOpen) == 0 {
@@ -313,17 +313,8 @@ func (e *Executor) Close(ctx context.Context) {
 	}
 	log.Info("onlineDDL Executor Close()")
 
-	done := make(chan struct{})
-	go func() {
-		e.ticks.Stop()
-		e.pool.Close()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-ctx.Done():
-		log.Warn(fmt.Sprintf("onlineDDL Executor: close cancelled by context: %v", ctx.Err()))
-	}
+	e.ticks.Stop()
+	e.pool.Close()
 	atomic.StoreInt64(&e.isOpen, 0)
 }
 
