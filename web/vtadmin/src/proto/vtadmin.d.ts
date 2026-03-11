@@ -50229,6 +50229,1022 @@ export namespace query {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a StreamExecuteRawRequest. */
+    interface IStreamExecuteRawRequest {
+
+        /** StreamExecuteRawRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** StreamExecuteRawRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** StreamExecuteRawRequest target */
+        target?: (query.ITarget|null);
+
+        /** StreamExecuteRawRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** StreamExecuteRawRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** StreamExecuteRawRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** StreamExecuteRawRequest reserved_id */
+        reserved_id?: (number|Long|null);
+    }
+
+    /** Represents a StreamExecuteRawRequest. */
+    class StreamExecuteRawRequest implements IStreamExecuteRawRequest {
+
+        /**
+         * Constructs a new StreamExecuteRawRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IStreamExecuteRawRequest);
+
+        /** StreamExecuteRawRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** StreamExecuteRawRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** StreamExecuteRawRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** StreamExecuteRawRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** StreamExecuteRawRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** StreamExecuteRawRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** StreamExecuteRawRequest reserved_id. */
+        public reserved_id: (number|Long);
+
+        /**
+         * Creates a new StreamExecuteRawRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamExecuteRawRequest instance
+         */
+        public static create(properties?: query.IStreamExecuteRawRequest): query.StreamExecuteRawRequest;
+
+        /**
+         * Encodes the specified StreamExecuteRawRequest message. Does not implicitly {@link query.StreamExecuteRawRequest.verify|verify} messages.
+         * @param message StreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamExecuteRawRequest message, length delimited. Does not implicitly {@link query.StreamExecuteRawRequest.verify|verify} messages.
+         * @param message StreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamExecuteRawRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.StreamExecuteRawRequest;
+
+        /**
+         * Decodes a StreamExecuteRawRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.StreamExecuteRawRequest;
+
+        /**
+         * Verifies a StreamExecuteRawRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamExecuteRawRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamExecuteRawRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.StreamExecuteRawRequest;
+
+        /**
+         * Creates a plain object from a StreamExecuteRawRequest message. Also converts values to other types if specified.
+         * @param message StreamExecuteRawRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.StreamExecuteRawRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamExecuteRawRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamExecuteRawRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamExecuteRawResponse. */
+    interface IStreamExecuteRawResponse {
+
+        /** StreamExecuteRawResponse raw */
+        raw?: (Uint8Array|null);
+
+        /** StreamExecuteRawResponse deprecate_eof */
+        deprecate_eof?: (boolean|null);
+    }
+
+    /** Represents a StreamExecuteRawResponse. */
+    class StreamExecuteRawResponse implements IStreamExecuteRawResponse {
+
+        /**
+         * Constructs a new StreamExecuteRawResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IStreamExecuteRawResponse);
+
+        /** StreamExecuteRawResponse raw. */
+        public raw: Uint8Array;
+
+        /** StreamExecuteRawResponse deprecate_eof. */
+        public deprecate_eof: boolean;
+
+        /**
+         * Creates a new StreamExecuteRawResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamExecuteRawResponse instance
+         */
+        public static create(properties?: query.IStreamExecuteRawResponse): query.StreamExecuteRawResponse;
+
+        /**
+         * Encodes the specified StreamExecuteRawResponse message. Does not implicitly {@link query.StreamExecuteRawResponse.verify|verify} messages.
+         * @param message StreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamExecuteRawResponse message, length delimited. Does not implicitly {@link query.StreamExecuteRawResponse.verify|verify} messages.
+         * @param message StreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamExecuteRawResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.StreamExecuteRawResponse;
+
+        /**
+         * Decodes a StreamExecuteRawResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.StreamExecuteRawResponse;
+
+        /**
+         * Verifies a StreamExecuteRawResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamExecuteRawResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamExecuteRawResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.StreamExecuteRawResponse;
+
+        /**
+         * Creates a plain object from a StreamExecuteRawResponse message. Also converts values to other types if specified.
+         * @param message StreamExecuteRawResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.StreamExecuteRawResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamExecuteRawResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamExecuteRawResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BeginStreamExecuteRawRequest. */
+    interface IBeginStreamExecuteRawRequest {
+
+        /** BeginStreamExecuteRawRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BeginStreamExecuteRawRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BeginStreamExecuteRawRequest target */
+        target?: (query.ITarget|null);
+
+        /** BeginStreamExecuteRawRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** BeginStreamExecuteRawRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** BeginStreamExecuteRawRequest pre_queries */
+        pre_queries?: (string[]|null);
+
+        /** BeginStreamExecuteRawRequest reserved_id */
+        reserved_id?: (number|Long|null);
+    }
+
+    /** Represents a BeginStreamExecuteRawRequest. */
+    class BeginStreamExecuteRawRequest implements IBeginStreamExecuteRawRequest {
+
+        /**
+         * Constructs a new BeginStreamExecuteRawRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IBeginStreamExecuteRawRequest);
+
+        /** BeginStreamExecuteRawRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BeginStreamExecuteRawRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BeginStreamExecuteRawRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BeginStreamExecuteRawRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** BeginStreamExecuteRawRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** BeginStreamExecuteRawRequest pre_queries. */
+        public pre_queries: string[];
+
+        /** BeginStreamExecuteRawRequest reserved_id. */
+        public reserved_id: (number|Long);
+
+        /**
+         * Creates a new BeginStreamExecuteRawRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BeginStreamExecuteRawRequest instance
+         */
+        public static create(properties?: query.IBeginStreamExecuteRawRequest): query.BeginStreamExecuteRawRequest;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRawRequest message. Does not implicitly {@link query.BeginStreamExecuteRawRequest.verify|verify} messages.
+         * @param message BeginStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IBeginStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRawRequest message, length delimited. Does not implicitly {@link query.BeginStreamExecuteRawRequest.verify|verify} messages.
+         * @param message BeginStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IBeginStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BeginStreamExecuteRawRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BeginStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.BeginStreamExecuteRawRequest;
+
+        /**
+         * Decodes a BeginStreamExecuteRawRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BeginStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.BeginStreamExecuteRawRequest;
+
+        /**
+         * Verifies a BeginStreamExecuteRawRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BeginStreamExecuteRawRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BeginStreamExecuteRawRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.BeginStreamExecuteRawRequest;
+
+        /**
+         * Creates a plain object from a BeginStreamExecuteRawRequest message. Also converts values to other types if specified.
+         * @param message BeginStreamExecuteRawRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.BeginStreamExecuteRawRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BeginStreamExecuteRawRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginStreamExecuteRawRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BeginStreamExecuteRawResponse. */
+    interface IBeginStreamExecuteRawResponse {
+
+        /** BeginStreamExecuteRawResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** BeginStreamExecuteRawResponse raw */
+        raw?: (Uint8Array|null);
+
+        /** BeginStreamExecuteRawResponse deprecate_eof */
+        deprecate_eof?: (boolean|null);
+
+        /** BeginStreamExecuteRawResponse transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** BeginStreamExecuteRawResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteRawResponse session_state_changes */
+        session_state_changes?: (string|null);
+    }
+
+    /** Represents a BeginStreamExecuteRawResponse. */
+    class BeginStreamExecuteRawResponse implements IBeginStreamExecuteRawResponse {
+
+        /**
+         * Constructs a new BeginStreamExecuteRawResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IBeginStreamExecuteRawResponse);
+
+        /** BeginStreamExecuteRawResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** BeginStreamExecuteRawResponse raw. */
+        public raw: Uint8Array;
+
+        /** BeginStreamExecuteRawResponse deprecate_eof. */
+        public deprecate_eof: boolean;
+
+        /** BeginStreamExecuteRawResponse transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** BeginStreamExecuteRawResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteRawResponse session_state_changes. */
+        public session_state_changes: string;
+
+        /**
+         * Creates a new BeginStreamExecuteRawResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BeginStreamExecuteRawResponse instance
+         */
+        public static create(properties?: query.IBeginStreamExecuteRawResponse): query.BeginStreamExecuteRawResponse;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRawResponse message. Does not implicitly {@link query.BeginStreamExecuteRawResponse.verify|verify} messages.
+         * @param message BeginStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IBeginStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRawResponse message, length delimited. Does not implicitly {@link query.BeginStreamExecuteRawResponse.verify|verify} messages.
+         * @param message BeginStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IBeginStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BeginStreamExecuteRawResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BeginStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.BeginStreamExecuteRawResponse;
+
+        /**
+         * Decodes a BeginStreamExecuteRawResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BeginStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.BeginStreamExecuteRawResponse;
+
+        /**
+         * Verifies a BeginStreamExecuteRawResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BeginStreamExecuteRawResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BeginStreamExecuteRawResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.BeginStreamExecuteRawResponse;
+
+        /**
+         * Creates a plain object from a BeginStreamExecuteRawResponse message. Also converts values to other types if specified.
+         * @param message BeginStreamExecuteRawResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.BeginStreamExecuteRawResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BeginStreamExecuteRawResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginStreamExecuteRawResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReserveStreamExecuteRawRequest. */
+    interface IReserveStreamExecuteRawRequest {
+
+        /** ReserveStreamExecuteRawRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveStreamExecuteRawRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveStreamExecuteRawRequest target */
+        target?: (query.ITarget|null);
+
+        /** ReserveStreamExecuteRawRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** ReserveStreamExecuteRawRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** ReserveStreamExecuteRawRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** ReserveStreamExecuteRawRequest pre_queries */
+        pre_queries?: (string[]|null);
+    }
+
+    /** Represents a ReserveStreamExecuteRawRequest. */
+    class ReserveStreamExecuteRawRequest implements IReserveStreamExecuteRawRequest {
+
+        /**
+         * Constructs a new ReserveStreamExecuteRawRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveStreamExecuteRawRequest);
+
+        /** ReserveStreamExecuteRawRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveStreamExecuteRawRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveStreamExecuteRawRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** ReserveStreamExecuteRawRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** ReserveStreamExecuteRawRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** ReserveStreamExecuteRawRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** ReserveStreamExecuteRawRequest pre_queries. */
+        public pre_queries: string[];
+
+        /**
+         * Creates a new ReserveStreamExecuteRawRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveStreamExecuteRawRequest instance
+         */
+        public static create(properties?: query.IReserveStreamExecuteRawRequest): query.ReserveStreamExecuteRawRequest;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRawRequest message. Does not implicitly {@link query.ReserveStreamExecuteRawRequest.verify|verify} messages.
+         * @param message ReserveStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRawRequest message, length delimited. Does not implicitly {@link query.ReserveStreamExecuteRawRequest.verify|verify} messages.
+         * @param message ReserveStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveStreamExecuteRawRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveStreamExecuteRawRequest;
+
+        /**
+         * Decodes a ReserveStreamExecuteRawRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveStreamExecuteRawRequest;
+
+        /**
+         * Verifies a ReserveStreamExecuteRawRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveStreamExecuteRawRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveStreamExecuteRawRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveStreamExecuteRawRequest;
+
+        /**
+         * Creates a plain object from a ReserveStreamExecuteRawRequest message. Also converts values to other types if specified.
+         * @param message ReserveStreamExecuteRawRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveStreamExecuteRawRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveStreamExecuteRawRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveStreamExecuteRawRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReserveStreamExecuteRawResponse. */
+    interface IReserveStreamExecuteRawResponse {
+
+        /** ReserveStreamExecuteRawResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** ReserveStreamExecuteRawResponse raw */
+        raw?: (Uint8Array|null);
+
+        /** ReserveStreamExecuteRawResponse deprecate_eof */
+        deprecate_eof?: (boolean|null);
+
+        /** ReserveStreamExecuteRawResponse reserved_id */
+        reserved_id?: (number|Long|null);
+
+        /** ReserveStreamExecuteRawResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReserveStreamExecuteRawResponse. */
+    class ReserveStreamExecuteRawResponse implements IReserveStreamExecuteRawResponse {
+
+        /**
+         * Constructs a new ReserveStreamExecuteRawResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveStreamExecuteRawResponse);
+
+        /** ReserveStreamExecuteRawResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** ReserveStreamExecuteRawResponse raw. */
+        public raw: Uint8Array;
+
+        /** ReserveStreamExecuteRawResponse deprecate_eof. */
+        public deprecate_eof: boolean;
+
+        /** ReserveStreamExecuteRawResponse reserved_id. */
+        public reserved_id: (number|Long);
+
+        /** ReserveStreamExecuteRawResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReserveStreamExecuteRawResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveStreamExecuteRawResponse instance
+         */
+        public static create(properties?: query.IReserveStreamExecuteRawResponse): query.ReserveStreamExecuteRawResponse;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRawResponse message. Does not implicitly {@link query.ReserveStreamExecuteRawResponse.verify|verify} messages.
+         * @param message ReserveStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRawResponse message, length delimited. Does not implicitly {@link query.ReserveStreamExecuteRawResponse.verify|verify} messages.
+         * @param message ReserveStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveStreamExecuteRawResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveStreamExecuteRawResponse;
+
+        /**
+         * Decodes a ReserveStreamExecuteRawResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveStreamExecuteRawResponse;
+
+        /**
+         * Verifies a ReserveStreamExecuteRawResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveStreamExecuteRawResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveStreamExecuteRawResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveStreamExecuteRawResponse;
+
+        /**
+         * Creates a plain object from a ReserveStreamExecuteRawResponse message. Also converts values to other types if specified.
+         * @param message ReserveStreamExecuteRawResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveStreamExecuteRawResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveStreamExecuteRawResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveStreamExecuteRawResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReserveBeginStreamExecuteRawRequest. */
+    interface IReserveBeginStreamExecuteRawRequest {
+
+        /** ReserveBeginStreamExecuteRawRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveBeginStreamExecuteRawRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveBeginStreamExecuteRawRequest target */
+        target?: (query.ITarget|null);
+
+        /** ReserveBeginStreamExecuteRawRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** ReserveBeginStreamExecuteRawRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** ReserveBeginStreamExecuteRawRequest pre_queries */
+        pre_queries?: (string[]|null);
+
+        /** ReserveBeginStreamExecuteRawRequest post_begin_queries */
+        post_begin_queries?: (string[]|null);
+    }
+
+    /** Represents a ReserveBeginStreamExecuteRawRequest. */
+    class ReserveBeginStreamExecuteRawRequest implements IReserveBeginStreamExecuteRawRequest {
+
+        /**
+         * Constructs a new ReserveBeginStreamExecuteRawRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveBeginStreamExecuteRawRequest);
+
+        /** ReserveBeginStreamExecuteRawRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveBeginStreamExecuteRawRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveBeginStreamExecuteRawRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** ReserveBeginStreamExecuteRawRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** ReserveBeginStreamExecuteRawRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** ReserveBeginStreamExecuteRawRequest pre_queries. */
+        public pre_queries: string[];
+
+        /** ReserveBeginStreamExecuteRawRequest post_begin_queries. */
+        public post_begin_queries: string[];
+
+        /**
+         * Creates a new ReserveBeginStreamExecuteRawRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveBeginStreamExecuteRawRequest instance
+         */
+        public static create(properties?: query.IReserveBeginStreamExecuteRawRequest): query.ReserveBeginStreamExecuteRawRequest;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRawRequest message. Does not implicitly {@link query.ReserveBeginStreamExecuteRawRequest.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveBeginStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRawRequest message, length delimited. Does not implicitly {@link query.ReserveBeginStreamExecuteRawRequest.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRawRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveBeginStreamExecuteRawRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRawRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveBeginStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveBeginStreamExecuteRawRequest;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRawRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveBeginStreamExecuteRawRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveBeginStreamExecuteRawRequest;
+
+        /**
+         * Verifies a ReserveBeginStreamExecuteRawRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveBeginStreamExecuteRawRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveBeginStreamExecuteRawRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveBeginStreamExecuteRawRequest;
+
+        /**
+         * Creates a plain object from a ReserveBeginStreamExecuteRawRequest message. Also converts values to other types if specified.
+         * @param message ReserveBeginStreamExecuteRawRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveBeginStreamExecuteRawRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveBeginStreamExecuteRawRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginStreamExecuteRawRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReserveBeginStreamExecuteRawResponse. */
+    interface IReserveBeginStreamExecuteRawResponse {
+
+        /** ReserveBeginStreamExecuteRawResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** ReserveBeginStreamExecuteRawResponse raw */
+        raw?: (Uint8Array|null);
+
+        /** ReserveBeginStreamExecuteRawResponse deprecate_eof */
+        deprecate_eof?: (boolean|null);
+
+        /** ReserveBeginStreamExecuteRawResponse transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** ReserveBeginStreamExecuteRawResponse reserved_id */
+        reserved_id?: (number|Long|null);
+
+        /** ReserveBeginStreamExecuteRawResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteRawResponse session_state_changes */
+        session_state_changes?: (string|null);
+    }
+
+    /** Represents a ReserveBeginStreamExecuteRawResponse. */
+    class ReserveBeginStreamExecuteRawResponse implements IReserveBeginStreamExecuteRawResponse {
+
+        /**
+         * Constructs a new ReserveBeginStreamExecuteRawResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveBeginStreamExecuteRawResponse);
+
+        /** ReserveBeginStreamExecuteRawResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** ReserveBeginStreamExecuteRawResponse raw. */
+        public raw: Uint8Array;
+
+        /** ReserveBeginStreamExecuteRawResponse deprecate_eof. */
+        public deprecate_eof: boolean;
+
+        /** ReserveBeginStreamExecuteRawResponse transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** ReserveBeginStreamExecuteRawResponse reserved_id. */
+        public reserved_id: (number|Long);
+
+        /** ReserveBeginStreamExecuteRawResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteRawResponse session_state_changes. */
+        public session_state_changes: string;
+
+        /**
+         * Creates a new ReserveBeginStreamExecuteRawResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveBeginStreamExecuteRawResponse instance
+         */
+        public static create(properties?: query.IReserveBeginStreamExecuteRawResponse): query.ReserveBeginStreamExecuteRawResponse;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRawResponse message. Does not implicitly {@link query.ReserveBeginStreamExecuteRawResponse.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveBeginStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRawResponse message, length delimited. Does not implicitly {@link query.ReserveBeginStreamExecuteRawResponse.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRawResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveBeginStreamExecuteRawResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRawResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveBeginStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveBeginStreamExecuteRawResponse;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRawResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveBeginStreamExecuteRawResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveBeginStreamExecuteRawResponse;
+
+        /**
+         * Verifies a ReserveBeginStreamExecuteRawResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveBeginStreamExecuteRawResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveBeginStreamExecuteRawResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveBeginStreamExecuteRawResponse;
+
+        /**
+         * Creates a plain object from a ReserveBeginStreamExecuteRawResponse message. Also converts values to other types if specified.
+         * @param message ReserveBeginStreamExecuteRawResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveBeginStreamExecuteRawResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveBeginStreamExecuteRawResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginStreamExecuteRawResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace replicationdata. */

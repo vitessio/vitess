@@ -1065,3 +1065,116 @@ message GetSchemaResponse {
   // this is for the schema definition for the requested tables and views.
   map<string, string> table_definition = 2;
 }
+
+// StreamExecuteRawRequest is the payload to StreamExecuteRaw
+message StreamExecuteRawRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  int64 transaction_id = 6;
+  int64 reserved_id = 7;
+}
+
+// StreamExecuteRawResponse is the returned value from StreamExecuteRaw
+message StreamExecuteRawResponse {
+  // Raw MySQL wire protocol bytes. Contains one or more complete MySQL packets
+  // (header + payload). Headers are never split across messages.
+  // Large packet payloads may span multiple messages.
+  bytes raw = 1;
+  // Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+  // Sent in every response so the client can start parsing from any message.
+  bool deprecate_eof = 2;
+}
+
+// BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
+message BeginStreamExecuteRawRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  int64 reserved_id = 7;
+}
+
+// BeginStreamExecuteRawResponse is the returned value from BeginStreamExecuteRaw
+message BeginStreamExecuteRawResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  // Raw MySQL wire protocol bytes.
+  bytes raw = 2;
+
+  // Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+  bool deprecate_eof = 3;
+
+  // transaction_id might be non-zero even if an error is present.
+  int64 transaction_id = 4;
+  topodata.TabletAlias tablet_alias = 5;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 6;
+}
+
+// ReserveStreamExecuteRawRequest is the payload to ReserveStreamExecuteRaw
+message ReserveStreamExecuteRawRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  int64 transaction_id = 6;
+  repeated string pre_queries = 7;
+}
+
+// ReserveStreamExecuteRawResponse is the returned value from ReserveStreamExecuteRaw
+message ReserveStreamExecuteRawResponse {
+  vtrpc.RPCError error = 1;
+
+  // Raw MySQL wire protocol bytes.
+  bytes raw = 2;
+
+  // Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+  bool deprecate_eof = 3;
+
+  // The following fields might be non-zero even if an error is present.
+  int64 reserved_id = 4;
+  topodata.TabletAlias tablet_alias = 5;
+}
+
+// ReserveBeginStreamExecuteRawRequest is the payload to ReserveBeginStreamExecuteRaw
+message ReserveBeginStreamExecuteRawRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
+}
+
+// ReserveBeginStreamExecuteRawResponse is the returned value from ReserveBeginStreamExecuteRaw
+message ReserveBeginStreamExecuteRawResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  // Raw MySQL wire protocol bytes.
+  bytes raw = 2;
+
+  // Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+  bool deprecate_eof = 3;
+
+  // The following fields might be non-zero even if an error is present.
+  int64 transaction_id = 4;
+  int64 reserved_id = 5;
+  topodata.TabletAlias tablet_alias = 6;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 7;
+}

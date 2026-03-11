@@ -298,6 +298,22 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 	return vterrors.ToGRPC(err)
 }
 
+// StreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) StreamExecuteRaw(request *querypb.StreamExecuteRawRequest, stream queryservicepb.Query_StreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(raw []byte, deprecateEOF bool) error {
+		return stream.Send(&querypb.StreamExecuteRawResponse{
+			Raw:          raw,
+			DeprecateEof: deprecateEOF,
+		})
+	})
+	return vterrors.ToGRPC(err)
+}
+
 // MessageStream is part of the queryservice.QueryServer interface
 func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream queryservicepb.Query_MessageStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)
@@ -485,6 +501,87 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 	}
 
 	err = stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
+		ReservedId:          state.ReservedID,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
+	})
+	return vterrors.ToGRPC(err)
+}
+
+// BeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) BeginStreamExecuteRaw(request *querypb.BeginStreamExecuteRawRequest, stream queryservicepb.Query_BeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	state, err := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(raw []byte, deprecateEOF bool) error {
+		return stream.Send(&querypb.BeginStreamExecuteRawResponse{
+			Raw:          raw,
+			DeprecateEof: deprecateEOF,
+		})
+	})
+
+	if err != nil && state.TransactionID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.BeginStreamExecuteRawResponse{
+		Error:               vterrors.ToVTRPC(err),
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
+	})
+	return vterrors.ToGRPC(err)
+}
+
+// ReserveStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveStreamExecuteRaw(request *querypb.ReserveStreamExecuteRawRequest, stream queryservicepb.Query_ReserveStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+
+	state, err := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(raw []byte, deprecateEOF bool) error {
+		return stream.Send(&querypb.ReserveStreamExecuteRawResponse{
+			Raw:          raw,
+			DeprecateEof: deprecateEOF,
+		})
+	})
+	if err != nil && state.ReservedID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.ReserveStreamExecuteRawResponse{
+		Error:       vterrors.ToVTRPC(err),
+		ReservedId:  state.ReservedID,
+		TabletAlias: state.TabletAlias,
+	})
+	return vterrors.ToGRPC(err)
+}
+
+// ReserveBeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginStreamExecuteRaw(request *querypb.ReserveBeginStreamExecuteRawRequest, stream queryservicepb.Query_ReserveBeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+
+	state, err := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(raw []byte, deprecateEOF bool) error {
+		return stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
+			Raw:          raw,
+			DeprecateEof: deprecateEOF,
+		})
+	})
+	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
 		Error:               vterrors.ToVTRPC(err),
 		ReservedId:          state.ReservedID,
 		TransactionId:       state.TransactionID,
