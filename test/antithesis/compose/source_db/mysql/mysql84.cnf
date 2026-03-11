@@ -13,8 +13,8 @@ server-id = 1
 socket = /var/run/mysqld/mysqld.sock
 tmpdir = /tmp
 slow-query-log-file = /var/log/mysql/slow.log
-long_query_time = 2
 slow-query-log
+long_query_time = 1
 skip-name-resolve
 connect_timeout = 30
 innodb_lock_wait_timeout = 20
@@ -33,9 +33,6 @@ loose_rpl_semi_sync_source_wait_no_replica = 1
 replica_net_timeout = 8
 general_log = 1
 general_log_file = /var/log/mysql/query.log
-slow_query_log = 1
-long_query_time = 1
-slow_query_log_file = /var/log/mysql/slow.log
 
 [mysql]
 local_infile = 1
