@@ -170,6 +170,15 @@ type trackedClientStream struct {
 	span oteltrace.Span
 }
 
+func (s *trackedClientStream) CloseSend() error {
+	err := s.ClientStream.CloseSend()
+	if err != nil {
+		s.span.RecordError(err)
+	}
+	s.span.End()
+	return err
+}
+
 func (s *trackedClientStream) RecvMsg(m any) error {
 	err := s.ClientStream.RecvMsg(m)
 	if err != nil {
