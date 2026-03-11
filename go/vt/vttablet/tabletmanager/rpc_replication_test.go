@@ -389,7 +389,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 				},
 			}
 
-			err := tm.handleRecoverableReplicationInitializationError(context.Background(), tc.inputErr)
+			err := tm.handleRecoverableReplicationError(context.Background(), tc.inputErr)
 			if tc.shouldRestart {
 				require.NoError(t, err)
 			} else {

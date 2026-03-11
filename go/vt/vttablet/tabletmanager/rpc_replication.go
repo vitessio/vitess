@@ -950,7 +950,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
-			if err := tm.handleRecoverableReplicationInitializationError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
@@ -958,12 +958,12 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRecoverableReplicationInitializationError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
 		if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRecoverableReplicationInitializationError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
@@ -1257,9 +1257,9 @@ func isRecoverableReplicationInitializationError(err error) bool {
 	return ok
 }
 
-// handleRecoverableReplicationInitializationError repairs recoverable replication initialization
+// handleRecoverableReplicationError repairs recoverable replication initialization
 // failures by restarting replication.
-func (tm *TabletManager) handleRecoverableReplicationInitializationError(ctx context.Context, err error) error {
+func (tm *TabletManager) handleRecoverableReplicationError(ctx context.Context, err error) error {
 	// Attempt to self-heal by restarting replication when initialization fails.
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
