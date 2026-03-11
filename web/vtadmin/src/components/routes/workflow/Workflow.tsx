@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useState } from 'react';
 
 import style from './Workflow.module.scss';
@@ -68,7 +68,6 @@ const REFETCH_OPTIONS = [
 
 export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
 
     useDocumentTitle(`${name} (${keyspace})`);
 
@@ -165,41 +164,33 @@ export const Workflow = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
-                    <Tab text="Details" to={`${url}/details`} />
-                    <Tab text="VDiff" to={`${url}/vdiff`} />
-                    <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
+                    <Tab text="Streams" to="streams" count={streams.length} />
+                    <Tab text="Details" to="details" />
+                    <Tab text="VDiff" to="vdiff" />
+                    <Tab text="JSON" to="json" />
+                    <Tab text="JSON Tree" to="json_tree" />
                 </TabContainer>
 
-                <Switch>
-                    <Route path={`${path}/streams`}>
-                        <WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />
-                    </Route>
+                <Routes>
+                    <Route path="streams" element={<WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />} />
 
-                    <Route path={`${path}/details`}>
+                    <Route path="details" element={
                         <WorkflowDetails
                             clusterID={clusterID}
                             keyspace={keyspace}
                             name={name}
                             refetchInterval={refetchInterval}
                         />
-                    </Route>
+                    } />
 
-                    <Route path={`${path}/vdiff`}>
-                        <WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />
-                    </Route>
+                    <Route path="vdiff" element={<WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />} />
 
-                    <Route path={`${path}/json`}>
-                        <Code code={JSON.stringify(data, null, 2)} />
-                    </Route>
+                    <Route path="json" element={<Code code={JSON.stringify(data, null, 2)} />} />
 
-                    <Route path={`${path}/json_tree`}>
-                        <JSONViewTree data={data} />
-                    </Route>
+                    <Route path="json_tree" element={<JSONViewTree data={data} />} />
 
-                    <Redirect exact from={path} to={`${path}/streams`} />
-                </Switch>
+                    <Route index element={<Navigate to="streams" replace />} />
+                </Routes>
             </ContentContainer>
         </div>
     );

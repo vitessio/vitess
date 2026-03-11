@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Switch, useLocation, useParams, useRouteMatch } from 'react-router';
-import { Link, Redirect, Route } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 
 import { useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -41,7 +40,6 @@ interface RouteParams {
 
 export const Keyspace = () => {
     const { clusterID, name } = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
     const { search } = useLocation();
 
     useDocumentTitle(`${name} (${clusterID})`);
@@ -92,43 +90,41 @@ export const Keyspace = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Shards" to={`${url}/shards`} />
-                    <Tab text="VSchema" to={`${url}/vschema`} />
-                    <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
+                    <Tab text="Shards" to="shards" />
+                    <Tab text="VSchema" to="vschema" />
+                    <Tab text="JSON" to="json" />
+                    <Tab text="JSON Tree" to="json_tree" />
 
                     <ReadOnlyGate>
-                        <Tab text="Advanced" to={`${url}/advanced`} />
+                        <Tab text="Advanced" to="advanced" />
                     </ReadOnlyGate>
                 </TabContainer>
 
-                <Switch>
-                    <Route path={`${path}/shards`}>
-                        <KeyspaceShards keyspace={keyspace} />
-                    </Route>
+                <Routes>
+                    <Route path="shards" element={<KeyspaceShards keyspace={keyspace} />} />
 
-                    <Route path={`${path}/vschema`}>
-                        <KeyspaceVSchema clusterID={clusterID} name={name} />
-                    </Route>
+                    <Route path="vschema" element={<KeyspaceVSchema clusterID={clusterID} name={name} />} />
 
-                    <Route path={`${path}/json`}>
-                        <QueryLoadingPlaceholder query={kq} />
-                        <Code code={JSON.stringify(keyspace, null, 2)} />
-                    </Route>
+                    <Route path="json" element={
+                        <>
+                            <QueryLoadingPlaceholder query={kq} />
+                            <Code code={JSON.stringify(keyspace, null, 2)} />
+                        </>
+                    } />
 
-                    <Route path={`${path}/json_tree`}>
-                        <QueryLoadingPlaceholder query={kq} />
-                        <JSONViewTree data={keyspace} />
-                    </Route>
+                    <Route path="json_tree" element={
+                        <>
+                            <QueryLoadingPlaceholder query={kq} />
+                            <JSONViewTree data={keyspace} />
+                        </>
+                    } />
 
                     {!isReadOnlyMode() && (
-                        <Route path={`${path}/advanced`}>
-                            <Advanced clusterID={clusterID} name={name} />
-                        </Route>
+                        <Route path="advanced" element={<Advanced clusterID={clusterID} name={name} />} />
                     )}
 
-                    <Redirect exact from={path} to={{ pathname: `${path}/shards`, search }} />
-                </Switch>
+                    <Route index element={<Navigate to={{ pathname: "shards", search }} replace />} />
+                </Routes>
             </ContentContainer>
         </div>
     );

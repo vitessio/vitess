@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import * as React from 'react';
-import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 
 import style from './App.module.scss';
 import { Tablets } from './routes/Tablets';
@@ -59,135 +59,77 @@ export const App = () => {
                 </div>
                 <SnackbarContainer />
                 <div className={style.mainContainer}>
-                    <Switch>
-                        <Route path="/backups">
-                            <Backups />
-                        </Route>
+                    <Routes>
+                        <Route path="/backups" element={<Backups />} />
 
-                        <Route path="/clusters">
-                            <Clusters />
-                        </Route>
+                        <Route path="/clusters" element={<Clusters />} />
 
-                        <Route path="/gates">
-                            <Gates />
-                        </Route>
+                        <Route path="/gates" element={<Gates />} />
 
-                        <Route exact path="/keyspaces">
-                            <Keyspaces />
-                        </Route>
+                        <Route path="/keyspaces" element={<Keyspaces />} />
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/keyspaces/create">
-                                <CreateKeyspace />
-                            </Route>
+                            <Route path="/keyspaces/create" element={<CreateKeyspace />} />
                         )}
 
-                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
-                            <Shard />
-                        </Route>
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard/*" element={<Shard />} />
 
-                        <Route path="/keyspace/:clusterID/:name">
-                            <Keyspace />
-                        </Route>
+                        <Route path="/keyspace/:clusterID/:name/*" element={<Keyspace />} />
 
-                        <Route path="/schemas">
-                            <Schemas />
-                        </Route>
+                        <Route path="/schemas" element={<Schemas />} />
 
-                        <Route path="/schema/:clusterID/:keyspace/:table">
-                            <Schema />
-                        </Route>
+                        <Route path="/schema/:clusterID/:keyspace/:table" element={<Schema />} />
 
-                        <Route path="/tablets">
-                            <Tablets />
-                        </Route>
+                        <Route path="/tablets" element={<Tablets />} />
 
-                        <Route path="/tablet/:clusterID/:alias">
-                            <Tablet />
-                        </Route>
+                        <Route path="/tablet/:clusterID/:alias/*" element={<Tablet />} />
 
-                        <Route path="/vtctlds">
-                            <Vtctlds />
-                        </Route>
+                        <Route path="/vtctlds" element={<Vtctlds />} />
 
-                        <Route path="/vtexplain">
-                            <VTExplain />
-                        </Route>
+                        <Route path="/vtexplain" element={<VTExplain />} />
 
-                        <Route path="/vexplain">
-                            <VExplain />
-                        </Route>
+                        <Route path="/vexplain" element={<VExplain />} />
 
-                        <Route exact path="/workflows">
-                            <Workflows />
-                        </Route>
+                        <Route path="/workflows" element={<Workflows />} />
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/workflows/movetables/create">
-                                <CreateMoveTables />
-                            </Route>
+                            <Route path="/workflows/movetables/create" element={<CreateMoveTables />} />
                         )}
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/workflows/reshard/create">
-                                <CreateReshard />
-                            </Route>
+                            <Route path="/workflows/reshard/create" element={<CreateReshard />} />
                         )}
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/workflows/materialize/create">
-                                <CreateMaterialize />
-                            </Route>
+                            <Route path="/workflows/materialize/create" element={<CreateMaterialize />} />
                         )}
 
-                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
-                            <Stream />
-                        </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID/*" element={<Stream />} />
 
-                        <Route path="/workflow/:clusterID/:keyspace/:name">
-                            <Workflow />
-                        </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:name/*" element={<Workflow />} />
 
-                        <Route exact path="/migrations">
-                            <SchemaMigrations />
-                        </Route>
+                        <Route path="/migrations" element={<SchemaMigrations />} />
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/migrations/create">
-                                <CreateSchemaMigration />
-                            </Route>
+                            <Route path="/migrations/create" element={<CreateSchemaMigration />} />
                         )}
 
-                        <Route path="/transactions">
-                            <Transactions />
-                        </Route>
+                        <Route path="/transactions" element={<Transactions />} />
 
-                        <Route path="/transaction/:clusterID/:dtid">
-                            <Transaction />
-                        </Route>
+                        <Route path="/transaction/:clusterID/:dtid" element={<Transaction />} />
 
-                        <Route path="/topology/:clusterID">
-                            <ClusterTopology />
-                        </Route>
+                        <Route path="/topology/:clusterID" element={<ClusterTopology />} />
 
-                        <Route path="/topologytree/:clusterID">
-                            <TopologyTree />
-                        </Route>
+                        <Route path="/topologytree/:clusterID" element={<TopologyTree />} />
 
-                        <Route path="/topology">
-                            <Topology />
-                        </Route>
+                        <Route path="/topology" element={<Topology />} />
 
-                        <Route path="/settings">
-                            <Settings />
-                        </Route>
+                        <Route path="/settings" element={<Settings />} />
 
-                        <Redirect exact from="/" to="/schemas" />
+                        <Route path="/" element={<Navigate to="/schemas" replace />} />
 
-                        <Route>
-                            <Error404 />
-                        </Route>
-                    </Switch>
+                        <Route path="*" element={<Error404 />} />
+                    </Routes>
                 </div>
             </div>
         </Router>

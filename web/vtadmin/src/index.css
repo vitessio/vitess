@@ -15,9 +15,8 @@
  */
 
 @import './style/fonts.css';
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 :root {
     /* Greyscale */
@@ -59,7 +58,7 @@
 
     /* Layout variables, set to light theme by default */
     --backgroundPrimary: #fff;
-    --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
+    --backgroundPrimaryHighlight: rgb(61 90 254 / 0.1);
     --backgroundSecondary: var(--grey75);
     --backgroundSecondaryHighlight: var(--grey200);
     --boxShadowHover: 0 3px 3px #cbd5e0;
@@ -76,7 +75,7 @@
     --textColorDisabled: #cbd5e0;
 
     /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
-    --tooltipBackground: rgba(0, 0, 0, 0.85);
+    --tooltipBackground: rgb(0 0 0 / 0.85);
 
     /* Z-index */
     --zIndexDefault: 0;
@@ -88,7 +87,7 @@
 /* Dark theme */
 [data-vtadmin-theme='dark'] {
     --backgroundPrimary: #17171b;
-    --backgroundPrimaryHighlight: rgba(129, 135, 255, 0.2);
+    --backgroundPrimaryHighlight: rgb(129 135 255 / 0.2);
     --backgroundSecondary: var(--grey900);
     --backgroundSecondaryHighlight: var(--grey800);
     --boxShadowHover: 0 3px 3px #2d3748;
@@ -103,7 +102,7 @@
     --textColorInverted: #17171b;
     --textColorSecondary: #cbd5e0;
     --textColorDisabled: #2d3748;
-    --tooltipBackground: rgba(255, 255, 255, 0.85);
+    --tooltipBackground: rgb(255 255 255 / 0.85);
 }
 
 * {
@@ -253,7 +252,7 @@ table tbody td[rowSpan] {
         @apply focus:ring-2;
 
         height: fit-content;
-        appearance: button;
+        appearance: auto;
     }
 
     .btn:disabled {
@@ -299,7 +298,7 @@ table tbody td[rowSpan] {
     /* Visual priority variants */
     .btn-secondary,
     .btn-secondary:visited {
-        @apply bg-transparent !important;
+        @apply !bg-transparent;
         @apply text-vtblue;
     }
 
