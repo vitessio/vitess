@@ -730,7 +730,7 @@ func TestPlanBuilder(t *testing.T) {
 		// analyzeExpr tests.
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, * from t1"},
-		outErr:  `unsupported: *`,
+		outErr:  `syntax error: unexpected '*' at position 13`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select none from t1"},
