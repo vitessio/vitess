@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -84,6 +85,13 @@ import (
 var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
+
+const rawStreamBufSize = 256 * 1024
+
+var rawStreamBufPool = sync.Pool{New: func() any {
+	b := make([]byte, rawStreamBufSize)
+	return &b
+}}
 
 // TabletServer implements the RPC interface for the query service.
 // TabletServer is initialized in the following sequence:
@@ -1239,7 +1247,9 @@ func (tsv *TabletServer) streamQueryResultPackets(
 	deprecateEOF bool,
 	send func([]byte) error,
 ) error {
-	buf := make([]byte, 256*1024)
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer rawStreamBufPool.Put(bufp)
 	bufOffset := 0
 
 	flush := func() error {
