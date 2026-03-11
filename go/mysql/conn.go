@@ -48,10 +48,9 @@ const (
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
 
-	// packetHeaderSize is the 4 bytes of header per MySQL packet
+	// PacketHeaderSize is the 4 bytes of header per MySQL packet
 	// sent over
-	packetHeaderSize = 4
-	PacketHeaderSize = packetHeaderSize
+	PacketHeaderSize = 4
 )
 
 // Constants for how ephemeral buffers were used for reading / writing.
@@ -135,7 +134,7 @@ type Conn struct {
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
 	flushDelay     time.Duration
-	header         [packetHeaderSize]byte
+	header         [PacketHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
 	// ephemeral packet on the read and write sides.
@@ -702,8 +701,8 @@ func (c *Conn) WritePacket(data []byte) error {
 // Returns the length of the packet data that follows the header (not including the header),
 // or an error if any.
 func (c *Conn) ReadHeaderInto(buf []byte) (int, error) {
-	if len(buf) < packetHeaderSize {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "buffer too small for packet header: %v < %v", len(buf), packetHeaderSize)
+	if len(buf) < PacketHeaderSize {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "buffer too small for packet header: %v < %v", len(buf), PacketHeaderSize)
 	}
 
 	r := c.getReader()
@@ -755,7 +754,7 @@ func (c *Conn) ReadDataInto(buf []byte) error {
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writePacket(data []byte) error {
 	index := 0
-	dataLength := len(data) - packetHeaderSize
+	dataLength := len(data) - PacketHeaderSize
 
 	var w io.Writer
 
@@ -771,14 +770,14 @@ func (c *Conn) writePacket(data []byte) error {
 		w = c.conn
 	}
 
-	var header [packetHeaderSize]byte
+	var header [PacketHeaderSize]byte
 	for {
 		// toBeSent is capped to MaxPacketSize.
 		toBeSent := min(dataLength, MaxPacketSize)
 
 		// save the first 4 bytes of the payload, we will overwrite them with the
 		// header below
-		copy(header[0:packetHeaderSize], data[index:index+packetHeaderSize])
+		copy(header[0:PacketHeaderSize], data[index:index+PacketHeaderSize])
 
 		// Compute and write the header.
 		data[index] = byte(toBeSent)
@@ -787,14 +786,14 @@ func (c *Conn) writePacket(data []byte) error {
 		data[index+3] = c.sequence
 
 		// Write the body.
-		if n, err := w.Write(data[index : index+toBeSent+packetHeaderSize]); err != nil {
+		if n, err := w.Write(data[index : index+toBeSent+PacketHeaderSize]); err != nil {
 			return vterrors.Wrapf(err, "Write(packet) failed")
-		} else if n != (toBeSent + packetHeaderSize) {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + packetHeaderSize))
+		} else if n != (toBeSent + PacketHeaderSize) {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + PacketHeaderSize))
 		}
 
 		// restore the first 4 bytes once the network send is done
-		copy(data[index:index+packetHeaderSize], header[0:packetHeaderSize])
+		copy(data[index:index+PacketHeaderSize], header[0:PacketHeaderSize])
 
 		// Update our state.
 		c.sequence++
@@ -810,7 +809,7 @@ func (c *Conn) writePacket(data []byte) error {
 				header[3] = c.sequence
 				if n, err := w.Write(header[:]); err != nil {
 					return vterrors.Wrapf(err, "Write(empty header) failed")
-				} else if n != packetHeaderSize {
+				} else if n != PacketHeaderSize {
 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
@@ -828,8 +827,8 @@ func (c *Conn) startEphemeralPacketWithHeader(length int) ([]byte, int) {
 
 	c.currentEphemeralPolicy = ephemeralWrite
 	// get buffer from pool or it'll be allocated if length is too big
-	c.currentEphemeralBuffer = bufPool.Get(length + packetHeaderSize)
-	return *c.currentEphemeralBuffer, packetHeaderSize
+	c.currentEphemeralBuffer = bufPool.Get(length + PacketHeaderSize)
+	return *c.currentEphemeralBuffer, PacketHeaderSize
 }
 
 // writeEphemeralPacket writes the packet that was allocated by

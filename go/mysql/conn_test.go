@@ -87,8 +87,8 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	}()
 
 	dataLen := len(data)
-	dataWithHeader := make([]byte, packetHeaderSize+dataLen)
-	copy(dataWithHeader[packetHeaderSize:], data)
+	dataWithHeader := make([]byte, PacketHeaderSize+dataLen)
+	copy(dataWithHeader[PacketHeaderSize:], data)
 
 	if err := cConn.writePacket(dataWithHeader); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
