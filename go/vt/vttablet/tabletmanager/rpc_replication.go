@@ -864,8 +864,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 
 	// If MySQL is local and down, everything below requires MySQL and cannot proceed.
-	// The tablet type is already changed above. VTOrc or VTTablet (re-)startup will
-	// repair replication when MySQL comes back.
+	// Returning nil here allows the ChangeTabletType call above to succeed and update
+	// the topo. VTOrc or VTTablet (re-)startup will repair replication when MySQL comes back.
 	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
 		log.Warn("setReplicationSourceLocked: MySQL is down, skipping replication configuration")
 		return nil
