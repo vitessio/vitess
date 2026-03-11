@@ -401,3 +401,30 @@ func TestMysqldIsLocalMySQLDown(t *testing.T) {
 		assert.True(t, mysqld.IsLocalMySQLDown(context.Background()))
 	})
 }
+
+func TestShutdownStopsReplication(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
+
+	cp := *db.ConnParams()
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	mysqld := NewMysqld(dbc)
+	defer mysqld.Close()
+
+	// Create fake socket and pid files so Shutdown doesn't bail early.
+	cnf := &Mycnf{
+		SocketFile: t.TempDir() + "/mysql.sock",
+		PidFile:    t.TempDir() + "/mysql.pid",
+	}
+	require.NoError(t, os.WriteFile(cnf.SocketFile, nil, 0o600))
+	require.NoError(t, os.WriteFile(cnf.PidFile, nil, 0o600))
+
+	// Shutdown will fail at the mysqladmin step, but STOP REPLICA
+	// happens before that.
+	mysqld.Shutdown(context.Background(), cnf, false, 1*time.Second)
+
+	assert.Contains(t, db.QueryLog(), "stop replica")
+}
