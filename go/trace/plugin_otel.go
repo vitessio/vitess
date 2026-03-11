@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
@@ -116,7 +117,9 @@ type otelCloser struct {
 }
 
 func (c *otelCloser) Close() error {
-	return c.tp.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return c.tp.Shutdown(ctx)
 }
 
 func init() {
