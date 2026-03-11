@@ -90,6 +90,7 @@ func TestDownPrimary(t *testing.T) {
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	defer func() {
 		// we remove the tablet from our global list
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
 	}()
 
@@ -117,10 +118,6 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	err = curPrimary.VttabletProcess.Setup()
 	require.NoError(t, err)
-	defer func() {
-		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
-	}()
-
 	// verify the old primary rejoins as a replica with replication working
 	err = curPrimary.VttabletProcess.WaitForTabletTypes([]string{"replica"})
 	require.NoError(t, err)

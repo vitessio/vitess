@@ -213,7 +213,7 @@ func TestIsLocalMySQLDown(t *testing.T) {
 		low := syscall.Rlimit{Cur: 32, Max: original.Max}
 		require.NoError(t, syscall.Setrlimit(syscall.RLIMIT_NOFILE, &low))
 		t.Cleanup(func() {
-			syscall.Setrlimit(syscall.RLIMIT_NOFILE, &original)
+			require.NoError(t, syscall.Setrlimit(syscall.RLIMIT_NOFILE, &original))
 		})
 
 		// Consume all remaining fds via Dup.
