@@ -1,4 +1,5 @@
 [mysqld]
+local_infile = 1
 datadir = /var/lib/mysql
 innodb_data_home_dir = /var/lib/mysql
 innodb_log_group_home_dir = /var/lib/mysql
@@ -35,4 +36,6 @@ general_log_file = /var/log/mysql/query.log
 slow_query_log = 1
 long_query_time = 1
 slow_query_log_file = /var/log/mysql/slow.log
-super-read-only
+
+[mysql]
+local_infile = 1

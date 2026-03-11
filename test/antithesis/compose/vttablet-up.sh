@@ -162,6 +162,11 @@ fi
 
 read -r -a topo_args <<< "$TOPOLOGY_FLAGS"
 
+# Wait for vtctld to be reachable
+until $VTROOT/bin/vtctldclient --server "vtctld:$GRPC_PORT" GetCellInfoNames 2>/dev/null; do
+  echo "Waiting for vtctld to be reachable..."
+  sleep 1
+done
 
 echo "Starting vttablet..."
 exec "$VTROOT/bin/vttablet" \
