@@ -20,6 +20,10 @@ package osutil
 
 import "os"
 
-func lockPortFile(f *os.File) {}
+func lockPortFile(f *os.File) {
+	panic("osutil: port file locking is not supported on this platform")
+}
 
-func unlockPortFile(f *os.File) {}
+func unlockPortFile(f *os.File) {
+	panic("osutil: port file locking is not supported on this platform")
+}

@@ -63,7 +63,7 @@ func readPortFile(f *os.File) []*PortReservation {
 	var ranges []*PortReservation
 	now := time.Now()
 	if _, err := f.Seek(0, 0); err != nil {
-		return nil
+		panic(fmt.Sprintf("osutil: failed to seek port file: %v", err))
 	}
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -80,14 +80,23 @@ func readPortFile(f *os.File) []*PortReservation {
 			})
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		panic(fmt.Sprintf("osutil: failed to read port file: %v", err))
+	}
 	return ranges
 }
 
 func writePortFile(f *os.File, ranges []*PortReservation) {
-	_ = f.Truncate(0)
-	_, _ = f.Seek(0, 0)
+	if err := f.Truncate(0); err != nil {
+		panic(fmt.Sprintf("osutil: failed to truncate port file: %v", err))
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		panic(fmt.Sprintf("osutil: failed to seek port file: %v", err))
+	}
 	for _, r := range ranges {
-		fmt.Fprintf(f, "%d %d %d\n", r.Start, r.End, r.allocated.Unix())
+		if _, err := fmt.Fprintf(f, "%d %d %d\n", r.Start, r.End, r.allocated.Unix()); err != nil {
+			panic(fmt.Sprintf("osutil: failed to write port file: %v", err))
+		}
 	}
 }
 

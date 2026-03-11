@@ -78,8 +78,8 @@ func TestPersistentMode(t *testing.T) {
 	dir := t.TempDir()
 
 	cluster, pr, err := startPersistentCluster(dir)
-	require.NoError(t, err)
 	t.Cleanup(func() { osutil.UnreservePorts(pr) })
+	require.NoError(t, err)
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
@@ -377,7 +377,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 }
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, *osutil.PortReservation, error) {
-	pr := osutil.GetPortReservation(1)
+	pr := osutil.GetPortReservation(6)
 	flags = append(flags, []string{
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
