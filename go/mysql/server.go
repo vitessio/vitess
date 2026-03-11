@@ -463,27 +463,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
-	// Parse username for optional target, alias, and workload.
-	// Format: user|target|alias|workload (e.g., "vt_repl|commerce:0@primary|zone1-100|olap").
-	var workload string
-	parts := strings.Split(user, "|")
-	switch len(parts) {
-	case 2:
-		user = parts[0]
-		c.schemaName = parts[1]
-	case 3:
-		user = parts[0]
-		c.schemaName = parts[1] + "|" + parts[2]
-	case 4:
-		user = parts[0]
-		c.schemaName = parts[1] + "|" + parts[2]
-		if !strings.EqualFold(parts[3], "olap") {
-			c.writeErrorPacketFromError(fmt.Errorf("invalid workload in username: %q (only 'olap' is supported)", parts[3]))
-			return
-		}
-		workload = "olap"
-	}
-
 	// See what auth method the AuthServer wants to use for that user.
 	negotiatedAuthMethod, err := negotiateAuthMethod(c, l.authServer, user, clientAuthMethod)
 
@@ -551,20 +530,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountPerUser.Add(c.User, -1)
 	}
 
-	// Set initial db name (or target string for binlog replication).
+	// Set initial db name.
 	if c.schemaName != "" {
 		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
-			return nil
-		})
-		if err != nil {
-			c.writeErrorPacketFromError(err)
-			return
-		}
-	}
-
-	// Set initial workload if specified in the username (e.g., "user|target|alias|olap").
-	if workload != "" {
-		err = l.handler.ComQuery(c, "set workload = '"+workload+"'", func(result *sqltypes.Result) error {
 			return nil
 		})
 		if err != nil {
