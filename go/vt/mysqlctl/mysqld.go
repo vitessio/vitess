@@ -705,6 +705,18 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return nil
 	}
 
+	// Stop replication before shutting down to avoid a brief race in
+	// MySQL's close_connections() (mysqld.cc) where close_listener()
+	// removes the unix socket before end_slave() stops replication
+	// threads. Best-effort with a tight timeout — if MySQL is already
+	// unreachable we proceed with shutdown regardless.
+	stopCtx, stopCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer stopCancel()
+	if conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool); err == nil {
+		mysqld.executeSuperQueryListConn(stopCtx, conn, []string{conn.Conn.StopReplicationCommand()})
+		conn.Recycle()
+	}
+
 	// try the preflight mysqld shutdown hook, if any
 	h := hook.NewSimpleHook("preflight_mysqld_shutdown")
 	hr := h.ExecuteContext(ctx)
