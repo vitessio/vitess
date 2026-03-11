@@ -250,7 +250,12 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 		}
 		if isEOF {
 			p.state = rawParserStateDone
-			p.parseTerminalPacket(payload)
+			// With deprecateEOF the terminal is an OK-format packet that
+			// carries last_insert_id and status_flags. vttablet always
+			// negotiates CLIENT_DEPRECATE_EOF so this is the common path.
+			if p.deprecateEOF {
+				p.parseTerminalOKPacket(payload)
+			}
 			// Rows will be flushed by Feed when it sees rawParserStateDone.
 			return nil
 		}
@@ -266,41 +271,31 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 	return nil
 }
 
-// parseTerminalPacket extracts metadata from the terminal EOF/OK packet.
-// With deprecateEOF, the terminal is an OK-format packet containing
-// affected_rows, last_insert_id, status_flags, and warnings.
-// Without deprecateEOF, the terminal is an EOF packet with only
-// warnings and status_flags.
-func (p *RawResultParser) parseTerminalPacket(payload []byte) {
-	if p.deprecateEOF {
-		// OK-format terminal: 0xFE + affected_rows + last_insert_id + status_flags + warnings
-		pos := 1
-		var ok bool
-		// affected_rows - skip (not needed for streaming results)
-		_, pos, ok = readLenEncInt(payload, pos)
-		if !ok {
-			return
-		}
-		var insertID uint64
-		insertID, pos, ok = readLenEncInt(payload, pos)
-		if !ok {
-			return
-		}
-		if insertID > 0 {
-			p.terminalInsertID = insertID
-			p.terminalInsertIDSet = true
-		}
-		sf, _, ok := readUint16(payload, pos)
-		if !ok {
-			return
-		}
-		p.terminalStatusFlags = sf
-	} else {
-		// Legacy EOF: 0xFE + warnings(2) + status_flags(2)
-		if len(payload) >= 5 {
-			p.terminalStatusFlags = uint16(payload[3]) | uint16(payload[4])<<8
-		}
+// parseTerminalOKPacket extracts metadata from the terminal OK packet sent
+// when CLIENT_DEPRECATE_EOF is negotiated (which vttablet always does).
+// Format: 0xFE + affected_rows + last_insert_id + status_flags + warnings
+func (p *RawResultParser) parseTerminalOKPacket(payload []byte) {
+	pos := 1
+	var ok bool
+	// affected_rows - skip (not needed for streaming results)
+	_, pos, ok = readLenEncInt(payload, pos)
+	if !ok {
+		return
 	}
+	var insertID uint64
+	insertID, pos, ok = readLenEncInt(payload, pos)
+	if !ok {
+		return
+	}
+	if insertID > 0 {
+		p.terminalInsertID = insertID
+		p.terminalInsertIDSet = true
+	}
+	sf, _, ok := readUint16(payload, pos)
+	if !ok {
+		return
+	}
+	p.terminalStatusFlags = sf
 }
 
 // flushPendingRows delivers accumulated rows (if any) via a single callback.
@@ -515,26 +510,19 @@ func EncodeResultToMySQLPackets(results []*sqltypes.Result, deprecateEOF bool) [
 		}
 	}
 
-	// Terminal packet. With deprecateEOF, this is an OK-format packet that
-	// includes session metadata (InsertID, StatusFlags). Without deprecateEOF,
-	// it's a legacy EOF with just warnings and status_flags.
-	if deprecateEOF {
-		// Find terminal metadata from the results.
-		var insertID uint64
-		var statusFlags uint16
-		for _, r := range results {
-			if r.InsertID > 0 {
-				insertID = r.InsertID
-			}
-			if r.StatusFlags != 0 {
-				statusFlags = r.StatusFlags
-			}
+	// Terminal OK packet. vttablet always negotiates CLIENT_DEPRECATE_EOF,
+	// so the terminal is an OK-format packet carrying session metadata.
+	var insertID uint64
+	var statusFlags uint16
+	for _, r := range results {
+		if r.InsertID > 0 {
+			insertID = r.InsertID
 		}
-		termPayload := encodeTerminalOKPayload(insertID, statusFlags)
-		buf = appendPacket(&buf, &seq, termPayload)
-	} else {
-		buf = appendPacket(&buf, &seq, []byte{EOFPacket, 0, 0, 0, 0})
+		if r.StatusFlags != 0 {
+			statusFlags = r.StatusFlags
+		}
 	}
+	buf = appendPacket(&buf, &seq, encodeTerminalOKPayload(insertID, statusFlags))
 
 	return buf
 }

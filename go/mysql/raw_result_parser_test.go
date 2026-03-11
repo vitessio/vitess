@@ -398,32 +398,6 @@ func TestRawResultParser_TerminalOKMetadata_SplitChunks(t *testing.T) {
 	assert.Equal(t, uint64(7), results[1].InsertID)
 }
 
-func TestRawResultParser_TerminalEOF_StatusFlags(t *testing.T) {
-	// Legacy EOF (deprecateEOF=false) should extract status_flags.
-	parser := NewRawResultParser(false)
-
-	var results []*sqltypes.Result
-	cb := func(r *sqltypes.Result) error {
-		results = append(results, r)
-		return nil
-	}
-
-	// Terminal EOF with status_flags=0x0022 (autocommit | more_results_exists)
-	termPayload := []byte{EOFPacket, 0, 0, 0x22, 0x00}
-
-	var chunk []byte
-	chunk = append(chunk, makePacket(1, []byte{1})...)
-	chunk = append(chunk, makeColumnDefPacket(2, "x", 0x0f, 0)...)
-	chunk = append(chunk, makeEOFPacket(3)...)           // mid-stream EOF
-	chunk = append(chunk, makeRowPacket(4, "val")...)    // row
-	chunk = append(chunk, makePacket(5, termPayload)...) // terminal EOF with flags
-
-	err := parser.Feed(chunk, cb)
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, uint16(0x0022), results[0].StatusFlags)
-}
-
 func TestRawResultParser_NoInsertID(t *testing.T) {
 	// Normal SELECT without LAST_INSERT_ID should not set InsertIDChanged.
 	parser := NewRawResultParser(true)
