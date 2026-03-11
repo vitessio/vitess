@@ -1408,8 +1408,13 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	resp := &binlogdatapb.BinlogDumpResponse{}
 
 	flush := func() error {
+		if bufOffset == 0 {
+			return nil
+		}
 		resp.Raw = buf[:bufOffset]
-		return send(resp)
+		err := send(resp)
+		bufOffset = 0
+		return err
 	}
 
 	type headerResult struct {
@@ -1421,16 +1426,25 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 	timer := time.NewTimer(0) // Reset (Go 1.23+) drains the channel, so the initial fire is harmless.
 	defer timer.Stop()
 
+	// readHeader reads a 4-byte MySQL packet header into buf at the current
+	// offset. Returns the payload length. Flushes first if the header wouldn't
+	// fit.
 	readHeader := func() (int, error) {
+		if bufOffset+mysql.PacketHeaderSize > len(buf) {
+			if err := flush(); err != nil {
+				return 0, err
+			}
+		}
+
 		var result headerResult
 
 		if bufOffset == 0 || reader.Buffered() >= mysql.PacketHeaderSize {
 			// Fast path: either nothing to flush, or the next header is already
-			// buffered and won't block. Read synchronously.
+			// buffered and won't block. Read synchronously, directly into buf.
 			if cause := context.Cause(ctx); cause != nil {
 				return 0, cause
 			}
-			packetLength, err := reader.ReadHeaderInto(header)
+			packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
 			result = headerResult{packetLength: packetLength, err: err}
 		} else {
 			// Slow path: We have complete but unflushed packets in the buffer.
@@ -1458,13 +1472,9 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 				// If we hit the timer, it means we're likely blocked on ReadHeaderInto.
 				// Flush the data we have in the buffer (if we have anything),
 				// and then wait for the header read to complete.
-
 				if err := flush(); err != nil {
 					return 0, err
 				}
-
-				// Reset the buffer offset after flushing
-				bufOffset = 0
 
 				select {
 				case <-ctx.Done():
@@ -1474,38 +1484,60 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 			case result = <-headerReadChan:
 			}
+
+			// Copy header into buf (only needed for slow path where we used a
+			// separate buffer for the goroutine).
+			if result.err == nil {
+				copy(buf[bufOffset:], header)
+			}
 		}
 
 		if result.err != nil {
-			return 0, result.err
+			if cause := context.Cause(ctx); cause == result.err {
+				return 0, result.err
+			}
+			return 0, vterrors.Wrapf(result.err, "failed to read binlog packet header")
 		}
 
-		copy(buf[bufOffset:], header)
 		return result.packetLength, nil
 	}
 
-	for {
-		if bufOffset+mysql.PacketHeaderSize > len(buf) {
-			// Flush the buffer if we don't have enough space for the next packet header.
-			if err := flush(); err != nil {
-				return err
-			}
-			bufOffset = 0
+	// readPayload reads a full packet payload into buf, returning the first
+	// byte for packet type detection. Fills the remaining buffer space before
+	// flushing, so partially-filled buffers are packed tightly.
+	readPayload := func(packetLength int) (byte, error) {
+		if packetLength == 0 {
+			return 0, nil
 		}
 
-		firstFragment := true
-		isTerminal := false
+		var firstByte byte
+		remaining := packetLength
+		for remaining > 0 {
+			chunkSize := min(remaining, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read binlog packet body")
+			}
+			if remaining == packetLength {
+				firstByte = buf[bufOffset]
+			}
+			remaining -= chunkSize
+			bufOffset += chunkSize
 
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		return firstByte, nil
+	}
+
+	for {
 		packetLength, err := readHeader()
 		if err != nil {
-			// Check if the error is due to context cancellation,
-			// and if it is, return the error without wrapping
-			if cause := context.Cause(ctx); cause == err {
-				return err
-			}
-			return vterrors.Wrapf(err, "failed to read binlog packet header")
+			return err
 		}
-
 		bufOffset += mysql.PacketHeaderSize
 
 		// First packet of a message can't be zero length
@@ -1513,101 +1545,47 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet header")
 		}
 
-		// Are we at the end of the buffer? If so, flush it before we start reading the packet body.
-		if bufOffset+packetLength > len(buf) {
-			if err := flush(); err != nil {
-				return err
-			}
-			bufOffset = 0
-		}
+		firstFragment := true
+		isTerminal := false
 
 		// Is this a fragmented message? If yes, this will be potentially followed by multiple max-packet-size packets.
 		for packetLength == mysql.MaxPacketSize {
 			if firstFragment {
-				// Read the first byte of the first packet to check whether this is a terminal message or not.
-				if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
-					return vterrors.Wrapf(err, "failed to read first byte of packet")
-				}
-
-				bufOffset += 1
-				packetLength -= 1
-
-				isTerminal = buf[bufOffset-1] == mysql.EOFPacket || buf[bufOffset-1] == mysql.ErrPacket
-				firstFragment = false
-			}
-
-			for packetLength > 0 {
-				chunkSize := min(packetLength, len(buf)-bufOffset)
-				if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
-					return vterrors.Wrapf(err, "failed to read binlog packet body")
-				}
-				packetLength -= chunkSize
-				bufOffset += chunkSize
-
-				// Flush the buffer if we've reached the end
-				if bufOffset == len(buf) {
-					if err := flush(); err != nil {
-						return err
-					}
-					bufOffset = 0
-				}
-			}
-
-			if bufOffset+mysql.PacketHeaderSize > len(buf) {
-				// Flush the buffer if we don't have enough space for the next packet header.
-				if err := flush(); err != nil {
+				firstByte, err := readPayload(packetLength)
+				if err != nil {
 					return err
 				}
-				bufOffset = 0
+				isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+				firstFragment = false
+			} else {
+				if _, err := readPayload(packetLength); err != nil {
+					return err
+				}
 			}
 
 			packetLength, err = readHeader()
 			if err != nil {
-				// Check if the error is due to context cancellation,
-				// and if it is, return the error without wrapping
-				if cause := context.Cause(ctx); cause == err {
-					return err
-				}
-				return vterrors.Wrapf(err, "failed to read binlog packet header")
+				return err
 			}
 			bufOffset += mysql.PacketHeaderSize
 		}
 
-		// Read the first byte of the packet to check whether this is a terminal message or not.
+		// Read the payload of the final (or only) packet.
 		if firstFragment {
-			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
-				return vterrors.Wrapf(err, "failed to read first byte of packet")
+			firstByte, err := readPayload(packetLength)
+			if err != nil {
+				return err
 			}
-
-			bufOffset += 1
-			packetLength -= 1
-
-			isTerminal = buf[bufOffset-1] == mysql.EOFPacket || buf[bufOffset-1] == mysql.ErrPacket
-		}
-
-		for packetLength > 0 {
-			chunkSize := min(packetLength, len(buf)-bufOffset)
-			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
-				return vterrors.Wrapf(err, "failed to read binlog packet body")
-			}
-			packetLength -= chunkSize
-			bufOffset += chunkSize
-
-			// Flush the buffer if we've reached the end
-			if bufOffset == len(buf) {
-				if err := flush(); err != nil {
-					return err
-				}
-				bufOffset = 0
+			isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+		} else {
+			if _, err := readPayload(packetLength); err != nil {
+				return err
 			}
 		}
 
 		if isTerminal {
 			// If this is a terminal message (EOF or ERR), flush it immediately and stop streaming.
-			if err := flush(); err != nil {
-				return err
-			}
-			return nil
+			return flush()
 		}
 	}
 }
