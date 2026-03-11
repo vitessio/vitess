@@ -50,8 +50,8 @@ def get_connection(database=None):
         log("Connected to VTGate")
         return conn
     except Exception as e:
-        log("Connection to VTGate failed")
-        sys.exit(0)
+        log(f"Connection to VTGate failed: {type(e).__name__}: {e}")
+        raise
 
 def setup_test_table(conn, table_name='test'):
     """
