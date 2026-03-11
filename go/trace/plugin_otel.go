@@ -87,10 +87,19 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 		return nil, &nilCloser{}, fmt.Errorf("failed to create resource: %w", err)
 	}
 
+	rate := samplingRate.Get()
+	if rate < 0.0 {
+		log.Warn(fmt.Sprintf("tracing sampling rate %f is below 0.0; clamping to 0.0", rate))
+		rate = 0.0
+	} else if rate > 1.0 {
+		log.Warn(fmt.Sprintf("tracing sampling rate %f is above 1.0; clamping to 1.0", rate))
+		rate = 1.0
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sdktrace.TraceIDRatioBased(samplingRate.Get())),
+		sdktrace.WithSampler(sdktrace.TraceIDRatioBased(rate)),
 	)
 
 	otel.SetTracerProvider(tp)
