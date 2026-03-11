@@ -357,7 +357,6 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	assert.Contains(t, env, "TZ=Europe/Berlin")
 }
 
-
 func TestMysqldIsMySQLLocal(t *testing.T) {
 	t.Run("unix socket", func(t *testing.T) {
 		db := fakesqldb.New(t)
