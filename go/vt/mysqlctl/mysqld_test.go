@@ -382,6 +382,7 @@ func TestMysqldIsMySQLLocal(t *testing.T) {
 
 func TestMysqldIsLocalMySQLDown(t *testing.T) {
 	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
 
 	params := db.ConnParams()
 	cp := *params

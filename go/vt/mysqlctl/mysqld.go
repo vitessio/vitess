@@ -377,7 +377,10 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	}
 
 	// Finally, validate the socket file exists and that it really is a socket.
-	params, _ := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil || params.UnixSocket == "" {
+		return false
+	}
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
 		return false
