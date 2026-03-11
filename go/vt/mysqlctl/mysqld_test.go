@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -382,7 +383,9 @@ func TestMysqldIsMySQLLocal(t *testing.T) {
 
 func TestMysqldIsLocalMySQLDown(t *testing.T) {
 	db := fakesqldb.New(t)
-	t.Cleanup(db.Close)
+	var closeOnce sync.Once
+	closeDB := func() { closeOnce.Do(db.Close) }
+	t.Cleanup(closeDB)
 
 	params := db.ConnParams()
 	cp := *params
@@ -397,7 +400,7 @@ func TestMysqldIsLocalMySQLDown(t *testing.T) {
 
 	t.Run("mysql is down", func(t *testing.T) {
 		// Close the fake MySQL server to simulate MySQL being down.
-		db.Close()
+		closeDB()
 
 		assert.True(t, mysqld.IsLocalMySQLDown(context.Background()))
 	})
