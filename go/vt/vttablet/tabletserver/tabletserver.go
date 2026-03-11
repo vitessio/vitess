@@ -1103,7 +1103,7 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, _ := sqlparser.SplitMarginComments(sql)
+			query, comments := sqlparser.SplitMarginComments(sql)
 			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1111,6 +1111,18 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
 			}
+
+			// Handle special bind variables, same as QueryExecutor.Stream.
+			if bindVariables[sqltypes.BvReplaceSchemaName] != nil {
+				bindVariables[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(tsv.config.DB.DBName)
+			}
+
+			// Substitute bind variables into the SQL template, same as QueryExecutor.Stream.
+			finalSQL, err := plan.FullQuery.GenerateQuery(bindVariables, nil)
+			if err != nil {
+				return err
+			}
+			finalSQL = comments.Leading + finalSQL + comments.Trailing
 
 			connID := reservedID
 			if transactionID != 0 {
@@ -1144,7 +1156,7 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 				conn = dbConn
 			}
 
-			return conn.Conn.StreamRaw(ctx, query, func(mysqlConn *mysql.Conn) error {
+			return conn.Conn.StreamRaw(ctx, finalSQL, func(mysqlConn *mysql.Conn) error {
 				deprecateEOF := mysqlConn.Capabilities&mysql.CapabilityClientDeprecateEOF != 0
 				return tsv.streamQueryResultPackets(ctx, mysqlConn, deprecateEOF, func(raw []byte) error {
 					return callback(raw, deprecateEOF)
