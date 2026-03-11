@@ -3005,7 +3005,7 @@ type (
 	// JSONArrayAgg is an aggregation expression that creates a JSON Array.
 	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-arrayagg
 	JSONArrayAgg struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Expr       Expr
 		OverClause *OverClause
 	}
@@ -3013,7 +3013,7 @@ type (
 	// JSONObjectAgg is an aggregation expression that creates a JSON Object.
 	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-objectagg
 	JSONObjectAgg struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Key        Expr
 		Value      Expr
 		OverClause *OverClause
@@ -3357,7 +3357,7 @@ type (
 	}
 
 	Count struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Args       []Expr
 		Distinct   bool
 		OverClause *OverClause
@@ -3365,7 +3365,7 @@ type (
 
 	CountStar struct {
 		_    bool
-		Name string
+		Name string `ast:"noEquals"`
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
 		// You're correct that this might seem a bit strange at first glance.
@@ -3396,96 +3396,96 @@ type (
 	}
 
 	Avg struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Max struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Min struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	Sum struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
 
 	BitAnd struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	BitOr struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	BitXor struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	Std struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdDev struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdPop struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	StdSamp struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	VarPop struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	VarSamp struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	Variance struct {
-		Name       string
+		Name       string `ast:"noEquals"`
 		Arg        Expr
 		OverClause *OverClause
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
-		Name      string
+		Name      string `ast:"noEquals"`
 		Distinct  bool
 		Exprs     []Expr
 		OrderBy   OrderBy
@@ -3498,7 +3498,7 @@ type (
 	// see https://dev.mysql.com/doc/refman/8.0/en/miscellaneous-functions.html#function_any-value
 	AnyValue struct {
 		Arg  Expr
-		Name string
+		Name string `ast:"noEquals"`
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
