@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM golang:1.26.0-trixie@sha256:889885d7cc1275935e3f9920aabadc5fadbe873f633d92a746f1bc401dd40f69 AS go-builder
+FROM golang:1.26.1-trixie@sha256:ab8c4944b04c6f97c2b5bffce471b7f3d55f2228badc55eae6cce87596d5710b AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -44,7 +44,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
 # Build vtadmin separately.
-FROM node:25-trixie-slim@sha256:38c5908b3cfac8badb58d599028f9459481ec75953c7df08432de94402ae960c AS vtadmin-builder
+FROM node:25-trixie-slim@sha256:bac06594bd1fd30d7c4af1ac92a9b2f2484614974e48aa40c275e3efa37bae2b AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 

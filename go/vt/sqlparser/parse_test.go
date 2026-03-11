@@ -6633,6 +6633,12 @@ var invalidSQL = []struct {
 }, {
 	input:  "insert into t1 (a1) values row('a'), ('b')",
 	output: "syntax error at position 39",
+}, {
+	input:  "select a, * from t",
+	output: "syntax error: unexpected '*' at position 12",
+}, {
+	input:  "select *, * from t",
+	output: "syntax error: unexpected '*' at position 12",
 }}
 
 func TestErrors(t *testing.T) {
