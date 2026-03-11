@@ -54,37 +54,72 @@ func NewRawResultParser(deprecateEOF bool) *RawResultParser {
 	}
 }
 
-// Feed appends a raw chunk and parses any complete packets, calling the callback
-// for each complete result. The first result has Fields set. Subsequent results have Rows.
+// Feed parses raw MySQL wire protocol bytes, calling the callback for each
+// complete result. The first result has Fields set. Subsequent results have Rows.
 // All rows parsed from a single chunk are batched into a single callback.
+//
+// When there is no leftover data from a previous call, Feed processes the chunk
+// directly without copying it into an internal buffer (fast path). Leftover bytes
+// from an incomplete packet are compacted to the front of p.buf for the next call.
 func (p *RawResultParser) Feed(chunk []byte, callback func(*sqltypes.Result) error) error {
-	p.buf = append(p.buf, chunk...)
+	// If there are leftover bytes from a previous call, combine them with
+	// the new chunk. Otherwise, process the chunk directly to avoid a copy.
+	var data []byte
+	if len(p.buf) > 0 {
+		p.buf = append(p.buf, chunk...)
+		data = p.buf
+	} else {
+		data = chunk
+	}
 
+	consumed := 0
 	for {
 		if p.state == rawParserStateDone {
-			return p.flushPendingRows(callback)
+			break
 		}
 
+		remaining := len(data) - consumed
 		// Need at least a header to proceed
-		if len(p.buf) < PacketHeaderSize {
-			return p.flushPendingRows(callback)
+		if remaining < PacketHeaderSize {
+			break
 		}
 
-		packetLength := int(uint32(p.buf[0]) | uint32(p.buf[1])<<8 | uint32(p.buf[2])<<16)
+		packetLength := int(uint32(data[consumed]) | uint32(data[consumed+1])<<8 | uint32(data[consumed+2])<<16)
 		totalLength := PacketHeaderSize + packetLength
 
 		// Wait for complete packet
-		if len(p.buf) < totalLength {
-			return p.flushPendingRows(callback)
+		if remaining < totalLength {
+			break
 		}
 
-		payload := p.buf[PacketHeaderSize:totalLength]
-		p.buf = p.buf[totalLength:]
+		payload := data[consumed+PacketHeaderSize : consumed+totalLength]
+		consumed += totalLength
 
 		if err := p.processPacket(payload, callback); err != nil {
+			p.buf = nil
 			return err
 		}
 	}
+
+	// Save any unconsumed bytes for the next call.
+	leftover := len(data) - consumed
+	if leftover == 0 {
+		// All data consumed. Set p.buf to nil rather than p.buf[:0] so the
+		// backing array can be collected once parsed Values are released.
+		p.buf = nil
+	} else if len(p.buf) > 0 {
+		// data was p.buf. Sub-slice instead of compacting to preserve any
+		// Value references into the earlier part of the backing array.
+		// The head-leak is bounded: leftover is at most one packet's worth
+		// of bytes and is fully consumed on the next Feed call.
+		p.buf = data[consumed:]
+	} else {
+		// data was chunk (not owned by us). Copy leftover into p.buf.
+		p.buf = make([]byte, leftover)
+		copy(p.buf, data[consumed:])
+	}
+
+	return p.flushPendingRows(callback)
 }
 
 func (p *RawResultParser) processPacket(payload []byte, callback func(*sqltypes.Result) error) error {

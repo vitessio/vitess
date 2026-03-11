@@ -1241,7 +1241,6 @@ func (tsv *TabletServer) streamQueryResultPackets(
 ) error {
 	buf := make([]byte, 256*1024)
 	bufOffset := 0
-	header := make([]byte, mysql.PacketHeaderSize)
 
 	flush := func() error {
 		if bufOffset == 0 {
@@ -1252,26 +1251,77 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		return err
 	}
 
+	// readHeader reads a 4-byte MySQL packet header directly into buf at the
+	// current offset. Returns the payload length. Flushes first if the header
+	// wouldn't fit.
 	readHeader := func() (int, error) {
-		if cause := context.Cause(ctx); cause != nil {
-			return 0, cause
-		}
 		if bufOffset+mysql.PacketHeaderSize > len(buf) {
 			if err := flush(); err != nil {
 				return 0, err
 			}
 		}
-		packetLength, err := reader.ReadHeaderInto(header)
+		packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
 		if err != nil {
-			if cause := context.Cause(ctx); cause == err {
-				return 0, err
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, cause
 			}
 			return 0, vterrors.Wrapf(err, "failed to read result packet header")
 		}
-		copy(buf[bufOffset:], header)
 		return packetLength, nil
 	}
 
+	// readPayload reads a full packet payload into buf, handling the case where
+	// the payload is larger than the remaining buffer space. Returns the first
+	// byte of the payload for packet type detection.
+	readPayload := func(packetLength int) (byte, error) {
+		if packetLength == 0 {
+			return 0, nil
+		}
+
+		// Fast path: entire payload fits in remaining buffer space.
+		// Single ReadDataInto call instead of 1-byte + rest.
+		if bufOffset+packetLength <= len(buf) {
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+packetLength]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read packet payload")
+			}
+			firstByte := buf[bufOffset]
+			bufOffset += packetLength
+			return firstByte, nil
+		}
+
+		// Slow path: payload larger than remaining buffer space.
+		// Flush current buffer, then read in chunks.
+		if err := flush(); err != nil {
+			return 0, err
+		}
+
+		// Read first byte to detect packet type.
+		if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
+			return 0, vterrors.Wrapf(err, "failed to read first byte of packet")
+		}
+		firstByte := buf[bufOffset]
+		bufOffset++
+		remaining := packetLength - 1
+
+		for remaining > 0 {
+			chunkSize := min(remaining, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read packet body")
+			}
+			remaining -= chunkSize
+			bufOffset += chunkSize
+
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		return firstByte, nil
+	}
+
+	// readPacket reads a complete MySQL packet (header + payload) into buf.
 	readPacket := func() (int, byte, error) {
 		packetLength, err := readHeader()
 		if err != nil {
@@ -1279,38 +1329,9 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		}
 		bufOffset += mysql.PacketHeaderSize
 
-		if packetLength == 0 {
-			return 0, 0, nil
-		}
-
-		if bufOffset+packetLength > len(buf) {
-			if err := flush(); err != nil {
-				return 0, 0, err
-			}
-		}
-
-		// Read first byte to detect packet type
-		if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
-			return 0, 0, vterrors.Wrapf(err, "failed to read first byte of packet")
-		}
-		firstByte := buf[bufOffset]
-		bufOffset++
-		packetLength--
-
-		// Read remaining payload
-		for packetLength > 0 {
-			chunkSize := min(packetLength, len(buf)-bufOffset)
-			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
-				return 0, 0, vterrors.Wrapf(err, "failed to read packet body")
-			}
-			packetLength -= chunkSize
-			bufOffset += chunkSize
-
-			if bufOffset == len(buf) {
-				if err := flush(); err != nil {
-					return 0, 0, err
-				}
-			}
+		firstByte, err := readPayload(packetLength)
+		if err != nil {
+			return 0, 0, err
 		}
 
 		return packetLength, firstByte, nil
@@ -1361,26 +1382,17 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		}
 		bufOffset += mysql.PacketHeaderSize
 
+		firstByte, err := readPayload(packetLength)
+		if err != nil {
+			return err
+		}
+
 		if packetLength == 0 {
 			continue
 		}
 
-		if bufOffset+packetLength > len(buf) {
-			if err := flush(); err != nil {
-				return err
-			}
-		}
-
-		// Read first byte to detect terminal packet
-		if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
-			return vterrors.Wrapf(err, "failed to read first byte of row packet")
-		}
-		rowFirstByte := buf[bufOffset]
-		bufOffset++
-		remaining := packetLength - 1
-
 		isTerminal := false
-		switch rowFirstByte {
+		switch firstByte {
 		case mysql.ErrPacket:
 			isTerminal = true
 		case mysql.EOFPacket:
@@ -1388,22 +1400,6 @@ func (tsv *TabletServer) streamQueryResultPackets(
 				isTerminal = packetLength < mysql.MaxPacketSize
 			} else {
 				isTerminal = packetLength < 9
-			}
-		}
-
-		// Read remaining payload
-		for remaining > 0 {
-			chunkSize := min(remaining, len(buf)-bufOffset)
-			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
-				return vterrors.Wrapf(err, "failed to read row packet body")
-			}
-			remaining -= chunkSize
-			bufOffset += chunkSize
-
-			if bufOffset == len(buf) {
-				if err := flush(); err != nil {
-					return err
-				}
 			}
 		}
 
