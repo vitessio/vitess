@@ -98,11 +98,13 @@ describe('CreateKeyspace integration test', () => {
             method: 'post',
         });
 
-        // Validate form UI loading state, while the API request is "in flight"
+        // Validate form UI loading state, while the API request is "in flight".
+        // Both assertions must be checked atomically during the transient loading state.
         await waitFor(() => {
             expect(submitButton).toHaveTextContent('Creating Keyspace...');
+            // eslint-disable-next-line testing-library/no-wait-for-multiple-assertions
+            expect(submitButton).toHaveAttribute('disabled');
         });
-        expect(submitButton).toHaveAttribute('disabled');
 
         // Wait for the API request to complete
         await waitFor(() => {
