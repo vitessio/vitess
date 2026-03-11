@@ -889,9 +889,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
-	// lockConnRestoreWaitTimeout is declared here so the defer below can reference it
-	// before it is assigned by initConnectionWaitTimeout.
-	var lockConnRestoreWaitTimeout func()
 	defer func() {
 		if !renameWasSuccessful {
 			// It is important the LOCK TABLES connection does not get put back into
@@ -900,10 +897,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			if err != nil {
 				log.Warn(fmt.Sprintf("Failed to kill connection being used to lock tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 			}
-			// Do not restore wait_timeout: if Kill succeeded the connection is closing; if Kill
-			// failed, keep the short wait_timeout so the orphaned server session self-destructs.
-		} else if lockConnRestoreWaitTimeout != nil {
-			lockConnRestoreWaitTimeout()
 		}
 		lockConn.Recycle()
 	}()
@@ -915,11 +908,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	// Limit `@@wait_timeout` so orphaned server sessions self-destruct on failure.
-	lockConnRestoreWaitTimeout, err = e.initConnectionWaitTimeout(ctx, lockConn.Conn, lockConnWaitTimeout(onlineDDL.CutOverThreshold))
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting wait_timeout on locking connection")
-	}
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
@@ -1255,25 +1243,6 @@ func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connp
 // initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
 func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
 	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
-}
-
-// initConnectionWaitTimeout sets the given wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
-	return e.initConnectionSessionTimeout(ctx, conn, "wait_timeout", timeout)
-}
-
-// lockConnWaitTimeout returns the wait_timeout to set on the lock connection during a cut-over.
-// After LOCK TABLES, lockConn executes no queries until DROP sentry — MySQL's wait_timeout counts
-// down only while a connection is idle (no query executing), so this is the window we must cover.
-// The idle period spans:
-//   - waitForRenameProcess()         up to CutOverThreshold (5-30s)
-//   - waitForPos()                   up to CutOverThreshold (5-30s)
-//   - stop vreplication (gRPC)       up to grpcTimeout (30s)
-//   - waitForRenameProcess() again   up to CutOverThreshold (5-30s)
-//
-// Total: 3*CutOverThreshold + grpcTimeout. We add an extra CutOverThreshold + 60s as headroom.
-func lockConnWaitTimeout(cutOverThreshold time.Duration) time.Duration {
-	return 4*cutOverThreshold + grpcTimeout + time.Minute
 }
 
 // initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
