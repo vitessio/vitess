@@ -22,10 +22,10 @@ keyspaces=$KEYSPACES
 
 # set the correct durability policy for the keyspace
 for keyspace in $keyspaces; do
-  echo "Set Keyspace Durability Policy ${keyspace} to none"
+  echo "Set Keyspace Durability Policy ${keyspace} to semi_sync"
   max_retries=20
   retry_count=0
-  until /vt/bin/vtctldclient --server "vtctld:$GRPC_PORT" SetKeyspaceDurabilityPolicy --durability-policy=none "$keyspace"; do
+  until /vt/bin/vtctldclient --server "vtctld:$GRPC_PORT" SetKeyspaceDurabilityPolicy --durability-policy=semi_sync "$keyspace"; do
     retry_count=$((retry_count + 1))
     if [ "$retry_count" -ge "$max_retries" ]; then
       echo "Failed to set durability policy for ${keyspace} after ${max_retries} attempts"
