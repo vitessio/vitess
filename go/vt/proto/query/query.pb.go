@@ -5813,10 +5813,7 @@ type StreamExecuteRawResponse struct {
 	// Raw MySQL wire protocol bytes. Contains one or more complete MySQL packets
 	// (header + payload). Headers are never split across messages.
 	// Large packet payloads may span multiple messages.
-	Raw []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
-	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
-	// Sent in every response so the client can start parsing from any message.
-	DeprecateEof  bool `protobuf:"varint,2,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
+	Raw           []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5856,13 +5853,6 @@ func (x *StreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
-}
-
-func (x *StreamExecuteRawResponse) GetDeprecateEof() bool {
-	if x != nil {
-		return x.DeprecateEof
-	}
-	return false
 }
 
 // BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
@@ -5967,8 +5957,6 @@ type BeginStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
-	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
-	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
 	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
@@ -6021,13 +6009,6 @@ func (x *BeginStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
-}
-
-func (x *BeginStreamExecuteRawResponse) GetDeprecateEof() bool {
-	if x != nil {
-		return x.DeprecateEof
-	}
-	return false
 }
 
 func (x *BeginStreamExecuteRawResponse) GetTransactionId() int64 {
@@ -6150,8 +6131,6 @@ type ReserveStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
-	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
-	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
 	// The following fields might be non-zero even if an error is present.
 	ReservedId    int64                 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
 	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
@@ -6201,13 +6180,6 @@ func (x *ReserveStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
-}
-
-func (x *ReserveStreamExecuteRawResponse) GetDeprecateEof() bool {
-	if x != nil {
-		return x.DeprecateEof
-	}
-	return false
 }
 
 func (x *ReserveStreamExecuteRawResponse) GetReservedId() int64 {
@@ -6326,8 +6298,6 @@ type ReserveBeginStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
-	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
-	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
 	// The following fields might be non-zero even if an error is present.
 	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	ReservedId    int64                 `protobuf:"varint,5,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
@@ -6381,13 +6351,6 @@ func (x *ReserveBeginStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
-}
-
-func (x *ReserveBeginStreamExecuteRawResponse) GetDeprecateEof() bool {
-	if x != nil {
-		return x.DeprecateEof
-	}
-	return false
 }
 
 func (x *ReserveBeginStreamExecuteRawResponse) GetTransactionId() int64 {
@@ -6922,10 +6885,9 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"Q\n" +
+	"reservedId\",\n" +
 	"\x18StreamExecuteRawResponse\x12\x10\n" +
-	"\x03raw\x18\x01 \x01(\fR\x03raw\x12#\n" +
-	"\rdeprecate_eof\x18\x02 \x01(\bR\fdeprecateEof\"\xe9\x02\n" +
+	"\x03raw\x18\x01 \x01(\fR\x03raw\"\xe9\x02\n" +
 	"\x1cBeginStreamExecuteRawRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6935,11 +6897,10 @@ const file_query_proto_rawDesc = "" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"\x92\x02\n" +
+	"reservedId\"\xed\x01\n" +
 	"\x1dBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
-	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12%\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12%\n" +
 	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
 	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xf1\x02\n" +
@@ -6951,11 +6912,10 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xda\x01\n" +
+	"preQueries\"\xb5\x01\n" +
 	"\x1fReserveStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
-	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12\x1f\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x1f\n" +
 	"\vreserved_id\x18\x04 \x01(\x03R\n" +
 	"reservedId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xfd\x02\n" +
@@ -6967,11 +6927,10 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12,\n" +
-	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xba\x02\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\x95\x02\n" +
 	"$ReserveBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
-	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12%\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12%\n" +
 	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\x05 \x01(\x03R\n" +
 	"reservedId\x128\n" +

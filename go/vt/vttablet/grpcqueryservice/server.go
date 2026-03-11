@@ -318,9 +318,8 @@ func (q *query) StreamExecuteRaw(request *querypb.StreamExecuteRawRequest, strea
 	}
 	buf := resp.Raw
 
-	err = q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+	err = q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
 		resp.Raw = raw
-		resp.DeprecateEof = deprecateEOF
 		return stream.Send(resp)
 	})
 	return vterrors.ToGRPC(err)
@@ -540,9 +539,8 @@ func (q *query) BeginStreamExecuteRaw(request *querypb.BeginStreamExecuteRawRequ
 	}
 	buf := resp.Raw
 
-	state, err := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+	state, err := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte) error {
 		resp.Raw = raw
-		resp.DeprecateEof = deprecateEOF
 		return stream.Send(resp)
 	})
 
@@ -577,9 +575,8 @@ func (q *query) ReserveStreamExecuteRaw(request *querypb.ReserveStreamExecuteRaw
 	}
 	buf := resp.Raw
 
-	state, err := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+	state, err := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte) error {
 		resp.Raw = raw
-		resp.DeprecateEof = deprecateEOF
 		return stream.Send(resp)
 	})
 	if err != nil && state.ReservedID == 0 {
@@ -612,9 +609,8 @@ func (q *query) ReserveBeginStreamExecuteRaw(request *querypb.ReserveBeginStream
 	}
 	buf := resp.Raw
 
-	state, err := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+	state, err := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte) error {
 		resp.Raw = raw
-		resp.DeprecateEof = deprecateEOF
 		return stream.Send(resp)
 	})
 	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {

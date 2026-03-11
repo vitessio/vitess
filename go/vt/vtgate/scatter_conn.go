@@ -515,11 +515,11 @@ func (stc *ScatterConn) StreamExecuteMulti(
 // rawStreamCallback wraps a Result callback with a RawResultParser that
 // converts raw MySQL wire protocol bytes into sqltypes.Result objects.
 // Each invocation returns a new callback with its own parser instance.
-func rawStreamCallback(callback func(*sqltypes.Result) error) func(raw []byte, deprecateEOF bool) error {
+func rawStreamCallback(callback func(*sqltypes.Result) error) func(raw []byte) error {
 	var parser *mysql.RawResultParser
-	return func(raw []byte, deprecateEOF bool) error {
+	return func(raw []byte) error {
 		if parser == nil {
-			parser = mysql.NewRawResultParser(deprecateEOF)
+			parser = mysql.NewRawResultParser()
 		}
 		return parser.Feed(raw, callback)
 	}

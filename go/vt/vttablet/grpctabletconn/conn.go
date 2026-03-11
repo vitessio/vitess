@@ -190,7 +190,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 }
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire protocol bytes.
-func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) error {
+func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -229,7 +229,7 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 		if err := stream.RecvMsg(resp); err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
-		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
+		if err := callback(resp.Raw); err != nil {
 			if err == io.EOF {
 				return nil
 			}
@@ -239,7 +239,7 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 	}
 }
 
-func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.TransactionState, err error) {
+func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.TransactionState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -302,7 +302,7 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 			return state, nil
 		}
 
-		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
+		if err := callback(resp.Raw); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}
@@ -312,7 +312,7 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 	}
 }
 
-func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedState, err error) {
+func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -372,7 +372,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 			return state, nil
 		}
 
-		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
+		if err := callback(resp.Raw); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}
@@ -382,7 +382,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 	}
 }
 
-func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedTransactionState, err error) {
+func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedTransactionState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -448,7 +448,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _
 			return state, nil
 		}
 
-		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
+		if err := callback(resp.Raw); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}

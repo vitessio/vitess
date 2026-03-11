@@ -103,8 +103,8 @@ func makeNullRowPacket(seq byte) []byte {
 }
 
 func TestRawResultParser_SimpleResultSet(t *testing.T) {
-	// Build a result set: 1 column (VARCHAR), 2 rows, with deprecateEOF=true
-	parser := NewRawResultParser(true)
+	// Build a result set: 1 column (VARCHAR), 2 rows
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -120,7 +120,7 @@ func TestRawResultParser_SimpleResultSet(t *testing.T) {
 	chunk = append(chunk, makeRowPacket(3, "alice")...)
 	// Row 2
 	chunk = append(chunk, makeRowPacket(4, "bob")...)
-	// EOF (deprecateEOF style - OK packet with EOF marker)
+	// Terminal EOF (OK packet with EOF marker)
 	chunk = append(chunk, makeEOFPacket(5)...)
 
 	err := parser.Feed(chunk, cb)
@@ -136,8 +136,8 @@ func TestRawResultParser_SimpleResultSet(t *testing.T) {
 	assert.Equal(t, "bob", results[0].Rows[1][0].ToString())
 }
 
-func TestRawResultParser_WithMidEOF(t *testing.T) {
-	parser := NewRawResultParser(false) // deprecateEOF=false, so mid-stream EOF expected
+func TestRawResultParser_IntColumn(t *testing.T) {
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -150,12 +150,10 @@ func TestRawResultParser_WithMidEOF(t *testing.T) {
 	chunk = append(chunk, makePacket(1, []byte{1})...)
 	// Column def
 	chunk = append(chunk, makeColumnDefPacket(2, "id", 0x03, 0)...) // LONG = 0x03
-	// Mid-stream EOF
-	chunk = append(chunk, makeEOFPacket(3)...)
 	// Row 1
-	chunk = append(chunk, makeRowPacket(4, "42")...)
+	chunk = append(chunk, makeRowPacket(3, "42")...)
 	// Terminal EOF
-	chunk = append(chunk, makeEOFPacket(5)...)
+	chunk = append(chunk, makeEOFPacket(4)...)
 
 	err := parser.Feed(chunk, cb)
 	require.NoError(t, err)
@@ -169,7 +167,7 @@ func TestRawResultParser_WithMidEOF(t *testing.T) {
 }
 
 func TestRawResultParser_SplitAcrossChunks(t *testing.T) {
-	parser := NewRawResultParser(false)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -181,9 +179,8 @@ func TestRawResultParser_SplitAcrossChunks(t *testing.T) {
 	var full []byte
 	full = append(full, makePacket(1, []byte{1})...)
 	full = append(full, makeColumnDefPacket(2, "val", 0x0f, 0)...)
-	full = append(full, makeEOFPacket(3)...)
-	full = append(full, makeRowPacket(4, "hello")...)
-	full = append(full, makeEOFPacket(5)...)
+	full = append(full, makeRowPacket(3, "hello")...)
+	full = append(full, makeEOFPacket(4)...)
 
 	// Feed in small chunks (simulating split across gRPC messages)
 	for i := 0; i < len(full); i += 7 {
@@ -201,7 +198,7 @@ func TestRawResultParser_SplitAcrossChunks(t *testing.T) {
 }
 
 func TestRawResultParser_ErrorPacket(t *testing.T) {
-	parser := NewRawResultParser(true)
+	parser := NewRawResultParser()
 
 	// Send an error response instead of column count
 	errPayload := []byte{
@@ -221,7 +218,7 @@ func TestRawResultParser_ErrorPacket(t *testing.T) {
 }
 
 func TestRawResultParser_EmptyResultSet(t *testing.T) {
-	parser := NewRawResultParser(true)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -239,7 +236,7 @@ func TestRawResultParser_EmptyResultSet(t *testing.T) {
 }
 
 func TestRawResultParser_NullValues(t *testing.T) {
-	parser := NewRawResultParser(false)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -252,12 +249,10 @@ func TestRawResultParser_NullValues(t *testing.T) {
 	chunk = append(chunk, makePacket(1, []byte{1})...)
 	// Column def
 	chunk = append(chunk, makeColumnDefPacket(2, "nullable", 0x0f, 0)...)
-	// Mid-stream EOF
-	chunk = append(chunk, makeEOFPacket(3)...)
 	// Row with NULL value
-	chunk = append(chunk, makeNullRowPacket(4)...)
+	chunk = append(chunk, makeNullRowPacket(3)...)
 	// Terminal EOF
-	chunk = append(chunk, makeEOFPacket(5)...)
+	chunk = append(chunk, makeEOFPacket(4)...)
 
 	err := parser.Feed(chunk, cb)
 	require.NoError(t, err)
@@ -341,7 +336,7 @@ func makeTerminalOKPacket(seq byte, insertID uint64, statusFlags uint16) []byte 
 }
 
 func TestRawResultParser_TerminalOKMetadata_DeprecateEOF(t *testing.T) {
-	parser := NewRawResultParser(true)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -370,7 +365,7 @@ func TestRawResultParser_TerminalOKMetadata_DeprecateEOF(t *testing.T) {
 func TestRawResultParser_TerminalOKMetadata_SplitChunks(t *testing.T) {
 	// Test that terminal metadata is delivered even when the terminal packet
 	// arrives in a separate chunk from the rows.
-	parser := NewRawResultParser(true)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -400,7 +395,7 @@ func TestRawResultParser_TerminalOKMetadata_SplitChunks(t *testing.T) {
 
 func TestRawResultParser_NoInsertID(t *testing.T) {
 	// Normal SELECT without LAST_INSERT_ID should not set InsertIDChanged.
-	parser := NewRawResultParser(true)
+	parser := NewRawResultParser()
 
 	var results []*sqltypes.Result
 	cb := func(r *sqltypes.Result) error {
@@ -421,9 +416,9 @@ func TestRawResultParser_NoInsertID(t *testing.T) {
 	assert.Equal(t, uint64(0), results[0].InsertID)
 }
 
-func TestEncodeResultToMySQLPackets_TerminalOK_DeprecateEOF(t *testing.T) {
+func TestEncodeResultToMySQLPackets_TerminalOK(t *testing.T) {
 	// Verify that EncodeResultToMySQLPackets encodes InsertID in the terminal
-	// OK packet when deprecateEOF=true.
+	// OK packet.
 	results := []*sqltypes.Result{
 		{
 			Fields: []*querypb.Field{
@@ -437,8 +432,8 @@ func TestEncodeResultToMySQLPackets_TerminalOK_DeprecateEOF(t *testing.T) {
 		},
 	}
 
-	encoded := EncodeResultToMySQLPackets(results, true)
-	parser := NewRawResultParser(true)
+	encoded := EncodeResultToMySQLPackets(results)
+	parser := NewRawResultParser()
 
 	var parsed []*sqltypes.Result
 	err := parser.Feed(encoded, func(r *sqltypes.Result) error {

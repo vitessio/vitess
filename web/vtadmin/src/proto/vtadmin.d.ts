@@ -50368,9 +50368,6 @@ export namespace query {
 
         /** StreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
-
-        /** StreamExecuteRawResponse deprecate_eof */
-        deprecate_eof?: (boolean|null);
     }
 
     /** Represents a StreamExecuteRawResponse. */
@@ -50384,9 +50381,6 @@ export namespace query {
 
         /** StreamExecuteRawResponse raw. */
         public raw: Uint8Array;
-
-        /** StreamExecuteRawResponse deprecate_eof. */
-        public deprecate_eof: boolean;
 
         /**
          * Creates a new StreamExecuteRawResponse instance using the specified properties.
@@ -50608,9 +50602,6 @@ export namespace query {
         /** BeginStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
-        /** BeginStreamExecuteRawResponse deprecate_eof */
-        deprecate_eof?: (boolean|null);
-
         /** BeginStreamExecuteRawResponse transaction_id */
         transaction_id?: (number|Long|null);
 
@@ -50635,9 +50626,6 @@ export namespace query {
 
         /** BeginStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
-
-        /** BeginStreamExecuteRawResponse deprecate_eof. */
-        public deprecate_eof: boolean;
 
         /** BeginStreamExecuteRawResponse transaction_id. */
         public transaction_id: (number|Long);
@@ -50868,9 +50856,6 @@ export namespace query {
         /** ReserveStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
-        /** ReserveStreamExecuteRawResponse deprecate_eof */
-        deprecate_eof?: (boolean|null);
-
         /** ReserveStreamExecuteRawResponse reserved_id */
         reserved_id?: (number|Long|null);
 
@@ -50892,9 +50877,6 @@ export namespace query {
 
         /** ReserveStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
-
-        /** ReserveStreamExecuteRawResponse deprecate_eof. */
-        public deprecate_eof: boolean;
 
         /** ReserveStreamExecuteRawResponse reserved_id. */
         public reserved_id: (number|Long);
@@ -51122,9 +51104,6 @@ export namespace query {
         /** ReserveBeginStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
-        /** ReserveBeginStreamExecuteRawResponse deprecate_eof */
-        deprecate_eof?: (boolean|null);
-
         /** ReserveBeginStreamExecuteRawResponse transaction_id */
         transaction_id?: (number|Long|null);
 
@@ -51152,9 +51131,6 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
-
-        /** ReserveBeginStreamExecuteRawResponse deprecate_eof. */
-        public deprecate_eof: boolean;
 
         /** ReserveBeginStreamExecuteRawResponse transaction_id. */
         public transaction_id: (number|Long);

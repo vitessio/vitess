@@ -1081,7 +1081,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire
 // protocol bytes instead of parsed result objects.
-func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (err error) {
+func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (err error) {
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
@@ -1089,7 +1089,7 @@ func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryserv
 	return tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options, buf, callback)
 }
 
-func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) error {
+func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
@@ -1159,10 +1159,7 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 			}
 
 			return conn.Conn.StreamRaw(ctx, finalSQL, func(mysqlConn *mysql.Conn) error {
-				deprecateEOF := mysqlConn.Capabilities&mysql.CapabilityClientDeprecateEOF != 0
-				return tsv.streamQueryResultPackets(ctx, mysqlConn, deprecateEOF, buf, func(raw []byte) error {
-					return callback(raw, deprecateEOF)
-				})
+				return tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
 			})
 		},
 	)
@@ -1179,7 +1176,7 @@ func (tsv *TabletServer) BeginStreamExecuteRaw(
 	reservedID int64,
 	options *querypb.ExecuteOptions,
 	buf []byte,
-	callback func(raw []byte, deprecateEOF bool) error,
+	callback func(raw []byte) error,
 ) (queryservice.TransactionState, error) {
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
@@ -1201,7 +1198,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecuteRaw(
 	bindVariables map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
 	buf []byte,
-	callback func(raw []byte, deprecateEOF bool) error,
+	callback func(raw []byte) error,
 ) (state queryservice.ReservedTransactionState, err error) {
 	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
 	if err != nil {
@@ -1223,7 +1220,7 @@ func (tsv *TabletServer) ReserveStreamExecuteRaw(
 	transactionID int64,
 	options *querypb.ExecuteOptions,
 	buf []byte,
-	callback func(raw []byte, deprecateEOF bool) error,
+	callback func(raw []byte) error,
 ) (state queryservice.ReservedState, err error) {
 	return state, tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, 0, settings, options, buf, callback)
 }
@@ -1241,7 +1238,6 @@ type packetReader interface {
 func (tsv *TabletServer) streamQueryResultPackets(
 	ctx context.Context,
 	reader packetReader,
-	deprecateEOF bool,
 	buf []byte,
 	send func([]byte) error,
 ) error {
@@ -1370,14 +1366,7 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		}
 	}
 
-	// Phase 3: Read mid-stream EOF if not deprecated
-	if !deprecateEOF {
-		if _, _, err := readPacket(); err != nil {
-			return err
-		}
-	}
-
-	// Flush after fields + EOF
+	// Flush after fields
 	if err := flush(); err != nil {
 		return err
 	}
@@ -1404,11 +1393,7 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		case mysql.ErrPacket:
 			isTerminal = true
 		case mysql.EOFPacket:
-			if deprecateEOF {
-				isTerminal = packetLength < mysql.MaxPacketSize
-			} else {
-				isTerminal = packetLength < 9
-			}
+			isTerminal = packetLength < mysql.MaxPacketSize
 		}
 
 		if isTerminal {

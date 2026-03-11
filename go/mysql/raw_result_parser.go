@@ -27,7 +27,6 @@ import (
 const (
 	rawParserStateColumnCount = iota
 	rawParserStateColumnDefs
-	rawParserStateMidEOF
 	rawParserStateRows
 	rawParserStateDone
 )
@@ -36,14 +35,13 @@ const (
 // bytes into *sqltypes.Result objects. It is used by the gRPC client to parse
 // incoming raw chunks from StreamExecuteRaw.
 type RawResultParser struct {
-	buf          []byte
-	state        int
-	deprecateEOF bool
-	colCount     int
-	colsRead     int
-	fields       []*querypb.Field
-	fieldsSent   bool
-	pendingRows  [][]sqltypes.Value
+	buf         []byte
+	state       int
+	colCount    int
+	colsRead    int
+	fields      []*querypb.Field
+	fieldsSent  bool
+	pendingRows [][]sqltypes.Value
 
 	// Terminal packet metadata extracted from the final EOF/OK packet.
 	terminalInsertID    uint64
@@ -52,10 +50,9 @@ type RawResultParser struct {
 }
 
 // NewRawResultParser creates a parser for raw MySQL wire protocol bytes.
-func NewRawResultParser(deprecateEOF bool) *RawResultParser {
+func NewRawResultParser() *RawResultParser {
 	return &RawResultParser{
-		deprecateEOF: deprecateEOF,
-		state:        rawParserStateColumnCount,
+		state: rawParserStateColumnCount,
 	}
 }
 
@@ -133,8 +130,6 @@ func (p *RawResultParser) processPacket(payload []byte, callback func(*sqltypes.
 		return p.handleColumnCount(payload, callback)
 	case rawParserStateColumnDefs:
 		return p.handleColumnDef(payload, callback)
-	case rawParserStateMidEOF:
-		return p.handleMidEOF(payload, callback)
 	case rawParserStateRows:
 		return p.handleRow(payload, callback)
 	}
@@ -208,21 +203,10 @@ func (p *RawResultParser) handleColumnDef(payload []byte, _ func(*sqltypes.Resul
 	}
 	p.colsRead++
 	if p.colsRead == p.colCount {
-		if p.deprecateEOF {
-			// With deprecateEOF, there's no mid-stream EOF packet.
-			// Don't emit fields yet - they'll be included with the first row.
-			p.state = rawParserStateRows
-		} else {
-			p.state = rawParserStateMidEOF
-		}
+		// No mid-stream EOF packet (CLIENT_DEPRECATE_EOF is always negotiated).
+		// Don't emit fields yet - they'll be included with the first row.
+		p.state = rawParserStateRows
 	}
-	return nil
-}
-
-func (p *RawResultParser) handleMidEOF(_ []byte, _ func(*sqltypes.Result) error) error {
-	// Consume the EOF packet. Don't emit fields yet - they'll be
-	// included with the first row (matching StreamExecute behavior).
-	p.state = rawParserStateRows
 	return nil
 }
 
@@ -242,20 +226,13 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 	}
 
 	if payload[0] == EOFPacket {
-		isEOF := false
-		if p.deprecateEOF {
-			isEOF = len(payload) < MaxPacketSize
-		} else {
-			isEOF = len(payload) < 9
-		}
+		isEOF := len(payload) < MaxPacketSize
 		if isEOF {
 			p.state = rawParserStateDone
-			// With deprecateEOF the terminal is an OK-format packet that
-			// carries last_insert_id and status_flags. vttablet always
-			// negotiates CLIENT_DEPRECATE_EOF so this is the common path.
-			if p.deprecateEOF {
-				p.parseTerminalOKPacket(payload)
-			}
+			// The terminal is an OK-format packet that carries
+			// last_insert_id and status_flags (CLIENT_DEPRECATE_EOF
+			// is always negotiated).
+			p.parseTerminalOKPacket(payload)
 			// Rows will be flushed by Feed when it sees rawParserStateDone.
 			return nil
 		}
@@ -459,7 +436,7 @@ func ParseTextRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error
 // raw MySQL wire protocol bytes suitable for feeding into RawResultParser.
 // The first result should have Fields set. Subsequent results should have Rows.
 // This is used for testing and by test doubles (e.g. SandboxConn).
-func EncodeResultToMySQLPackets(results []*sqltypes.Result, deprecateEOF bool) []byte {
+func EncodeResultToMySQLPackets(results []*sqltypes.Result) []byte {
 	var buf []byte
 	var seq byte = 1
 
@@ -496,11 +473,6 @@ func EncodeResultToMySQLPackets(results []*sqltypes.Result, deprecateEOF bool) [
 	// Column definitions.
 	for _, field := range fields {
 		buf = appendPacket(&buf, &seq, encodeColumnDefPayload(field))
-	}
-
-	// Mid-stream EOF if not deprecateEOF.
-	if !deprecateEOF {
-		buf = appendPacket(&buf, &seq, []byte{EOFPacket, 0, 0, 0, 0})
 	}
 
 	// Rows from all results.

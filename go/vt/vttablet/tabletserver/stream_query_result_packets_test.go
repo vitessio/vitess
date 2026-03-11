@@ -133,7 +133,7 @@ func collectRawSender() (func([]byte) error, *[][]byte) {
 	return send, &chunks
 }
 
-func TestStreamQueryResultPackets_SimpleWithMidEOF(t *testing.T) {
+func TestStreamQueryResultPackets_Simple(t *testing.T) {
 	reader := newQueryMockReader()
 	tsv := &TabletServer{}
 
@@ -144,15 +144,13 @@ func TestStreamQueryResultPackets_SimpleWithMidEOF(t *testing.T) {
 		reader.WritePacket([]byte{1})
 		// Column definition
 		reader.WritePacket(makeTestColumnDefPayload("name"))
-		// Mid-stream EOF
-		reader.WritePacket(eofPayload())
 		// Row
 		reader.WritePacket(makeTestRowPayload("alice"))
 		// Terminal EOF
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, false, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
 	require.NoError(t, err)
 
 	// We should have received at least one chunk
@@ -166,7 +164,7 @@ func TestStreamQueryResultPackets_SimpleWithMidEOF(t *testing.T) {
 	assert.Greater(t, totalBytes, 0)
 }
 
-func TestStreamQueryResultPackets_DeprecateEOF(t *testing.T) {
+func TestStreamQueryResultPackets_SingleRow(t *testing.T) {
 	reader := newQueryMockReader()
 	tsv := &TabletServer{}
 
@@ -177,14 +175,13 @@ func TestStreamQueryResultPackets_DeprecateEOF(t *testing.T) {
 		reader.WritePacket([]byte{1})
 		// Column definition
 		reader.WritePacket(makeTestColumnDefPayload("id"))
-		// No mid-stream EOF (deprecateEOF=true)
 		// Row
 		reader.WritePacket(makeTestRowPayload("42"))
 		// Terminal EOF
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, true, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 }
@@ -207,7 +204,7 @@ func TestStreamQueryResultPackets_ErrorResponse(t *testing.T) {
 		reader.WritePacket(errPayload)
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, true, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
 	require.NoError(t, err) // Flush should succeed; error is in the raw bytes
 }
 
@@ -221,14 +218,13 @@ func TestStreamQueryResultPackets_MultipleRows(t *testing.T) {
 		reader.WritePacket([]byte{2})                        // 2 columns
 		reader.WritePacket(makeTestColumnDefPayload("col1")) // Col 1
 		reader.WritePacket(makeTestColumnDefPayload("col2")) // Col 2
-		reader.WritePacket(eofPayload())                     // Mid-stream EOF
 		reader.WritePacket(makeTestRowPayload("a", "b"))     // Row 1
 		reader.WritePacket(makeTestRowPayload("c", "d"))     // Row 2
 		reader.WritePacket(makeTestRowPayload("e", "f"))     // Row 3
 		reader.WritePacket(eofPayload())                     // Terminal EOF
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, false, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 
@@ -240,7 +236,6 @@ func TestStreamQueryResultPackets_MultipleRows(t *testing.T) {
 	// Each packet has header (4 bytes) + payload
 	expectedSize := (mysql.PacketHeaderSize + 1) + // col count
 		2*(mysql.PacketHeaderSize+len(makeTestColumnDefPayload("col1"))) + // 2 col defs
-		(mysql.PacketHeaderSize + 5) + // mid-EOF
 		3*(mysql.PacketHeaderSize+len(makeTestRowPayload("a", "b"))) + // 3 rows
 		(mysql.PacketHeaderSize + 5) // terminal EOF
 	assert.Equal(t, expectedSize, totalBytes)
@@ -258,13 +253,12 @@ func TestStreamQueryResultPackets_ContextCancellation(t *testing.T) {
 		// Send column count, then cancel context before sending more
 		reader.WritePacket([]byte{1})
 		reader.WritePacket(makeTestColumnDefPayload("name"))
-		reader.WritePacket(eofPayload())
 		// Cancel context to simulate client disconnect
 		cancel()
 		reader.Close()
 	}()
 
-	err := tsv.streamQueryResultPackets(ctx, reader, false, nil, send)
+	err := tsv.streamQueryResultPackets(ctx, reader, nil, send)
 	// Should get an error (either context cancelled or connection closed)
 	require.Error(t, err)
 }

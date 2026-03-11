@@ -1565,7 +1565,6 @@ func (m *StreamExecuteRawResponse) CloneVT() *StreamExecuteRawResponse {
 		return (*StreamExecuteRawResponse)(nil)
 	}
 	r := StreamExecuteRawResponseFromVTPool()
-	r.DeprecateEof = m.DeprecateEof
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -1615,7 +1614,6 @@ func (m *BeginStreamExecuteRawResponse) CloneVT() *BeginStreamExecuteRawResponse
 	}
 	r := BeginStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
-	r.DeprecateEof = m.DeprecateEof
 	r.TransactionId = m.TransactionId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.SessionStateChanges = m.SessionStateChanges
@@ -1668,7 +1666,6 @@ func (m *ReserveStreamExecuteRawResponse) CloneVT() *ReserveStreamExecuteRawResp
 	}
 	r := ReserveStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
-	r.DeprecateEof = m.DeprecateEof
 	r.ReservedId = m.ReservedId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	if rhs := m.Raw; rhs != nil {
@@ -1724,7 +1721,6 @@ func (m *ReserveBeginStreamExecuteRawResponse) CloneVT() *ReserveBeginStreamExec
 	}
 	r := ReserveBeginStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
-	r.DeprecateEof = m.DeprecateEof
 	r.TransactionId = m.TransactionId
 	r.ReservedId = m.ReservedId
 	r.TabletAlias = m.TabletAlias.CloneVT()
@@ -6340,16 +6336,6 @@ func (m *StreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DeprecateEof {
-		i--
-		if m.DeprecateEof {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x10
-	}
 	if len(m.Raw) > 0 {
 		i -= len(m.Raw)
 		copy(dAtA[i:], m.Raw)
@@ -6508,16 +6494,6 @@ func (m *BeginStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (int
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TransactionId))
 		i--
 		dAtA[i] = 0x20
-	}
-	if m.DeprecateEof {
-		i--
-		if m.DeprecateEof {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
 	}
 	if len(m.Raw) > 0 {
 		i -= len(m.Raw)
@@ -6680,16 +6656,6 @@ func (m *ReserveStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (i
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ReservedId))
 		i--
 		dAtA[i] = 0x20
-	}
-	if m.DeprecateEof {
-		i--
-		if m.DeprecateEof {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
 	}
 	if len(m.Raw) > 0 {
 		i -= len(m.Raw)
@@ -6868,16 +6834,6 @@ func (m *ReserveBeginStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byt
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TransactionId))
 		i--
 		dAtA[i] = 0x20
-	}
-	if m.DeprecateEof {
-		i--
-		if m.DeprecateEof {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
 	}
 	if len(m.Raw) > 0 {
 		i -= len(m.Raw)
@@ -8777,9 +8733,6 @@ func (m *StreamExecuteRawResponse) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.DeprecateEof {
-		n += 2
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8836,9 +8789,6 @@ func (m *BeginStreamExecuteRawResponse) SizeVT() (n int) {
 	l = len(m.Raw)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.DeprecateEof {
-		n += 2
 	}
 	if m.TransactionId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.TransactionId))
@@ -8908,9 +8858,6 @@ func (m *ReserveStreamExecuteRawResponse) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.DeprecateEof {
-		n += 2
-	}
 	if m.ReservedId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReservedId))
 	}
@@ -8977,9 +8924,6 @@ func (m *ReserveBeginStreamExecuteRawResponse) SizeVT() (n int) {
 	l = len(m.Raw)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.DeprecateEof {
-		n += 2
 	}
 	if m.TransactionId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.TransactionId))
@@ -20894,26 +20838,6 @@ func (m *StreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				m.Raw = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeprecateEof", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DeprecateEof = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -21317,26 +21241,6 @@ func (m *BeginStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				m.Raw = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeprecateEof", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DeprecateEof = bool(v != 0)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TransactionId", wireType)
@@ -21827,26 +21731,6 @@ func (m *ReserveStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				m.Raw = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeprecateEof", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DeprecateEof = bool(v != 0)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReservedId", wireType)
@@ -22318,26 +22202,6 @@ func (m *ReserveBeginStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				m.Raw = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeprecateEof", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DeprecateEof = bool(v != 0)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TransactionId", wireType)

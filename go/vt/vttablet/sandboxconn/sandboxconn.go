@@ -336,7 +336,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 }
 
 // StreamExecuteRaw is part of the QueryService interface.
-func (sbc *SandboxConn) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) error {
+func (sbc *SandboxConn) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
 	var results []*sqltypes.Result
 	err := sbc.StreamExecute(ctx, session, target, query, bindVars, transactionID, reservedID, options, func(r *sqltypes.Result) error {
 		results = append(results, r)
@@ -345,11 +345,11 @@ func (sbc *SandboxConn) StreamExecuteRaw(ctx context.Context, session queryservi
 	if err != nil {
 		return err
 	}
-	raw := mysql.EncodeResultToMySQLPackets(results, true)
-	return callback(raw, true)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return callback(raw)
 }
 
-func (sbc *SandboxConn) BeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (queryservice.TransactionState, error) {
+func (sbc *SandboxConn) BeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.TransactionState, error) {
 	var results []*sqltypes.Result
 	state, err := sbc.BeginStreamExecute(ctx, session, target, preQueries, sql, bindVariables, reservedID, options, func(r *sqltypes.Result) error {
 		results = append(results, r)
@@ -358,11 +358,11 @@ func (sbc *SandboxConn) BeginStreamExecuteRaw(ctx context.Context, session query
 	if err != nil {
 		return state, err
 	}
-	raw := mysql.EncodeResultToMySQLPackets(results, true)
-	return state, callback(raw, true)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
 }
 
-func (sbc *SandboxConn) ReserveStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (queryservice.ReservedState, error) {
+func (sbc *SandboxConn) ReserveStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedState, error) {
 	var results []*sqltypes.Result
 	state, err := sbc.ReserveStreamExecute(ctx, session, target, preQueries, sql, bindVariables, transactionID, options, func(r *sqltypes.Result) error {
 		results = append(results, r)
@@ -371,11 +371,11 @@ func (sbc *SandboxConn) ReserveStreamExecuteRaw(ctx context.Context, session que
 	if err != nil {
 		return state, err
 	}
-	raw := mysql.EncodeResultToMySQLPackets(results, true)
-	return state, callback(raw, true)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
 }
 
-func (sbc *SandboxConn) ReserveBeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (queryservice.ReservedTransactionState, error) {
+func (sbc *SandboxConn) ReserveBeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedTransactionState, error) {
 	var results []*sqltypes.Result
 	state, err := sbc.ReserveBeginStreamExecute(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options, func(r *sqltypes.Result) error {
 		results = append(results, r)
@@ -384,8 +384,8 @@ func (sbc *SandboxConn) ReserveBeginStreamExecuteRaw(ctx context.Context, sessio
 	if err != nil {
 		return state, err
 	}
-	raw := mysql.EncodeResultToMySQLPackets(results, true)
-	return state, callback(raw, true)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
 }
 
 // Begin is part of the QueryService interface.
