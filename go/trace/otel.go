@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -68,7 +70,7 @@ func (ots otelTracingService) NewFromString(ctx context.Context, parent, label s
 
 	spanCtx := oteltrace.SpanContextFromContext(ctx)
 	if !spanCtx.IsValid() {
-		return nil, nil, vterrors.New(0, "failed to deserialize span context")
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "failed to deserialize span context")
 	}
 
 	ctx, span := ots.Tracer.Start(ctx, label)
@@ -158,8 +160,34 @@ func (ots otelTracingService) otelStreamClientInterceptor() grpc.StreamClientInt
 			span.End()
 			return cs, err
 		}
-		return cs, nil
+		return &trackedClientStream{ClientStream: cs, span: span}, nil
 	}
+}
+
+// trackedClientStream wraps grpc.ClientStream to end the span when the stream finishes.
+type trackedClientStream struct {
+	grpc.ClientStream
+	span oteltrace.Span
+}
+
+func (s *trackedClientStream) RecvMsg(m any) error {
+	err := s.ClientStream.RecvMsg(m)
+	if err != nil {
+		if err != io.EOF {
+			s.span.RecordError(err)
+		}
+		s.span.End()
+	}
+	return err
+}
+
+func (s *trackedClientStream) SendMsg(m any) error {
+	err := s.ClientStream.SendMsg(m)
+	if err != nil {
+		s.span.RecordError(err)
+		s.span.End()
+	}
+	return err
 }
 
 // extractFromGRPCMetadata extracts trace context from incoming gRPC metadata.
