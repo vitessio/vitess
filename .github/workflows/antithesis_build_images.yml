@@ -1,5 +1,7 @@
 name: Build and Push Antithesis Images
 
+permissions: read-all
+
 on:
   push:
     branches:
@@ -15,6 +17,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

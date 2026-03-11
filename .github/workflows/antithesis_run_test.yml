@@ -1,5 +1,7 @@
 name: Trigger Antithesis Exploration
 
+permissions: read-all
+
 on:
   push:
     branches:
@@ -45,6 +47,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write
+      statuses: write
 
     steps:
       - uses: actions/checkout@v4
