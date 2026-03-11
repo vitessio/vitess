@@ -205,6 +205,12 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 		log.Warn(fmt.Sprintf("mysqlctl shutdown failed for tablet %d: %v, attempting force kill", mysqlctld.TabletUID, err))
 	case <-time.After(30 * time.Second):
 		log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", mysqlctld.TabletUID))
+		// Kill the hung mysqlctl process itself so cmd.Wait() can return.
+		if tmpProcess.Process != nil {
+			if err := tmpProcess.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				log.Error(fmt.Sprintf("Error killing mysqlctl process for tablet %d: %v", mysqlctld.TabletUID, err))
+			}
+		}
 	}
 
 	return mysqlForceShutdown(mysqlctld.TabletUID)

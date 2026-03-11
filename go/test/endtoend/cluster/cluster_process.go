@@ -1157,6 +1157,12 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				log.Warn(fmt.Sprintf("mysqlctl shutdown failed for tablet %d: %v, attempting force kill", tabletUID, err))
 			case <-time.After(30 * time.Second):
 				log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", tabletUID))
+				// Kill the hung mysqlctl process itself so cmd.Wait() can return.
+				if cmd.Process != nil {
+					if killErr := cmd.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+						log.Error(fmt.Sprintf("Error killing mysqlctl process for tablet %d: %v", tabletUID, killErr))
+					}
+				}
 			}
 			if err := mysqlForceShutdown(tabletUID); err != nil {
 				log.Error(fmt.Sprintf("Error in mysqlctl force shutdown for tablet %d: %v", tabletUID, err))

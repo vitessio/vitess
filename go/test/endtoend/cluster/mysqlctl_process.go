@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -191,20 +192,25 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	// on local investigation it was waiting on SEMI_SYNC acks for an internal command
 	// of Vitess even after closing the socket file.
 	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
-	exit := make(chan error)
+	exit := make(chan error, 1)
 	go func() {
 		exit <- tmpProcess.Wait()
 	}()
 	select {
-	case <-time.After(30 * time.Second):
-		break
 	case err := <-exit:
 		if err == nil {
 			return nil
 		}
-		break
+		log.Warn(fmt.Sprintf("mysqlctl shutdown failed for tablet %d: %v, attempting force kill", mysqlctl.TabletUID, err))
+	case <-time.After(30 * time.Second):
+		log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", mysqlctl.TabletUID))
+		// Kill the hung mysqlctl process itself so cmd.Wait() can return.
+		if tmpProcess.Process != nil {
+			if err := tmpProcess.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				log.Error(fmt.Sprintf("Error killing mysqlctl process for tablet %d: %v", mysqlctl.TabletUID, err))
+			}
+		}
 	}
-	// Process group kill handles mysqld_safe and all children automatically.
 	return mysqlForceShutdown(mysqlctl.TabletUID)
 }
 

@@ -66,13 +66,19 @@ func mysqlForceShutdown(tabletUID int) error {
 	// Kill mysqld_safe first so it doesn't restart mysqld after we kill it.
 	killMysqldSafe(tabletUID)
 
-	// Try killing the entire process group. If that fails (e.g. the PGID
-	// doesn't match mysqld's PID), fall back to killing the individual process.
-	if err := syscallutil.KillProcessGroup(pid, syscall.SIGKILL); err != nil && !isNoSuchProcess(err) {
-		log.Warn(fmt.Sprintf("Failed to kill process group %d, falling back to individual kill: %v", pid, err))
-		if err := syscallutil.Kill(pid, syscall.SIGKILL); err != nil && !isNoSuchProcess(err) {
-			return fmt.Errorf("failed to kill MySQL pid %d: %w", pid, err)
+	// Try killing the entire process group first. This may fail with ESRCH
+	// if the PID is not a process group leader.
+	if err := syscallutil.KillProcessGroup(pid, syscall.SIGKILL); err != nil {
+		if !isNoSuchProcess(err) {
+			log.Warn(fmt.Sprintf("Failed to kill process group %d: %v", pid, err))
 		}
+	}
+
+	// Always attempt an individual kill of mysqld, even if the process-group
+	// kill returned ESRCH (which can mean there is no such process group,
+	// but the process itself still exists).
+	if err := syscallutil.Kill(pid, syscall.SIGKILL); err != nil && !isNoSuchProcess(err) {
+		return fmt.Errorf("failed to kill MySQL pid %d: %w", pid, err)
 	}
 
 	return verifyProcessDead(pid, verifyDeadTimeout)
@@ -87,17 +93,19 @@ func killMysqldSafe(tabletUID int) {
 	if err != nil {
 		return
 	}
-	pidStr := strings.TrimSpace(string(out))
-	if pidStr == "" {
+	pidsStr := strings.TrimSpace(string(out))
+	if pidsStr == "" {
 		return
 	}
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil || pid <= 0 {
-		return
-	}
-	log.Info(fmt.Sprintf("Killing mysqld_safe for tablet %d (pid %d)", tabletUID, pid))
-	if err := syscallutil.Kill(pid, syscall.SIGKILL); err != nil && !isNoSuchProcess(err) {
-		log.Warn(fmt.Sprintf("Failed to kill mysqld_safe pid %d: %v", pid, err))
+	for field := range strings.FieldsSeq(pidsStr) {
+		pid, err := strconv.Atoi(field)
+		if err != nil || pid <= 0 {
+			continue
+		}
+		log.Info(fmt.Sprintf("Killing mysqld_safe for tablet %d (pid %d)", tabletUID, pid))
+		if err := syscallutil.Kill(pid, syscall.SIGKILL); err != nil && !isNoSuchProcess(err) {
+			log.Warn(fmt.Sprintf("Failed to kill mysqld_safe pid %d: %v", pid, err))
+		}
 	}
 }
 
