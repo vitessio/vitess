@@ -142,8 +142,11 @@ func portsAvailable(base, count int) bool {
 	return true
 }
 
-// GetPortReservation reserves count consecutive available TCP ports on 127.0.0.1.
-// Ranges are tracked in-memory by default; call SetPortFilePath for cross-process coordination.
+// GetPortReservation selects count consecutive currently available TCP ports on 127.0.0.1.
+// This is a best-effort, cooperative reservation mechanism: ranges are tracked in-memory by
+// default, and persisted for cross-process coordination when SetPortFilePath is used. It does
+// not keep listeners open on the reserved ports, so other non-cooperating processes may still
+// bind to them after this call returns.
 func GetPortReservation(count int) *PortReservation {
 	if count < 1 {
 		panic("osutil.GetPortReservation: count must be >= 1")

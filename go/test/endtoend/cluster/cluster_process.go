@@ -1215,7 +1215,7 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 		} else {
 			osutil.SetPortFilePath(path.Join(os.TempDir(), portFileName))
 			cluster.reservedPorts = osutil.GetPortReservation(200)
-			cluster.nextPortForProcess = cluster.reservedPorts.Start
+			cluster.nextPortForProcess = cluster.reservedPorts.Start - 1
 		}
 	}
 	cluster.nextPortForProcess++
