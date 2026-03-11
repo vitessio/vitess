@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -335,19 +336,29 @@ func TestHandleRelayLogError(t *testing.T) {
 		shouldRestart bool
 	}{
 		{
-			name:          "relay log info error",
-			inputErr:      errors.New(relayLogInfoInitializationError),
+			name:          "relay log info repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 			shouldRestart: true,
 		},
 		{
 			name:          "master info error",
-			inputErr:      errors.New(masterInfoInitializationError),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			shouldRestart: true,
+		},
+		{
+			name:          "connection metadata repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaCMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
 			shouldRestart: true,
 		},
 		{
 			name:          "applier metadata error",
-			inputErr:      errors.New(applierMetadataInitializationError),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 			shouldRestart: true,
+		},
+		{
+			name:          "applier metadata message with wrong errno",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			shouldRestart: false,
 		},
 		{
 			name:          "unrelated error",

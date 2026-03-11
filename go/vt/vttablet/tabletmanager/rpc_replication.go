@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"slices"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -1238,33 +1236,18 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	return nil
 }
 
-// Known MySQL replication metadata initialization failures that can be repaired
-// by restarting replication.
-const (
-	relayLogInfoInitializationError    = "Replica failed to initialize relay log info structure from the repository"
-	masterInfoInitializationError      = "Could not initialize master info structure"
-	applierMetadataInitializationError = "Replica failed to initialize applier metadata structure from the repository"
-)
-
-// recoverableReplicationInitializationErrors enumerates the error substrings we
-// treat as recoverable through RestartReplication.
-var recoverableReplicationInitializationErrors = []string{
-	relayLogInfoInitializationError,
-	masterInfoInitializationError,
-	applierMetadataInitializationError,
-}
-
-// isRecoverableReplicationInitializationError returns true if err contains one
-// of the known recoverable metadata initialization failures.
 func isRecoverableReplicationInitializationError(err error) bool {
-	if err == nil {
+	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if !ok || sqlErr == nil {
 		return false
 	}
 
-	errMessage := err.Error()
-	return slices.ContainsFunc(recoverableReplicationInitializationErrors, func(s string) bool {
-		return strings.Contains(errMessage, s)
-	})
+	switch sqlErr.Number() {
+	case sqlerror.ERMasterInfo, sqlerror.ERReplicaCMInitRepository, sqlerror.ERReplicaAMInitRepository:
+		return true
+	default:
+		return false
+	}
 }
 
 // handleRelayLogError resets replication of the instance.

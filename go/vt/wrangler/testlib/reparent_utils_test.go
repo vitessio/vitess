@@ -18,13 +18,13 @@ package testlib
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -213,19 +213,19 @@ func TestSetReplicationSource(t *testing.T) {
 	defer primary.StopActionLoop(t)
 
 	relayErrors := []struct {
-		name    string
-		message string
-		uid     uint32
+		name string
+		err  error
+		uid  uint32
 	}{
 		{
-			name:    "master info relay error",
-			message: "ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log",
-			uid:     2,
+			name: "master info relay error",
+			err:  sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			uid:  2,
 		},
 		{
-			name:    "applier metadata relay error",
-			message: "Replica failed to initialize applier metadata structure from the repository",
-			uid:     5,
+			name: "applier metadata relay error",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			uid:  5,
 		},
 	}
 
@@ -254,7 +254,7 @@ func TestSetReplicationSource(t *testing.T) {
 			defer replica.StopActionLoop(t)
 
 			// Set the correct error message that indicates we have received a relay log error.
-			replica.FakeMysqlDaemon.StartReplicationError = errors.New(relayError.message)
+			replica.FakeMysqlDaemon.StartReplicationError = relayError.err
 			err := wr.SetReplicationSource(ctx, replica.Tablet)
 			require.NoError(t, err, "SetReplicationSource failed")
 

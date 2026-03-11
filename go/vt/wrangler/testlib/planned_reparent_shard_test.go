@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -594,16 +595,16 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 
 func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	relayErrors := []struct {
-		name    string
-		message string
+		name string
+		err  error
 	}{
 		{
-			name:    "relay log info",
-			message: "Replica failed to initialize relay log info structure from the repository",
+			name: "relay log info",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 		},
 		{
-			name:    "applier metadata",
-			message: "Replica failed to initialize applier metadata structure from the repository",
+			name: "applier metadata",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 		},
 	}
 
@@ -661,7 +662,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 				"START REPLICA",
 			}
 			goodReplica1.StartActionLoop(t, wr)
-			goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New(relayError.message)
+			goodReplica1.FakeMysqlDaemon.StopReplicationError = relayError.err
 			defer goodReplica1.StopActionLoop(t)
 
 			// run PlannedReparentShard
@@ -693,16 +694,16 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 // simulate an error from the attempt to start replication
 func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	relayErrors := []struct {
-		name    string
-		message string
+		name string
+		err  error
 	}{
 		{
-			name:    "relay log info",
-			message: "Replica failed to initialize relay log info structure from the repository",
+			name: "relay log info",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 		},
 		{
-			name:    "applier metadata",
-			message: "Replica failed to initialize applier metadata structure from the repository",
+			name: "applier metadata",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 		},
 	}
 
@@ -767,7 +768,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 				"START REPLICA",
 			}
 			goodReplica1.StartActionLoop(t, wr)
-			goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New(relayError.message)
+			goodReplica1.FakeMysqlDaemon.StartReplicationError = relayError.err
 			defer goodReplica1.StopActionLoop(t)
 
 			// run PlannedReparentShard

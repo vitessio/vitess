@@ -105,6 +105,7 @@ const (
 	ERDupUnique                     = ErrorCode(1169)
 	ERRequiresPrimaryKey            = ErrorCode(1173)
 	ERCantDoThisDuringAnTransaction = ErrorCode(1179)
+	ERMasterInfo                    = ErrorCode(1201)
 	ERReadOnlyTransaction           = ErrorCode(1207)
 	ERCannotAddForeign              = ErrorCode(1215)
 	ERNoReferencedRow               = ErrorCode(1216)
@@ -128,6 +129,8 @@ const (
 	ERSourceHasPurgedRequiredGtids  = ErrorCode(1789)
 	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
+	ERReplicaCMInitRepository       = ErrorCode(1871)
+	ERReplicaAMInitRepository       = ErrorCode(1872)
 	ERInnodbReadOnly                = ErrorCode(1874)
 
 	ERVectorConversion = ErrorCode(6138)
