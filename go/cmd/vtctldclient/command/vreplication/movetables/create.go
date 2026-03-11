@@ -66,6 +66,11 @@ var (
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
+
+			if err := validateViewOptions(createOptions.AllViews, createOptions.IncludeViews, createOptions.ExcludeViews); err != nil {
+				return err
+			}
+
 			checkAtomicCopyOptions := func() error {
 				var errors []string
 				if !createOptions.AtomicCopy {
@@ -113,6 +118,22 @@ var (
 		RunE: commandCreate,
 	}
 )
+
+// validateViewOptions returns an error for ambiguous or erroneous view flag
+// combinations.
+func validateViewOptions(allViews bool, includeViews, excludeViews []string) error {
+	// Only one of `--views` or `--all-views` can be used at once.
+	if allViews && len(includeViews) > 0 {
+		return errors.New("cannot specify both --views and --all-views")
+	}
+
+	// `--exclude-views` can only be used when views are explicitly included.
+	if len(excludeViews) > 0 && !allViews && len(includeViews) == 0 {
+		return errors.New("exclude-views requires --views or --all-views")
+	}
+
+	return nil
+}
 
 func commandCreate(cmd *cobra.Command, args []string) error {
 	format, err := common.GetOutputFormat(cmd)
