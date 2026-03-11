@@ -109,6 +109,18 @@ func openAndLockPortFile() (f *os.File, cleanup func()) {
 	}
 }
 
+// pruneExpiredRanges removes expired entries from allocatedRanges.
+func pruneExpiredRanges() {
+	now := time.Now()
+	filtered := allocatedRanges[:0]
+	for _, r := range allocatedRanges {
+		if now.Sub(r.allocated) <= portFileTimeout {
+			filtered = append(filtered, r)
+		}
+	}
+	allocatedRanges = filtered
+}
+
 // mergeFileRanges merges port file ranges into the in-memory list.
 func mergeFileRanges(f *os.File) {
 	if f == nil {
@@ -132,7 +144,7 @@ func randomPort() int {
 }
 
 func portsAvailable(base, count int) bool {
-	for i := 1; i < count; i++ {
+	for i := range count {
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", base+i))
 		if err != nil {
 			return false
@@ -157,6 +169,7 @@ func GetPortReservation(count int) *PortReservation {
 
 	f, cleanup := openAndLockPortFile()
 	defer cleanup()
+	pruneExpiredRanges()
 	mergeFileRanges(f)
 
 	for {

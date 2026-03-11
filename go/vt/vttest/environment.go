@@ -226,7 +226,7 @@ func tmpdir(dataroot string) (dir string, err error) {
 // - The MySQL flavor is set to `flavor`. If the argument is not set, it will
 // default DefaultMySQLFlavor
 // - PortForProtocol() will return ports based off the given basePort. If basePort
-// is zero, a random port between 10000 and 20000 will be chosen.
+// is zero, a block of available ports will be reserved via osutil.GetPortReservation.
 // - DefaultProtocol() is always "grpc"
 // - ProcessHealthCheck() performs no service-specific health checks
 // - BinaryPath() will look up the default Vitess binaries in VTROOT

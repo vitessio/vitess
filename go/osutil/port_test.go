@@ -28,17 +28,20 @@ import (
 
 func TestGetPortReservation_Single(t *testing.T) {
 	pr := GetPortReservation(1)
+	t.Cleanup(func() { UnreservePorts(pr) })
 	require.Greater(t, pr.Start, 0)
 	require.Less(t, pr.Start, 65536)
 	assert.Equal(t, pr.Start, pr.End)
 
 	// Second call returns a different port.
 	pr2 := GetPortReservation(1)
+	t.Cleanup(func() { UnreservePorts(pr2) })
 	assert.NotEqual(t, pr.Start, pr2.Start)
 }
 
 func TestGetPortReservation_Consecutive(t *testing.T) {
 	pr := GetPortReservation(6)
+	t.Cleanup(func() { UnreservePorts(pr) })
 	require.Greater(t, pr.Start, 0)
 	require.Less(t, pr.Start, 65536)
 	assert.Equal(t, pr.Start+5, pr.End)

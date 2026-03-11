@@ -77,8 +77,9 @@ func TestPersistentMode(t *testing.T) {
 
 	dir := t.TempDir()
 
-	cluster, err := startPersistentCluster(dir)
+	cluster, pr, err := startPersistentCluster(dir)
 	require.NoError(t, err)
+	t.Cleanup(func() { osutil.UnreservePorts(pr) })
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
@@ -112,7 +113,8 @@ func TestPersistentMode(t *testing.T) {
 
 	// reboot the persistent cluster
 	cluster.TearDown()
-	cluster, err = startPersistentCluster(dir)
+	cluster, pr2, err := startPersistentCluster(dir)
+	t.Cleanup(func() { osutil.UnreservePorts(pr2) })
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
@@ -374,14 +376,16 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 
-func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
+func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, *osutil.PortReservation, error) {
+	pr := osutil.GetPortReservation(1)
 	flags = append(flags, []string{
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", osutil.GetPortReservation(1).Start),
+		fmt.Sprintf("--port=%d", pr.Start),
 		"--data-dir=" + dir,
 	}...)
-	return startCluster(flags...)
+	cluster, err := startCluster(flags...)
+	return cluster, pr, err
 }
 
 var clusterKeyspaces = []string{
@@ -503,7 +507,9 @@ func consumeEventStream(stream logutil.EventStream) (string, error) {
 // Returns the exec.Cmd forked, and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string) {
 	// pick a random port to make sure things work with non-default port
-	port := osutil.GetPortReservation(1).Start
+	pr := osutil.GetPortReservation(1)
+	t.Cleanup(func() { osutil.UnreservePorts(pr) })
+	port := pr.Start
 
 	cmd := exec.Command("consul",
 		"agent",

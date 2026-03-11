@@ -49,9 +49,11 @@ func TestVtcomboArguments(t *testing.T) {
 
 func TestGetPortReservation(t *testing.T) {
 	pr := osutil.GetPortReservation(6)
+	t.Cleanup(func() { osutil.UnreservePorts(pr) })
 	require.Greater(t, pr.Start, 0)
 	require.Less(t, pr.Start, 65536)
 	// Consecutive calls return different port ranges.
 	pr2 := osutil.GetPortReservation(6)
+	t.Cleanup(func() { osutil.UnreservePorts(pr2) })
 	require.NotEqual(t, pr.Start, pr2.Start)
 }
