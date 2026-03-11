@@ -329,7 +329,7 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.False(t, isReadOnly)
 }
 
-func TestHandleRelayLogError(t *testing.T) {
+func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 	testCases := []struct {
 		name          string
 		inputErr      error
@@ -389,7 +389,7 @@ func TestHandleRelayLogError(t *testing.T) {
 				},
 			}
 
-			err := tm.handleRelayLogError(context.Background(), tc.inputErr)
+			err := tm.handleRecoverableReplicationInitializationError(context.Background(), tc.inputErr)
 			if tc.shouldRestart {
 				require.NoError(t, err)
 			} else {
