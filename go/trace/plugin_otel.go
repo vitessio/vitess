@@ -47,7 +47,7 @@ var (
 	otelInsecure = viperutil.Configure(
 		otelConfigKey("insecure"),
 		viperutil.Options[bool]{
-			Default:  true,
+			Default:  false,
 			FlagName: "otel-insecure",
 		},
 	)
