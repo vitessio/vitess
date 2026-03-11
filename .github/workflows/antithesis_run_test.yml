@@ -37,7 +37,7 @@ on:
         description: Additional email notification recipient (separate with ;)
         required: true
         type: string
-        default: "mlord@planetscale.com"
+        default: "cncf-vitess-maintainers@lists.cncf.io"
 
 jobs:
   antithesis:
