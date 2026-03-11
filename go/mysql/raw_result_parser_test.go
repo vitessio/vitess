@@ -320,3 +320,167 @@ func TestParseTextRow_WithNull(t *testing.T) {
 	require.Len(t, row, 1)
 	assert.True(t, row[0].IsNull())
 }
+
+// makeTerminalOKPacket creates a terminal OK packet (0xFE marker) with the
+// given metadata, as sent by MySQL when CLIENT_DEPRECATE_EOF is negotiated.
+func makeTerminalOKPacket(seq byte, insertID uint64, statusFlags uint16) []byte {
+	length := 1 + // 0xFE marker
+		lenEncIntSize(0) + // affected_rows
+		lenEncIntSize(insertID) +
+		2 + // status_flags
+		2 // warnings
+
+	payload := make([]byte, length)
+	pos := 0
+	pos = writeByte(payload, pos, EOFPacket) // 0xFE
+	pos = writeLenEncInt(payload, pos, 0)    // affected_rows
+	pos = writeLenEncInt(payload, pos, insertID)
+	pos = writeUint16(payload, pos, statusFlags)
+	writeUint16(payload, pos, 0) // warnings
+	return makePacket(seq, payload)
+}
+
+func TestRawResultParser_TerminalOKMetadata_DeprecateEOF(t *testing.T) {
+	parser := NewRawResultParser(true)
+
+	var results []*sqltypes.Result
+	cb := func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	}
+
+	// Simulate SELECT LAST_INSERT_ID(42): result set with terminal OK containing insertID=42
+	var chunk []byte
+	chunk = append(chunk, makePacket(1, []byte{1})...)               // 1 column
+	chunk = append(chunk, makeColumnDefPacket(2, "lid", 0x08, 0)...) // LONGLONG
+	chunk = append(chunk, makeRowPacket(3, "42")...)                 // row
+	chunk = append(chunk, makeTerminalOKPacket(4, 42, 0x0002)...)    // insertID=42, status=autocommit
+
+	err := parser.Feed(chunk, cb)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	assert.Len(t, results[0].Rows, 1)
+	assert.Equal(t, "42", results[0].Rows[0][0].ToString())
+	assert.True(t, results[0].InsertIDChanged, "InsertIDChanged should be true")
+	assert.Equal(t, uint64(42), results[0].InsertID)
+	assert.Equal(t, uint16(0x0002), results[0].StatusFlags)
+}
+
+func TestRawResultParser_TerminalOKMetadata_SplitChunks(t *testing.T) {
+	// Test that terminal metadata is delivered even when the terminal packet
+	// arrives in a separate chunk from the rows.
+	parser := NewRawResultParser(true)
+
+	var results []*sqltypes.Result
+	cb := func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	}
+
+	// Chunk 1: column def + row
+	var chunk1 []byte
+	chunk1 = append(chunk1, makePacket(1, []byte{1})...)
+	chunk1 = append(chunk1, makeColumnDefPacket(2, "lid", 0x08, 0)...)
+	chunk1 = append(chunk1, makeRowPacket(3, "7")...)
+
+	err := parser.Feed(chunk1, cb)
+	require.NoError(t, err)
+	require.Len(t, results, 1, "first chunk should flush fields+rows")
+	assert.False(t, results[0].InsertIDChanged, "InsertIDChanged should be false before terminal")
+
+	// Chunk 2: terminal OK with insertID=7
+	chunk2 := makeTerminalOKPacket(4, 7, 0)
+	err = parser.Feed(chunk2, cb)
+	require.NoError(t, err)
+	require.Len(t, results, 2, "terminal metadata should be delivered as a separate result")
+	assert.True(t, results[1].InsertIDChanged, "InsertIDChanged should be true from terminal OK")
+	assert.Equal(t, uint64(7), results[1].InsertID)
+}
+
+func TestRawResultParser_TerminalEOF_StatusFlags(t *testing.T) {
+	// Legacy EOF (deprecateEOF=false) should extract status_flags.
+	parser := NewRawResultParser(false)
+
+	var results []*sqltypes.Result
+	cb := func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	}
+
+	// Terminal EOF with status_flags=0x0022 (autocommit | more_results_exists)
+	termPayload := []byte{EOFPacket, 0, 0, 0x22, 0x00}
+
+	var chunk []byte
+	chunk = append(chunk, makePacket(1, []byte{1})...)
+	chunk = append(chunk, makeColumnDefPacket(2, "x", 0x0f, 0)...)
+	chunk = append(chunk, makeEOFPacket(3)...)           // mid-stream EOF
+	chunk = append(chunk, makeRowPacket(4, "val")...)    // row
+	chunk = append(chunk, makePacket(5, termPayload)...) // terminal EOF with flags
+
+	err := parser.Feed(chunk, cb)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, uint16(0x0022), results[0].StatusFlags)
+}
+
+func TestRawResultParser_NoInsertID(t *testing.T) {
+	// Normal SELECT without LAST_INSERT_ID should not set InsertIDChanged.
+	parser := NewRawResultParser(true)
+
+	var results []*sqltypes.Result
+	cb := func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	}
+
+	var chunk []byte
+	chunk = append(chunk, makePacket(1, []byte{1})...)
+	chunk = append(chunk, makeColumnDefPacket(2, "name", 0x0f, 0)...)
+	chunk = append(chunk, makeRowPacket(3, "alice")...)
+	chunk = append(chunk, makeTerminalOKPacket(4, 0, 0)...) // insertID=0
+
+	err := parser.Feed(chunk, cb)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.False(t, results[0].InsertIDChanged, "InsertIDChanged should be false when insertID is 0")
+	assert.Equal(t, uint64(0), results[0].InsertID)
+}
+
+func TestEncodeResultToMySQLPackets_TerminalOK_DeprecateEOF(t *testing.T) {
+	// Verify that EncodeResultToMySQLPackets encodes InsertID in the terminal
+	// OK packet when deprecateEOF=true.
+	results := []*sqltypes.Result{
+		{
+			Fields: []*querypb.Field{
+				{Name: "lid", Type: sqltypes.Int64, Charset: 33, ColumnLength: 20},
+			},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewInt64(5)},
+			},
+			InsertID:        5,
+			InsertIDChanged: true,
+		},
+	}
+
+	encoded := EncodeResultToMySQLPackets(results, true)
+	parser := NewRawResultParser(true)
+
+	var parsed []*sqltypes.Result
+	err := parser.Feed(encoded, func(r *sqltypes.Result) error {
+		parsed = append(parsed, r)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, parsed)
+
+	// Find the result with InsertIDChanged
+	var found bool
+	for _, r := range parsed {
+		if r.InsertIDChanged {
+			assert.Equal(t, uint64(5), r.InsertID)
+			found = true
+		}
+	}
+	assert.True(t, found, "should find a result with InsertIDChanged=true")
+}

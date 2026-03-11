@@ -44,6 +44,11 @@ type RawResultParser struct {
 	fields       []*querypb.Field
 	fieldsSent   bool
 	pendingRows  [][]sqltypes.Value
+
+	// Terminal packet metadata extracted from the final EOF/OK packet.
+	terminalInsertID    uint64
+	terminalInsertIDSet bool
+	terminalStatusFlags uint16
 }
 
 // NewRawResultParser creates a parser for raw MySQL wire protocol bytes.
@@ -245,6 +250,7 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 		}
 		if isEOF {
 			p.state = rawParserStateDone
+			p.parseTerminalPacket(payload)
 			// Rows will be flushed by Feed when it sees rawParserStateDone.
 			return nil
 		}
@@ -260,15 +266,63 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 	return nil
 }
 
+// parseTerminalPacket extracts metadata from the terminal EOF/OK packet.
+// With deprecateEOF, the terminal is an OK-format packet containing
+// affected_rows, last_insert_id, status_flags, and warnings.
+// Without deprecateEOF, the terminal is an EOF packet with only
+// warnings and status_flags.
+func (p *RawResultParser) parseTerminalPacket(payload []byte) {
+	if p.deprecateEOF {
+		// OK-format terminal: 0xFE + affected_rows + last_insert_id + status_flags + warnings
+		pos := 1
+		var ok bool
+		// affected_rows - skip (not needed for streaming results)
+		_, pos, ok = readLenEncInt(payload, pos)
+		if !ok {
+			return
+		}
+		var insertID uint64
+		insertID, pos, ok = readLenEncInt(payload, pos)
+		if !ok {
+			return
+		}
+		if insertID > 0 {
+			p.terminalInsertID = insertID
+			p.terminalInsertIDSet = true
+		}
+		sf, _, ok := readUint16(payload, pos)
+		if !ok {
+			return
+		}
+		p.terminalStatusFlags = sf
+	} else {
+		// Legacy EOF: 0xFE + warnings(2) + status_flags(2)
+		if len(payload) >= 5 {
+			p.terminalStatusFlags = uint16(payload[3]) | uint16(payload[4])<<8
+		}
+	}
+}
+
 // flushPendingRows delivers accumulated rows (if any) via a single callback.
 // The first result includes Fields, matching StreamExecute behavior.
+// When the parser is done, terminal packet metadata (InsertID, StatusFlags)
+// is included in the final result.
 func (p *RawResultParser) flushPendingRows(callback func(*sqltypes.Result) error) error {
 	if len(p.pendingRows) == 0 {
 		// No rows accumulated. If we're done and fields were never sent,
 		// emit a fields-only result (empty result set).
 		if p.state == rawParserStateDone && !p.fieldsSent && p.fields != nil {
 			p.fieldsSent = true
-			return callback(&sqltypes.Result{Fields: p.fields})
+			result := &sqltypes.Result{Fields: p.fields}
+			p.applyTerminalMetadata(result)
+			return callback(result)
+		}
+		// No rows and fields already sent, but we may still have terminal
+		// metadata to deliver (e.g., InsertID from the terminal OK packet).
+		if p.state == rawParserStateDone && p.terminalInsertIDSet {
+			result := &sqltypes.Result{}
+			p.applyTerminalMetadata(result)
+			return callback(result)
 		}
 		return nil
 	}
@@ -281,7 +335,20 @@ func (p *RawResultParser) flushPendingRows(callback func(*sqltypes.Result) error
 		result.Fields = p.fields
 	}
 	p.pendingRows = nil
+	if p.state == rawParserStateDone {
+		p.applyTerminalMetadata(result)
+	}
 	return callback(result)
+}
+
+// applyTerminalMetadata sets terminal packet metadata on a result.
+func (p *RawResultParser) applyTerminalMetadata(result *sqltypes.Result) {
+	if p.terminalInsertIDSet {
+		result.InsertID = p.terminalInsertID
+		result.InsertIDChanged = true
+		p.terminalInsertIDSet = false // deliver only once
+	}
+	result.StatusFlags = p.terminalStatusFlags
 }
 
 // ParseColumnDefinition parses a column definition packet from raw bytes.
@@ -448,10 +515,45 @@ func EncodeResultToMySQLPackets(results []*sqltypes.Result, deprecateEOF bool) [
 		}
 	}
 
-	// Terminal EOF.
-	buf = appendPacket(&buf, &seq, []byte{EOFPacket, 0, 0, 0, 0})
+	// Terminal packet. With deprecateEOF, this is an OK-format packet that
+	// includes session metadata (InsertID, StatusFlags). Without deprecateEOF,
+	// it's a legacy EOF with just warnings and status_flags.
+	if deprecateEOF {
+		// Find terminal metadata from the results.
+		var insertID uint64
+		var statusFlags uint16
+		for _, r := range results {
+			if r.InsertID > 0 {
+				insertID = r.InsertID
+			}
+			if r.StatusFlags != 0 {
+				statusFlags = r.StatusFlags
+			}
+		}
+		termPayload := encodeTerminalOKPayload(insertID, statusFlags)
+		buf = appendPacket(&buf, &seq, termPayload)
+	} else {
+		buf = appendPacket(&buf, &seq, []byte{EOFPacket, 0, 0, 0, 0})
+	}
 
 	return buf
+}
+
+func encodeTerminalOKPayload(insertID uint64, statusFlags uint16) []byte {
+	length := 1 + // 0xFE marker
+		lenEncIntSize(0) + // affected_rows (0 for result sets)
+		lenEncIntSize(insertID) +
+		2 + // status_flags
+		2 // warnings
+
+	data := make([]byte, length)
+	pos := 0
+	pos = writeByte(data, pos, EOFPacket) // 0xFE marker for OK-in-EOF
+	pos = writeLenEncInt(data, pos, 0)    // affected_rows
+	pos = writeLenEncInt(data, pos, insertID)
+	pos = writeUint16(data, pos, statusFlags)
+	writeUint16(data, pos, 0) // warnings
+	return data
 }
 
 func appendPacket(buf *[]byte, seq *byte, payload []byte) []byte {
