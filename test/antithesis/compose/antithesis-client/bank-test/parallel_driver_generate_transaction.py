@@ -20,12 +20,17 @@ from helper import log
 def get_num_accounts(conn):
     """Get number of accounts from initial_state table."""
     cursor = conn.cursor()
+    result = None
     try:
         cursor.execute("SELECT num_accts FROM initial_state")
         result = cursor.fetchone()
-        cursor.close()
     except Exception as e:
-        log(f"failed to get accounts")
+        log(f"failed to get accounts: {e}")
+    finally:
+        try:
+            cursor.close()
+        except Exception as close_err:
+            log(f"cursor.close() failed: {close_err}")
     return result[0] if result else 0
 
 
