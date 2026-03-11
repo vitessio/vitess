@@ -172,18 +172,27 @@ export const Workflow = () => {
                 </TabContainer>
 
                 <Routes>
-                    <Route path="streams" element={<WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />} />
+                    <Route
+                        path="streams"
+                        element={<WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />}
+                    />
 
-                    <Route path="details" element={
-                        <WorkflowDetails
-                            clusterID={clusterID}
-                            keyspace={keyspace}
-                            name={name}
-                            refetchInterval={refetchInterval}
-                        />
-                    } />
+                    <Route
+                        path="details"
+                        element={
+                            <WorkflowDetails
+                                clusterID={clusterID}
+                                keyspace={keyspace}
+                                name={name}
+                                refetchInterval={refetchInterval}
+                            />
+                        }
+                    />
 
-                    <Route path="vdiff" element={<WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />} />
+                    <Route
+                        path="vdiff"
+                        element={<WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />}
+                    />
 
                     <Route path="json" element={<Code code={JSON.stringify(data, null, 2)} />} />
 

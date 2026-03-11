@@ -116,28 +116,37 @@ export const Tablet = () => {
                 <Routes>
                     <Route path="qps" element={<TabletCharts alias={alias} clusterID={clusterID} />} />
 
-                    <Route path="json" element={
-                        <div>
-                            <Code code={JSON.stringify(tablet, null, 2)} />
+                    <Route
+                        path="json"
+                        element={
+                            <div>
+                                <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
-                                <Code code={JSON.stringify(debugVars, null, 2)} />
-                            )}
-                        </div>
-                    } />
+                                {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                                    <Code code={JSON.stringify(debugVars, null, 2)} />
+                                )}
+                            </div>
+                        }
+                    />
 
-                    <Route path="json_tree" element={
-                        <div>
-                            <JSONViewTree data={tablet} />
+                    <Route
+                        path="json_tree"
+                        element={
+                            <div>
+                                <JSONViewTree data={tablet} />
 
-                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && <JSONViewTree data={debugVars} />}
-                        </div>
-                    } />
+                                {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && <JSONViewTree data={debugVars} />}
+                            </div>
+                        }
+                    />
 
                     <Route path="full-status" element={tablet ? <FullStatus tablet={tablet} /> : null} />
 
                     {!isReadOnlyMode() && (
-                        <Route path="advanced" element={<Advanced alias={alias} clusterID={clusterID} tablet={tablet} />} />
+                        <Route
+                            path="advanced"
+                            element={<Advanced alias={alias} clusterID={clusterID} tablet={tablet} />}
+                        />
                     )}
 
                     <Route index element={<Navigate to="qps" replace />} />

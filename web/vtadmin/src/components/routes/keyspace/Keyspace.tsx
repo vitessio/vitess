@@ -105,25 +105,31 @@ export const Keyspace = () => {
 
                     <Route path="vschema" element={<KeyspaceVSchema clusterID={clusterID} name={name} />} />
 
-                    <Route path="json" element={
-                        <>
-                            <QueryLoadingPlaceholder query={kq} />
-                            <Code code={JSON.stringify(keyspace, null, 2)} />
-                        </>
-                    } />
+                    <Route
+                        path="json"
+                        element={
+                            <>
+                                <QueryLoadingPlaceholder query={kq} />
+                                <Code code={JSON.stringify(keyspace, null, 2)} />
+                            </>
+                        }
+                    />
 
-                    <Route path="json_tree" element={
-                        <>
-                            <QueryLoadingPlaceholder query={kq} />
-                            <JSONViewTree data={keyspace} />
-                        </>
-                    } />
+                    <Route
+                        path="json_tree"
+                        element={
+                            <>
+                                <QueryLoadingPlaceholder query={kq} />
+                                <JSONViewTree data={keyspace} />
+                            </>
+                        }
+                    />
 
                     {!isReadOnlyMode() && (
                         <Route path="advanced" element={<Advanced clusterID={clusterID} name={name} />} />
                     )}
 
-                    <Route index element={<Navigate to={{ pathname: "shards", search }} replace />} />
+                    <Route index element={<Navigate to={{ pathname: 'shards', search }} replace />} />
                 </Routes>
             </ContentContainer>
         </div>

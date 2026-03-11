@@ -15,7 +15,7 @@
  */
 
 @import './style/fonts.css';
-@import "tailwindcss";
+@import 'tailwindcss';
 @config "../tailwind.config.js";
 
 :root {

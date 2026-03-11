@@ -172,9 +172,7 @@ describe('useURLQuery', () => {
                 }),
             {
                 wrapper: ({ children }) => {
-                    return (
-                        <MemoryRouter initialEntries={['/test?foo=true&count=123']}>{children}</MemoryRouter>
-                    );
+                    return <MemoryRouter initialEntries={['/test?foo=true&count=123']}>{children}</MemoryRouter>;
                 },
             }
         );

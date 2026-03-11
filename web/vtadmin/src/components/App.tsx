@@ -68,9 +68,7 @@ export const App = () => {
 
                         <Route path="/keyspaces" element={<Keyspaces />} />
 
-                        {!isReadOnlyMode() && (
-                            <Route path="/keyspaces/create" element={<CreateKeyspace />} />
-                        )}
+                        {!isReadOnlyMode() && <Route path="/keyspaces/create" element={<CreateKeyspace />} />}
 
                         <Route path="/keyspace/:clusterID/:keyspace/shard/:shard/*" element={<Shard />} />
 
@@ -96,23 +94,22 @@ export const App = () => {
                             <Route path="/workflows/movetables/create" element={<CreateMoveTables />} />
                         )}
 
-                        {!isReadOnlyMode() && (
-                            <Route path="/workflows/reshard/create" element={<CreateReshard />} />
-                        )}
+                        {!isReadOnlyMode() && <Route path="/workflows/reshard/create" element={<CreateReshard />} />}
 
                         {!isReadOnlyMode() && (
                             <Route path="/workflows/materialize/create" element={<CreateMaterialize />} />
                         )}
 
-                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID/*" element={<Stream />} />
+                        <Route
+                            path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID/*"
+                            element={<Stream />}
+                        />
 
                         <Route path="/workflow/:clusterID/:keyspace/:name/*" element={<Workflow />} />
 
                         <Route path="/migrations" element={<SchemaMigrations />} />
 
-                        {!isReadOnlyMode() && (
-                            <Route path="/migrations/create" element={<CreateSchemaMigration />} />
-                        )}
+                        {!isReadOnlyMode() && <Route path="/migrations/create" element={<CreateSchemaMigration />} />}
 
                         <Route path="/transactions" element={<Transactions />} />
 
