@@ -11,6 +11,7 @@ import (
 	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -49,7 +50,10 @@ func init() {
 	})
 }
 
+// Deprecated: use --tracer opentelemetry instead. The opentracing-datadog backend
+// will be removed in a future release.
 func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
+	log.Warn("tracer \"opentracing-datadog\" is deprecated; migrate to \"opentelemetry\" (OTLP). See release notes for details.")
 	host, port := dataDogHost.Get(), dataDogPort.Get()
 	if host == "" || port == "" {
 		return nil, nil, errors.New("need host and port to datadog agent to use datadog tracing")
