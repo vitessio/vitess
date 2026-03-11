@@ -62,7 +62,7 @@ func (ots otelTracingService) New(ctx context.Context, label string) (Span, cont
 func (ots otelTracingService) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	carrier, err := extractCarrierFromString(parent)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vterrors.Wrapf(err, "failed to deserialize span context")
 	}
 
 	propagator := otel.GetTextMapPropagator()
