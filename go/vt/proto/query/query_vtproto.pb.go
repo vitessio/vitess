@@ -1564,7 +1564,7 @@ func (m *StreamExecuteRawResponse) CloneVT() *StreamExecuteRawResponse {
 	if m == nil {
 		return (*StreamExecuteRawResponse)(nil)
 	}
-	r := new(StreamExecuteRawResponse)
+	r := StreamExecuteRawResponseFromVTPool()
 	r.DeprecateEof = m.DeprecateEof
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
@@ -1613,7 +1613,7 @@ func (m *BeginStreamExecuteRawResponse) CloneVT() *BeginStreamExecuteRawResponse
 	if m == nil {
 		return (*BeginStreamExecuteRawResponse)(nil)
 	}
-	r := new(BeginStreamExecuteRawResponse)
+	r := BeginStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
 	r.DeprecateEof = m.DeprecateEof
 	r.TransactionId = m.TransactionId
@@ -1666,7 +1666,7 @@ func (m *ReserveStreamExecuteRawResponse) CloneVT() *ReserveStreamExecuteRawResp
 	if m == nil {
 		return (*ReserveStreamExecuteRawResponse)(nil)
 	}
-	r := new(ReserveStreamExecuteRawResponse)
+	r := ReserveStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
 	r.DeprecateEof = m.DeprecateEof
 	r.ReservedId = m.ReservedId
@@ -1722,7 +1722,7 @@ func (m *ReserveBeginStreamExecuteRawResponse) CloneVT() *ReserveBeginStreamExec
 	if m == nil {
 		return (*ReserveBeginStreamExecuteRawResponse)(nil)
 	}
-	r := new(ReserveBeginStreamExecuteRawResponse)
+	r := ReserveBeginStreamExecuteRawResponseFromVTPool()
 	r.Error = m.Error.CloneVT()
 	r.DeprecateEof = m.DeprecateEof
 	r.TransactionId = m.TransactionId
@@ -6922,6 +6922,98 @@ func (m *Row) ReturnToVTPool() {
 }
 func RowFromVTPool() *Row {
 	return vtprotoPool_Row.Get().(*Row)
+}
+
+var vtprotoPool_StreamExecuteRawResponse = sync.Pool{
+	New: func() interface{} {
+		return &StreamExecuteRawResponse{}
+	},
+}
+
+func (m *StreamExecuteRawResponse) ResetVT() {
+	if m != nil {
+		f0 := m.Raw[:0]
+		m.Reset()
+		m.Raw = f0
+	}
+}
+func (m *StreamExecuteRawResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_StreamExecuteRawResponse.Put(m)
+	}
+}
+func StreamExecuteRawResponseFromVTPool() *StreamExecuteRawResponse {
+	return vtprotoPool_StreamExecuteRawResponse.Get().(*StreamExecuteRawResponse)
+}
+
+var vtprotoPool_BeginStreamExecuteRawResponse = sync.Pool{
+	New: func() interface{} {
+		return &BeginStreamExecuteRawResponse{}
+	},
+}
+
+func (m *BeginStreamExecuteRawResponse) ResetVT() {
+	if m != nil {
+		f0 := m.Raw[:0]
+		m.Reset()
+		m.Raw = f0
+	}
+}
+func (m *BeginStreamExecuteRawResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_BeginStreamExecuteRawResponse.Put(m)
+	}
+}
+func BeginStreamExecuteRawResponseFromVTPool() *BeginStreamExecuteRawResponse {
+	return vtprotoPool_BeginStreamExecuteRawResponse.Get().(*BeginStreamExecuteRawResponse)
+}
+
+var vtprotoPool_ReserveStreamExecuteRawResponse = sync.Pool{
+	New: func() interface{} {
+		return &ReserveStreamExecuteRawResponse{}
+	},
+}
+
+func (m *ReserveStreamExecuteRawResponse) ResetVT() {
+	if m != nil {
+		f0 := m.Raw[:0]
+		m.Reset()
+		m.Raw = f0
+	}
+}
+func (m *ReserveStreamExecuteRawResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_ReserveStreamExecuteRawResponse.Put(m)
+	}
+}
+func ReserveStreamExecuteRawResponseFromVTPool() *ReserveStreamExecuteRawResponse {
+	return vtprotoPool_ReserveStreamExecuteRawResponse.Get().(*ReserveStreamExecuteRawResponse)
+}
+
+var vtprotoPool_ReserveBeginStreamExecuteRawResponse = sync.Pool{
+	New: func() interface{} {
+		return &ReserveBeginStreamExecuteRawResponse{}
+	},
+}
+
+func (m *ReserveBeginStreamExecuteRawResponse) ResetVT() {
+	if m != nil {
+		f0 := m.Raw[:0]
+		m.Reset()
+		m.Raw = f0
+	}
+}
+func (m *ReserveBeginStreamExecuteRawResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_ReserveBeginStreamExecuteRawResponse.Put(m)
+	}
+}
+func ReserveBeginStreamExecuteRawResponseFromVTPool() *ReserveBeginStreamExecuteRawResponse {
+	return vtprotoPool_ReserveBeginStreamExecuteRawResponse.Get().(*ReserveBeginStreamExecuteRawResponse)
 }
 func (m *Target) SizeVT() (n int) {
 	if m == nil {

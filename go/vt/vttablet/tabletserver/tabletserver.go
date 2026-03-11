@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -87,11 +86,6 @@ var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
 
 const rawStreamBufSize = 256 * 1024
-
-var rawStreamBufPool = sync.Pool{New: func() any {
-	b := make([]byte, rawStreamBufSize)
-	return &b
-}}
 
 // TabletServer implements the RPC interface for the query service.
 // TabletServer is initialized in the following sequence:
@@ -1087,15 +1081,15 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire
 // protocol bytes instead of parsed result objects.
-func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (err error) {
+func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (err error) {
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
-	return tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options, callback)
+	return tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options, buf, callback)
 }
 
-func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) error {
+func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) error {
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
@@ -1166,7 +1160,7 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 
 			return conn.Conn.StreamRaw(ctx, finalSQL, func(mysqlConn *mysql.Conn) error {
 				deprecateEOF := mysqlConn.Capabilities&mysql.CapabilityClientDeprecateEOF != 0
-				return tsv.streamQueryResultPackets(ctx, mysqlConn, deprecateEOF, func(raw []byte) error {
+				return tsv.streamQueryResultPackets(ctx, mysqlConn, deprecateEOF, buf, func(raw []byte) error {
 					return callback(raw, deprecateEOF)
 				})
 			})
@@ -1184,6 +1178,7 @@ func (tsv *TabletServer) BeginStreamExecuteRaw(
 	bindVariables map[string]*querypb.BindVariable,
 	reservedID int64,
 	options *querypb.ExecuteOptions,
+	buf []byte,
 	callback func(raw []byte, deprecateEOF bool) error,
 ) (queryservice.TransactionState, error) {
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
@@ -1191,7 +1186,7 @@ func (tsv *TabletServer) BeginStreamExecuteRaw(
 		return state, err
 	}
 
-	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, state.TransactionID, reservedID, nil, options, callback)
+	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, state.TransactionID, reservedID, nil, options, buf, callback)
 	return state, err
 }
 
@@ -1205,6 +1200,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecuteRaw(
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
+	buf []byte,
 	callback func(raw []byte, deprecateEOF bool) error,
 ) (state queryservice.ReservedTransactionState, err error) {
 	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
@@ -1212,7 +1208,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecuteRaw(
 		return txToReserveState(txState), err
 	}
 
-	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, txState.TransactionID, 0, settings, options, callback)
+	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, txState.TransactionID, 0, settings, options, buf, callback)
 	return txToReserveState(txState), err
 }
 
@@ -1226,9 +1222,10 @@ func (tsv *TabletServer) ReserveStreamExecuteRaw(
 	bindVariables map[string]*querypb.BindVariable,
 	transactionID int64,
 	options *querypb.ExecuteOptions,
+	buf []byte,
 	callback func(raw []byte, deprecateEOF bool) error,
 ) (state queryservice.ReservedState, err error) {
-	return state, tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, 0, settings, options, callback)
+	return state, tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, 0, settings, options, buf, callback)
 }
 
 // packetReader is the interface for reading raw MySQL packets.
@@ -1245,11 +1242,12 @@ func (tsv *TabletServer) streamQueryResultPackets(
 	ctx context.Context,
 	reader packetReader,
 	deprecateEOF bool,
+	buf []byte,
 	send func([]byte) error,
 ) error {
-	bufp := rawStreamBufPool.Get().(*[]byte)
-	buf := *bufp
-	defer rawStreamBufPool.Put(bufp)
+	if len(buf) == 0 {
+		buf = make([]byte, rawStreamBufSize)
+	}
 	bufOffset := 0
 
 	flush := func() error {

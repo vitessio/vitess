@@ -152,7 +152,7 @@ func TestStreamQueryResultPackets_SimpleWithMidEOF(t *testing.T) {
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, false, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, false, nil, send)
 	require.NoError(t, err)
 
 	// We should have received at least one chunk
@@ -184,7 +184,7 @@ func TestStreamQueryResultPackets_DeprecateEOF(t *testing.T) {
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, true, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, true, nil, send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 }
@@ -207,7 +207,7 @@ func TestStreamQueryResultPackets_ErrorResponse(t *testing.T) {
 		reader.WritePacket(errPayload)
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, true, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, true, nil, send)
 	require.NoError(t, err) // Flush should succeed; error is in the raw bytes
 }
 
@@ -228,7 +228,7 @@ func TestStreamQueryResultPackets_MultipleRows(t *testing.T) {
 		reader.WritePacket(eofPayload())                     // Terminal EOF
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, false, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, false, nil, send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 
@@ -264,7 +264,7 @@ func TestStreamQueryResultPackets_ContextCancellation(t *testing.T) {
 		reader.Close()
 	}()
 
-	err := tsv.streamQueryResultPackets(ctx, reader, false, send)
+	err := tsv.streamQueryResultPackets(ctx, reader, false, nil, send)
 	// Should get an error (either context cancelled or connection closed)
 	require.Error(t, err)
 }

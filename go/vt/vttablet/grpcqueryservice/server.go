@@ -32,6 +32,8 @@ import (
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
 
+const rawStreamBufSize = 256 * 1024
+
 // query is the gRPC query service implementation.
 // It implements the queryservice.QueryServer interface.
 type query struct {
@@ -305,11 +307,21 @@ func (q *query) StreamExecuteRaw(request *querypb.StreamExecuteRawRequest, strea
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(raw []byte, deprecateEOF bool) error {
-		return stream.Send(&querypb.StreamExecuteRawResponse{
-			Raw:          raw,
-			DeprecateEof: deprecateEOF,
-		})
+
+	resp := querypb.StreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+
+	if cap(resp.Raw) < rawStreamBufSize {
+		resp.Raw = make([]byte, rawStreamBufSize)
+	} else {
+		resp.Raw = resp.Raw[:rawStreamBufSize]
+	}
+	buf := resp.Raw
+
+	err = q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+		resp.Raw = raw
+		resp.DeprecateEof = deprecateEOF
+		return stream.Send(resp)
 	})
 	return vterrors.ToGRPC(err)
 }
@@ -517,11 +529,21 @@ func (q *query) BeginStreamExecuteRaw(request *querypb.BeginStreamExecuteRawRequ
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	state, err := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(raw []byte, deprecateEOF bool) error {
-		return stream.Send(&querypb.BeginStreamExecuteRawResponse{
-			Raw:          raw,
-			DeprecateEof: deprecateEOF,
-		})
+
+	resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+
+	if cap(resp.Raw) < rawStreamBufSize {
+		resp.Raw = make([]byte, rawStreamBufSize)
+	} else {
+		resp.Raw = resp.Raw[:rawStreamBufSize]
+	}
+	buf := resp.Raw
+
+	state, err := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+		resp.Raw = raw
+		resp.DeprecateEof = deprecateEOF
+		return stream.Send(resp)
 	})
 
 	if err != nil && state.TransactionID == 0 {
@@ -545,11 +567,20 @@ func (q *query) ReserveStreamExecuteRaw(request *querypb.ReserveStreamExecuteRaw
 		request.ImmediateCallerId,
 	)
 
-	state, err := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(raw []byte, deprecateEOF bool) error {
-		return stream.Send(&querypb.ReserveStreamExecuteRawResponse{
-			Raw:          raw,
-			DeprecateEof: deprecateEOF,
-		})
+	resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+
+	if cap(resp.Raw) < rawStreamBufSize {
+		resp.Raw = make([]byte, rawStreamBufSize)
+	} else {
+		resp.Raw = resp.Raw[:rawStreamBufSize]
+	}
+	buf := resp.Raw
+
+	state, err := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+		resp.Raw = raw
+		resp.DeprecateEof = deprecateEOF
+		return stream.Send(resp)
 	})
 	if err != nil && state.ReservedID == 0 {
 		return vterrors.ToGRPC(err)
@@ -571,11 +602,20 @@ func (q *query) ReserveBeginStreamExecuteRaw(request *querypb.ReserveBeginStream
 		request.ImmediateCallerId,
 	)
 
-	state, err := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(raw []byte, deprecateEOF bool) error {
-		return stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
-			Raw:          raw,
-			DeprecateEof: deprecateEOF,
-		})
+	resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+
+	if cap(resp.Raw) < rawStreamBufSize {
+		resp.Raw = make([]byte, rawStreamBufSize)
+	} else {
+		resp.Raw = resp.Raw[:rawStreamBufSize]
+	}
+	buf := resp.Raw
+
+	state, err := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte, deprecateEOF bool) error {
+		resp.Raw = raw
+		resp.DeprecateEof = deprecateEOF
+		return stream.Send(resp)
 	})
 	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {
 		return vterrors.ToGRPC(err)

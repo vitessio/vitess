@@ -190,7 +190,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 }
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire protocol bytes.
-func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) error {
+func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -223,9 +223,10 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 		return err
 	}
 
+	resp := querypb.StreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
 	for {
-		resp, err := stream.Recv()
-		if err != nil {
+		if err := stream.RecvMsg(resp); err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
@@ -234,10 +235,11 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 			}
 			return err
 		}
+		resp.ResetVT()
 	}
 }
 
-func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.TransactionState, err error) {
+func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.TransactionState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -276,40 +278,41 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 		return state, err
 	}
 
+	resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
 	for {
-		ser, err := stream.Recv()
-		if state.TransactionID == 0 && ser.GetTransactionId() != 0 {
-			state.TransactionID = ser.GetTransactionId()
-		}
-		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
-			state.TabletAlias = ser.GetTabletAlias()
-		}
-		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
-			state.SessionStateChanges = ser.GetSessionStateChanges()
-		}
-
-		if err != nil {
+		if err := stream.RecvMsg(resp); err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
-
-		if ser.Error != nil {
-			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		if state.TransactionID == 0 && resp.GetTransactionId() != 0 {
+			state.TransactionID = resp.GetTransactionId()
+		}
+		if state.TabletAlias == nil && resp.GetTabletAlias() != nil {
+			state.TabletAlias = resp.GetTabletAlias()
+		}
+		if state.SessionStateChanges == "" && resp.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = resp.GetSessionStateChanges()
 		}
 
-		if len(ser.Raw) == 0 {
+		if resp.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(resp.Error)
+		}
+
+		if len(resp.Raw) == 0 {
 			return state, nil
 		}
 
-		if err := callback(ser.Raw, ser.DeprecateEof); err != nil {
+		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
 		}
+		resp.ResetVT()
 	}
 }
 
-func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedState, err error) {
+func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -348,37 +351,38 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 		return state, tabletconn.ErrorFromGRPC(err)
 	}
 
+	resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
 	for {
-		ser, err := stream.Recv()
-		if state.ReservedID == 0 && ser.GetReservedId() != 0 {
-			state.ReservedID = ser.GetReservedId()
-		}
-		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
-			state.TabletAlias = ser.GetTabletAlias()
-		}
-
-		if err != nil {
+		if err := stream.RecvMsg(resp); err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
-
-		if ser.Error != nil {
-			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		if state.ReservedID == 0 && resp.GetReservedId() != 0 {
+			state.ReservedID = resp.GetReservedId()
+		}
+		if state.TabletAlias == nil && resp.GetTabletAlias() != nil {
+			state.TabletAlias = resp.GetTabletAlias()
 		}
 
-		if len(ser.Raw) == 0 {
+		if resp.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(resp.Error)
+		}
+
+		if len(resp.Raw) == 0 {
 			return state, nil
 		}
 
-		if err := callback(ser.Raw, ser.DeprecateEof); err != nil {
+		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
 		}
+		resp.ResetVT()
 	}
 }
 
-func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedTransactionState, err error) {
+func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte, deprecateEOF bool) error) (state queryservice.ReservedTransactionState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -417,39 +421,40 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _
 		return state, tabletconn.ErrorFromGRPC(err)
 	}
 
+	resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
 	for {
-		ser, err := stream.Recv()
-		if state.TransactionID == 0 && ser.GetTransactionId() != 0 {
-			state.TransactionID = ser.GetTransactionId()
-		}
-		if state.ReservedID == 0 && ser.GetReservedId() != 0 {
-			state.ReservedID = ser.GetReservedId()
-		}
-		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
-			state.TabletAlias = ser.GetTabletAlias()
-		}
-		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
-			state.SessionStateChanges = ser.GetSessionStateChanges()
-		}
-
-		if err != nil {
+		if err := stream.RecvMsg(resp); err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
-
-		if ser.Error != nil {
-			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		if state.TransactionID == 0 && resp.GetTransactionId() != 0 {
+			state.TransactionID = resp.GetTransactionId()
+		}
+		if state.ReservedID == 0 && resp.GetReservedId() != 0 {
+			state.ReservedID = resp.GetReservedId()
+		}
+		if state.TabletAlias == nil && resp.GetTabletAlias() != nil {
+			state.TabletAlias = resp.GetTabletAlias()
+		}
+		if state.SessionStateChanges == "" && resp.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = resp.GetSessionStateChanges()
 		}
 
-		if len(ser.Raw) == 0 {
+		if resp.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(resp.Error)
+		}
+
+		if len(resp.Raw) == 0 {
 			return state, nil
 		}
 
-		if err := callback(ser.Raw, ser.DeprecateEof); err != nil {
+		if err := callback(resp.Raw, resp.DeprecateEof); err != nil {
 			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
 		}
+		resp.ResetVT()
 	}
 }
 

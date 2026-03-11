@@ -457,20 +457,20 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			switch info.actionNeeded {
 			case nothing:
-				err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, rawCb)
+				err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawCb)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
 						var state queryservice.ReservedState
-						state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, rawStreamCallback(observedCallback))
+						state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(observedCallback))
 						reservedID = state.ReservedID
 						alias = state.TabletAlias
 					})
 				}
 			case begin:
 				var state queryservice.TransactionState
-				state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, rawCb)
+				state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawCb)
 				transactionID = state.TransactionID
 				alias = state.TabletAlias
 				if err != nil {
@@ -478,7 +478,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
 						var state queryservice.ReservedTransactionState
-						state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, rawStreamCallback(observedCallback))
+						state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
 						transactionID = state.TransactionID
 						reservedID = state.ReservedID
 						alias = state.TabletAlias
@@ -486,12 +486,12 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			case reserve:
 				var state queryservice.ReservedState
-				state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, rawCb)
+				state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawCb)
 				reservedID = state.ReservedID
 				alias = state.TabletAlias
 			case reserveBegin:
 				var state queryservice.ReservedTransactionState
-				state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, rawStreamCallback(observedCallback))
+				state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
 				transactionID = state.TransactionID
 				reservedID = state.ReservedID
 				alias = state.TabletAlias

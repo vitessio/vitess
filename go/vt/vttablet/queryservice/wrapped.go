@@ -268,12 +268,12 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, session Session, ta
 	return wrapFatalTxErrorInVTError(err, transactionID != 0, vterrors.VT15001)
 }
 
-func (ws *wrappedService) StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) error {
+func (ws *wrappedService) StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) error {
 	inDedicatedConn := transactionID != 0 || reservedID != 0
 	opts := WrapOpts{InTransaction: inDedicatedConn, Session: session}
 	err := ws.wrapper(ctx, target, ws.impl, "StreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		streamingStarted := false
-		innerErr := conn.StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, func(raw []byte, deprecateEOF bool) error {
+		innerErr := conn.StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, buf, func(raw []byte, deprecateEOF bool) error {
 			streamingStarted = true
 			return callback(raw, deprecateEOF)
 		})
@@ -306,12 +306,12 @@ func (ws *wrappedService) BeginStreamExecute(ctx context.Context, session Sessio
 	return state, wrapFatalTxErrorInVTError(err, true, vterrors.VT15001)
 }
 
-func (ws *wrappedService) BeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state TransactionState, err error) {
+func (ws *wrappedService) BeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (state TransactionState, err error) {
 	inDedicatedConn := reservedID != 0
 	opts := WrapOpts{InTransaction: inDedicatedConn, Session: session}
 	err = ws.wrapper(ctx, target, ws.impl, "BeginStreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		state, innerErr = conn.BeginStreamExecuteRaw(ctx, session, target, preQueries, query, bindVars, reservedID, options, callback)
+		state, innerErr = conn.BeginStreamExecuteRaw(ctx, session, target, preQueries, query, bindVars, reservedID, options, buf, callback)
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
 	})
 	return state, wrapFatalTxErrorInVTError(err, true, vterrors.VT15001)
@@ -402,11 +402,11 @@ func (ws *wrappedService) ReserveBeginStreamExecute(ctx context.Context, session
 	return state, err
 }
 
-func (ws *wrappedService) ReserveBeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state ReservedTransactionState, err error) {
+func (ws *wrappedService) ReserveBeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (state ReservedTransactionState, err error) {
 	opts := WrapOpts{InTransaction: false, Session: session}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveBeginStreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		state, innerErr = conn.ReserveBeginStreamExecuteRaw(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
+		state, innerErr = conn.ReserveBeginStreamExecuteRaw(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options, buf, callback)
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return state, err
@@ -437,12 +437,12 @@ func (ws *wrappedService) ReserveStreamExecute(ctx context.Context, session Sess
 	return state, err
 }
 
-func (ws *wrappedService) ReserveStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(raw []byte, deprecateEOF bool) error) (state ReservedState, err error) {
+func (ws *wrappedService) ReserveStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (state ReservedState, err error) {
 	inDedicatedConn := transactionID != 0
 	opts := WrapOpts{InTransaction: inDedicatedConn, Session: session}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveStreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		state, innerErr = conn.ReserveStreamExecuteRaw(ctx, session, target, preQueries, sql, bindVariables, transactionID, options, callback)
+		state, innerErr = conn.ReserveStreamExecuteRaw(ctx, session, target, preQueries, sql, bindVariables, transactionID, options, buf, callback)
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
 	})
 	return state, err
