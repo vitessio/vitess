@@ -224,7 +224,7 @@ func TestSetReplicationSource(t *testing.T) {
 		},
 		{
 			name: "applier metadata relay error",
-			err:  sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 			uid:  5,
 		},
 	}

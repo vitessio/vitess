@@ -337,7 +337,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 	}{
 		{
 			name:          "relay log info repository error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 			shouldRestart: true,
 		},
 		{
@@ -347,12 +347,12 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 		},
 		{
 			name:          "connection metadata repository error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaCMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
 			shouldRestart: true,
 		},
 		{
 			name:          "applier metadata error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaAMInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 			shouldRestart: true,
 		},
 		{

@@ -1240,9 +1240,9 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 // recoverableReplicationInitializationErrorCodes is the set of replication initialization error
 // codes that can be recovered from by restarting replication.
 var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
-	sqlerror.ERMasterInfo:              {},
-	sqlerror.ERReplicaCMInitRepository: {},
-	sqlerror.ERReplicaAMInitRepository: {},
+	sqlerror.ERMasterInfo:                              {},
+	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
+	sqlerror.ERReplicaApplierMetadataInitRepository:    {},
 }
 
 // isRecoverableReplicationInitializationError reports whether an error can be recovered from by
