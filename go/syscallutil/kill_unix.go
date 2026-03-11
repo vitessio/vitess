@@ -19,6 +19,7 @@ limitations under the License.
 package syscallutil
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -27,6 +28,10 @@ func Kill(pid int, signum syscall.Signal) (err error) {
 }
 
 // KillProcessGroup sends a signal to an entire process group (negative PID).
+// Requires pid > 1 to avoid the dangerous kill(-1, ...) semantics.
 func KillProcessGroup(pid int, signum syscall.Signal) error {
+	if pid <= 1 {
+		return fmt.Errorf("invalid PID %d for process group kill", pid)
+	}
 	return syscall.Kill(-pid, signum)
 }

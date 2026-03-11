@@ -35,7 +35,7 @@ const verifyDeadTimeout = 5 * time.Second
 
 // mysqlPIDFile returns the path to the mysql.pid file for a given tablet UID.
 func mysqlPIDFile(tabletUID int) string {
-	return path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tabletUID))
+	return path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tabletUID), "mysql.pid")
 }
 
 // mysqlForceShutdown reads the PID file for the given tablet UID, kills
@@ -46,13 +46,19 @@ func mysqlForceShutdown(tabletUID int) error {
 	pidFile := mysqlPIDFile(tabletUID)
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
-		// PID file doesn't exist — server must have stopped already.
-		return nil
+		if os.IsNotExist(err) {
+			// PID file doesn't exist — server must have stopped already.
+			return nil
+		}
+		return fmt.Errorf("failed to read PID file %s: %w", pidFile, err)
 	}
 
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 	if err != nil {
 		return fmt.Errorf("failed to parse PID from %s: %w", pidFile, err)
+	}
+	if pid <= 0 {
+		return fmt.Errorf("invalid PID %d read from %s", pid, pidFile)
 	}
 
 	log.Info(fmt.Sprintf("Force-killing MySQL for tablet %d (pid %d)", tabletUID, pid))
@@ -107,8 +113,10 @@ func verifyProcessDead(pid int, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		err := syscallutil.Kill(pid, 0)
 		if err != nil {
-			// Process is gone.
-			return nil
+			if isNoSuchProcess(err) {
+				return nil
+			}
+			return fmt.Errorf("failed to verify process %d status: %w", pid, err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

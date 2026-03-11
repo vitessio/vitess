@@ -39,7 +39,10 @@ func TestVerifyProcessDead_AlreadyDead(t *testing.T) {
 func TestVerifyProcessDead_LiveProcess(t *testing.T) {
 	cmd := exec.Command("sleep", "60")
 	require.NoError(t, cmd.Start())
-	defer cmd.Process.Kill()
+	defer func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
 
 	err := verifyProcessDead(cmd.Process.Pid, 500*time.Millisecond)
 	assert.ErrorContains(t, err, "still alive")
@@ -56,7 +59,7 @@ func TestMysqlForceShutdown_InvalidPIDFile(t *testing.T) {
 	t.Setenv("VTDATAROOT", t.TempDir())
 
 	tabletUID := 88888888
-	pidDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID))
+	pidDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tabletUID))
 	require.NoError(t, os.MkdirAll(pidDir, 0o755))
 
 	pidFile := path.Join(pidDir, "mysql.pid")
@@ -77,7 +80,7 @@ func TestMysqlForceShutdown_ProcessAlreadyDead(t *testing.T) {
 	cmd.Wait()
 
 	tabletUID := 77777777
-	pidDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID))
+	pidDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tabletUID))
 	require.NoError(t, os.MkdirAll(pidDir, 0o755))
 
 	pidFile := path.Join(pidDir, "mysql.pid")
