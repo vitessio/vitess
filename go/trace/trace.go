@@ -156,7 +156,7 @@ var (
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.String("tracer", tracingServer.Default(), "tracing service to use")
 	fs.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
-	fs.Float64("tracing-sampling-rate", samplingRate.Default(), "sampling rate for traces (0.0 to 1.0)")
+	fs.Float64("tracing-sampling-rate", samplingRate.Default(), "sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0")
 
 	viperutil.BindFlags(fs, tracingServer, enableLogging, samplingRate)
 
