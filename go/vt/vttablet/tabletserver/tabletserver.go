@@ -316,7 +316,6 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.sm.target = target.CloneVT()
 	tsv.config.DB = dbcfgs
 
-	tsv.sm.mysqld = mysqld
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)

@@ -830,10 +830,11 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	defer tm.unlock()
 
 	// If MySQL is local and down, skip convertBoolToSemiSyncAction (which queries
-	// MySQL) and use SemiSyncActionNone. setReplicationSourceLocked will detect
-	// MySQL is down and skip replication configuration.
+	// MySQL) and use SemiSyncActionNone. setReplicationSourceLocked will skip
+	// replication configuration.
+	localMySQLDown := tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx)
 	var semiSyncAction SemiSyncAction
-	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+	if localMySQLDown {
 		semiSyncAction = SemiSyncActionNone
 	} else {
 		var err error
@@ -845,7 +846,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval, localMySQLDown)
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
@@ -855,10 +856,10 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 	}
 	defer tm.unlock()
 
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0, false)
 }
 
-func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
+func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64, localMySQLDown bool) (err error) {
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
@@ -875,7 +876,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// If MySQL is local and down, everything below requires MySQL and cannot proceed.
 	// The ChangeTabletType call above will have updated the topo via publishStateLocked.
 	// VTOrc or VTTablet (re-)startup will repair replication when MySQL comes back.
-	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+	if localMySQLDown {
 		log.Warn("setReplicationSourceLocked: MySQL is down, skipping replication configuration")
 		return nil
 	}

@@ -774,7 +774,6 @@ func newTestStateManager() *stateManager {
 		throttler:         &testLagThrottler{},
 		qThrottler:        &testQueryThrottler{},
 		tableGC:           &testTableGC{},
-		mysqld:            &testMysqlDaemon{},
 		rw:                newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
@@ -1000,19 +999,6 @@ func (te *testLagThrottler) Open() error {
 func (te *testLagThrottler) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
-}
-
-type testMysqlDaemon struct {
-	mysqlLocal bool
-	mysqlDown  bool
-}
-
-func (t *testMysqlDaemon) IsMySQLLocal() bool {
-	return t.mysqlLocal
-}
-
-func (t *testMysqlDaemon) IsLocalMySQLDown(_ context.Context) bool {
-	return t.mysqlDown
 }
 
 type testTableGC struct {

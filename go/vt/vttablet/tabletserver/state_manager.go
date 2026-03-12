@@ -130,7 +130,6 @@ type stateManager struct {
 	throttler   lagThrottler
 	qThrottler  queryThrottler
 	tableGC     tableGarbageCollector
-	mysqld      mysqlDaemon
 
 	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
@@ -203,11 +202,6 @@ type (
 	queryThrottler interface {
 		Open() error
 		Close()
-	}
-
-	mysqlDaemon interface {
-		IsMySQLLocal() bool
-		IsLocalMySQLDown(ctx context.Context) bool
 	}
 )
 
