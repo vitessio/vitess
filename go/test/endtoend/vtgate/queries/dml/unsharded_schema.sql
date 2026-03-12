@@ -42,3 +42,14 @@ create table j_utbl
     jdoc json,
     primary key (id)
 ) Engine = InnoDB;
+
+create table lid_seq
+(
+    id      int    default 0,
+    next_id bigint default null,
+    cache   bigint default null,
+    primary key (id)
+) comment 'vitess_sequence' Engine = InnoDB;
+
+insert into lid_seq(id, next_id, cache)
+values (0, 1, 1000);
