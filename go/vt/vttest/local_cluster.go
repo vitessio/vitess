@@ -159,6 +159,16 @@ type Config struct {
 
 	// Set the planner to fail on scatter queries
 	NoScatter bool
+
+	// MigrationCheckInterval controls how often the online DDL executor
+	// checks for pending migrations. Default is 1 minute; lower values
+	// (e.g. 5s) make online DDL tests faster.
+	MigrationCheckInterval time.Duration
+
+	// PerShardSidecar gives each shard its own sidecar database instead of
+	// sharing _vt. Required when multiple shards share a single MySQL instance
+	// to avoid conflicts in schema_migrations and vreplication tables.
+	PerShardSidecar bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -556,19 +566,26 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 }
 
 func (db *LocalCluster) createVTSchema() error {
+	// Use a single connection for the entire sidecar init so that
+	// USE <sidecar_db> persists across subsequent DDL executions.
+	params := db.mysql.Params("")
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecar.GetIdentifier())}, ""); err != nil {
+			_, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), 1, false)
+			if err != nil {
 				return nil, err
 			}
 		}
-		return db.ExecuteFetch(query, "")
+		return conn.ExecuteFetch(query, maxRows, true)
 	}
 
-	if err := sidecardb.Init(context.Background(), vtenv.NewTestEnv(), sidecardbExec); err != nil {
-		return err
-	}
-	return nil
+	return sidecardb.Init(context.Background(), vtenv.NewTestEnv(), sidecardbExec)
 }
 
 func (db *LocalCluster) createDatabases() error {

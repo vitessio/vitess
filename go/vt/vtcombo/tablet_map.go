@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,7 +43,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -73,6 +76,12 @@ type comboTablet struct {
 
 // tabletMap maps the tablet uid to the tablet record
 var tabletMap map[uint32]*comboTablet
+
+// PerShardSidecar controls whether each shard gets its own sidecar database
+// (e.g. _vt_ks_shard) instead of sharing the default _vt. This is needed in
+// vtcombo where all shards share a single MySQL instance, to avoid conflicts
+// in tables like schema_migrations and vreplication.
+var PerShardSidecar bool
 
 // CreateTablet creates an individual tablet, with its tm, and adds
 // it to the map. If it's a primary tablet, it also issues a TER.
@@ -110,6 +119,11 @@ func CreateTablet(
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		QueryServiceControl: controller,
+	}
+	// Initialize VREngine for primary tablets so that vreplication-based
+	// online DDL works in vtcombo (requires VReplicationExec/WaitForPos).
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		tm.VREngine = vreplication.NewEngine(env, tabletenv.NewCurrentConfig(), ts, cell, mysqld, controller.LagThrottler())
 	}
 	tablet := &topodatapb.Tablet{
 		Alias: alias,
@@ -339,6 +353,23 @@ func CreateKs(
 			return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
 		}
 
+		if PerShardSidecar {
+			// Set shard-specific sidecar DB name in the keyspace topo record so
+			// that each shard's tablets get their own sidecar database, avoiding
+			// collisions when multiple shards share a single MySQL instance.
+			//
+			// NOTE: SidecarDbName is a keyspace-level field, so we overwrite it
+			// before creating each shard's tablets. This is safe because vtcombo
+			// creates shards sequentially, and each tablet captures the sidecar
+			// name at init time (in VREngine.InitDBConfig, Executor.InitDBConfig,
+			// etc.). A proper per-shard sidecar name would require threading the
+			// name through all tablet components — a much larger refactor.
+			sidecarName := shardSidecarDBName(keyspace, shard)
+			if err := setKeyspaceSidecarDBName(ctx, ts, keyspace, sidecarName); err != nil {
+				return 0, fmt.Errorf("set sidecar DB name for %v/%v: %v", keyspace, shard, err)
+			}
+		}
+
 		for _, cell := range tpb.Cells {
 			dbname := spb.DbNameOverride
 			if dbname == "" {
@@ -429,6 +460,35 @@ func CreateKs(
 		return 0, fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 	}
 	return uid, nil
+}
+
+// shardSidecarDBName returns a shard-specific sidecar database name.
+// In vtcombo, all shards share one MySQL instance, so each shard needs
+// its own sidecar DB to avoid conflicts in tables like schema_migrations
+// and vreplication.
+func shardSidecarDBName(keyspace, shard string) string {
+	safeShard := strings.NewReplacer("-", "_", "/", "_").Replace(shard)
+	return fmt.Sprintf("_vt_%s_%s", keyspace, safeShard)
+}
+
+// setKeyspaceSidecarDBName updates the keyspace topo record with a custom
+// sidecar database name. When tablets start, they read this value and use
+// it instead of the default "_vt".
+func setKeyspaceSidecarDBName(ctx context.Context, ts *topo.Server, keyspace, name string) error {
+	getlockctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	lockctx, unlock, err := ts.LockKeyspace(getlockctx, keyspace, "setting per-shard sidecar DB name")
+	if err != nil {
+		return err
+	}
+	defer unlock(&err)
+
+	ki, err := ts.GetKeyspace(lockctx, keyspace)
+	if err != nil {
+		return err
+	}
+	ki.SidecarDbName = name
+	return ts.UpdateKeyspace(lockctx, ki)
 }
 
 //
@@ -977,12 +1037,26 @@ func (itmc *internalTabletManagerClient) ValidateVReplicationPermissions(context
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) VReplicationExec(context.Context, *topodatapb.Tablet, string) (*querypb.QueryResult, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	if t.tm.VREngine == nil {
+		return nil, fmt.Errorf("tmclient: VREngine not initialized on tablet %v", tablet.Alias.Uid)
+	}
+	return t.tm.VReplicationExec(ctx, query)
 }
 
-func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context, *topodatapb.Tablet, int32, string) error {
-	return fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	if t.tm.VREngine == nil {
+		return fmt.Errorf("tmclient: VREngine not initialized on tablet %v", tablet.Alias.Uid)
+	}
+	return t.tm.VReplicationWaitForPos(ctx, id, pos)
 }
 
 func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {

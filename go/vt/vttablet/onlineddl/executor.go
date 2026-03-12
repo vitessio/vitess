@@ -146,9 +146,10 @@ type Executor struct {
 	requestGCChecksFunc   func()
 	tabletAlias           *topodatapb.TabletAlias
 
-	keyspace string
-	shard    string
-	dbName   string
+	keyspace      string
+	shard         string
+	dbName        string
+	sidecarDBName string
 
 	initMutex      sync.Mutex
 	migrationMutex sync.Mutex
@@ -260,7 +261,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	defer conn.Recycle()
 
 	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := e.env.Environment().Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := e.env.Environment().Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, e.sidecarDBName)
 	if err != nil {
 		return nil, err
 	}
@@ -277,6 +278,10 @@ func (e *Executor) InitDBConfig(keyspace, shard, dbName string) {
 	e.keyspace = keyspace
 	e.shard = shard
 	e.dbName = dbName
+	// Capture the sidecar DB name now (during tm.Start), when the global
+	// sidecar.GetName() still reflects this shard's value. In vtcombo, Open()
+	// is called later when the global may have been overwritten by another shard.
+	e.sidecarDBName = sidecar.GetName()
 }
 
 // Open opens database pool and initializes the schema
@@ -295,7 +300,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 
-	if sidecar.GetName() != sidecar.DefaultName {
+	if e.sidecarDBName != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
 	} else {
 		e.execQuery = e.executeQuery

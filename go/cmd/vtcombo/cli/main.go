@@ -123,6 +123,8 @@ func init() {
 
 	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 
+	utils.SetFlagBoolVar(Main.Flags(), &vtcombo.PerShardSidecar, "per-shard-sidecar", false, "Give each shard its own sidecar database instead of sharing _vt. Required when multiple shards share a single MySQL instance (e.g. vtcombo) to avoid conflicts in schema_migrations and vreplication tables.")
+
 	// We're going to force the value later, so don't even bother letting the
 	// user know about this flag.
 	Main.Flags().MarkHidden("tablet-protocol")

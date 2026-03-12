@@ -153,7 +153,6 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			return nil, err
 		}
 		streamres, err := tm.VREngine.Exec(stmt)
-
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +269,6 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 		return nil, err
 	}
 	streamres, err := tm.VREngine.Exec(stmt)
-
 	if err != nil {
 		return nil, err
 	}
@@ -1004,12 +1002,11 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
-	qr, err := tm.VREngine.ExecWithDBA(uq)
+	// When using per-shard sidecar databases (e.g. in vtcombo), the global
+	// sidecar.GetName() may not match this tablet's shard. Skip the
+	// qualifier rewrite here and let the vreplication engine's DBClient
+	// handle it using the correct per-instance sidecar name.
+	qr, err := tm.VREngine.ExecWithDBA(query)
 	if err != nil {
 		return nil, err
 	}

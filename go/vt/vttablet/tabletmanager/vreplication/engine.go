@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -114,6 +115,12 @@ type Engine struct {
 	// production.
 	shortcircuit bool
 
+	// sidecarDBName is captured at InitDBConfig time from the global
+	// sidecar.GetName(). In vtcombo, multiple engines share a process and
+	// each may use a different sidecar DB; using the captured value avoids
+	// reading the global (which may have been overwritten by another tablet).
+	sidecarDBName string
+
 	env *vtenv.Environment
 }
 
@@ -123,11 +130,13 @@ type journalEvent struct {
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
-type PostCopyActionType int
-type PostCopyAction struct {
-	Type PostCopyActionType `json:"type"`
-	Task string             `json:"task"`
-}
+type (
+	PostCopyActionType int
+	PostCopyAction     struct {
+		Type PostCopyActionType `json:"type"`
+		Task string             `json:"task"`
+	}
+)
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
@@ -152,11 +161,12 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	if vre.dbClientFactoryFiltered != nil && vre.dbClientFactoryDba != nil {
 		return
 	}
+	vre.sidecarDBName = sidecar.GetName()
 	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.env.Parser())
+		return binlogplayer.NewDBClientWithSidecarName(dbcfgs.FilteredWithDB(), vre.env.Parser(), vre.sidecarDBName)
 	}
 	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.env.Parser())
+		return binlogplayer.NewDBClientWithSidecarName(dbcfgs.DbaWithDB(), vre.env.Parser(), vre.sidecarDBName)
 	}
 	vre.dbName = dbcfgs.DBName
 }
@@ -173,6 +183,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryFiltered: dbClientFactoryFiltered,
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
+		sidecarDBName:           sidecar.DefaultName,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
 	}
@@ -192,6 +203,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryFiltered: dbClientFactoryFiltered,
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
+		sidecarDBName:           sidecar.DefaultName,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
 		shortcircuit:            true,
@@ -389,7 +401,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sqlparser.String(sqlparser.NewIdentifierCS(vre.sidecarDBName))), 1); err != nil {
 		return nil, err
 	}
 

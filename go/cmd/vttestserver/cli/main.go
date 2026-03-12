@@ -227,6 +227,11 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 
 	utils.SetFlagBoolVar(cmd.Flags(), &config.NoScatter, "no-scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+
+	utils.SetFlagDurationVar(cmd.Flags(), &config.MigrationCheckInterval, "migration-check-interval", 0, "How often the online DDL executor checks for pending migrations (passed to vtcombo). 0 uses vtcombo default (1m).")
+
+	utils.SetFlagBoolVar(cmd.Flags(), &config.PerShardSidecar, "per-shard-sidecar", false, "Give each shard its own sidecar database instead of sharing _vt. Required when multiple shards share a single MySQL instance to avoid conflicts in schema_migrations and vreplication tables.")
+
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd

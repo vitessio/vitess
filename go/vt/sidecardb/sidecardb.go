@@ -123,7 +123,6 @@ func init() {
 
 func validateSchemaDefinition(name, schema string, parser *sqlparser.Parser) (string, error) {
 	stmt, err := parser.ParseStrictDDL(schema)
-
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +136,6 @@ func validateSchemaDefinition(name, schema string, parser *sqlparser.Parser) (st
 	if qualifier != "" {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
 	}
-	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(sidecar.GetName())
 	if !strings.EqualFold(tableName, name) {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table name of %s does not match the table name specified within the file: %s", name, tableName)
 	}
@@ -568,6 +566,13 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlpars
 	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
 	db.AddQuery(sdbe, result)
 	for _, table := range sidecarTables {
+		// Accept unqualified DDLs for this table. Schema definitions are
+		// stored without a database qualifier so that sidecardb.Init can
+		// target any sidecar database name via USE.
+		quotedName := regexp.QuoteMeta(table.name)
+		db.AddQueryPattern(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `?%s`? .*", quotedName), result)
+		db.AddQueryPattern(fmt.Sprintf("ALTER TABLE `?%s`? .*", quotedName), result)
+
 		result = &sqltypes.Result{}
 		if populateTables {
 			result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -625,6 +630,14 @@ func MatchesInitQuery(query string) bool {
 			return true
 		}
 		if match, _ := regexp.MatchString(q, query); match {
+			return true
+		}
+	}
+	// Also match unqualified DDLs targeting known sidecar tables.
+	for _, table := range sidecarTables {
+		quotedName := regexp.QuoteMeta(table.name)
+		pattern := fmt.Sprintf("(?i)(CREATE TABLE IF NOT EXISTS|ALTER TABLE) `?%s`?", quotedName)
+		if match, _ := regexp.MatchString(pattern, query); match {
 			return true
 		}
 	}

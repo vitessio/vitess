@@ -59,13 +59,22 @@ type dbClientImpl struct {
 // sidecar database qualifiers with the actual one in use on the tablet.
 type dbClientImplWithSidecarDBReplacement struct {
 	dbClientImpl
+	sidecarDBName string
 }
 
-// NewDBClient creates a DBClient instance
+// NewDBClient creates a DBClient instance using the current global sidecar name.
 func NewDBClient(params dbconfigs.Connector, parser *sqlparser.Parser) DBClient {
-	if sidecar.GetName() != sidecar.DefaultName {
+	return NewDBClientWithSidecarName(params, parser, sidecar.GetName())
+}
+
+// NewDBClientWithSidecarName creates a DBClient instance with an explicit sidecar
+// database name. Use this when the global sidecar.GetName() may not reflect the
+// correct per-instance value (e.g., in vtcombo where multiple tablets share a process).
+func NewDBClientWithSidecarName(params dbconfigs.Connector, parser *sqlparser.Parser, sidecarDBName string) DBClient {
+	if sidecarDBName != sidecar.DefaultName {
 		return &dbClientImplWithSidecarDBReplacement{
-			dbClientImpl{dbConfig: params, parser: parser},
+			dbClientImpl:  dbClientImpl{dbConfig: params, parser: parser},
+			sidecarDBName: sidecarDBName,
 		}
 	}
 	return &dbClientImpl{
@@ -181,7 +190,7 @@ func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := dcr.parser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := dcr.parser.ReplaceTableQualifiers(query, sidecar.DefaultName, dcr.sidecarDBName)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +204,7 @@ func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetchMulti(query string,
 		return nil, err
 	}
 	for i, qp := range qps {
-		uq, err := dcr.parser.ReplaceTableQualifiers(qp, sidecar.DefaultName, sidecar.GetName())
+		uq, err := dcr.parser.ReplaceTableQualifiers(qp, sidecar.DefaultName, dcr.sidecarDBName)
 		if err != nil {
 			return nil, err
 		}
