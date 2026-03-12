@@ -139,7 +139,7 @@ percona80)
 	;;
 percona84)
 	PACKAGES=(
-		libperconaserverclient22
+		libperconaserverclient24
 		percona-server-rocksdb
 		percona-server-server
 		percona-xtrabackup-84
