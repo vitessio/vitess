@@ -37,17 +37,16 @@ type benchCase struct {
 	insert func(b *testing.B, conn *mysql.Conn) (startGTID, endGTID string)
 }
 
-// BenchmarkBinlogDumpThroughput measures binlog dump throughput via three paths
+// BenchmarkBinlogDumpThroughput measures binlog dump throughput via two paths
 // to isolate where overhead is introduced:
 //
-//  1. Direct  — client → MySQL unix socket (baseline)
-//  2. gRPC    — client → vttablet gRPC (adds: streamBinlogPackets buffering + protobuf + gRPC)
-//  3. VTGate  — client → VTGate MySQL port → vttablet gRPC (adds: VTGate routing + packet reassembly)
+//  1. Direct — client → MySQL unix socket (baseline)
+//  2. VTGate — client → VTGate MySQL port → vttablet gRPC (adds: VTGate routing + packet reassembly)
 //
 // Two row-size scenarios are tested:
 //   - SmallRows: 100K small rows (~2 MB) — exercises the non-spanning packet path
 //   - LargeRows: 100 rows with 512KB blobs (~50 MB) — each binlog event exceeds
-//     the 256KB gRPC response buffer, exercising the spanning-packet path
+//     the 256KB streaming buffer, exercising the spanning-packet path
 //
 // All use nonBlock mode so the stream terminates with EOF after catching up.
 func BenchmarkBinlogDumpThroughput(b *testing.B) {
@@ -207,9 +206,10 @@ func BenchmarkBinlogDumpThroughput(b *testing.B) {
 				primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 				targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
 				vtgateParams := mysql.ConnParams{
-					Host:  clusterInstance.Hostname,
-					Port:  clusterInstance.VtgateMySQLPort,
-					Uname: "vt_repl|" + targetString,
+					Host:   clusterInstance.Hostname,
+					Port:   clusterInstance.VtgateMySQLPort,
+					Uname:  "vt_repl",
+					DbName: targetString,
 				}
 
 				// Warmup iteration to get byte count for SetBytes.
