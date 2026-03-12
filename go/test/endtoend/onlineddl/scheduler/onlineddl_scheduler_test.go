@@ -1006,7 +1006,7 @@ func testScheduler(t *testing.T) {
 		// ready to complete. This way VReplication and other connections survive
 		// setup, but new connections (the cutover connections) inherit the low value.
 		t.Run("set low wait_timeout", func(t *testing.T) {
-			_, err = primaryTablet.VttabletProcess.QueryTabletWithDB("set global wait_timeout=2", "performance_schema")
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithDB("set global wait_timeout=5", "performance_schema")
 			require.NoError(t, err)
 		})
 		defer primaryTablet.VttabletProcess.QueryTabletWithDB(fmt.Sprintf("set global wait_timeout=%d", originalWaitTimeout), "performance_schema")
