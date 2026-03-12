@@ -89,7 +89,7 @@ jobs:
         sudo apt-get -qq update
 
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 python3-pip
 
         sudo service etcd stop
 
