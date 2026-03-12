@@ -845,11 +845,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				return vterrors.Wrap(err, "failed setting lock_wait_timeout on locking connection")
 			}
 			defer preparationConnRestoreLockWaitTimeout()
-			preparationConnRestoreWaitTimeout, err := e.ensureConnectionWaitTimeout(ctx, preparationsConn.Conn, waitTimeoutDuringCutOver)
-			if err != nil {
-				return vterrors.Wrap(err, "failed ensuring wait_timeout on preparation connection")
-			}
-			defer preparationConnRestoreWaitTimeout()
 
 			if needsShadowTableAnalysis {
 				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over.
