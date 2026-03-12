@@ -197,6 +197,20 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	}
 }
 
+func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
+	vh := &vtgateHandler{
+		connections: make(map[uint32]*mysql.Conn),
+	}
+
+	c := &mysql.Conn{}
+	assert.Zero(t, c.StatusFlags, "StatusFlags should be zero before NewConnection")
+
+	vh.NewConnection(c)
+
+	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
+}
+
 var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return trace.NoopSpan{}, context.Background()
 }
