@@ -890,13 +890,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
 	defer func() {
-		if !renameWasSuccessful {
-			// It is important the LOCK TABLES connection does not get put back into
-			// the pool on failure. .Conn.Kill() will kill + close the conn.
-			err := lockConn.Conn.Kill("premature exit while holding lock tables", 0)
-			if err != nil {
-				log.Warn(fmt.Sprintf("Failed to kill connection being used to lock tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
-			}
+		// Always kill the lock connection to guarantee any held locks are released,
+		// even if UNLOCK TABLES were to fail.
+		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
+			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
 		lockConn.Recycle()
 	}()
@@ -908,7 +905,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
 	renameConn, err := e.pool.Get(ctx, nil)
