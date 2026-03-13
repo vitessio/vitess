@@ -128,7 +128,6 @@ mysql84)
     )
     ;;
 percona80)
-<<<<<<< HEAD
     PACKAGES=(
         libperconaserverclient21
         percona-server-rocksdb
@@ -136,23 +135,6 @@ percona80)
         percona-xtrabackup-80
     )
     ;;
-=======
-	PACKAGES=(
-		libperconaserverclient21
-		percona-server-rocksdb
-		percona-server-server
-		percona-xtrabackup-80
-	)
-	;;
-percona84)
-	PACKAGES=(
-		libperconaserverclient24
-		percona-server-rocksdb
-		percona-server-server
-		percona-xtrabackup-84
-	)
-	;;
->>>>>>> dbd0dfe207 (Upgrade `libperconaserverclient22` to `libperconaserverclient24` (#19631))
 *)
     echo "Unknown flavor ${FLAVOR}"
     exit 1
