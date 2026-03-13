@@ -18,28 +18,16 @@ package vttest
 
 import (
 	"errors"
-	"math/rand/v2"
-	"net"
 	"os"
 	"path"
-	"slices"
-	"strconv"
 	"strings"
-	"sync"
 
+	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
-)
-
-var (
-	// randomPortsMu provides synchronization for randomPorts().
-	randomPortsMu sync.Mutex
-
-	// usedRandomPorts stores ports that have been used by remotePort().
-	usedRandomPorts []int
 )
 
 // Environment is the interface that customizes the global settings for
@@ -109,11 +97,12 @@ type Environment interface {
 // LocalTestEnv is an Environment implementation for local testing
 // See: NewLocalTestEnv()
 type LocalTestEnv struct {
-	BasePort     int
-	TmpPath      string
-	DefaultMyCnf []string
-	InitDBFile   string
-	Env          []string
+	BasePort      int
+	TmpPath       string
+	DefaultMyCnf  []string
+	InitDBFile    string
+	Env           []string
+	reservedPorts *osutil.PortReservation // ports reserved via GetPortReservation, nil if user-provided
 }
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when no explicit
@@ -218,44 +207,15 @@ func (env *LocalTestEnv) Directory() string {
 
 // TearDown implements TearDown for LocalTestEnv
 func (env *LocalTestEnv) TearDown() error {
+	if env.reservedPorts != nil {
+		osutil.UnreservePorts(env.reservedPorts)
+	}
 	return os.RemoveAll(env.TmpPath)
 }
 
 func tmpdir(dataroot string) (dir string, err error) {
 	dir, err = os.MkdirTemp(dataroot, "vttest")
 	return
-}
-
-// randomPort gets a random port that is available for a TCP connection.
-// After we generate a random port, we try to establish tcp connections on it and the next 5 values.
-// If any of them fail, then we try a different port.
-func randomPort() (port int) {
-	randomPortsMu.Lock()
-	defer randomPortsMu.Unlock()
-	for {
-		portBase := int(rand.Int32N(20000) + 10000)
-		portInUse := false
-		portRange := make([]int, 0, 6)
-		for i := range 6 {
-			port = portBase + i
-			if slices.Contains(usedRandomPorts, port) {
-				portInUse = true
-				break
-			}
-			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-			if err != nil {
-				portInUse = true
-				break
-			}
-			portRange = append(portRange, port)
-			ln.Close()
-		}
-		if portInUse {
-			continue
-		}
-		usedRandomPorts = append(usedRandomPorts, portRange...)
-		return port
-	}
 }
 
 // NewLocalTestEnv returns an instance of the default test environment used
@@ -266,7 +226,7 @@ func randomPort() (port int) {
 // - The MySQL flavor is set to `flavor`. If the argument is not set, it will
 // default DefaultMySQLFlavor
 // - PortForProtocol() will return ports based off the given basePort. If basePort
-// is zero, a random port between 10000 and 20000 will be chosen.
+// is zero, a block of available ports will be reserved via osutil.GetPortReservation.
 // - DefaultProtocol() is always "grpc"
 // - ProcessHealthCheck() performs no service-specific health checks
 // - BinaryPath() will look up the default Vitess binaries in VTROOT
@@ -296,15 +256,18 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 		return nil, err
 	}
 
+	var reservedPorts *osutil.PortReservation
 	if basePort == 0 {
-		basePort = randomPort()
+		reservedPorts = osutil.GetPortReservation(6)
+		basePort = reservedPorts.Start
 	}
 
 	return &LocalTestEnv{
-		BasePort:     basePort,
-		TmpPath:      directory,
-		DefaultMyCnf: mycnf,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
+		BasePort:      basePort,
+		TmpPath:       directory,
+		DefaultMyCnf:  mycnf,
+		InitDBFile:    path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
+		reservedPorts: reservedPorts,
 		Env: []string{
 			"VTDATAROOT=" + directory,
 			"VTTEST=endtoend",
