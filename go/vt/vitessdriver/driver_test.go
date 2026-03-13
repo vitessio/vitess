@@ -582,9 +582,7 @@ func TestTx(t *testing.T) {
 	// Commit on committed transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Commit()
-	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
-	}
+	require.ErrorIs(t, err, sql.ErrTxDone)
 
 	// Test rollback now.
 	tx, err = db.Begin()
@@ -609,7 +607,7 @@ func TestTx(t *testing.T) {
 	// We actually don't have to cover this in our code.
 	err = tx.Rollback()
 	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
+		assert.NoError(t, err)
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	vtutils "vitess.io/vitess/go/vt/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -192,11 +193,11 @@ func setupExtraMyCnf() error {
 	if existing != "" {
 		// Append clone.cnf to existing
 		if err := os.Setenv("EXTRA_MY_CNF", existing+":"+cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
+			assert.NoError(t, err)
 		}
 	} else {
 		if err := os.Setenv("EXTRA_MY_CNF", cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
+			assert.NoError(t, err)
 		}
 	}
 

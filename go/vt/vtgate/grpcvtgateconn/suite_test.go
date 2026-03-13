@@ -329,9 +329,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 		return impl, nil
 	})
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
-	if err != nil {
-		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
-	}
+	require.NoError(t, err)
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
 	fs := fakeServer.(*fakeVTGateService)
@@ -357,9 +355,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 // RunErrorTests runs all the tests that expect errors
 func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
-	if err != nil {
-		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
-	}
+	require.NoError(t, err)
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
 	fs := fakeServer.(*fakeVTGateService)
@@ -610,13 +606,9 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	ctx := newContext()
 	execCase := execMap["request1"]
 	stream, err := session.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
-	if err != nil {
-		t.Fatalf("StreamExecute failed: %v", err)
-	}
+	require.NoError(t, err)
 	qr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-	}
+	require.NoError(t, err)
 
 	if !qr.Equal(&streamResultFields) {
 		t.Errorf("Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
@@ -822,9 +814,7 @@ func RunSessionTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservic
 		return impl, nil
 	})
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
-	if err != nil {
-		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
-	}
+	require.NoError(t, err)
 	session := conn.Session("connection_ks", nil)
 	session.SessionPb().Autocommit = false
 

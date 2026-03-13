@@ -117,7 +117,7 @@ func TestStaticConfigHUP(t *testing.T) {
 	oldStr := "str5"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+		require.NoError(t, err)
 	}
 
 	aStatic := NewAuthServerStatic(tmpFile.Name(), "", 0)
@@ -147,7 +147,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+		require.NoError(t, err)
 	}
 
 	aStatic := NewAuthServerStatic(tmpFile.Name(), "", 10*time.Millisecond)
@@ -171,7 +171,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't overwrite temp file: %v", err)
+		require.NoError(t, err)
 	}
 	require.Equal(t, oldStr, aStatic.getEntries()[oldStr][0].Password, "%s's Password should still be '%s'", oldStr, oldStr)
 
@@ -187,7 +187,7 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't overwrite temp file: %v", err)
+		require.NoError(t, err)
 	}
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {

@@ -56,6 +56,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -1169,7 +1170,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v", err)
+					assert.NoError(t, err)
 				}
 			}()
 

@@ -65,9 +65,7 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
@@ -197,9 +195,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
@@ -229,9 +225,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
@@ -470,13 +464,9 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
 	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	if sbc.RollbackCount.Load() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
@@ -495,13 +485,9 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	if sbc.RollbackCount.Load() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
@@ -520,13 +506,9 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	if sbc.RollbackCount.Load() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}

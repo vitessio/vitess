@@ -69,13 +69,13 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 
 	leftText, err := coercion1(nil, tc.left.Text)
 	if err != nil {
-		t.Errorf("failed to transcode left: %v", err)
+		assert.NoError(t, err)
 		return
 	}
 
 	rightText, err := coercion2(nil, tc.right.Text)
 	if err != nil {
-		t.Errorf("failed to transcode right: %v", err)
+		assert.NoError(t, err)
 		return
 	}
 
@@ -106,13 +106,13 @@ func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local
 	localCollation := colldata.Lookup(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
-		t.Errorf("failed to transcode left: %v", err)
+		assert.NoError(t, err)
 		return
 	}
 
 	rightText, err := coerce2(nil, tc.right.Text)
 	if err != nil {
-		t.Errorf("failed to transcode right: %v", err)
+		assert.NoError(t, err)
 		return
 	}
 	rEBytes, err := remote.Expr.ToBytes()

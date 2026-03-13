@@ -34,6 +34,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"github.com/stretchr/testify/require"
 )
 
 func TestQueryRules(t *testing.T) {
@@ -280,9 +281,7 @@ func TestFilterByPlan(t *testing.T) {
 func TestQueryRule(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr.SetIPCond("123")
-	if err != nil {
-		t.Errorf("unexpected: %v", err)
-	}
+	assert.NoError(t, err)
 	if !qr.requestIP.MatchString("123") {
 		t.Errorf("want match")
 	}
@@ -317,13 +316,9 @@ func TestBindVarStruct(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 
 	err := qr.AddBindVarCond("b", false, true, QRNoOp, nil)
-	if err != nil {
-		t.Errorf("unexpected: %v", err)
-	}
+	assert.NoError(t, err)
 	err = qr.AddBindVarCond("a", true, false, QRNoOp, nil)
-	if err != nil {
-		t.Errorf("unexpected: %v", err)
-	}
+	assert.NoError(t, err)
 	if qr.bindVarConds[1].name != "a" {
 		t.Errorf("want a, got %s", qr.bindVarConds[1].name)
 	}
@@ -758,9 +753,7 @@ func TestInvalidJSON(t *testing.T) {
 func TestBuildQueryRuleActionFail(t *testing.T) {
 	var ruleInfo map[string]any
 	err := json.Unmarshal([]byte(`{"Action": "FAIL" }`), &ruleInfo)
-	if err != nil {
-		t.Fatalf("failed to unmarshal json, got error: %v", err)
-	}
+	require.NoError(t, err)
 	qr, err := BuildQueryRule(ruleInfo)
 	if err != nil {
 		t.Fatalf("build query rule should succeed")

@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecimalAdd(t *testing.T) {
@@ -198,7 +199,7 @@ func testfile(t *testing.T, name string, out any) {
 	}
 	defer tf.Close()
 	if err := json.NewDecoder(tf).Decode(out); err != nil {
-		t.Fatalf("failed to decode testdata: %v", err)
+		require.NoError(t, err)
 	}
 }
 

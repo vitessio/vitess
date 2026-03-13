@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 	"vitess.io/vitess/go/vt/wrangler/testlib"
+	"github.com/stretchr/testify/require"
 )
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
@@ -115,7 +116,7 @@ func TestTabletData(t *testing.T) {
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -145,9 +146,7 @@ func TestTabletData(t *testing.T) {
 	result, err := thc.Get(requestCtx, tablet1.Tablet.Alias)
 	close(stop)
 
-	if err != nil {
-		t.Fatalf("thc.Get failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	stats := &querypb.RealtimeStats{
 		HealthError:           "testHealthError",

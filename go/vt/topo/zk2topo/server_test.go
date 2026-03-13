@@ -82,7 +82,7 @@ func TestZk2Topo(t *testing.T) {
 			}
 			select {
 			case <-timeout:
-				t.Fatalf("Timedout creating cell info - %v", err)
+				require.NoError(t, err)
 				return nil
 			default:
 				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")
