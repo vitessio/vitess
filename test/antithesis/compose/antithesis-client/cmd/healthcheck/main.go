@@ -120,10 +120,10 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 				entry = &healthCounts{}
 				counts[key] = entry
 			}
-			if isPrimary(tablet.Tablet.Type) {
+			if isPrimary(tablet.Target.TabletType) {
 				entry.primaries++
 			}
-			if isReplica(tablet.Tablet.Type) {
+			if isReplica(tablet.Target.TabletType) {
 				entry.replicas++
 			}
 		}
@@ -133,7 +133,7 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 	}
 	for key, entry := range counts {
 		if entry.primaries < 1 || entry.replicas < 1 {
-			return false, fmt.Errorf("shard %s does not have required healthy primary/replica", key)
+			return false, fmt.Errorf("shard %s does not have required healthy primary/replica (primaries=%d, replicas=%d)", key, entry.primaries, entry.replicas)
 		}
 	}
 	return true, nil
