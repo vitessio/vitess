@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -63,6 +64,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -82,6 +84,8 @@ import (
 var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
+
+const rawStreamBufSize = 256 * 1024
 
 // TabletServer implements the RPC interface for the query service.
 // TabletServer is initialized in the following sequence:
@@ -1073,6 +1077,344 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			return qre.Stream(callback)
 		},
 	)
+}
+
+// StreamExecuteRaw executes a streaming query and returns raw MySQL wire
+// protocol bytes instead of parsed result objects.
+func (tsv *TabletServer) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) (err error) {
+	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
+	}
+
+	return tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options, buf, callback)
+}
+
+func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte, deprecateEOF bool) error) error {
+	allowOnShutdown := false
+	var timeout time.Duration
+	if transactionID != 0 {
+		allowOnShutdown = true
+		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
+	}
+
+	return tsv.execRequest(
+		ctx, timeout,
+		"StreamExecuteRaw", sql, bindVariables,
+		target, options, allowOnShutdown,
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			if bindVariables == nil {
+				bindVariables = make(map[string]*querypb.BindVariable)
+			}
+			query, comments := sqlparser.SplitMarginComments(sql)
+			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, skipQueryPlanCache(options))
+			if err != nil {
+				return err
+			}
+			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				return err
+			}
+
+			// Handle special bind variables, same as QueryExecutor.Stream.
+			if bindVariables[sqltypes.BvReplaceSchemaName] != nil {
+				bindVariables[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(tsv.config.DB.DBName)
+			}
+
+			// Substitute bind variables into the SQL template, same as QueryExecutor.Stream.
+			finalSQL, err := plan.FullQuery.GenerateQuery(bindVariables, nil)
+			if err != nil {
+				return err
+			}
+			finalSQL = comments.Leading + finalSQL + comments.Trailing
+
+			connID := reservedID
+			if transactionID != 0 {
+				connID = transactionID
+			}
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
+
+			var connSetting *smartconnpool.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+
+			var conn *connpool.PooledConn
+			if connID != 0 {
+				txConn, err := tsv.te.txPool.GetAndLock(connID, "for raw streaming query")
+				if err != nil {
+					return err
+				}
+				defer txConn.Unlock()
+				conn = txConn.UnderlyingDBConn()
+			} else {
+				dbConn, err := tsv.qe.streamConns.Get(ctx, connSetting)
+				if err != nil {
+					return err
+				}
+				defer dbConn.Recycle()
+				conn = dbConn
+			}
+
+			return conn.Conn.StreamRaw(ctx, finalSQL, func(mysqlConn *mysql.Conn) error {
+				deprecateEOF := mysqlConn.Capabilities&mysql.CapabilityClientDeprecateEOF != 0
+				return tsv.streamQueryResultPackets(ctx, mysqlConn, deprecateEOF, buf, func(raw []byte) error {
+					return callback(raw, deprecateEOF)
+				})
+			})
+		},
+	)
+}
+
+// BeginStreamExecuteRaw combines Begin and StreamExecuteRaw.
+func (tsv *TabletServer) BeginStreamExecuteRaw(
+	ctx context.Context,
+	session queryservice.Session,
+	target *querypb.Target,
+	postBeginQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	reservedID int64,
+	options *querypb.ExecuteOptions,
+	buf []byte,
+	callback func(raw []byte, deprecateEOF bool) error,
+) (queryservice.TransactionState, error) {
+	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
+	if err != nil {
+		return state, err
+	}
+
+	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, state.TransactionID, reservedID, nil, options, buf, callback)
+	return state, err
+}
+
+// ReserveBeginStreamExecuteRaw combines Reserve, Begin, and StreamExecuteRaw.
+func (tsv *TabletServer) ReserveBeginStreamExecuteRaw(
+	ctx context.Context,
+	session queryservice.Session,
+	target *querypb.Target,
+	settings []string,
+	postBeginQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	options *querypb.ExecuteOptions,
+	buf []byte,
+	callback func(raw []byte, deprecateEOF bool) error,
+) (state queryservice.ReservedTransactionState, err error) {
+	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
+	if err != nil {
+		return txToReserveState(txState), err
+	}
+
+	err = tsv.streamExecuteRaw(ctx, target, sql, bindVariables, txState.TransactionID, 0, settings, options, buf, callback)
+	return txToReserveState(txState), err
+}
+
+// ReserveStreamExecuteRaw executes a raw streaming query on a reserved connection.
+func (tsv *TabletServer) ReserveStreamExecuteRaw(
+	ctx context.Context,
+	session queryservice.Session,
+	target *querypb.Target,
+	settings []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	transactionID int64,
+	options *querypb.ExecuteOptions,
+	buf []byte,
+	callback func(raw []byte, deprecateEOF bool) error,
+) (state queryservice.ReservedState, err error) {
+	return state, tsv.streamExecuteRaw(ctx, target, sql, bindVariables, transactionID, 0, settings, options, buf, callback)
+}
+
+// packetReader is the interface for reading raw MySQL packets.
+type packetReader interface {
+	ReadHeaderInto([]byte) (int, error)
+	ReadDataInto([]byte) error
+	Buffered() int
+}
+
+// streamQueryResultPackets streams raw MySQL result set packets from a connection.
+// It reads the column count, column definitions, optional mid-stream EOF,
+// and row data packets, forwarding them as raw bytes through the send callback.
+func (tsv *TabletServer) streamQueryResultPackets(
+	ctx context.Context,
+	reader packetReader,
+	deprecateEOF bool,
+	buf []byte,
+	send func([]byte) error,
+) error {
+	if len(buf) == 0 {
+		buf = make([]byte, rawStreamBufSize)
+	}
+	bufOffset := 0
+
+	flush := func() error {
+		if bufOffset == 0 {
+			return nil
+		}
+		err := send(buf[:bufOffset])
+		bufOffset = 0
+		return err
+	}
+
+	// readHeader reads a 4-byte MySQL packet header directly into buf at the
+	// current offset. Returns the payload length. Flushes first if the header
+	// wouldn't fit.
+	readHeader := func() (int, error) {
+		if bufOffset+mysql.PacketHeaderSize > len(buf) {
+			if err := flush(); err != nil {
+				return 0, err
+			}
+		}
+		packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+		if err != nil {
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, cause
+			}
+			return 0, vterrors.Wrapf(err, "failed to read result packet header")
+		}
+		return packetLength, nil
+	}
+
+	// readPayload reads a full packet payload into buf, handling the case where
+	// the payload is larger than the remaining buffer space. Returns the first
+	// byte of the payload for packet type detection.
+	readPayload := func(packetLength int) (byte, error) {
+		if packetLength == 0 {
+			return 0, nil
+		}
+
+		// Fast path: entire payload fits in remaining buffer space.
+		// Single ReadDataInto call instead of 1-byte + rest.
+		if bufOffset+packetLength <= len(buf) {
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+packetLength]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read packet payload")
+			}
+			firstByte := buf[bufOffset]
+			bufOffset += packetLength
+			return firstByte, nil
+		}
+
+		// Slow path: payload larger than remaining buffer space.
+		// Flush current buffer, then read in chunks.
+		if err := flush(); err != nil {
+			return 0, err
+		}
+
+		// Read first byte to detect packet type.
+		if err := reader.ReadDataInto(buf[bufOffset : bufOffset+1]); err != nil {
+			return 0, vterrors.Wrapf(err, "failed to read first byte of packet")
+		}
+		firstByte := buf[bufOffset]
+		bufOffset++
+		remaining := packetLength - 1
+
+		for remaining > 0 {
+			chunkSize := min(remaining, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read packet body")
+			}
+			remaining -= chunkSize
+			bufOffset += chunkSize
+
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		return firstByte, nil
+	}
+
+	// readPacket reads a complete MySQL packet (header + payload) into buf.
+	readPacket := func() (int, byte, error) {
+		packetLength, err := readHeader()
+		if err != nil {
+			return 0, 0, err
+		}
+		bufOffset += mysql.PacketHeaderSize
+
+		firstByte, err := readPayload(packetLength)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		return packetLength, firstByte, nil
+	}
+
+	// Phase 1: Read column count packet
+	_, firstByte, err := readPacket()
+	if err != nil {
+		return err
+	}
+
+	// Check for ERR or OK (0 columns)
+	if firstByte == mysql.ErrPacket {
+		return flush()
+	}
+	if firstByte == mysql.OKPacket {
+		return flush()
+	}
+
+	// Parse column count from the first byte (it's a lenenc int)
+	// For small counts (< 251), the first byte IS the count
+	colCount := int(firstByte)
+
+	// Phase 2: Read column definition packets
+	for range colCount {
+		if _, _, err := readPacket(); err != nil {
+			return err
+		}
+	}
+
+	// Phase 3: Read mid-stream EOF if not deprecated
+	if !deprecateEOF {
+		if _, _, err := readPacket(); err != nil {
+			return err
+		}
+	}
+
+	// Flush after fields + EOF
+	if err := flush(); err != nil {
+		return err
+	}
+
+	// Phase 4: Read row data until terminal EOF/ERR
+	for {
+		packetLength, err := readHeader()
+		if err != nil {
+			return err
+		}
+		bufOffset += mysql.PacketHeaderSize
+
+		firstByte, err := readPayload(packetLength)
+		if err != nil {
+			return err
+		}
+
+		if packetLength == 0 {
+			continue
+		}
+
+		isTerminal := false
+		switch firstByte {
+		case mysql.ErrPacket:
+			isTerminal = true
+		case mysql.EOFPacket:
+			if deprecateEOF {
+				isTerminal = packetLength < mysql.MaxPacketSize
+			} else {
+				isTerminal = packetLength < 9
+			}
+		}
+
+		if isTerminal {
+			return flush()
+		}
+	}
 }
 
 // BeginExecute combines Begin and Execute.

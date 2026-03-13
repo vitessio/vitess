@@ -5714,6 +5714,710 @@ func (x *GetSchemaResponse) GetTableDefinition() map[string]string {
 	return nil
 }
 
+// StreamExecuteRawRequest is the payload to StreamExecuteRaw
+type StreamExecuteRawRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID        `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target                `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery            `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	TransactionId     int64                  `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	ReservedId        int64                  `protobuf:"varint,7,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *StreamExecuteRawRequest) Reset() {
+	*x = StreamExecuteRawRequest{}
+	mi := &file_query_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamExecuteRawRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamExecuteRawRequest) ProtoMessage() {}
+
+func (x *StreamExecuteRawRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamExecuteRawRequest.ProtoReflect.Descriptor instead.
+func (*StreamExecuteRawRequest) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *StreamExecuteRawRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.EffectiveCallerId
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawRequest) GetImmediateCallerId() *VTGateCallerID {
+	if x != nil {
+		return x.ImmediateCallerId
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawRequest) GetQuery() *BoundQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawRequest) GetOptions() *ExecuteOptions {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawRequest) GetTransactionId() int64 {
+	if x != nil {
+		return x.TransactionId
+	}
+	return 0
+}
+
+func (x *StreamExecuteRawRequest) GetReservedId() int64 {
+	if x != nil {
+		return x.ReservedId
+	}
+	return 0
+}
+
+// StreamExecuteRawResponse is the returned value from StreamExecuteRaw
+type StreamExecuteRawResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Raw MySQL wire protocol bytes. Contains one or more complete MySQL packets
+	// (header + payload). Headers are never split across messages.
+	// Large packet payloads may span multiple messages.
+	Raw []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
+	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+	// Sent in every response so the client can start parsing from any message.
+	DeprecateEof  bool `protobuf:"varint,2,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamExecuteRawResponse) Reset() {
+	*x = StreamExecuteRawResponse{}
+	mi := &file_query_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamExecuteRawResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamExecuteRawResponse) ProtoMessage() {}
+
+func (x *StreamExecuteRawResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamExecuteRawResponse.ProtoReflect.Descriptor instead.
+func (*StreamExecuteRawResponse) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *StreamExecuteRawResponse) GetRaw() []byte {
+	if x != nil {
+		return x.Raw
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawResponse) GetDeprecateEof() bool {
+	if x != nil {
+		return x.DeprecateEof
+	}
+	return false
+}
+
+// BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
+type BeginStreamExecuteRawRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID        `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target                `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery            `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	PreQueries        []string               `protobuf:"bytes,6,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
+	ReservedId        int64                  `protobuf:"varint,7,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BeginStreamExecuteRawRequest) Reset() {
+	*x = BeginStreamExecuteRawRequest{}
+	mi := &file_query_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginStreamExecuteRawRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginStreamExecuteRawRequest) ProtoMessage() {}
+
+func (x *BeginStreamExecuteRawRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginStreamExecuteRawRequest.ProtoReflect.Descriptor instead.
+func (*BeginStreamExecuteRawRequest) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *BeginStreamExecuteRawRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.EffectiveCallerId
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetImmediateCallerId() *VTGateCallerID {
+	if x != nil {
+		return x.ImmediateCallerId
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetQuery() *BoundQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetOptions() *ExecuteOptions {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetPreQueries() []string {
+	if x != nil {
+		return x.PreQueries
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawRequest) GetReservedId() int64 {
+	if x != nil {
+		return x.ReservedId
+	}
+	return 0
+}
+
+// BeginStreamExecuteRawResponse is the returned value from BeginStreamExecuteRaw
+type BeginStreamExecuteRawResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// error contains an application level error if necessary. Note the
+	// transaction_id may be set, even when an error is returned, if the begin
+	// worked but the stream execute failed.
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	// Raw MySQL wire protocol bytes.
+	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
+	// transaction_id might be non-zero even if an error is present.
+	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	// The session_state_changes might be set if the transaction is a snapshot transaction
+	// and the MySQL implementation supports getting a start gtid on snapshot
+	SessionStateChanges string `protobuf:"bytes,6,opt,name=session_state_changes,json=sessionStateChanges,proto3" json:"session_state_changes,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *BeginStreamExecuteRawResponse) Reset() {
+	*x = BeginStreamExecuteRawResponse{}
+	mi := &file_query_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginStreamExecuteRawResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginStreamExecuteRawResponse) ProtoMessage() {}
+
+func (x *BeginStreamExecuteRawResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginStreamExecuteRawResponse.ProtoReflect.Descriptor instead.
+func (*BeginStreamExecuteRawResponse) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *BeginStreamExecuteRawResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawResponse) GetRaw() []byte {
+	if x != nil {
+		return x.Raw
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawResponse) GetDeprecateEof() bool {
+	if x != nil {
+		return x.DeprecateEof
+	}
+	return false
+}
+
+func (x *BeginStreamExecuteRawResponse) GetTransactionId() int64 {
+	if x != nil {
+		return x.TransactionId
+	}
+	return 0
+}
+
+func (x *BeginStreamExecuteRawResponse) GetTabletAlias() *topodata.TabletAlias {
+	if x != nil {
+		return x.TabletAlias
+	}
+	return nil
+}
+
+func (x *BeginStreamExecuteRawResponse) GetSessionStateChanges() string {
+	if x != nil {
+		return x.SessionStateChanges
+	}
+	return ""
+}
+
+// ReserveStreamExecuteRawRequest is the payload to ReserveStreamExecuteRaw
+type ReserveStreamExecuteRawRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID        `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target                `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery            `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	TransactionId     int64                  `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	PreQueries        []string               `protobuf:"bytes,7,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ReserveStreamExecuteRawRequest) Reset() {
+	*x = ReserveStreamExecuteRawRequest{}
+	mi := &file_query_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveStreamExecuteRawRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveStreamExecuteRawRequest) ProtoMessage() {}
+
+func (x *ReserveStreamExecuteRawRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveStreamExecuteRawRequest.ProtoReflect.Descriptor instead.
+func (*ReserveStreamExecuteRawRequest) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.EffectiveCallerId
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetImmediateCallerId() *VTGateCallerID {
+	if x != nil {
+		return x.ImmediateCallerId
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetQuery() *BoundQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetOptions() *ExecuteOptions {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetTransactionId() int64 {
+	if x != nil {
+		return x.TransactionId
+	}
+	return 0
+}
+
+func (x *ReserveStreamExecuteRawRequest) GetPreQueries() []string {
+	if x != nil {
+		return x.PreQueries
+	}
+	return nil
+}
+
+// ReserveStreamExecuteRawResponse is the returned value from ReserveStreamExecuteRaw
+type ReserveStreamExecuteRawResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Error *vtrpc.RPCError        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	// Raw MySQL wire protocol bytes.
+	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
+	// The following fields might be non-zero even if an error is present.
+	ReservedId    int64                 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
+	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReserveStreamExecuteRawResponse) Reset() {
+	*x = ReserveStreamExecuteRawResponse{}
+	mi := &file_query_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveStreamExecuteRawResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveStreamExecuteRawResponse) ProtoMessage() {}
+
+func (x *ReserveStreamExecuteRawResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveStreamExecuteRawResponse.ProtoReflect.Descriptor instead.
+func (*ReserveStreamExecuteRawResponse) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetRaw() []byte {
+	if x != nil {
+		return x.Raw
+	}
+	return nil
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetDeprecateEof() bool {
+	if x != nil {
+		return x.DeprecateEof
+	}
+	return false
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetReservedId() int64 {
+	if x != nil {
+		return x.ReservedId
+	}
+	return 0
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetTabletAlias() *topodata.TabletAlias {
+	if x != nil {
+		return x.TabletAlias
+	}
+	return nil
+}
+
+// ReserveBeginStreamExecuteRawRequest is the payload to ReserveBeginStreamExecuteRaw
+type ReserveBeginStreamExecuteRawRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	EffectiveCallerId *vtrpc.CallerID        `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID        `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target                `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery            `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	PreQueries        []string               `protobuf:"bytes,6,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
+	PostBeginQueries  []string               `protobuf:"bytes,7,rep,name=post_begin_queries,json=postBeginQueries,proto3" json:"post_begin_queries,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) Reset() {
+	*x = ReserveBeginStreamExecuteRawRequest{}
+	mi := &file_query_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveBeginStreamExecuteRawRequest) ProtoMessage() {}
+
+func (x *ReserveBeginStreamExecuteRawRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveBeginStreamExecuteRawRequest.ProtoReflect.Descriptor instead.
+func (*ReserveBeginStreamExecuteRawRequest) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.EffectiveCallerId
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetImmediateCallerId() *VTGateCallerID {
+	if x != nil {
+		return x.ImmediateCallerId
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetQuery() *BoundQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetOptions() *ExecuteOptions {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetPreQueries() []string {
+	if x != nil {
+		return x.PreQueries
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawRequest) GetPostBeginQueries() []string {
+	if x != nil {
+		return x.PostBeginQueries
+	}
+	return nil
+}
+
+// ReserveBeginStreamExecuteRawResponse is the returned value from ReserveBeginStreamExecuteRaw
+type ReserveBeginStreamExecuteRawResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// error contains an application level error if necessary. Note the
+	// transaction_id may be set, even when an error is returned, if the begin
+	// worked but the stream execute failed.
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	// Raw MySQL wire protocol bytes.
+	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// Whether CapabilityClientDeprecateEOF is set on the MySQL connection.
+	DeprecateEof bool `protobuf:"varint,3,opt,name=deprecate_eof,json=deprecateEof,proto3" json:"deprecate_eof,omitempty"`
+	// The following fields might be non-zero even if an error is present.
+	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	ReservedId    int64                 `protobuf:"varint,5,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
+	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,6,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	// The session_state_changes might be set if the transaction is a snapshot transaction
+	// and the MySQL implementation supports getting a start gtid on snapshot
+	SessionStateChanges string `protobuf:"bytes,7,opt,name=session_state_changes,json=sessionStateChanges,proto3" json:"session_state_changes,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) Reset() {
+	*x = ReserveBeginStreamExecuteRawResponse{}
+	mi := &file_query_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveBeginStreamExecuteRawResponse) ProtoMessage() {}
+
+func (x *ReserveBeginStreamExecuteRawResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_query_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveBeginStreamExecuteRawResponse.ProtoReflect.Descriptor instead.
+func (*ReserveBeginStreamExecuteRawResponse) Descriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetRaw() []byte {
+	if x != nil {
+		return x.Raw
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetDeprecateEof() bool {
+	if x != nil {
+		return x.DeprecateEof
+	}
+	return false
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetTransactionId() int64 {
+	if x != nil {
+		return x.TransactionId
+	}
+	return 0
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetReservedId() int64 {
+	if x != nil {
+		return x.ReservedId
+	}
+	return 0
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetTabletAlias() *topodata.TabletAlias {
+	if x != nil {
+		return x.TabletAlias
+	}
+	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetSessionStateChanges() string {
+	if x != nil {
+		return x.SessionStateChanges
+	}
+	return ""
+}
+
 // One individual Statement in a transaction.
 type StreamEvent_Statement struct {
 	state    protoimpl.MessageState         `protogen:"open.v1"`
@@ -5731,7 +6435,7 @@ type StreamEvent_Statement struct {
 
 func (x *StreamEvent_Statement) Reset() {
 	*x = StreamEvent_Statement{}
-	mi := &file_query_proto_msgTypes[68]
+	mi := &file_query_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5743,7 +6447,7 @@ func (x *StreamEvent_Statement) String() string {
 func (*StreamEvent_Statement) ProtoMessage() {}
 
 func (x *StreamEvent_Statement) ProtoReflect() protoreflect.Message {
-	mi := &file_query_proto_msgTypes[68]
+	mi := &file_query_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6209,7 +6913,70 @@ const file_query_proto_rawDesc = "" +
 	"\x10table_definition\x18\x02 \x03(\v2-.query.GetSchemaResponse.TableDefinitionEntryR\x0ftableDefinition\x1aB\n" +
 	"\x14TableDefinitionEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x92\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xea\x02\n" +
+	"\x17StreamExecuteRawRequest\x12?\n" +
+	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
+	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
+	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
+	"\x05query\x18\x04 \x01(\v2\x11.query.BoundQueryR\x05query\x12/\n" +
+	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
+	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
+	"\vreserved_id\x18\a \x01(\x03R\n" +
+	"reservedId\"Q\n" +
+	"\x18StreamExecuteRawResponse\x12\x10\n" +
+	"\x03raw\x18\x01 \x01(\fR\x03raw\x12#\n" +
+	"\rdeprecate_eof\x18\x02 \x01(\bR\fdeprecateEof\"\xe9\x02\n" +
+	"\x1cBeginStreamExecuteRawRequest\x12?\n" +
+	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
+	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
+	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
+	"\x05query\x18\x04 \x01(\v2\x11.query.BoundQueryR\x05query\x12/\n" +
+	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
+	"\vpre_queries\x18\x06 \x03(\tR\n" +
+	"preQueries\x12\x1f\n" +
+	"\vreserved_id\x18\a \x01(\x03R\n" +
+	"reservedId\"\x92\x02\n" +
+	"\x1dBeginStreamExecuteRawResponse\x12%\n" +
+	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
+	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12%\n" +
+	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x128\n" +
+	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
+	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xf1\x02\n" +
+	"\x1eReserveStreamExecuteRawRequest\x12?\n" +
+	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
+	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
+	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
+	"\x05query\x18\x04 \x01(\v2\x11.query.BoundQueryR\x05query\x12/\n" +
+	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
+	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
+	"\vpre_queries\x18\a \x03(\tR\n" +
+	"preQueries\"\xda\x01\n" +
+	"\x1fReserveStreamExecuteRawResponse\x12%\n" +
+	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
+	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12\x1f\n" +
+	"\vreserved_id\x18\x04 \x01(\x03R\n" +
+	"reservedId\x128\n" +
+	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xfd\x02\n" +
+	"#ReserveBeginStreamExecuteRawRequest\x12?\n" +
+	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
+	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
+	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
+	"\x05query\x18\x04 \x01(\v2\x11.query.BoundQueryR\x05query\x12/\n" +
+	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
+	"\vpre_queries\x18\x06 \x03(\tR\n" +
+	"preQueries\x12,\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xba\x02\n" +
+	"$ReserveBeginStreamExecuteRawResponse\x12%\n" +
+	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12#\n" +
+	"\rdeprecate_eof\x18\x03 \x01(\bR\fdeprecateEof\x12%\n" +
+	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x12\x1f\n" +
+	"\vreserved_id\x18\x05 \x01(\x03R\n" +
+	"reservedId\x128\n" +
+	"\ftablet_alias\x18\x06 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
+	"\x15session_state_changes\x18\a \x01(\tR\x13sessionStateChanges*\x92\x03\n" +
 	"\tMySqlFlag\x12\t\n" +
 	"\x05EMPTY\x10\x00\x12\x11\n" +
 	"\rNOT_NULL_FLAG\x10\x01\x12\x10\n" +
@@ -6318,102 +7085,110 @@ func file_query_proto_rawDescGZIP() []byte {
 }
 
 var file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 13)
-var file_query_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_query_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
 var file_query_proto_goTypes = []any{
-	(MySqlFlag)(0),                            // 0: query.MySqlFlag
-	(Flag)(0),                                 // 1: query.Flag
-	(Type)(0),                                 // 2: query.Type
-	(StartCommitState)(0),                     // 3: query.StartCommitState
-	(TransactionState)(0),                     // 4: query.TransactionState
-	(SchemaTableType)(0),                      // 5: query.SchemaTableType
-	(ExecuteOptions_IncludedFields)(0),        // 6: query.ExecuteOptions.IncludedFields
-	(ExecuteOptions_Workload)(0),              // 7: query.ExecuteOptions.Workload
-	(ExecuteOptions_TransactionIsolation)(0),  // 8: query.ExecuteOptions.TransactionIsolation
-	(ExecuteOptions_PlannerVersion)(0),        // 9: query.ExecuteOptions.PlannerVersion
-	(ExecuteOptions_Consolidator)(0),          // 10: query.ExecuteOptions.Consolidator
-	(ExecuteOptions_TransactionAccessMode)(0), // 11: query.ExecuteOptions.TransactionAccessMode
-	(StreamEvent_Statement_Category)(0),       // 12: query.StreamEvent.Statement.Category
-	(*Target)(nil),                            // 13: query.Target
-	(*VTGateCallerID)(nil),                    // 14: query.VTGateCallerID
-	(*EventToken)(nil),                        // 15: query.EventToken
-	(*Value)(nil),                             // 16: query.Value
-	(*BindVariable)(nil),                      // 17: query.BindVariable
-	(*BoundQuery)(nil),                        // 18: query.BoundQuery
-	(*ExecuteOptions)(nil),                    // 19: query.ExecuteOptions
-	(*Field)(nil),                             // 20: query.Field
-	(*Row)(nil),                               // 21: query.Row
-	(*QueryResult)(nil),                       // 22: query.QueryResult
-	(*QueryWarning)(nil),                      // 23: query.QueryWarning
-	(*StreamEvent)(nil),                       // 24: query.StreamEvent
-	(*ExecuteRequest)(nil),                    // 25: query.ExecuteRequest
-	(*ExecuteResponse)(nil),                   // 26: query.ExecuteResponse
-	(*ResultWithError)(nil),                   // 27: query.ResultWithError
-	(*StreamExecuteRequest)(nil),              // 28: query.StreamExecuteRequest
-	(*StreamExecuteResponse)(nil),             // 29: query.StreamExecuteResponse
-	(*BeginRequest)(nil),                      // 30: query.BeginRequest
-	(*BeginResponse)(nil),                     // 31: query.BeginResponse
-	(*CommitRequest)(nil),                     // 32: query.CommitRequest
-	(*CommitResponse)(nil),                    // 33: query.CommitResponse
-	(*RollbackRequest)(nil),                   // 34: query.RollbackRequest
-	(*RollbackResponse)(nil),                  // 35: query.RollbackResponse
-	(*PrepareRequest)(nil),                    // 36: query.PrepareRequest
-	(*PrepareResponse)(nil),                   // 37: query.PrepareResponse
-	(*CommitPreparedRequest)(nil),             // 38: query.CommitPreparedRequest
-	(*CommitPreparedResponse)(nil),            // 39: query.CommitPreparedResponse
-	(*RollbackPreparedRequest)(nil),           // 40: query.RollbackPreparedRequest
-	(*RollbackPreparedResponse)(nil),          // 41: query.RollbackPreparedResponse
-	(*CreateTransactionRequest)(nil),          // 42: query.CreateTransactionRequest
-	(*CreateTransactionResponse)(nil),         // 43: query.CreateTransactionResponse
-	(*StartCommitRequest)(nil),                // 44: query.StartCommitRequest
-	(*StartCommitResponse)(nil),               // 45: query.StartCommitResponse
-	(*SetRollbackRequest)(nil),                // 46: query.SetRollbackRequest
-	(*SetRollbackResponse)(nil),               // 47: query.SetRollbackResponse
-	(*ConcludeTransactionRequest)(nil),        // 48: query.ConcludeTransactionRequest
-	(*ConcludeTransactionResponse)(nil),       // 49: query.ConcludeTransactionResponse
-	(*ReadTransactionRequest)(nil),            // 50: query.ReadTransactionRequest
-	(*ReadTransactionResponse)(nil),           // 51: query.ReadTransactionResponse
-	(*UnresolvedTransactionsRequest)(nil),     // 52: query.UnresolvedTransactionsRequest
-	(*UnresolvedTransactionsResponse)(nil),    // 53: query.UnresolvedTransactionsResponse
-	(*BeginExecuteRequest)(nil),               // 54: query.BeginExecuteRequest
-	(*BeginExecuteResponse)(nil),              // 55: query.BeginExecuteResponse
-	(*BeginStreamExecuteRequest)(nil),         // 56: query.BeginStreamExecuteRequest
-	(*BeginStreamExecuteResponse)(nil),        // 57: query.BeginStreamExecuteResponse
-	(*MessageStreamRequest)(nil),              // 58: query.MessageStreamRequest
-	(*MessageStreamResponse)(nil),             // 59: query.MessageStreamResponse
-	(*MessageAckRequest)(nil),                 // 60: query.MessageAckRequest
-	(*MessageAckResponse)(nil),                // 61: query.MessageAckResponse
-	(*ReserveExecuteRequest)(nil),             // 62: query.ReserveExecuteRequest
-	(*ReserveExecuteResponse)(nil),            // 63: query.ReserveExecuteResponse
-	(*ReserveStreamExecuteRequest)(nil),       // 64: query.ReserveStreamExecuteRequest
-	(*ReserveStreamExecuteResponse)(nil),      // 65: query.ReserveStreamExecuteResponse
-	(*ReserveBeginExecuteRequest)(nil),        // 66: query.ReserveBeginExecuteRequest
-	(*ReserveBeginExecuteResponse)(nil),       // 67: query.ReserveBeginExecuteResponse
-	(*ReserveBeginStreamExecuteRequest)(nil),  // 68: query.ReserveBeginStreamExecuteRequest
-	(*ReserveBeginStreamExecuteResponse)(nil), // 69: query.ReserveBeginStreamExecuteResponse
-	(*ReleaseRequest)(nil),                    // 70: query.ReleaseRequest
-	(*ReleaseResponse)(nil),                   // 71: query.ReleaseResponse
-	(*StreamHealthRequest)(nil),               // 72: query.StreamHealthRequest
-	(*RealtimeStats)(nil),                     // 73: query.RealtimeStats
-	(*AggregateStats)(nil),                    // 74: query.AggregateStats
-	(*StreamHealthResponse)(nil),              // 75: query.StreamHealthResponse
-	(*TransactionMetadata)(nil),               // 76: query.TransactionMetadata
-	(*GetSchemaRequest)(nil),                  // 77: query.GetSchemaRequest
-	(*UDFInfo)(nil),                           // 78: query.UDFInfo
-	(*GetSchemaResponse)(nil),                 // 79: query.GetSchemaResponse
-	nil,                                       // 80: query.BoundQuery.BindVariablesEntry
-	(*StreamEvent_Statement)(nil),             // 81: query.StreamEvent.Statement
-	nil,                                       // 82: query.GetSchemaResponse.TableDefinitionEntry
-	(topodata.TabletType)(0),                  // 83: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                    // 84: vtrpc.CallerID
-	(*vtrpc.RPCError)(nil),                    // 85: vtrpc.RPCError
-	(*topodata.TabletAlias)(nil),              // 86: topodata.TabletAlias
+	(MySqlFlag)(0),                               // 0: query.MySqlFlag
+	(Flag)(0),                                    // 1: query.Flag
+	(Type)(0),                                    // 2: query.Type
+	(StartCommitState)(0),                        // 3: query.StartCommitState
+	(TransactionState)(0),                        // 4: query.TransactionState
+	(SchemaTableType)(0),                         // 5: query.SchemaTableType
+	(ExecuteOptions_IncludedFields)(0),           // 6: query.ExecuteOptions.IncludedFields
+	(ExecuteOptions_Workload)(0),                 // 7: query.ExecuteOptions.Workload
+	(ExecuteOptions_TransactionIsolation)(0),     // 8: query.ExecuteOptions.TransactionIsolation
+	(ExecuteOptions_PlannerVersion)(0),           // 9: query.ExecuteOptions.PlannerVersion
+	(ExecuteOptions_Consolidator)(0),             // 10: query.ExecuteOptions.Consolidator
+	(ExecuteOptions_TransactionAccessMode)(0),    // 11: query.ExecuteOptions.TransactionAccessMode
+	(StreamEvent_Statement_Category)(0),          // 12: query.StreamEvent.Statement.Category
+	(*Target)(nil),                               // 13: query.Target
+	(*VTGateCallerID)(nil),                       // 14: query.VTGateCallerID
+	(*EventToken)(nil),                           // 15: query.EventToken
+	(*Value)(nil),                                // 16: query.Value
+	(*BindVariable)(nil),                         // 17: query.BindVariable
+	(*BoundQuery)(nil),                           // 18: query.BoundQuery
+	(*ExecuteOptions)(nil),                       // 19: query.ExecuteOptions
+	(*Field)(nil),                                // 20: query.Field
+	(*Row)(nil),                                  // 21: query.Row
+	(*QueryResult)(nil),                          // 22: query.QueryResult
+	(*QueryWarning)(nil),                         // 23: query.QueryWarning
+	(*StreamEvent)(nil),                          // 24: query.StreamEvent
+	(*ExecuteRequest)(nil),                       // 25: query.ExecuteRequest
+	(*ExecuteResponse)(nil),                      // 26: query.ExecuteResponse
+	(*ResultWithError)(nil),                      // 27: query.ResultWithError
+	(*StreamExecuteRequest)(nil),                 // 28: query.StreamExecuteRequest
+	(*StreamExecuteResponse)(nil),                // 29: query.StreamExecuteResponse
+	(*BeginRequest)(nil),                         // 30: query.BeginRequest
+	(*BeginResponse)(nil),                        // 31: query.BeginResponse
+	(*CommitRequest)(nil),                        // 32: query.CommitRequest
+	(*CommitResponse)(nil),                       // 33: query.CommitResponse
+	(*RollbackRequest)(nil),                      // 34: query.RollbackRequest
+	(*RollbackResponse)(nil),                     // 35: query.RollbackResponse
+	(*PrepareRequest)(nil),                       // 36: query.PrepareRequest
+	(*PrepareResponse)(nil),                      // 37: query.PrepareResponse
+	(*CommitPreparedRequest)(nil),                // 38: query.CommitPreparedRequest
+	(*CommitPreparedResponse)(nil),               // 39: query.CommitPreparedResponse
+	(*RollbackPreparedRequest)(nil),              // 40: query.RollbackPreparedRequest
+	(*RollbackPreparedResponse)(nil),             // 41: query.RollbackPreparedResponse
+	(*CreateTransactionRequest)(nil),             // 42: query.CreateTransactionRequest
+	(*CreateTransactionResponse)(nil),            // 43: query.CreateTransactionResponse
+	(*StartCommitRequest)(nil),                   // 44: query.StartCommitRequest
+	(*StartCommitResponse)(nil),                  // 45: query.StartCommitResponse
+	(*SetRollbackRequest)(nil),                   // 46: query.SetRollbackRequest
+	(*SetRollbackResponse)(nil),                  // 47: query.SetRollbackResponse
+	(*ConcludeTransactionRequest)(nil),           // 48: query.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),          // 49: query.ConcludeTransactionResponse
+	(*ReadTransactionRequest)(nil),               // 50: query.ReadTransactionRequest
+	(*ReadTransactionResponse)(nil),              // 51: query.ReadTransactionResponse
+	(*UnresolvedTransactionsRequest)(nil),        // 52: query.UnresolvedTransactionsRequest
+	(*UnresolvedTransactionsResponse)(nil),       // 53: query.UnresolvedTransactionsResponse
+	(*BeginExecuteRequest)(nil),                  // 54: query.BeginExecuteRequest
+	(*BeginExecuteResponse)(nil),                 // 55: query.BeginExecuteResponse
+	(*BeginStreamExecuteRequest)(nil),            // 56: query.BeginStreamExecuteRequest
+	(*BeginStreamExecuteResponse)(nil),           // 57: query.BeginStreamExecuteResponse
+	(*MessageStreamRequest)(nil),                 // 58: query.MessageStreamRequest
+	(*MessageStreamResponse)(nil),                // 59: query.MessageStreamResponse
+	(*MessageAckRequest)(nil),                    // 60: query.MessageAckRequest
+	(*MessageAckResponse)(nil),                   // 61: query.MessageAckResponse
+	(*ReserveExecuteRequest)(nil),                // 62: query.ReserveExecuteRequest
+	(*ReserveExecuteResponse)(nil),               // 63: query.ReserveExecuteResponse
+	(*ReserveStreamExecuteRequest)(nil),          // 64: query.ReserveStreamExecuteRequest
+	(*ReserveStreamExecuteResponse)(nil),         // 65: query.ReserveStreamExecuteResponse
+	(*ReserveBeginExecuteRequest)(nil),           // 66: query.ReserveBeginExecuteRequest
+	(*ReserveBeginExecuteResponse)(nil),          // 67: query.ReserveBeginExecuteResponse
+	(*ReserveBeginStreamExecuteRequest)(nil),     // 68: query.ReserveBeginStreamExecuteRequest
+	(*ReserveBeginStreamExecuteResponse)(nil),    // 69: query.ReserveBeginStreamExecuteResponse
+	(*ReleaseRequest)(nil),                       // 70: query.ReleaseRequest
+	(*ReleaseResponse)(nil),                      // 71: query.ReleaseResponse
+	(*StreamHealthRequest)(nil),                  // 72: query.StreamHealthRequest
+	(*RealtimeStats)(nil),                        // 73: query.RealtimeStats
+	(*AggregateStats)(nil),                       // 74: query.AggregateStats
+	(*StreamHealthResponse)(nil),                 // 75: query.StreamHealthResponse
+	(*TransactionMetadata)(nil),                  // 76: query.TransactionMetadata
+	(*GetSchemaRequest)(nil),                     // 77: query.GetSchemaRequest
+	(*UDFInfo)(nil),                              // 78: query.UDFInfo
+	(*GetSchemaResponse)(nil),                    // 79: query.GetSchemaResponse
+	(*StreamExecuteRawRequest)(nil),              // 80: query.StreamExecuteRawRequest
+	(*StreamExecuteRawResponse)(nil),             // 81: query.StreamExecuteRawResponse
+	(*BeginStreamExecuteRawRequest)(nil),         // 82: query.BeginStreamExecuteRawRequest
+	(*BeginStreamExecuteRawResponse)(nil),        // 83: query.BeginStreamExecuteRawResponse
+	(*ReserveStreamExecuteRawRequest)(nil),       // 84: query.ReserveStreamExecuteRawRequest
+	(*ReserveStreamExecuteRawResponse)(nil),      // 85: query.ReserveStreamExecuteRawResponse
+	(*ReserveBeginStreamExecuteRawRequest)(nil),  // 86: query.ReserveBeginStreamExecuteRawRequest
+	(*ReserveBeginStreamExecuteRawResponse)(nil), // 87: query.ReserveBeginStreamExecuteRawResponse
+	nil,                           // 88: query.BoundQuery.BindVariablesEntry
+	(*StreamEvent_Statement)(nil), // 89: query.StreamEvent.Statement
+	nil,                           // 90: query.GetSchemaResponse.TableDefinitionEntry
+	(topodata.TabletType)(0),      // 91: topodata.TabletType
+	(*vtrpc.CallerID)(nil),        // 92: vtrpc.CallerID
+	(*vtrpc.RPCError)(nil),        // 93: vtrpc.RPCError
+	(*topodata.TabletAlias)(nil),  // 94: topodata.TabletAlias
 }
 var file_query_proto_depIdxs = []int32{
-	83,  // 0: query.Target.tablet_type:type_name -> topodata.TabletType
+	91,  // 0: query.Target.tablet_type:type_name -> topodata.TabletType
 	2,   // 1: query.Value.type:type_name -> query.Type
 	2,   // 2: query.BindVariable.type:type_name -> query.Type
 	16,  // 3: query.BindVariable.values:type_name -> query.Value
-	80,  // 4: query.BoundQuery.bind_variables:type_name -> query.BoundQuery.BindVariablesEntry
+	88,  // 4: query.BoundQuery.bind_variables:type_name -> query.BoundQuery.BindVariablesEntry
 	6,   // 5: query.ExecuteOptions.included_fields:type_name -> query.ExecuteOptions.IncludedFields
 	7,   // 6: query.ExecuteOptions.workload:type_name -> query.ExecuteOptions.Workload
 	8,   // 7: query.ExecuteOptions.transaction_isolation:type_name -> query.ExecuteOptions.TransactionIsolation
@@ -6423,143 +7198,169 @@ var file_query_proto_depIdxs = []int32{
 	2,   // 11: query.Field.type:type_name -> query.Type
 	20,  // 12: query.QueryResult.fields:type_name -> query.Field
 	21,  // 13: query.QueryResult.rows:type_name -> query.Row
-	81,  // 14: query.StreamEvent.statements:type_name -> query.StreamEvent.Statement
+	89,  // 14: query.StreamEvent.statements:type_name -> query.StreamEvent.Statement
 	15,  // 15: query.StreamEvent.event_token:type_name -> query.EventToken
-	84,  // 16: query.ExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 16: query.ExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 17: query.ExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 18: query.ExecuteRequest.target:type_name -> query.Target
 	18,  // 19: query.ExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 20: query.ExecuteRequest.options:type_name -> query.ExecuteOptions
 	22,  // 21: query.ExecuteResponse.result:type_name -> query.QueryResult
-	85,  // 22: query.ResultWithError.error:type_name -> vtrpc.RPCError
+	93,  // 22: query.ResultWithError.error:type_name -> vtrpc.RPCError
 	22,  // 23: query.ResultWithError.result:type_name -> query.QueryResult
-	84,  // 24: query.StreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 24: query.StreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 25: query.StreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 26: query.StreamExecuteRequest.target:type_name -> query.Target
 	18,  // 27: query.StreamExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 28: query.StreamExecuteRequest.options:type_name -> query.ExecuteOptions
 	22,  // 29: query.StreamExecuteResponse.result:type_name -> query.QueryResult
-	84,  // 30: query.BeginRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 30: query.BeginRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 31: query.BeginRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 32: query.BeginRequest.target:type_name -> query.Target
 	19,  // 33: query.BeginRequest.options:type_name -> query.ExecuteOptions
-	86,  // 34: query.BeginResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 35: query.CommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 34: query.BeginResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 35: query.CommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 36: query.CommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 37: query.CommitRequest.target:type_name -> query.Target
-	84,  // 38: query.RollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 38: query.RollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 39: query.RollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 40: query.RollbackRequest.target:type_name -> query.Target
-	84,  // 41: query.PrepareRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 41: query.PrepareRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 42: query.PrepareRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 43: query.PrepareRequest.target:type_name -> query.Target
-	84,  // 44: query.CommitPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 44: query.CommitPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 45: query.CommitPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 46: query.CommitPreparedRequest.target:type_name -> query.Target
-	84,  // 47: query.RollbackPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 47: query.RollbackPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 48: query.RollbackPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 49: query.RollbackPreparedRequest.target:type_name -> query.Target
-	84,  // 50: query.CreateTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 50: query.CreateTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 51: query.CreateTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 52: query.CreateTransactionRequest.target:type_name -> query.Target
 	13,  // 53: query.CreateTransactionRequest.participants:type_name -> query.Target
-	84,  // 54: query.StartCommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 54: query.StartCommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 55: query.StartCommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 56: query.StartCommitRequest.target:type_name -> query.Target
 	3,   // 57: query.StartCommitResponse.state:type_name -> query.StartCommitState
-	84,  // 58: query.SetRollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 58: query.SetRollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 59: query.SetRollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 60: query.SetRollbackRequest.target:type_name -> query.Target
-	84,  // 61: query.ConcludeTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 61: query.ConcludeTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 62: query.ConcludeTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 63: query.ConcludeTransactionRequest.target:type_name -> query.Target
-	84,  // 64: query.ReadTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 64: query.ReadTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 65: query.ReadTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 66: query.ReadTransactionRequest.target:type_name -> query.Target
 	76,  // 67: query.ReadTransactionResponse.metadata:type_name -> query.TransactionMetadata
-	84,  // 68: query.UnresolvedTransactionsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 68: query.UnresolvedTransactionsRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 69: query.UnresolvedTransactionsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 70: query.UnresolvedTransactionsRequest.target:type_name -> query.Target
 	76,  // 71: query.UnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
-	84,  // 72: query.BeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 72: query.BeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 73: query.BeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 74: query.BeginExecuteRequest.target:type_name -> query.Target
 	18,  // 75: query.BeginExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 76: query.BeginExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 77: query.BeginExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 77: query.BeginExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 78: query.BeginExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 79: query.BeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 80: query.BeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 79: query.BeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 80: query.BeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 81: query.BeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 82: query.BeginStreamExecuteRequest.target:type_name -> query.Target
 	18,  // 83: query.BeginStreamExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 84: query.BeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 85: query.BeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 85: query.BeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 86: query.BeginStreamExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 87: query.BeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 88: query.MessageStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 87: query.BeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 88: query.MessageStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 89: query.MessageStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 90: query.MessageStreamRequest.target:type_name -> query.Target
 	22,  // 91: query.MessageStreamResponse.result:type_name -> query.QueryResult
-	84,  // 92: query.MessageAckRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 92: query.MessageAckRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 93: query.MessageAckRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 94: query.MessageAckRequest.target:type_name -> query.Target
 	16,  // 95: query.MessageAckRequest.ids:type_name -> query.Value
 	22,  // 96: query.MessageAckResponse.result:type_name -> query.QueryResult
-	84,  // 97: query.ReserveExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	92,  // 97: query.ReserveExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 98: query.ReserveExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 99: query.ReserveExecuteRequest.target:type_name -> query.Target
 	18,  // 100: query.ReserveExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 101: query.ReserveExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 102: query.ReserveExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 102: query.ReserveExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 103: query.ReserveExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 104: query.ReserveExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 105: query.ReserveStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 104: query.ReserveExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 105: query.ReserveStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 106: query.ReserveStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 107: query.ReserveStreamExecuteRequest.target:type_name -> query.Target
 	18,  // 108: query.ReserveStreamExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 109: query.ReserveStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 110: query.ReserveStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 110: query.ReserveStreamExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 111: query.ReserveStreamExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 112: query.ReserveStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 113: query.ReserveBeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 112: query.ReserveStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 113: query.ReserveBeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 114: query.ReserveBeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 115: query.ReserveBeginExecuteRequest.target:type_name -> query.Target
 	18,  // 116: query.ReserveBeginExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 117: query.ReserveBeginExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 118: query.ReserveBeginExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 118: query.ReserveBeginExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 119: query.ReserveBeginExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 120: query.ReserveBeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 121: query.ReserveBeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 120: query.ReserveBeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 121: query.ReserveBeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 122: query.ReserveBeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 123: query.ReserveBeginStreamExecuteRequest.target:type_name -> query.Target
 	18,  // 124: query.ReserveBeginStreamExecuteRequest.query:type_name -> query.BoundQuery
 	19,  // 125: query.ReserveBeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	85,  // 126: query.ReserveBeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	93,  // 126: query.ReserveBeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
 	22,  // 127: query.ReserveBeginStreamExecuteResponse.result:type_name -> query.QueryResult
-	86,  // 128: query.ReserveBeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	84,  // 129: query.ReleaseRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	94,  // 128: query.ReserveBeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 129: query.ReleaseRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	14,  // 130: query.ReleaseRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	13,  // 131: query.ReleaseRequest.target:type_name -> query.Target
 	13,  // 132: query.StreamHealthResponse.target:type_name -> query.Target
 	73,  // 133: query.StreamHealthResponse.realtime_stats:type_name -> query.RealtimeStats
-	86,  // 134: query.StreamHealthResponse.tablet_alias:type_name -> topodata.TabletAlias
+	94,  // 134: query.StreamHealthResponse.tablet_alias:type_name -> topodata.TabletAlias
 	4,   // 135: query.TransactionMetadata.state:type_name -> query.TransactionState
 	13,  // 136: query.TransactionMetadata.participants:type_name -> query.Target
 	13,  // 137: query.GetSchemaRequest.target:type_name -> query.Target
 	5,   // 138: query.GetSchemaRequest.table_type:type_name -> query.SchemaTableType
 	2,   // 139: query.UDFInfo.return_type:type_name -> query.Type
 	78,  // 140: query.GetSchemaResponse.udfs:type_name -> query.UDFInfo
-	82,  // 141: query.GetSchemaResponse.table_definition:type_name -> query.GetSchemaResponse.TableDefinitionEntry
-	17,  // 142: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
-	12,  // 143: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
-	20,  // 144: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
-	21,  // 145: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
-	146, // [146:146] is the sub-list for method output_type
-	146, // [146:146] is the sub-list for method input_type
-	146, // [146:146] is the sub-list for extension type_name
-	146, // [146:146] is the sub-list for extension extendee
-	0,   // [0:146] is the sub-list for field type_name
+	90,  // 141: query.GetSchemaResponse.table_definition:type_name -> query.GetSchemaResponse.TableDefinitionEntry
+	92,  // 142: query.StreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 143: query.StreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 144: query.StreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 145: query.StreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 146: query.StreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	92,  // 147: query.BeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 148: query.BeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 149: query.BeginStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 150: query.BeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 151: query.BeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 152: query.BeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 153: query.BeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 154: query.ReserveStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 155: query.ReserveStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 156: query.ReserveStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 157: query.ReserveStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 158: query.ReserveStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 159: query.ReserveStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 160: query.ReserveStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 161: query.ReserveBeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 162: query.ReserveBeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 163: query.ReserveBeginStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 164: query.ReserveBeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 165: query.ReserveBeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 166: query.ReserveBeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 167: query.ReserveBeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	17,  // 168: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
+	12,  // 169: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
+	20,  // 170: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
+	21,  // 171: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
+	172, // [172:172] is the sub-list for method output_type
+	172, // [172:172] is the sub-list for method input_type
+	172, // [172:172] is the sub-list for extension type_name
+	172, // [172:172] is the sub-list for extension extendee
+	0,   // [0:172] is the sub-list for field type_name
 }
 
 func init() { file_query_proto_init() }
@@ -6576,7 +7377,7 @@ func file_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_query_proto_rawDesc), len(file_query_proto_rawDesc)),
 			NumEnums:      13,
-			NumMessages:   70,
+			NumMessages:   78,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
