@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,7 +64,6 @@ func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
 	if pos == nil {
 		return false
 	}
-
 	if rlp.Combined.Equal(pos.Combined) {
 		return rlp.Executed.AtLeast(pos.Executed)
 	}
@@ -82,6 +82,31 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// compareRelayLogPositions compares two RelayLogPositions, returning:
+// 0 if both a anb b are equal positions.
+// 1 if a is > than b.
+// -1 if a is < than b.
+// This can be used as a sort function via
+// slices.SortFunc and slices.SortFuncStable.
+func compareRelayLogPositions(a, b *RelayLogPositions) int {
+	if a.Equal(b) {
+		return 0
+	}
+	if a.AtLeast(b) && !b.AtLeast(a) {
+		return -1
+	}
+	return 1
+}
+
+// sortRelayLogPositions sorts RelayLogPositions using replication positions.
+func sortRelayLogPositions(p []*RelayLogPositions) []*RelayLogPositions {
+	positions := p
+	slices.SortFunc(positions, func(a, b *RelayLogPositions) int {
+		return compareRelayLogPositions(a, b)
+	})
+	return positions
 }
 
 // FindPositionsOfAllCandidates will find candidates for an emergency
