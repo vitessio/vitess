@@ -37,20 +37,21 @@ import (
 // target (vreplication)and the source (vstreamer) side.
 type VReplicationConfig struct {
 	// Config parameters applicable to the target side (vreplication)
-	ExperimentalFlags       int64
-	NetReadTimeout          int
-	NetWriteTimeout         int
-	CopyPhaseDuration       time.Duration
-	RetryDelay              time.Duration
-	MaxTimeToRetryError     time.Duration
-	RelayLogMaxSize         int
-	RelayLogMaxItems        int
-	ReplicaLagTolerance     time.Duration
-	HeartbeatUpdateInterval int
-	StoreCompressedGTID     bool
-	ParallelInsertWorkers   int
-	TabletTypesStr          string
-	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
+	ExperimentalFlags          int64
+	NetReadTimeout             int
+	NetWriteTimeout            int
+	CopyPhaseDuration          time.Duration
+	RetryDelay                 time.Duration
+	MaxTimeToRetryError        time.Duration
+	RelayLogMaxSize            int
+	RelayLogMaxItems           int
+	ReplicaLagTolerance        time.Duration
+	HeartbeatUpdateInterval    int
+	StoreCompressedGTID        bool
+	ParallelInsertWorkers      int
+	ParallelReplicationWorkers int
+	TabletTypesStr             string
+	EnableHttpLog              bool // Enable the /debug/vrlog endpoint
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -82,20 +83,21 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		return DefaultVReplicationConfig
 	}
 	DefaultVReplicationConfig = &VReplicationConfig{
-		ExperimentalFlags:       vreplicationExperimentalFlags,
-		NetReadTimeout:          vreplicationNetReadTimeout,
-		NetWriteTimeout:         vreplicationNetWriteTimeout,
-		CopyPhaseDuration:       vreplicationCopyPhaseDuration,
-		RetryDelay:              vreplicationRetryDelay,
-		MaxTimeToRetryError:     vreplicationMaxTimeToRetryError,
-		RelayLogMaxSize:         vreplicationRelayLogMaxSize,
-		RelayLogMaxItems:        vreplicationRelayLogMaxItems,
-		ReplicaLagTolerance:     vreplicationReplicaLagTolerance,
-		HeartbeatUpdateInterval: vreplicationHeartbeatUpdateInterval,
-		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
-		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
-		TabletTypesStr:          vreplicationTabletTypesStr,
-		EnableHttpLog:           vreplicationEnableHttpLog,
+		ExperimentalFlags:          vreplicationExperimentalFlags,
+		NetReadTimeout:             vreplicationNetReadTimeout,
+		NetWriteTimeout:            vreplicationNetWriteTimeout,
+		CopyPhaseDuration:          vreplicationCopyPhaseDuration,
+		RetryDelay:                 vreplicationRetryDelay,
+		MaxTimeToRetryError:        vreplicationMaxTimeToRetryError,
+		RelayLogMaxSize:            vreplicationRelayLogMaxSize,
+		RelayLogMaxItems:           vreplicationRelayLogMaxItems,
+		ReplicaLagTolerance:        vreplicationReplicaLagTolerance,
+		HeartbeatUpdateInterval:    vreplicationHeartbeatUpdateInterval,
+		StoreCompressedGTID:        vreplicationStoreCompressedGTID,
+		ParallelInsertWorkers:      vreplicationParallelInsertWorkers,
+		ParallelReplicationWorkers: vreplicationParallelReplicationWorkers,
+		TabletTypesStr:             vreplicationTabletTypesStr,
+		EnableHttpLog:              vreplicationEnableHttpLog,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
@@ -191,6 +193,13 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				errors = append(errors, getError(k, v))
 			} else {
 				c.RelayLogMaxItems = value
+			}
+		case "vreplication-parallel-replication-workers":
+			value, err := strconv.Atoi(v)
+			if err != nil {
+				errors = append(errors, getError(k, v))
+			} else {
+				c.ParallelReplicationWorkers = value
 			}
 		case "vreplication-replica-lag-tolerance":
 			value, err := time.ParseDuration(v)

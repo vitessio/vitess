@@ -996,6 +996,31 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			go log.Info(fmt.Sprintf("cutOverVReplMigration %v: unbuffered queries", s.workflow))
 		})
 	}
+
+	// Pre-buffering: wait for VReplication to catch up to the current primary position *before*
+	// enabling vtgate buffering. This is critical for two reasons:
+	// 1. It ensures the waitForPos inside the buffering window completes quickly (< 1s),
+	//    preventing buffer timeout (buffer timeout = CutOverThreshold + qrBufferExtraTimeout = 15s).
+	// 2. Once we start the RENAME TABLE goroutine, even while blocked by LOCK TABLES, MySQL queues
+	//    a pending exclusive MDL on the shadow table. That MDL blocks VReplication workers from
+	//    writing to the shadow table (MySQL MDL FIFO), causing lock-wait timeouts in the workers,
+	//    which prevents VReplication from advancing — a livelock. By ensuring VReplication has
+	//    already applied all pending events before buffering + RENAME, the shadow table will be
+	//    idle when RENAME starts, avoiding the livelock entirely.
+	e.updateMigrationStage(ctx, onlineDDL.UUID, "pre-buffer: waiting for vreplication to catch up")
+	preBufferPos, err := e.primaryPosition(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed reading primary position before buffering")
+	}
+	// Read up-to-date vreplication stream info before waiting
+	if s, err = e.readVReplStream(ctx, s.workflow, false); err != nil {
+		return vterrors.Wrapf(err, "failed reading vreplication stream before buffering")
+	}
+	if err := waitForPos(s, preBufferPos, onlineDDL.CutOverThreshold); err != nil {
+		return vterrors.Wrapf(err, "failed waiting for vreplication to catch up before buffering")
+	}
+	go log.Info(fmt.Sprintf("cutOverVReplMigration %v: pre-buffer waitForPos reached %v", s.workflow, replication.EncodePosition(preBufferPos)))
+
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "buffering queries")
 	// stop writes on source:
 	err = toggleBuffering(true)
