@@ -26,3 +26,8 @@ import (
 func Kill(pid int, signum syscall.Signal) (err error) {
 	return errors.New("kill is not supported on windows")
 }
+
+// KillProcessGroup is a stub on windows — process groups are not supported.
+func KillProcessGroup(pid int, signum syscall.Signal) error {
+	return errors.New("kill process group is not supported on windows")
+}

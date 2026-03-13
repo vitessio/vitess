@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -1079,6 +1078,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if cluster.CancelFunc != nil {
 		cluster.CancelFunc()
 	}
+
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Error(fmt.Sprintf("Error in vtgate teardown: %v", err))
 	}
@@ -1108,7 +1108,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
 					if err := tablet.MysqlctldProcess.Stop(); err != nil {
-						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						log.Error(fmt.Sprintf("Error in mysqlctld teardown: %v", err))
 					}
 				}
 
@@ -1144,38 +1144,28 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 	for i, cmd := range mysqlctlProcessList {
 		wg.Add(1)
 		go func(cmd *exec.Cmd, tabletUID int) {
-			defer func() {
-				wg.Done()
-			}()
-			exit := make(chan error)
+			defer wg.Done()
+			exit := make(chan error, 1)
 			go func() {
 				exit <- cmd.Wait()
 			}()
 			select {
-			case <-time.After(30 * time.Second):
-				break
 			case err := <-exit:
 				if err == nil {
 					return
 				}
-				log.Error(fmt.Sprintf("Error in mysqlctl teardown wait: %v", err))
-				break
+				log.Warn(fmt.Sprintf("mysqlctl shutdown failed for tablet %d: %v, attempting force kill", tabletUID, err))
+			case <-time.After(30 * time.Second):
+				log.Warn(fmt.Sprintf("mysqlctl shutdown timed out for tablet %d, attempting force kill", tabletUID))
+				// Kill the hung mysqlctl process itself so cmd.Wait() can return.
+				if cmd.Process != nil {
+					if killErr := cmd.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+						log.Error(fmt.Sprintf("Error killing mysqlctl process for tablet %d: %v", tabletUID, killErr))
+					}
+				}
 			}
-			pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tabletUID))
-			pidBytes, err := os.ReadFile(pidFile)
-			if err != nil {
-				// We can't read the file which means the PID file does not exist
-				// The server must have stopped
-				return
-			}
-			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-			if err != nil {
-				log.Error(fmt.Sprintf("Error in conversion to integer: %v", err))
-				return
-			}
-			err = syscallutil.Kill(pid, syscall.SIGKILL)
-			if err != nil {
-				log.Error(fmt.Sprintf("Error in killing process: %v", err))
+			if err := mysqlForceShutdown(tabletUID); err != nil {
+				log.Error(fmt.Sprintf("Error in mysqlctl force shutdown for tablet %d: %v", tabletUID, err))
 			}
 		}(cmd, mysqlctlTabletUIDs[i])
 	}
