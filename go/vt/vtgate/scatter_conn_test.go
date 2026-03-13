@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 
@@ -637,6 +638,35 @@ func TestIsConnClosed(t *testing.T) {
 			assert.Equal(t, tCase.conClosed, wasConnectionClosed(tCase.err))
 		})
 	}
+}
+
+func TestScatterConnMessageStreamContextCanceled(t *testing.T) {
+	baseCtx := utils.LeakCheckContext(t)
+
+	ks := "TestMessageStreamContextCanceled"
+	createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(baseCtx, hc, newSandboxForCells(baseCtx, []string{"aa"}), "aa")
+
+	hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	rss := []*srvtopo.ResolvedShard{{
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sc.gateway,
+	}}
+
+	// here we are creating a context that is already canceled before we call MessageStream.
+	ctx, cancel := context.WithCancel(baseCtx)
+	cancel()
+
+	err := sc.MessageStream(ctx, rss, "msg_table", func(_ *sqltypes.Result) error {
+		return nil
+	})
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // TestActionInfoWithTabletAlias tests the actionInfo function with tablet-specific routing.

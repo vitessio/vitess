@@ -391,6 +391,41 @@ func TestMergeSortDataFailures(t *testing.T) {
 	require.EqualError(t, err, want)
 }
 
+func TestMergeSortCanceledContextPropagatesContextError(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	shardResults := []*shardResult{{
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"1|a",
+			"2|b",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"3|c",
+		),
+	}}
+	orderBy := []evalengine.OrderByParams{{
+		WeightStringCol: -1,
+		Col:             0,
+	}}
+
+	prims := make([]StreamExecutor, 0, len(shardResults))
+	for _, sr := range shardResults {
+		prims = append(prims, sr)
+	}
+	ms := MergeSort{
+		Primitives: prims,
+		OrderBy:    orderBy,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := ms.TryStreamExecute(ctx, &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		return nil
+	})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func testMergeSort(shardResults []*shardResult, orderBy []evalengine.OrderByParams, callback func(qr *sqltypes.Result) error) error {
 	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {

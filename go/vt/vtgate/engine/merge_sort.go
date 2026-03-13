@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"io"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -237,7 +236,7 @@ func runOneStream(
 				select {
 				case handle.fields <- qr.Fields:
 				case <-ctx.Done():
-					return io.EOF
+					return ctx.Err()
 				}
 			}
 
@@ -245,7 +244,7 @@ func runOneStream(
 				select {
 				case handle.row <- row:
 				case <-ctx.Done():
-					return io.EOF
+					return ctx.Err()
 				}
 			}
 			return nil
