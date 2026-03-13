@@ -202,8 +202,8 @@ type Pitem struct {
 }
 
 type Item struct {
-	pitem Pitem
 	look  Lkset
+	pitem Pitem
 }
 
 type Symb struct {
@@ -213,9 +213,9 @@ type Symb struct {
 }
 
 type Wset struct {
+	ws    Lkset
 	pitem Pitem
 	flag  int
-	ws    Lkset
 }
 
 // storage of types
@@ -368,9 +368,9 @@ var resrv = []Resrv{
 }
 
 type Error struct {
-	lineno int
-	tokens []string
 	msg    string
+	tokens []string
+	lineno int
 }
 
 var errors []Error
@@ -479,7 +479,7 @@ outer:
 			if gettok() != IDENTIFIER {
 				errorf("bad syntax in %%error")
 			}
-			errors = append(errors, Error{lno, tokens, tokname})
+			errors = append(errors, Error{msg: tokname, tokens: tokens, lineno: lno})
 
 		case TYPEDEF:
 			t = gettok()

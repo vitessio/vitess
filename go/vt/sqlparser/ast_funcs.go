@@ -69,11 +69,9 @@ func Append(buf *strings.Builder, node SQLNode) {
 
 // IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
-	// Only one of Column or Expression can be specified
-	// Length is an optional field which is only applicable when Column is used
-	Column     IdentifierCI
-	Length     *int
 	Expression Expr
+	Length     *int
+	Column     IdentifierCI
 	Direction  OrderDirection
 }
 
@@ -144,9 +142,9 @@ const (
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
+	Filter *ShowFilter
 	Full   string
 	DbName string
-	Filter *ShowFilter
 }
 
 // ValType specifies the type for Literal.

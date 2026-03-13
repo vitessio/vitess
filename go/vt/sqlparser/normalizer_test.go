@@ -39,9 +39,9 @@ import (
 func TestNormalize(t *testing.T) {
 	prefix := "bv"
 	testcases := []struct {
+		outbv   map[string]*querypb.BindVariable
 		in      string
 		outstmt string
-		outbv   map[string]*querypb.BindVariable
 	}{{
 		// str val
 		in:      "select * from t where foobar = 'aa'",
@@ -470,8 +470,8 @@ func TestNormalize(t *testing.T) {
 
 func TestNormalizeInvalidDates(t *testing.T) {
 	testcases := []struct {
-		in  string
 		err error
+		in  string
 	}{{
 		in:  "select date'foo'",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", "foo"),
@@ -577,17 +577,38 @@ type testCaseSetVar struct {
 }
 
 type testCaseSysVar struct {
-	in, expected string
-	sysVar       map[string]string
+	sysVar   map[string]string
+	in       string
+	expected string
 }
 
 type myTestCase struct {
-	in, expected                                                                            string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID                       bool
-	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                 bool
-	udv                                                                                     int
-	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment, transactionTimeout  bool
+	in                          string
+	expected                    string
+	udv                         int
+	sessionEnableSystemSettings bool
+	autocommit                  bool
+	rowCount                    bool
+	rawGTID                     bool
+	rawTimeout                  bool
+	sessTrackGTID               bool
+	ddlStrategy                 bool
+	migrationContext            bool
+	sessionUUID                 bool
+	db                          bool
+	liid                        bool
+	foundRows                   bool
+	foreignKeyChecks            bool
+	clientFoundRows             bool
+	skipQueryPlanCache          bool
+	socket                      bool
+	queryTimeout                bool
+	sqlSelectLimit              bool
+	transactionMode             bool
+	workload                    bool
+	version                     bool
+	versionComment              bool
+	transactionTimeout          bool
 }
 
 func TestRewrites(in *testing.T) {

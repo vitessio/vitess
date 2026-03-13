@@ -42,28 +42,25 @@ type (
 	//     it ensures that table columns are consistently placed on the left side of comparison expressions. This uniformity
 	//     minimizes the number of distinct patterns the planner must handle, enhancing planning efficiency.
 	normalizer struct {
-		bindVars  map[string]*querypb.BindVariable
-		reserved  *ReservedVars
-		vals      map[Literal]string
-		tupleVals map[string]string
-		err       error
-		inDerived int
-		inSelect  int
-
+		err                       error
+		views                     VSchemaViews
+		bindVars                  map[string]*querypb.BindVariable
+		reserved                  *ReservedVars
+		vals                      map[Literal]string
+		tupleVals                 map[string]string
+		onLeave                   map[*AliasedExpr]func(*AliasedExpr)
 		bindVarNeeds              *BindVarNeeds
-		shouldRewriteDatabaseFunc bool
+		sysVars                   map[string]string
+		fkChecksState             *bool
+		setVarComment             string
+		keyspace                  string
+		selectLimit               int
+		inSelect                  int
+		inDerived                 int
 		hasStarInSelect           bool
-
-		keyspace      string
-		selectLimit   int
-		setVarComment string
-		fkChecksState *bool
-		sysVars       map[string]string
-		views         VSchemaViews
-
-		onLeave      map[*AliasedExpr]func(*AliasedExpr)
-		parameterize bool
-		useASTQuery  bool
+		shouldRewriteDatabaseFunc bool
+		parameterize              bool
+		useASTQuery               bool
 	}
 	// RewriteASTResult holds the result of rewriting the AST, including bind variable needs.
 	RewriteASTResult struct {

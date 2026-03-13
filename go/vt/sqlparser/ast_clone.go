@@ -3163,9 +3163,9 @@ func CloneRefOfShowProfile(n *ShowProfile) *ShowProfile {
 		return nil
 	}
 	out := *n
-	out.Types = CloneSliceOfString(n.Types)
 	out.ForQuery = CloneRefOfLiteral(n.ForQuery)
 	out.Limit = CloneRefOfLimit(n.Limit)
+	out.Types = CloneSliceOfString(n.Types)
 	return &out
 }
 
@@ -5104,11 +5104,11 @@ func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
 		return nil
 	}
 	out := *n
-	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneRefOfColumnType(n.Type)
 	out.Path = CloneExpr(n.Path)
+	out.Type = CloneRefOfColumnType(n.Type)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
 	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -5338,9 +5338,9 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 		return nil
 	}
 	out := *n
-	out.Column = CloneIdentifierCI(n.Column)
-	out.Length = CloneRefOfInt(n.Length)
 	out.Expression = CloneExpr(n.Expression)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Column = CloneIdentifierCI(n.Column)
 	return &out
 }
 

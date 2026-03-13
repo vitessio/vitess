@@ -575,11 +575,11 @@ const (
 	SliceOfRefOfJSONObjectParamOffset
 	SliceOfRefOfJtColumnDefinitionOffset
 	RefOfJtOrdinalColDefName
-	RefOfJtPathColDefName
-	RefOfJtPathColDefType
 	RefOfJtPathColDefPath
+	RefOfJtPathColDefType
 	RefOfJtPathColDefEmptyOnResponse
 	RefOfJtPathColDefErrorOnResponse
+	RefOfJtPathColDefName
 	RefOfJtNestedPathColDefPath
 	RefOfJtNestedPathColDefColumnsOffset
 	SliceOfRefOfColNameOffset
@@ -596,8 +596,8 @@ const (
 	RefOfVindexParamKey
 	SliceOfVindexParamOffset
 	SliceOfRefOfCommonTableExprOffset
-	RefOfIndexColumnColumn
 	RefOfIndexColumnExpression
+	RefOfIndexColumnColumn
 	RefOfIndexOptionValue
 	RefOfTableAndLockTypeTable
 	RefOfRenameTablePairFromTable
@@ -1717,16 +1717,16 @@ func (s ASTStep) DebugString() string {
 		return "([]*JtColumnDefinition)[]Offset"
 	case RefOfJtOrdinalColDefName:
 		return "(*JtOrdinalColDef).Name"
-	case RefOfJtPathColDefName:
-		return "(*JtPathColDef).Name"
-	case RefOfJtPathColDefType:
-		return "(*JtPathColDef).Type"
 	case RefOfJtPathColDefPath:
 		return "(*JtPathColDef).Path"
+	case RefOfJtPathColDefType:
+		return "(*JtPathColDef).Type"
 	case RefOfJtPathColDefEmptyOnResponse:
 		return "(*JtPathColDef).EmptyOnResponse"
 	case RefOfJtPathColDefErrorOnResponse:
 		return "(*JtPathColDef).ErrorOnResponse"
+	case RefOfJtPathColDefName:
+		return "(*JtPathColDef).Name"
 	case RefOfJtNestedPathColDefPath:
 		return "(*JtNestedPathColDef).Path"
 	case RefOfJtNestedPathColDefColumnsOffset:
@@ -1759,10 +1759,10 @@ func (s ASTStep) DebugString() string {
 		return "([]VindexParam)[]Offset"
 	case SliceOfRefOfCommonTableExprOffset:
 		return "([]*CommonTableExpr)[]Offset"
-	case RefOfIndexColumnColumn:
-		return "(*IndexColumn).Column"
 	case RefOfIndexColumnExpression:
 		return "(*IndexColumn).Expression"
+	case RefOfIndexColumnColumn:
+		return "(*IndexColumn).Column"
 	case RefOfIndexOptionValue:
 		return "(*IndexOption).Value"
 	case RefOfTableAndLockTypeTable:

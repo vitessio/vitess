@@ -196,15 +196,15 @@ type (
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            bool
 		After            *ColName
+		First            bool
 	}
 
 	// RenameColumn is used to change the column definition in alter table command
@@ -251,8 +251,8 @@ type (
 
 	// DropKey is used to drop a key in an alter table statement
 	DropKey struct {
-		Type DropKeyType
 		Name IdentifierCI
+		Type DropKeyType
 	}
 
 	// Force is used to specify force alter option in an alter table statement
@@ -431,17 +431,17 @@ type (
 
 	// DatabaseOption is a struct that stores Collation or Character Set value
 	DatabaseOption struct {
+		Value     string
 		Type      DatabaseOptionType
 		IsDefault bool
-		Value     string
 	}
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
 		Comments      *ParsedComments
 		DBName        IdentifierCS
-		IfNotExists   bool
 		CreateOptions []DatabaseOption
+		IfNotExists   bool
 		FullyParsed   bool
 	}
 
@@ -449,16 +449,16 @@ type (
 	AlterDatabase struct {
 		Comments            *ParsedComments
 		DBName              IdentifierCS
-		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
+		UpdateDataDirectory bool
 		FullyParsed         bool
 	}
 
 	// Flush represents a FLUSH statement.
 	Flush struct {
-		IsLocal      bool
 		FlushOptions []string
 		TableNames   TableNames
+		IsLocal      bool
 		WithLock     bool
 		ForExport    bool
 	}
@@ -496,8 +496,8 @@ type (
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
@@ -512,8 +512,8 @@ type (
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID     string
 		Comments *ParsedComments
+		UUID     string
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -521,12 +521,12 @@ type (
 
 	// AlterMigration represents a ALTER VITESS_MIGRATION statement
 	AlterMigration struct {
-		Type      AlterMigrationType
+		Ratio     *Literal
 		UUID      string
 		Expire    string
-		Ratio     *Literal
 		Threshold string
 		Shards    string
+		Type      AlterMigrationType
 	}
 
 	// CreateProcedure represents a CREATE PROCEDURE statement.
@@ -649,11 +649,8 @@ type (
 
 	// Begin represents a Begin statement.
 	Begin struct {
-		// We need to differentiate between BEGIN and START TRANSACTION statements
-		// because inside a stored procedure the former is considered part of a BEGIN...END statement,
-		// while the latter starts a transaction.
-		Type          BeginType
 		TxAccessModes []TxAccessMode
+		Type          BeginType
 	}
 
 	// Commit represents a Commit statement.
@@ -708,9 +705,9 @@ type (
 
 	// ExplainStmt represents an Explain statement
 	ExplainStmt struct {
-		Type      ExplainType
 		Statement Statement
 		Comments  *ParsedComments
+		Type      ExplainType
 	}
 
 	// VExplainType is an enum for VExplainStmt.Type
@@ -718,9 +715,9 @@ type (
 
 	// VExplainStmt represents an VtExplain statement
 	VExplainStmt struct {
-		Type      VExplainType
 		Statement Statement
 		Comments  *ParsedComments
+		Type      VExplainType
 	}
 
 	// ExplainTab represents the Explain table
@@ -754,8 +751,8 @@ type (
 
 	// Analyze represents the Analyze statement.
 	Analyze struct {
-		IsLocal bool
 		Table   TableName
+		IsLocal bool
 	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
@@ -2023,8 +2020,8 @@ type (
 
 	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
 	ShowCreate struct {
-		Command ShowCommandType
 		Op      TableName
+		Command ShowCommandType
 	}
 
 	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
@@ -2047,9 +2044,9 @@ type (
 
 	// ShowProfile represents SHOW PROFILE [type, ...] [FOR QUERY n] [LIMIT row_count [OFFSET offset]].
 	ShowProfile struct {
-		Types    []string
 		ForQuery *Literal
 		Limit    *Limit
+		Types    []string
 	}
 
 	// ShowCreateUser represents SHOW CREATE USER user_or_role.
@@ -2059,17 +2056,17 @@ type (
 
 	// ShowBinlogEvents represents SHOW BINLOG EVENTS / SHOW RELAYLOG EVENTS statements.
 	ShowBinlogEvents struct {
-		IsRelaylog bool
-		LogName    string
 		Position   Expr
 		Limit      *Limit
-		Channel    string // only for RELAYLOG
+		LogName    string
+		Channel    string
+		IsRelaylog bool
 	}
 
 	// ShowReplicationStatus represents SHOW REPLICA STATUS / SHOW SLAVE STATUS statements.
 	ShowReplicationStatus struct {
-		Legacy  bool // true for SLAVE (deprecated), false for REPLICA
 		Channel string
+		Legacy  bool
 	}
 
 	// ShowReplicationSourceStatus represents SHOW BINARY LOG STATUS / SHOW MASTER STATUS statements.
@@ -2237,23 +2234,24 @@ type ColumnDefinition struct {
 // ColumnType represents a sql type in a CREATE TABLE statement
 // All optional fields are nil if not specified
 type ColumnType struct {
-	// The base type string
-	Type string
-
 	// Generic field options.
 	Options *ColumnTypeOptions
 
 	// Numeric field options
-	Length   *int
-	Unsigned bool
-	Zerofill bool
-	Scale    *int
+	Length *int
+	Scale  *int
+
+	// The base type string
+	Type string
 
 	// Text field options
 	Charset ColumnCharset
 
 	// Enum and Set column definition values
 	EnumValues []string
+
+	Unsigned bool
+	Zerofill bool
 }
 
 // ColumnCharset exists because in the type definition it's possible
@@ -2405,8 +2403,8 @@ type (
 
 // ShowFilter is show tables filter
 type ShowFilter struct {
-	Like   string
 	Filter Expr
+	Like   string
 }
 
 // Comments represents a list of comments.
@@ -2420,8 +2418,8 @@ func (c Comments) Parsed() *ParsedComments {
 }
 
 type ParsedComments struct {
-	comments    Comments
 	_directives *CommentDirectives
+	comments    Comments
 }
 
 type SelectExprs struct {
@@ -2486,9 +2484,9 @@ type (
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
 	JoinTableExpr struct {
 		LeftExpr  TableExpr
-		Join      JoinType
 		RightExpr TableExpr
 		Condition *JoinCondition
+		Join      JoinType
 	}
 
 	// JoinType represents the type of Join for JoinTableExpr
@@ -2528,8 +2526,8 @@ type (
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
-		Lateral bool
 		Select  TableStatement
+		Lateral bool
 	}
 )
 
@@ -2624,9 +2622,9 @@ type (
 	// FramePoint refers to frame_start/frame_end
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
+		Expr Expr
 		Type FramePointType
 		Unit IntervalType
-		Expr Expr
 	}
 
 	// OverClause refers to over_clause
@@ -2701,10 +2699,11 @@ type (
 
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
-		Operator    ComparisonExprOperator
-		Modifier    ComparisonModifier
-		Left, Right Expr
-		Escape      Expr
+		Left     Expr
+		Right    Expr
+		Escape   Expr
+		Operator ComparisonExprOperator
+		Modifier ComparisonModifier
 	}
 
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
@@ -2715,9 +2714,10 @@ type (
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
-		IsBetween bool
 		Left      Expr
-		From, To  Expr
+		From      Expr
+		To        Expr
+		IsBetween bool
 	}
 
 	// RangeCondOperator is an enum for RangeCond.Operator
@@ -2744,8 +2744,8 @@ type (
 
 	// Literal represents a fixed value.
 	Literal struct {
-		Type ValType
 		Val  string
+		Type ValType
 	}
 
 	// Argument represents bindvariable expression
@@ -2771,8 +2771,8 @@ type (
 	Scope int8
 
 	Variable struct {
-		Scope Scope
 		Name  IdentifierCI
+		Scope Scope
 	}
 
 	// ColTuple represents a list of column values.
@@ -2790,8 +2790,9 @@ type (
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
-		Operator    BinaryExprOperator
-		Left, Right Expr
+		Left     Expr
+		Right    Expr
+		Operator BinaryExprOperator
 	}
 
 	// BinaryExprOperator is an enum for BinaryExpr.Operator
@@ -2799,8 +2800,8 @@ type (
 
 	// UnaryExpr represents a unary value expression.
 	UnaryExpr struct {
-		Operator UnaryExprOperator
 		Expr     Expr
+		Operator UnaryExprOperator
 	}
 
 	// UnaryExprOperator is an enum for UnaryExpr.Operator
@@ -2808,8 +2809,8 @@ type (
 
 	// IntroducerExpr represents a unary value expression.
 	IntroducerExpr struct {
-		CharacterSet string
 		Expr         Expr
+		CharacterSet string
 	}
 
 	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
@@ -2821,8 +2822,8 @@ type (
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalType IntervalType
 		Expr         Expr
+		IntervalType IntervalType
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -2922,8 +2923,8 @@ type (
 
 	// CharExpr represents a CHAR function expression
 	CharExpr struct {
-		Exprs   []Expr
 		Charset string
+		Exprs   []Expr
 	}
 
 	// Default represents a DEFAULT expression.
@@ -2965,8 +2966,8 @@ type (
 	// Offset is an AST type that is used during planning and never produced by the parser
 	// it is the column offset from the incoming result stream
 	Offset struct {
-		V        int
 		Original Expr
+		V        int
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -3034,12 +3035,12 @@ type (
 
 	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 	JtPathColDef struct {
-		Name            IdentifierCI
-		Type            *ColumnType
-		JtColExists     bool
 		Path            Expr
+		Type            *ColumnType
 		EmptyOnResponse *JtOnResponse
 		ErrorOnResponse *JtOnResponse
+		Name            IdentifierCI
+		JtColExists     bool
 	}
 
 	// JtNestedPathColDef is type of column definition with nested column definitions
@@ -3050,8 +3051,8 @@ type (
 
 	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
 	JtOnResponse struct {
-		ResponseType JtOnResponseType
 		Expr         Expr
+		ResponseType JtOnResponseType
 	}
 
 	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
@@ -3138,9 +3139,9 @@ type (
 	// JSONAttributesExpr represents the argument and function for functions returning JSON value attributes
 	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-attribute-functions.html
 	JSONAttributesExpr struct {
-		Type    JSONAttributeType
 		JSONDoc Expr
 		Path    Expr
+		Type    JSONAttributeType
 	}
 
 	// JSONAttributeType is an enum to get types of TrimFunc.
@@ -3148,9 +3149,9 @@ type (
 	JSONAttributeType int8
 
 	JSONValueModifierExpr struct {
-		Type    JSONValueModifierType
 		JSONDoc Expr
 		Params  []*JSONObjectParam
+		Type    JSONValueModifierType
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -3160,9 +3161,9 @@ type (
 	// JSONValueMergeExpr represents the json value modifier functions which merges documents.
 	// Functions falling under this class: JSON_MERGE, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE
 	JSONValueMergeExpr struct {
-		Type        JSONValueMergeType
 		JSONDoc     Expr
 		JSONDocList []Expr
+		Type        JSONValueMergeType
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -3217,73 +3218,73 @@ type (
 	GeomFromWktType int8
 
 	GeomFromTextExpr struct {
-		Type         GeomFromWktType
 		WktText      Expr
 		Srid         Expr
 		AxisOrderOpt Expr
+		Type         GeomFromWktType
 	}
 
 	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
 	GeomFromWkbType int8
 
 	GeomFromWKBExpr struct {
-		Type         GeomFromWkbType
 		WkbBlob      Expr
 		Srid         Expr
 		AxisOrderOpt Expr
+		Type         GeomFromWkbType
 	}
 
 	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
 	GeomFormatType int8
 
 	GeomFormatExpr struct {
-		FormatType   GeomFormatType
 		Geom         Expr
 		AxisOrderOpt Expr
+		FormatType   GeomFormatType
 	}
 
 	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
-		Property GeomPropertyType
 		Geom     Expr
+		Property GeomPropertyType
 	}
 
 	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
-		Property   PointPropertyType
 		Point      Expr
 		ValueToSet Expr
+		Property   PointPropertyType
 	}
 
 	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
 	LinestrPropType int8
 
 	LinestrPropertyFuncExpr struct {
-		Property       LinestrPropType
 		Linestring     Expr
 		PropertyDefArg Expr
+		Property       LinestrPropType
 	}
 
 	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
 	PolygonPropType int8
 
 	PolygonPropertyFuncExpr struct {
-		Property       PolygonPropType
 		Polygon        Expr
 		PropertyDefArg Expr
+		Property       PolygonPropType
 	}
 
 	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
 	GeomCollPropType int8
 
 	GeomCollPropertyFuncExpr struct {
-		Property       GeomCollPropType
 		GeomColl       Expr
 		PropertyDefArg Expr
+		Property       GeomCollPropType
 	}
 
 	GeoHashFromLatLongExpr struct {
@@ -3301,9 +3302,9 @@ type (
 	GeomFromHashType int8
 
 	GeomFromGeoHashExpr struct {
-		GeomType GeomFromHashType
 		GeoHash  Expr
 		SridOpt  Expr
+		GeomType GeomFromHashType
 	}
 
 	GeoJSONFromGeomExpr struct {
@@ -3361,58 +3362,31 @@ type (
 	}
 
 	CountStar struct {
-		_ bool
-		// TL;DR; This makes sure that reference equality checks works as expected
-		//
-		// You're correct that this might seem a bit strange at first glance.
-		// It's a quirk of Go's handling of empty structs. In Go, two instances of an empty struct are considered
-		// identical, which can be problematic when using these as keys in maps.
-		// They would be treated as the same key and potentially lead to incorrect map behavior.
-		//
-		// Here's a brief example:
-		//
-		// ```golang
-		// func TestWeirdGo(t *testing.T) {
-		// 	type CountStar struct{}
-		//
-		// 	cs1 := &CountStar{}
-		// 	cs2 := &CountStar{}
-		//  if cs1 == cs2 {
-		// 	  panic("what the what!?")
-		//  }
-		// }
-		// ```
-		//
-		// In the above code, cs1 and cs2, despite being distinct variables, would be treated as the same object.
-		//
-		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
-		// This ensures that each instance of `CountStar` is treated as a separate object,
-		// even in the context of out semantic state which uses these objects as map keys.
 		OverClause *OverClause
 	}
 
 	Avg struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Max struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Min struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	Sum struct {
 		Arg        Expr
-		Distinct   bool
 		OverClause *OverClause
+		Distinct   bool
 	}
 
 	BitAnd struct {
@@ -3525,17 +3499,17 @@ type (
 
 	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
 	IntervalDateExpr struct {
-		Syntax   IntervalExprSyntax
 		Date     Expr
 		Interval Expr
+		Syntax   IntervalExprSyntax
 		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
 	// These functions do not take any argument.
 	ArgumentLessWindowExpr struct {
-		Type       ArgumentLessWindowExprType
 		OverClause *OverClause
+		Type       ArgumentLessWindowExprType
 	}
 
 	// ArgumentLessWindowExprType is an enum to get types of ArgumentLessWindowExpr.
@@ -3543,10 +3517,10 @@ type (
 
 	// FirstOrLastValueExpr stands for the following window_functions: FIRST_VALUE, LAST_VALUE
 	FirstOrLastValueExpr struct {
-		Type                FirstOrLastValueExprType
 		Expr                Expr
 		NullTreatmentClause *NullTreatmentClause
 		OverClause          *OverClause
+		Type                FirstOrLastValueExprType
 	}
 
 	// FirstOrLastValueExprType is an enum to get types of FirstOrLastValueExpr.
@@ -3569,12 +3543,12 @@ type (
 
 	// LagLeadExpr stand for the following: LAG, LEAD
 	LagLeadExpr struct {
-		Type                LagLeadExprType
 		Expr                Expr
 		N                   Expr
 		Default             Expr
 		OverClause          *OverClause
 		NullTreatmentClause *NullTreatmentClause
+		Type                LagLeadExprType
 	}
 
 	// LagLeadExprType is an enum to get types of LagLeadExpr.
@@ -3602,9 +3576,9 @@ type (
 
 	// LockingFunc represents the advisory lock functions.
 	LockingFunc struct {
-		Type    LockingFuncType
 		Name    Expr
 		Timeout Expr
+		Type    LockingFuncType
 	}
 
 	// PerformanceSchemaType is an enum that get types of LockingFunc
@@ -3617,8 +3591,8 @@ type (
 	// For PS_THREAD_ID it means connection_id
 	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
 	PerformanceSchemaFuncExpr struct {
-		Type     PerformanceSchemaType
 		Argument Expr
+		Type     PerformanceSchemaType
 	}
 
 	// GTIDType is an enum that get types of GTIDFunc
@@ -3628,11 +3602,11 @@ type (
 	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
 	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
 	GTIDFuncExpr struct {
-		Type    GTIDType
 		Set1    Expr
 		Set2    Expr
 		Timeout Expr
 		Channel Expr
+		Type    GTIDType
 	}
 )
 

@@ -4941,28 +4941,28 @@ func TestPositionedErr(t *testing.T) {
 		output PositionedErr
 	}{{
 		input:  "select convert('abc' as date) from t",
-		output: PositionedErr{"syntax error", 24, "as"},
+		output: PositionedErr{Err: "syntax error", Near: "as", Pos: 24},
 	}, {
 		input:  "select convert from t",
-		output: PositionedErr{"syntax error", 20, "from"},
+		output: PositionedErr{Err: "syntax error", Near: "from", Pos: 20},
 	}, {
 		input:  "select cast('foo', decimal) from t",
-		output: PositionedErr{"syntax error", 19, ""},
+		output: PositionedErr{Err: "syntax error", Pos: 19},
 	}, {
 		input:  "select convert('abc', datetime(4+9)) from t",
-		output: PositionedErr{"syntax error", 34, ""},
+		output: PositionedErr{Err: "syntax error", Pos: 34},
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
-		output: PositionedErr{"syntax error", 33, ""},
+		output: PositionedErr{Err: "syntax error", Pos: 33},
 	}, {
 		input:  "set transaction isolation level 12345",
-		output: PositionedErr{"syntax error", 38, "12345"},
+		output: PositionedErr{Err: "syntax error", Near: "12345", Pos: 38},
 	}, {
 		input:  "select * from a left join b",
-		output: PositionedErr{"syntax error", 28, ""},
+		output: PositionedErr{Err: "syntax error", Pos: 28},
 	}, {
 		input:  "select a from (select * from tbl)",
-		output: PositionedErr{"syntax error", 34, ""},
+		output: PositionedErr{Err: "syntax error", Pos: 34},
 	}}
 
 	parser := NewTestParser()
@@ -6998,11 +6998,11 @@ func makeTestOutput(t *testing.T) string {
 
 type testCase struct {
 	file     string
-	lineno   int
 	input    string
 	output   string
 	errStr   string
 	comments string
+	lineno   int
 }
 
 func escapeNewLines(in string) string {

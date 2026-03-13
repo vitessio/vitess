@@ -43,20 +43,20 @@ type (
 	AggregateRule int8
 
 	ExprGeneratorConfig struct {
-		// AggrRule determines if the random expression can, cannot, or must be an aggregation expression
-		AggrRule AggregateRule
-		Type     string
+		Type string
 		// MaxCols = 0 indicates no limit
 		NumCols int
+		// AggrRule determines if the random expression can, cannot, or must be an aggregation expression
+		AggrRule AggregateRule
 		// SingleRow indicates that the query must have at most one row
 		SingleRow bool
 	}
 
 	Generator struct {
+		exprGenerators []ExprGenerator
 		depth          int
 		maxDepth       int
 		isAggregate    bool
-		exprGenerators []ExprGenerator
 	}
 )
 

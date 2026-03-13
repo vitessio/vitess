@@ -38,12 +38,11 @@ type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
 // want to generate a query that's different from the default.
 type TrackedBuffer struct {
 	*strings.Builder
-	bindLocations []BindLocation
 	nodeFormatter NodeFormatter
 	literal       func(string) (int, error)
+	bindLocations []BindLocation
+	escape        escapeType
 	fast          bool
-
-	escape escapeType
 }
 
 type escapeType int

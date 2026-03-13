@@ -26,8 +26,8 @@ import (
 func TestBuildParsedQuery(t *testing.T) {
 	testcases := []struct {
 		in   string
-		args []any
 		out  string
+		args []any
 	}{{
 		in:  "select * from tbl",
 		out: "select * from tbl",
