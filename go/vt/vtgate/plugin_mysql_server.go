@@ -75,7 +75,7 @@ var (
 	mysqlSlowConnectWarnThreshold time.Duration
 	mysqlConnBufferPooling        bool
 
-	mysqlDefaultWorkloadName = "OLTP"
+	mysqlDefaultWorkloadName = "OLAP"
 	mysqlDefaultWorkload     int32
 	mysqlDrainOnTerm         bool
 
