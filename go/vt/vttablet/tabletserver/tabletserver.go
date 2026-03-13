@@ -33,9 +33,9 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -66,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -119,6 +121,7 @@ type TabletServer struct {
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
 	vstreamer    *vstreamer.Engine
+	binlogDumper *BinlogDumpEngine
 	tracker      *schema.Tracker
 	qe           *QueryEngine
 	txThrottler  txthrottler.TxThrottler
@@ -193,6 +196,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
+	tsv.binlogDumper = NewBinlogDumpEngine()
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
@@ -210,6 +214,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		se:                tsv.se,
 		rt:                tsv.rt,
 		vstreamer:         tsv.vstreamer,
+		binlogDumper:      tsv.binlogDumper,
 		tracker:           tsv.tracker,
 		qe:                tsv.qe,
 		txThrottler:       tsv.txThrottler,
@@ -1332,6 +1337,257 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
+// BinlogDumpGTID streams raw binlog packets from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+// It reads MySQL packets directly and forwards them to the client without parsing.
+// Each packet is streamed individually, including zero-length packets that terminate
+// multi-packet sequences. This provides true streaming with bounded memory usage.
+func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+
+	// Register with the engine for graceful shutdown tracking
+	ctx, idx, err := tsv.binlogDumper.Register(ctx)
+	if err != nil {
+		return err
+	}
+	defer tsv.binlogDumper.Unregister(idx)
+
+	// Create a binlog connection to MySQL
+	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to create binlog connection")
+	}
+	defer conn.Close()
+
+	// Close the underlying socket when the context is cancelled (shutdown or
+	// client disconnect) to unblock any pending read. We capture the mysql.Conn
+	// reference here because BinlogConnection.Close() nils it out, and we must
+	// only call mysql.Conn.Close() (which is idempotent via CompareAndSwap) —
+	// not BinlogConnection.Close() — to avoid a double serverIDPool.Put() panic
+	// if the AfterFunc races with the deferred conn.Close() above.
+	mysqlConn := conn.Conn
+	stop := context.AfterFunc(ctx, func() { mysqlConn.Close() })
+	defer stop()
+
+	// Parse the GTID set from the request. An empty string parses to an empty
+	// set, which tells MySQL "I have no transactions — send everything."
+	gtidSet, err := replication.ParseMysql56GTIDSet(request.GtidSet)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse GTID set: %s", request.GtidSet)
+	}
+	startPos := replication.Position{GTIDSet: gtidSet}
+
+	// Send the binlog dump command to MySQL using GTID
+	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition, startPos, uint16(request.Flags)); err != nil {
+		return vterrors.Wrapf(err, "failed to send binlog dump command")
+	}
+
+	return tsv.streamBinlogPackets(ctx, conn, send)
+}
+
+// packetReader is satisfied by *binlog.BinlogConnection (via embedded *mysql.Conn).
+// Extracted as an interface for testability.
+type packetReader interface {
+	ReadHeaderInto([]byte) (int, error)
+	ReadDataInto([]byte) error
+	Buffered() int
+}
+
+// streamBinlogPackets streams binlog packets from the connection to the client.
+// This is shared by both BinlogDump and BinlogDumpGTID.
+//
+// On context cancellation (graceful shutdown or client disconnect), it returns
+// the context error. The caller is responsible for closing the connection.
+func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetReader, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
+	bufOffset := 0
+
+	resp := &binlogdatapb.BinlogDumpResponse{}
+
+	flush := func() error {
+		if bufOffset == 0 {
+			return nil
+		}
+		resp.Raw = buf[:bufOffset]
+		err := send(resp)
+		bufOffset = 0
+		return err
+	}
+
+	type headerResult struct {
+		packetLength int
+		err          error
+	}
+	headerReadChan := make(chan headerResult, 1)
+	header := make([]byte, mysql.PacketHeaderSize)
+	timer := time.NewTimer(0) // Reset (Go 1.23+) drains the channel, so the initial fire is harmless.
+	defer timer.Stop()
+
+	// readHeader reads a 4-byte MySQL packet header into buf at the current
+	// offset. Returns the payload length. Flushes first if the header wouldn't
+	// fit.
+	readHeader := func() (int, error) {
+		if bufOffset+mysql.PacketHeaderSize > len(buf) {
+			if err := flush(); err != nil {
+				return 0, err
+			}
+		}
+
+		var result headerResult
+
+		if bufOffset == 0 || reader.Buffered() >= mysql.PacketHeaderSize {
+			// Fast path: either nothing to flush, or the next header is already
+			// buffered and won't block. Read synchronously, directly into buf.
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, cause
+			}
+			packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+			result = headerResult{packetLength: packetLength, err: err}
+		} else {
+			// Slow path: We have complete but unflushed packets in the buffer.
+			// If we can immediately read the next header, we want to keep buffering
+			// to maximize batch sizes. But if the next header isn't buffered yet, we
+			// want to flush what we have to the client to free up buffer space and
+			// then wait for the header read to complete.
+			timer.Reset(1 * time.Millisecond)
+
+			// This goroutine is safe to "abandon" on context cancellation:
+			// the caller (BinlogDump/BinlogDumpGTID) closes the underlying
+			// MySQL connection when the context is done, which unblocks
+			// ReadHeaderInto. And since readHeader returning an error causes
+			// streamBinlogPackets to exit, no subsequent call to readHeader
+			// can race with a still-running goroutine.
+			go func() {
+				packetLength, err := reader.ReadHeaderInto(header)
+				headerReadChan <- headerResult{packetLength: packetLength, err: err}
+			}()
+
+			select {
+			case <-ctx.Done():
+				return 0, context.Cause(ctx)
+			case <-timer.C:
+				// If we hit the timer, it means we're likely blocked on ReadHeaderInto.
+				// Flush the data we have in the buffer (if we have anything),
+				// and then wait for the header read to complete.
+				if err := flush(); err != nil {
+					return 0, err
+				}
+
+				select {
+				case <-ctx.Done():
+					return 0, context.Cause(ctx)
+				case result = <-headerReadChan:
+				}
+
+			case result = <-headerReadChan:
+			}
+
+			// Copy header into buf (only needed for slow path where we used a
+			// separate buffer for the goroutine).
+			if result.err == nil {
+				copy(buf[bufOffset:], header)
+			}
+		}
+
+		if result.err != nil {
+			if cause := context.Cause(ctx); cause == result.err {
+				return 0, result.err
+			}
+			return 0, vterrors.Wrapf(result.err, "failed to read binlog packet header")
+		}
+
+		return result.packetLength, nil
+	}
+
+	// readPayload reads a full packet payload into buf, returning the first
+	// byte for packet type detection. Fills the remaining buffer space before
+	// flushing, so partially-filled buffers are packed tightly.
+	readPayload := func(packetLength int) (byte, error) {
+		if packetLength == 0 {
+			return 0, nil
+		}
+
+		var firstByte byte
+		remaining := packetLength
+		for remaining > 0 {
+			chunkSize := min(remaining, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read binlog packet body")
+			}
+			if remaining == packetLength {
+				firstByte = buf[bufOffset]
+			}
+			remaining -= chunkSize
+			bufOffset += chunkSize
+
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		return firstByte, nil
+	}
+
+	for {
+		packetLength, err := readHeader()
+		if err != nil {
+			return err
+		}
+		bufOffset += mysql.PacketHeaderSize
+
+		// First packet of a message can't be zero length
+		if packetLength == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet header")
+		}
+
+		firstFragment := true
+		isTerminal := false
+
+		// Is this a fragmented message? If yes, this will be potentially followed by multiple max-packet-size packets.
+		for packetLength == mysql.MaxPacketSize {
+			if firstFragment {
+				firstByte, err := readPayload(packetLength)
+				if err != nil {
+					return err
+				}
+				isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+				firstFragment = false
+			} else {
+				if _, err := readPayload(packetLength); err != nil {
+					return err
+				}
+			}
+
+			packetLength, err = readHeader()
+			if err != nil {
+				return err
+			}
+			bufOffset += mysql.PacketHeaderSize
+		}
+
+		// Read the payload of the final (or only) packet.
+		if firstFragment {
+			firstByte, err := readPayload(packetLength)
+			if err != nil {
+				return err
+			}
+			isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+		} else {
+			if _, err := readPayload(packetLength); err != nil {
+				return err
+			}
+		}
+
+		if isTerminal {
+			// If this is a terminal message (EOF or ERR), flush it immediately and stop streaming.
+			return flush()
+		}
+	}
 }
 
 // ReserveBeginExecute implements the QueryService interface
