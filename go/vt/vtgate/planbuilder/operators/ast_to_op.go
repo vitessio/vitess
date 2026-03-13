@@ -87,6 +87,13 @@ func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlpars
 	for _, expr := range sqlparser.SplitAndExpression(nil, in) {
 		sqlparser.RemoveKeyspaceInCol(expr)
 		expr = simplifyPredicates(ctx, expr)
+
+		if newExpr := sqc.pullOutBothSubqueriesComparison(ctx, expr, outerID); newExpr != nil {
+			op = op.AddPredicate(ctx, newExpr)
+			addColumnEquality(ctx, newExpr)
+			continue
+		}
+
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
