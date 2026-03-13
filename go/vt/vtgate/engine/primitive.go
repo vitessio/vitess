@@ -151,6 +151,12 @@ type (
 		SetLastInsertID(uint64)
 
 		GetExecutionMetrics() *Metrics
+
+		// SortBufferSize returns the configured sort buffer size in bytes for spill-to-disk sorting.
+		// A value of 0 disables spill-to-disk sorting.
+		SortBufferSize() int64
+		// SortTmpDir returns the directory for sort temporary files.
+		SortTmpDir() string
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

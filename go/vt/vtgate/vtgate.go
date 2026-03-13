@@ -81,6 +81,9 @@ var (
 	maxPayloadSize  int
 	warnPayloadSize int
 
+	sortBufferSize int64 = 262144 // 256KB
+	sortTmpDir     string
+
 	noScatter          bool
 	enableShardRouting bool
 
@@ -179,6 +182,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagInt64Var(fs, &queryPlanCacheMemory, "gate-query-cache-memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	utils.SetFlagIntVar(fs, &maxMemoryRows, "max-memory-rows", maxMemoryRows, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
 	utils.SetFlagIntVar(fs, &warnMemoryRows, "warn-memory-rows", warnMemoryRows, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
+	utils.SetFlagInt64Var(fs, &sortBufferSize, "sort-buffer-size", sortBufferSize, "Maximum amount of memory in bytes to use for in-memory sorting before spilling to disk in streaming mode. Set to 0 to disable spill-to-disk sorting.")
+	fs.StringVar(&sortTmpDir, "sort-tmp-dir", sortTmpDir, "Directory for temporary sort files when spilling to disk. Defaults to the OS temp directory if empty.")
 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
