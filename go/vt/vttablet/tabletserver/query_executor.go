@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"time"
@@ -450,7 +449,7 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	done, err := qre.tsv.messager.Subscribe(qre.ctx, qre.plan.TableName().String(), func(r *sqltypes.Result) error {
 		select {
 		case <-qre.ctx.Done():
-			return io.EOF
+			return qre.ctx.Err()
 		default:
 		}
 		return callback(r)
@@ -459,7 +458,7 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 		return err
 	}
 	<-done
-	return nil
+	return qre.ctx.Err()
 }
 
 // checkPermissions returns an error if the query does not pass all checks

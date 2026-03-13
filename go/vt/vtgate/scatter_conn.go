@@ -576,7 +576,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 			// return normally without retrying.
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			default:
 			}
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
@@ -589,7 +589,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 			// It's not been too long since our last good send. Wait and retry.
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			case <-time.After(messageStreamGracePeriod / 5):
 			}
 		}
