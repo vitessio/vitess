@@ -172,7 +172,7 @@ jobs:
             sudo apt-get -qq install -y mysql-shell
           fi
 
-          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 python3-pip
           sudo service etcd stop
           go mod download
 
@@ -191,7 +191,7 @@ jobs:
           steps.changes.outputs.end_to_end == 'true' &&
           github.base_ref == 'main'
         run: |
-          pip3 install --user launchable~=1.0 > /dev/null
+          pip3 install --user launchable==1.121.2 --hash=sha256:91d31fc40a3534d21041f6e83fb38aae6919f1560d33b5aa0797989dc4c46003 > /dev/null
           launchable verify || true
           launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 

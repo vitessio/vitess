@@ -132,10 +132,10 @@ jobs:
         uses: ./.github/actions/tune-os
 
       - name: Get dependencies
-        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true' || steps.changes.outputs.github == 'true')
         run: |
           sudo apt-get update
-          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget python3-pip
           sudo service etcd stop
           go mod download
 
@@ -150,7 +150,7 @@ jobs:
 
       - name: Install yamllint
         if: steps.changes.outputs.github == 'true'
-        run: pip install yamllint==1.38.0
+        run: pip3 install yamllint==1.38.0 --hash=sha256:09e5f29531daab93366bb061e76019d5e91691ef0a40328f04c927387d1d364d
 
       - name: check_go_versions
         run:
