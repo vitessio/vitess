@@ -889,13 +889,15 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
+	defer lockConn.Recycle()
 	defer func() {
-		// Always kill the lock connection to guarantee any held locks are released,
-		// even if UNLOCK TABLES were to fail.
+		// Always attempt UNLOCK TABLES first, as it releases locks immediately on this
+		// connection. Then kill the connection as a fallback to guarantee any held locks
+		// are released, even if UNLOCK TABLES were to fail.
+		lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
 			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
-		lockConn.Recycle()
 	}()
 
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
@@ -917,16 +919,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
+	defer renameConn.Recycle()
 	defer func() {
-		renameConnRestoreLockWaitTimeout()
 		if !renameWasSuccessful {
 			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
 			if err != nil {
 				log.Warn(fmt.Sprintf("Failed to kill connection being used to rename tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 			}
 		}
-		renameConn.Recycle()
 	}()
+	defer renameConnRestoreLockWaitTimeout()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
