@@ -206,6 +206,12 @@ type FakeMysqlDaemon struct {
 
 	// Version is the version that will be returned by GetVersionString.
 	Version string
+
+	// MysqlLocal is used by IsMySQLLocal.
+	MysqlLocal bool
+
+	// MysqlDown is used by IsLocalMySQLDown.
+	MysqlDown bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -228,6 +234,16 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 // DB returns the fakesqldb.DB object.
 func (fmd *FakeMysqlDaemon) DB() *fakesqldb.DB {
 	return fmd.db
+}
+
+// IsMySQLLocal is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsMySQLLocal() bool {
+	return fmd.MysqlLocal
+}
+
+// IsLocalMySQLDown is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsLocalMySQLDown(_ context.Context) bool {
+	return fmd.MysqlDown
 }
 
 // Start is part of the MysqlDaemon interface.

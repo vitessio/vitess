@@ -340,6 +340,68 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	return err
 }
 
+// IsMySQLLocal returns true if the DBA connection uses a local unix socket.
+func (mysqld *Mysqld) IsMySQLLocal() bool {
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	return err == nil && params.UnixSocket != ""
+}
+
+// IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
+// if MySQL appears to be down. Only meaningful when IsMySQLLocal returns true.
+func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
+	// Test if mysql is available by opening a new DBA connection.
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err == nil {
+		conn.Close()
+		return false
+	}
+
+	// "too many connections" proves MySQL is alive.
+	if sqlerror.IsTooManyConnectionsErr(err) {
+		return false
+	}
+
+	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
+	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
+	var sqlErr *sqlerror.SQLError
+	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
+		return false
+	}
+
+	// File-descriptor exhaustion is client-side; it is not a good signal of MySQL's state.
+	// It is unfortunately possible for file-descriptor exhaustion to be the cause of the
+	// CRConnectionError (errno 2002) error.
+	if isFileDescriptorExhaustedProbe() {
+		return false
+	}
+
+	// Finally, validate the socket file exists and that it really is a socket.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil || params.UnixSocket == "" {
+		return false
+	}
+	fi, sErr := os.Stat(params.UnixSocket)
+	if sErr != nil && !os.IsNotExist(sErr) {
+		return false
+	} else if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
+		return false
+	}
+
+	// We conclude MySQL is down.
+	return true
+}
+
+// isFileDescriptorExhaustedProbe uses Dup to detect EMFILE/ENFILE,
+// since the MySQL connector wraps the original syscall error.
+func isFileDescriptorExhaustedProbe() bool {
+	fd, err := syscall.Dup(0)
+	if err != nil {
+		return errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE)
+	}
+	syscall.Close(fd)
+	return false
+}
+
 // Start will start the mysql daemon, either by running the
 // 'mysqld_start' hook, or by running mysqld_safe in the background.
 // If a mysqlctld address is provided in a flag, Start will run
@@ -643,6 +705,18 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
 		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
 		return nil
+	}
+
+	// Stop replication before shutting down to avoid a brief race in
+	// MySQL's close_connections() (mysqld.cc) where close_listener()
+	// removes the unix socket before end_slave() stops replication
+	// threads. Best-effort with a tight timeout — if MySQL is already
+	// unreachable we proceed with shutdown regardless.
+	stopCtx, stopCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer stopCancel()
+	if conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool); err == nil {
+		mysqld.executeSuperQueryListConn(stopCtx, conn, []string{conn.Conn.StopReplicationCommand()})
+		conn.Recycle()
 	}
 
 	// try the preflight mysqld shutdown hook, if any

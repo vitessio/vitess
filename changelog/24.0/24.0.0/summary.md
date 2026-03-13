@@ -27,6 +27,7 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+        - [`STOP REPLICA` before MySQL shutdown](#vttablet-stop-replica-before-shutdown)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -214,6 +215,12 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
+
+#### <a id="vttablet-stop-replica-before-shutdown"/>`STOP REPLICA` before MySQL shutdown</a>
+
+`Mysqld.Shutdown()` now issues a best-effort `STOP REPLICA` (with a 3-second timeout) before shutting down MySQL. This addresses a brief race in MySQL's [`close_connections()`](https://github.com/mysql/mysql-server/blob/mysql-8.4.0/sql/mysqld.cc#L2368-L2391) where `close_listener()` removes the unix socket before `end_slave()` stops replication threads. Without this, there is a small window where the socket is gone but replication is still running.
+
+See [#19624](https://github.com/vitessio/vitess/pull/19624) and [#19625](https://github.com/vitessio/vitess/issues/19625) for details.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
