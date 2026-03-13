@@ -185,6 +185,12 @@ func createTestS3Client(mockServer *mockS3Server) *s3.Client {
 	})
 }
 
+func requireTimedIncrementAtLeast(t *testing.T, fakeStats *stats.FakeStats, min time.Duration) {
+	t.Helper()
+	require.Len(t, fakeStats.TimedIncrementCalls, 1)
+	require.GreaterOrEqual(t, fakeStats.TimedIncrementCalls[0], min)
+}
+
 func TestAddFileError(t *testing.T) {
 	mockServer := newMockS3Server()
 	defer mockServer.Close()
@@ -223,6 +229,7 @@ func TestAddFileError(t *testing.T) {
 func TestAddFileStats(t *testing.T) {
 	mockServer := newMockS3Server()
 	defer mockServer.Close()
+	mockServer.SetDelay(10 * time.Millisecond)
 
 	fakeStats := stats.NewFakeStats()
 
@@ -264,7 +271,7 @@ func TestAddFileStats(t *testing.T) {
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
 	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
-	require.Len(t, scopedStats.TimedIncrementCalls, 1)
+	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
 	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
 }
 
@@ -272,6 +279,7 @@ func TestAddFileErrorStats(t *testing.T) {
 	mockServer := newMockS3Server()
 	defer mockServer.Close()
 
+	mockServer.SetDelay(10 * time.Millisecond)
 	mockServer.SetError(true, 0)
 
 	fakeStats := stats.NewFakeStats()
@@ -312,7 +320,78 @@ func TestAddFileErrorStats(t *testing.T) {
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
 	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
-	require.Len(t, scopedStats.TimedIncrementCalls, 1)
+	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
+	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+}
+
+func TestReadFileStats(t *testing.T) {
+	mockServer := newMockS3Server()
+	defer mockServer.Close()
+	mockServer.SetDelay(10 * time.Millisecond)
+
+	originalBucket := bucket
+	originalRoot := root
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+	}()
+
+	bucket = "test-bucket"
+	root = ""
+
+	fakeStats := stats.NewFakeStats()
+
+	writeBh := &S3BackupHandle{
+		s3Client: createTestS3Client(mockServer),
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: false,
+	}
+
+	wc, err := writeBh.AddFile(context.Background(), "testfile", 100)
+	require.NoError(t, err)
+	_, err = wc.Write([]byte("test file contents"))
+	require.NoError(t, err)
+	require.NoError(t, wc.Close())
+	writeBh.waitGroup.Wait()
+
+	readBh := &S3BackupHandle{
+		s3Client: createTestS3Client(mockServer),
+		bs: &S3BackupStorage{
+			params: backupstorage.Params{
+				Logger: logutil.NewMemoryLogger(),
+				Stats:  fakeStats,
+			},
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := readBh.ReadFile(context.Background(), "testfile")
+	require.NoError(t, err)
+	_, err = io.ReadAll(rc)
+	require.NoError(t, err)
+	require.NoError(t, rc.Close())
+
+	require.Len(t, fakeStats.ScopeCalls, 1)
+	scopedStats := fakeStats.ScopeReturns[0]
+	require.Len(t, scopedStats.ScopeV, 1)
+	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
 	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
 }
 

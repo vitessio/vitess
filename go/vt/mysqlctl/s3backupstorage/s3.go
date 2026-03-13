@@ -37,6 +37,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
@@ -46,6 +47,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	transport "github.com/aws/smithy-go/endpoints"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
@@ -140,6 +142,63 @@ func newEndpointResolver() *endpointResolver {
 	}
 }
 
+type timedS3Client struct {
+	client    *s3.Client
+	sendStats stats.Stats
+}
+
+func (c *timedS3Client) appendTimingOption(optFns []func(*s3.Options)) []func(*s3.Options) {
+	timedOptions := make([]func(*s3.Options), 0, len(optFns)+1)
+	timedOptions = append(timedOptions, optFns...)
+	timedOptions = append(timedOptions, withRequestTiming(c.sendStats))
+	return timedOptions
+}
+
+func (c *timedS3Client) PutObject(ctx context.Context, input *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	return c.client.PutObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) UploadPart(ctx context.Context, input *s3.UploadPartInput, optFns ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
+	return c.client.UploadPart(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) CreateMultipartUpload(ctx context.Context, input *s3.CreateMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
+	return c.client.CreateMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) CompleteMultipartUpload(ctx context.Context, input *s3.CompleteMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {
+	return c.client.CompleteMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) AbortMultipartUpload(ctx context.Context, input *s3.AbortMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
+	return c.client.AbortMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return c.client.GetObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	return c.client.HeadObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	return c.client.ListObjectsV2(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func withRequestTiming(sendStats stats.Stats) func(*s3.Options) {
+	return func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return stack.Finalize.Add(smithymiddleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input smithymiddleware.FinalizeInput, next smithymiddleware.FinalizeHandler) (smithymiddleware.FinalizeOutput, smithymiddleware.Metadata, error) {
+				start := time.Now()
+				output, metadata, err := next.HandleFinalize(ctx, input)
+				sendStats.TimedIncrement(time.Since(start))
+				return output, metadata, err
+			}), smithymiddleware.Before)
+		})
+	}
+}
+
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
 	s3Client  *s3.Client
@@ -187,7 +246,7 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 		object := objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 
-		tmClient := transfermanager.New(bh.s3Client, func(o *transfermanager.Options) {
+		tmClient := transfermanager.New(&timedS3Client{client: bh.s3Client, sendStats: sendStats}, func(o *transfermanager.Options) {
 			o.PartSizeBytes = partSizeBytes
 		})
 
@@ -210,7 +269,6 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 			closer(err)
 			bh.RecordError(filename, err)
 		}
-		sendStats.TimedIncrement(0) // Track the operation
 	})
 }
 
@@ -270,10 +328,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 	object := objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-
-	tmClient := transfermanager.New(bh.s3Client)
-
-	out, err := tmClient.GetObject(ctx, &transfermanager.GetObjectInput{
+	out, err := (&timedS3Client{client: bh.s3Client, sendStats: sendStats}).GetObject(ctx, &s3.GetObjectInput{
 		Bucket:               &bucket,
 		Key:                  &object,
 		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
@@ -283,8 +338,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
-	sendStats.TimedIncrement(0) // Track the operation
-	return io.NopCloser(out.Body), nil
+	return out.Body, nil
 }
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
