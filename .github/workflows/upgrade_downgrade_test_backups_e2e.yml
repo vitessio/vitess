@@ -14,6 +14,9 @@ concurrency:
 
 permissions: read-all
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60

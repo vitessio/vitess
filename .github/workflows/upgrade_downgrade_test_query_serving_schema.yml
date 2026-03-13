@@ -14,6 +14,9 @@ concurrency:
 
 permissions: read-all
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtgate, vttablet, etc) built on different versions.
 
