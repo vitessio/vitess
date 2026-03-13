@@ -14,25 +14,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is used to build and copy the Angular 2 based vtctld UI
-# into the release folder (app) for checkin. Prior to running this script,
-# bootstrap.sh and bootstrap_web.sh should already have been run.
-
+# This script returns the latest stable release tag for the previous major
+# version of Vitess. For example, if the current branch is release-23.0,
+# this script returns the latest v22.0.x tag (e.g., v22.0.4).
+#
 # github.base_ref $1
+# github.ref $2
 
-target_release=""
+set -euo pipefail
 
-base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$')
+target_major_release=""
+
+base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$' || true)
 if [ "$base_release_branch" == "" ]; then
-  base_release_branch=$(echo "$2" | grep -E 'release-[0-9]*.0$')
+  base_release_branch=$(echo "$2" | grep -E 'release-[0-9]*.0$' || true)
 fi
 if [ "$base_release_branch" != "" ]; then
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
   target_major_release=$((major_release-1))
-  target_release="release-$target_major_release.0"
 else
-  target_major_release=$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sed 's/\.0//' | sort -nr | head -n1)
-  target_release="release-$target_major_release.0"
+  target_major_release=$(gh release list --repo vitessio/vitess --limit 1 --json tagName \
+    --jq '.[0].tagName | capture("v(?<major>[0-9]+)\\.") | .major')
 fi
 
-echo "$target_release"
+# Find the latest stable (non-prerelease) release tag for the target major version.
+release_tag=$(gh release list --repo vitessio/vitess --limit 100 --json tagName,isPrerelease \
+  --jq "[.[] | select(.isPrerelease == false) | select(.tagName | startswith(\"v${target_major_release}.0.\")) | .tagName][0]")
+
+if [ -z "$release_tag" ]; then
+  echo "ERROR: No stable release found for major version ${target_major_release}" >&2
+  exit 1
+fi
+
+echo "$release_tag"
