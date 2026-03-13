@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -85,6 +86,10 @@ type tmState struct {
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
 	displayState displayState
+
+	// allowReadsFromDeniedTables allows readonly operations to execute against
+	// denied tables.
+	allowReadsFromDeniedTables map[topodatapb.TabletType]bool
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
@@ -149,9 +154,11 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
 		ts.deniedTables = make(map[topodatapb.TabletType][]string)
+		ts.allowReadsFromDeniedTables = make(map[topodatapb.TabletType]bool)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
 				ts.deniedTables[tc.TabletType] = tc.DeniedTables
+				ts.allowReadsFromDeniedTables[tc.TabletType] = tc.AllowReads
 			}
 		}
 	}
@@ -404,6 +411,41 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
+			}
+			// This pathway exists in order to allow traffic to pass to the
+			// target of a MoveTables workflow after using MirrorTraffic.
+			if ts.allowReadsFromDeniedTables[ts.tablet.Type] {
+				// If a plan does not match any of the types below, it will be
+				// allowed to execute in spite of the table conditions above.
+				//
+				// The only plan supported by traffic mirror at present is
+				// PlanSelect, so add all other plans below.
+				qr.AddPlanCond(planbuilder.PlanNextval)
+				qr.AddPlanCond(planbuilder.PlanInsert)
+				qr.AddPlanCond(planbuilder.PlanInsertMessage)
+				qr.AddPlanCond(planbuilder.PlanUpdate)
+				qr.AddPlanCond(planbuilder.PlanUpdateLimit)
+				qr.AddPlanCond(planbuilder.PlanDelete)
+				qr.AddPlanCond(planbuilder.PlanDeleteLimit)
+				qr.AddPlanCond(planbuilder.PlanDDL)
+				qr.AddPlanCond(planbuilder.PlanSet)
+				qr.AddPlanCond(planbuilder.PlanOtherRead)
+				qr.AddPlanCond(planbuilder.PlanOtherAdmin)
+				qr.AddPlanCond(planbuilder.PlanMessageStream)
+				qr.AddPlanCond(planbuilder.PlanSavepoint)
+				qr.AddPlanCond(planbuilder.PlanRelease)
+				qr.AddPlanCond(planbuilder.PlanSRollback)
+				qr.AddPlanCond(planbuilder.PlanShow)
+				qr.AddPlanCond(planbuilder.PlanLoad)
+				qr.AddPlanCond(planbuilder.PlanFlush)
+				qr.AddPlanCond(planbuilder.PlanUnlockTables)
+				qr.AddPlanCond(planbuilder.PlanCallProc)
+				qr.AddPlanCond(planbuilder.PlanAlterMigration)
+				qr.AddPlanCond(planbuilder.PlanRevertMigration)
+				qr.AddPlanCond(planbuilder.PlanShowMigrations)
+				qr.AddPlanCond(planbuilder.PlanShowMigrationLogs)
+				qr.AddPlanCond(planbuilder.PlanShowThrottledApps)
+				qr.AddPlanCond(planbuilder.PlanShowThrottlerStatus)
 			}
 			denyListRules.Add(qr)
 		}
