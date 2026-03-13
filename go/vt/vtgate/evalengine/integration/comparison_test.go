@@ -238,12 +238,12 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 		t.Fatalf("failed to retrieve timezone info: %v", err)
 	}
 
-	_, more, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
+	_, status, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
 	if err != nil {
 		t.Fatalf("failed to insert timezone info: %v", err)
 	}
-	for more {
-		_, more, _, err = conn.ReadQueryResult(-1, false)
+	for mysql.IsMoreResultsExists(status) {
+		_, status, _, err = conn.ReadQueryResult(-1, false)
 		if err != nil {
 			t.Fatalf("failed to insert timezone info: %v", err)
 		}

@@ -403,6 +403,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Adjust the count of open connections
 	defer connCount.Add(-1)
 
+	defer c.discardAllCursors()
+
 	// First build and send the server handshake packet.
 	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, uint8(l.charset), l.TLSConfig.Load() != nil)
 	if err != nil {

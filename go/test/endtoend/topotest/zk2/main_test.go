@@ -248,11 +248,11 @@ func TestKeyspaceLocking(t *testing.T) {
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {
 	t.Helper()
 	var res []*sqltypes.Result
-	qr, more, err := conn.ExecuteFetchMulti(query, 1000, true)
+	qr, status, err := conn.ExecuteFetchMulti(query, 1000, true)
 	res = append(res, qr)
 	require.NoError(t, err)
-	for more == true {
-		qr, more, _, err = conn.ReadQueryResult(1000, true)
+	for mysql.IsMoreResultsExists(status) {
+		qr, status, _, err = conn.ReadQueryResult(1000, true)
 		require.NoError(t, err)
 		res = append(res, qr)
 	}
