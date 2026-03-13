@@ -14,6 +14,9 @@ concurrency:
 
 permissions: read-all
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 # This test ensures that our Online DDL + VReplication + throttler components
 # work using primary and replica vttablets built on different versions.
 
@@ -105,36 +108,16 @@ jobs:
         
         sudo service etcd stop
 
-    # Checkout to the last release of Vitess
-    - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      with:
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
-        persist-credentials: 'false'
-
-    - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the last release
+    - name: Download previous release's binaries (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
-        go mod download
-
-    - name: Building last release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        echo "building last release: $(git rev-parse HEAD)"
-        source build.env
-        make build
-        mkdir -p /tmp/vitess-build-last/
-        cp -R bin /tmp/vitess-build-last/
-        rm -Rf bin/*
+        mkdir -p /tmp/vitess-build-previous/
+        gh release download ${{ steps.output-previous-release-ref.outputs.previous_release_ref }} --repo vitessio/vitess --pattern '*.tar.gz' --dir /tmp
+        tar xzf /tmp/vitess-*.tar.gz --wildcards --strip-components=1 -C /tmp/vitess-build-previous/ \
+          '*/bin/vttablet' '*/bin/vtgate' '*/bin/vtbackup' \
+          '*/bin/vtctl' '*/bin/vtctld' '*/bin/vtctlclient' '*/bin/vtctldclient' \
+          '*/bin/mysqlctl' '*/bin/mysqlctld'
+        rm /tmp/vitess-*.tar.gz
 
     # Checkout to the next release of Vitess
     - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
@@ -202,9 +185,9 @@ jobs:
       run: |
         source build.env
 
-        cp /tmp/vitess-build-last/bin/vttablet $PWD/bin/vttablet-last
-        cp /tmp/vitess-build-last/bin/mysqlctl $PWD/bin/mysqlctl-last
-        cp /tmp/vitess-build-last/bin/mysqlctld $PWD/bin/mysqlctld-last
+        cp /tmp/vitess-build-previous/bin/vttablet $PWD/bin/vttablet-last
+        cp /tmp/vitess-build-previous/bin/mysqlctl $PWD/bin/mysqlctl-last
+        cp /tmp/vitess-build-previous/bin/mysqlctld $PWD/bin/mysqlctld-last
         cp /tmp/vitess-build-next/bin/vttablet $PWD/bin/vttablet-next
         cp /tmp/vitess-build-next/bin/mysqlctl $PWD/bin/mysqlctl-next
         cp /tmp/vitess-build-next/bin/mysqlctld $PWD/bin/mysqlctld-next

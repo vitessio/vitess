@@ -14,6 +14,9 @@ concurrency:
 
 permissions: read-all
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtctl, vttablet, etc) built on different versions.
 
@@ -96,42 +99,16 @@ jobs:
         
         sudo service etcd stop
 
-    # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      with:
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
-        persist-credentials: 'false'
-
-    - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the last release
+    - name: Download previous release's binaries (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
-        go mod download
-
-    - name: Building last release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env
-        NOVTADMINBUILD=1 make build
-        mkdir -p /tmp/vitess-build-other/
-        cp -R bin /tmp/vitess-build-other/
-        rm -Rf bin/*
-
-    # Checkout to this build's commit
-    - name: Check out commit's code
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      with:
-        persist-credentials: 'false'
+        mkdir -p /tmp/vitess-build-previous/
+        gh release download ${{ steps.output-previous-release-ref.outputs.previous_release_ref }} --repo vitessio/vitess --pattern '*.tar.gz' --dir /tmp
+        tar xzf /tmp/vitess-*.tar.gz --wildcards --strip-components=1 -C /tmp/vitess-build-previous/ \
+          '*/bin/vttablet' '*/bin/vtgate' '*/bin/vtbackup' \
+          '*/bin/vtctl' '*/bin/vtctld' '*/bin/vtctlclient' '*/bin/vtctldclient' \
+          '*/bin/mysqlctl' '*/bin/mysqlctld'
+        rm /tmp/vitess-*.tar.gz
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -161,10 +138,10 @@ jobs:
         source build.env
 
         rm -f $PWD/bin/vtctl $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
-        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
-        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
-        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
-        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin/vtctldclient
+        cp /tmp/vitess-build-previous/bin/vtctl $PWD/bin/vtctl
+        cp /tmp/vitess-build-previous/bin/vtctld $PWD/bin/vtctld
+        cp /tmp/vitess-build-previous/bin/vtctlclient $PWD/bin/vtctlclient
+        cp /tmp/vitess-build-previous/bin/vtctldclient $PWD/bin/vtctldclient
         vtctl --version
         vttablet --version
 
