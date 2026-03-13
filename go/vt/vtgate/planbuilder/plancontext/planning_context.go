@@ -75,6 +75,16 @@ type PlanningContext struct {
 	PredTracker *predicates.Tracker
 
 	Conditions []engine.Condition
+
+	// SubQueryArgIndex is a global, append-only index of (argName, pulloutOpcode) pairs
+	// shared across all SubQueryBuilders. It enables cross-SQB conflict detection when
+	// the same subquery text appears in different pullout contexts (e.g., WHERE vs SELECT).
+	SubQueryArgIndex []SubQueryArgEntry
+}
+
+type SubQueryArgEntry struct {
+	ArgName    string
+	FilterType opcode.PulloutOpcode
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -382,6 +392,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,
 		MergedSubqueries:  ctx.MergedSubqueries,
+		SubQueryArgIndex:  ctx.SubQueryArgIndex,
 		CurrentPhase:      ctx.CurrentPhase,
 		Statement:         ctx.Statement,
 		OuterTables:       ctx.OuterTables,
@@ -433,4 +444,20 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 
 func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
 	ctx.Conditions = append(ctx.Conditions, conditions...)
+}
+
+func (ctx *PlanningContext) AddSubQueryArg(argName string, filterType opcode.PulloutOpcode) {
+	ctx.SubQueryArgIndex = append(ctx.SubQueryArgIndex, SubQueryArgEntry{
+		ArgName:    argName,
+		FilterType: filterType,
+	})
+}
+
+func (ctx *PlanningContext) HasConflictingSubQueryArg(argName string, filterType opcode.PulloutOpcode) bool {
+	for _, entry := range ctx.SubQueryArgIndex {
+		if entry.ArgName == argName && entry.FilterType != filterType {
+			return true
+		}
+	}
+	return false
 }

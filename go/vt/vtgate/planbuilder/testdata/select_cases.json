@@ -6793,5 +6793,201 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "cross-SQB subquery arg name conflict: same subquery in WHERE (PulloutIn) and SELECT (PulloutValue)",
+    "query": "select (select count(*) from user_extra) as a from user where id in (select count(*) from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra) as a from user where id in (select count(*) from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                    "Query": "select count(*) from user_extra"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq2 /* INT64 */ as a from `user` where 1 != 1",
+                "Query": "select :__sq2 /* INT64 */ as a from `user` where :__sq_has_values and id in ::__vals",
+                "Values": [
+                  "::__sq1"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "same subquery across SELECT (IN + scalar), WHERE (IN), and ORDER BY (scalar) — cross-SQB pullout context collision",
+    "query": "select 1 in (select count(*) from user_extra) as a, (select count(*) from user_extra) as b from user where id in (select count(*) from user_extra) order by (select count(*) from user_extra) desc",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 in (select count(*) from user_extra) as a, (select count(*) from user_extra) as b from user where id in (select count(*) from user_extra) order by (select count(*) from user_extra) desc",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                    "Query": "select count(*) from user_extra"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count_star(0) AS count(*)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                        "Query": "select count(*) from user_extra"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 in ::__sq1 as a, :__sq2 /* INT64 */ as b from `user` where 1 != 1",
+                    "Query": "select 1 in ::__sq1 as a, :__sq2 /* INT64 */ as b from `user` where :__sq_has_values and id in ::__vals",
+                    "Values": [
+                      "::__sq1"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

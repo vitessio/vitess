@@ -78,6 +78,7 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	argName := ctx.GetReservedArgumentFor(subq)
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
+	ctx.AddSubQueryArg(argName, sqInner.FilterType)
 
 	return sqInner
 }
@@ -376,7 +377,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.Clone(expr)
-	sqe := extractSubQueries(ctx, expr, isDML, sqb.Inner)
+	sqe := extractSubQueries(ctx, expr, isDML)
 	if sqe == nil {
 		return nil, nil
 	}
@@ -395,6 +396,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
+		ctx.AddSubQueryArg(argName, filterType)
 	}
 
 	return sqe.new, allSubqs
@@ -438,10 +440,9 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 
 // extractSubQueries recursively walks an expression tree to find and extract all subqueries.
 // Replaces subqueries with arguments (for DML) or column names (for SELECT).
-// existing is the set of already-created SubQuery operators from prior expressions sharing
-// the same SubQueryBuilder, used to detect cross-expression name conflicts.
+// Uses PlanningContext.SubQueryArgIndex for global cross-SQB conflict detection.
 // Returns nil if no subqueries found.
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool, existing []*SubQuery) *subqueryExtraction {
+func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
 		sqName := ctx.GetReservedArgumentFor(sq)
@@ -458,12 +459,7 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 			}
 		}
 		if !needsNewName {
-			for _, ex := range existing {
-				if ex.ArgName == sqName && ex.FilterType != t {
-					needsNewName = true
-					break
-				}
-			}
+			needsNewName = ctx.HasConflictingSubQueryArg(sqName, t)
 		}
 		if needsNewName {
 			sqName = ctx.ReservedVars.ReserveSubQuery()
