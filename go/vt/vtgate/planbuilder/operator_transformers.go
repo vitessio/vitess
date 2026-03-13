@@ -671,14 +671,26 @@ func buildInsertPrimitive(
 ) (engine.Primitive, error) {
 	ins := op.(*operators.Insert)
 
+	// For INSERT ... ON DUPLICATE KEY UPDATE with auto-increment sequences,
+	// add `<auto_inc_col> = LAST_INSERT_ID(<auto_inc_col>)` to the ON DUP clause.
+	// This causes the shard MySQL to report the existing row's id via last_insert_id
+	// when an update occurs, matching MySQL's behavior for tables with AUTO_INCREMENT.
+	// This must happen after vindex checks (which run during operator creation) because
+	// the auto-inc column may also be a vindex column.
+	var hasOnDupLID bool
+	if ins.AutoIncrement != nil && stmt.OnDup != nil {
+		hasOnDupLID = addLastInsertIDToOnDup(stmt, ins.VTable.AutoIncrement.Column)
+	}
+
 	ic := engine.InsertCommon{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode()),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
+		Opcode:               mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:             rb.Routing.Keyspace(),
+		TableName:            ins.VTable.Name.String(),
+		Ignore:               ins.Ignore,
+		Generate:             autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:          ins.ColVindexes,
+		FetchLastInsertID:    ctx.SemTable.ShouldFetchLastInsertID() || hasOnDupLID,
+		HasOnDupLastInsertID: hasOnDupLID,
 	}
 	if hints != nil {
 		ic.MultiShardAutocommit = hints.multiShardAutocommit
@@ -749,6 +761,58 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 		}
 	}, nil).(sqlparser.OnDup)
 	return
+}
+
+// addLastInsertIDToOnDup appends `<col> = LAST_INSERT_ID(<col>)` to the
+// ON DUPLICATE KEY UPDATE clause when the auto-increment column is not
+// already present. This causes the shard MySQL to set its session
+// last_insert_id to the existing row's value during an update, which
+// allows Vitess to return the correct InsertID to the client.
+// addLastInsertIDToOnDup appends `autoIncCol = LAST_INSERT_ID(autoIncCol)` to the
+// ON DUPLICATE KEY UPDATE clause so the shard MySQL reports the existing row's id.
+// It returns true if it added the expression or if LAST_INSERT_ID(expr) already
+// exists in the clause. It returns false (and does nothing) if:
+//   - the auto-inc column is already explicitly set in the clause, or
+//   - LAST_INSERT_ID(expr) is already called on a different column (we must not
+//     override the user's intent).
+func addLastInsertIDToOnDup(ins *sqlparser.Insert, autoIncCol sqlparser.IdentifierCI) bool {
+	hasLIDFunc := false
+	autoIncInClause := false
+	for _, expr := range ins.OnDup {
+		if expr.Name.Name.EqualString(autoIncCol.String()) {
+			autoIncInClause = true
+		}
+		// Check if LAST_INSERT_ID(expr) is used anywhere in this update expression's value.
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			funcExpr, ok := node.(*sqlparser.FuncExpr)
+			if ok && funcExpr.Name.EqualString("last_insert_id") && len(funcExpr.Exprs) > 0 {
+				hasLIDFunc = true
+				return false, nil
+			}
+			return true, nil
+		}, expr.Expr, nil)
+	}
+
+	// If the user already uses LAST_INSERT_ID(expr) anywhere in the clause,
+	// don't add our own — it would override their value.
+	if hasLIDFunc {
+		return true
+	}
+
+	// If the auto-inc column is already in the clause (e.g., id = 5),
+	// don't modify the user's expression.
+	if autoIncInClause {
+		return false
+	}
+
+	ins.OnDup = append(ins.OnDup, &sqlparser.UpdateExpr{
+		Name: sqlparser.NewColName(autoIncCol.String()),
+		Expr: &sqlparser.FuncExpr{
+			Name:  sqlparser.NewIdentifierCI("last_insert_id"),
+			Exprs: []sqlparser.Expr{sqlparser.NewColName(autoIncCol.String())},
+		},
+	})
+	return true
 }
 
 // dmlFormatter strips out keyspace name from dmls.

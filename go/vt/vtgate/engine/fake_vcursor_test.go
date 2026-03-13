@@ -411,6 +411,7 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 }
 
 func (t *noopVCursor) SetLastInsertID(uint64) {}
+func (t *noopVCursor) GetLastInsertID() uint64 { return 0 }
 func (t *noopVCursor) VExplainLogging()       {}
 func (t *noopVCursor) DisableLogging()        {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {

@@ -131,3 +131,12 @@ create table t2
     col bigint,
     primary key (id)
 ) Engine = InnoDB;
+
+create table lid_tbl
+(
+    id    bigint,
+    email varchar(255) not null,
+    name  varchar(255) not null,
+    primary key (id),
+    unique key (email)
+) Engine = InnoDB;
