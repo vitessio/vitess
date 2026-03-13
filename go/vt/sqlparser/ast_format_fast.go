@@ -110,11 +110,7 @@ func (node *Union) FormatFast(buf *TrackedBuffer) {
 	}
 
 	buf.WriteByte(' ')
-	if node.Distinct {
-		buf.WriteString(UnionStr)
-	} else {
-		buf.WriteString(UnionAllStr)
-	}
+	buf.WriteString(node.setOpStr())
 	buf.WriteByte(' ')
 
 	if requiresParen(node.Right) {

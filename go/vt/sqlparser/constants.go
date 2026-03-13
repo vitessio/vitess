@@ -44,10 +44,16 @@ const (
 	SQLCacheStr   = "sql_cache "
 	SQLNoCacheStr = "sql_no_cache "
 
-	// Union.Type
-	UnionStr         = "union"
-	UnionAllStr      = "union all"
-	UnionDistinctStr = "union distinct"
+	// Union.SetOp
+	UnionStr             = "union"
+	UnionAllStr          = "union all"
+	UnionDistinctStr     = "union distinct"
+	ExceptStr            = "except"
+	ExceptAllStr         = "except all"
+	ExceptDistinctStr    = "except distinct"
+	IntersectStr         = "intersect"
+	IntersectAllStr      = "intersect all"
+	IntersectDistinctStr = "intersect distinct"
 
 	// DDL strings.
 	InsertStr  = "insert"
@@ -690,6 +696,13 @@ const (
 const (
 	WhereClause WhereType = iota
 	HavingClause
+)
+
+// Constants for Enum Type - SetOpType
+const (
+	UnionSetOp SetOpType = iota
+	ExceptSetOp
+	IntersectSetOp
 )
 
 // Constants for Enum Type - JoinType
