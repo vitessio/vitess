@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -53,15 +52,14 @@ func fullStatus(tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error
 }
 
 // ReadTablet reads the vitess tablet record.
-func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
+func ReadTablet(tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, error) {
 	query := `SELECT
 		info
 	FROM
 		vitess_tablet
 	WHERE
-		alias = ?
-	`
-	args := sqlutils.Args(tabletAlias)
+		alias = ?`
+	args := sqlutils.Args(topoproto.TabletAliasString(tabletAlias))
 	tablet := &topodatapb.Tablet{}
 	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {

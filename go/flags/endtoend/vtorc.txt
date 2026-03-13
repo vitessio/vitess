@@ -26,6 +26,7 @@ Flags:
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                 cell to use (required in v25+)
+      --cells-to-watch strings                                      Comma-separated list of cells that this instance will monitor and repair. Defaults to all cells in the topology. Example: "cell1,cell2"
       --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
       --clusters-to-watch strings                                   Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -55,6 +56,7 @@ Flags:
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                              log stack traces for errors
+      --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                              enable structured JSON logging (default true)

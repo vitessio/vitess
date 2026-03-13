@@ -219,13 +219,7 @@ e2e_test: build
 
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
-	source build.env
-	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
-	# Handle go tool cover failures due to not handling `//line` directives, which
-	# the goyacc compiler adds to the generated parser in sql.go. See:
-	# https://github.com/golang/go/issues/41222
-	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
-	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
+	source build.env && tools/run_codecov.sh $(COVERAGE_PACKAGES)
 
 unit_test_race: build dependency_check
 	RACE=1 tools/unit_test_runner.sh
@@ -286,7 +280,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=53
+BOOTSTRAP_VERSION=54
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go

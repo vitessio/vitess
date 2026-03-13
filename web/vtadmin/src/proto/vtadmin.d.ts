@@ -39679,7 +39679,8 @@ export namespace binlogdata {
         LASTPK = 18,
         SAVEPOINT = 19,
         COPY_COMPLETED = 20,
-        PREVIOUS_GTIDS = 21
+        PREVIOUS_GTIDS = 21,
+        ROWS_QUERY = 22
     }
 
     /** Properties of a RowChange. */

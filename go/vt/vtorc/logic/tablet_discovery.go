@@ -36,9 +36,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -49,6 +51,7 @@ var (
 	ts               *topo.Server
 	tmc              tmclient.TabletManagerClient
 	clustersToWatch  []string
+	cellsToWatch     []string
 	shutdownWaitTime = 30 * time.Second
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
@@ -120,6 +123,7 @@ func getEmergencyReparentShardDisabledStats() map[string]int64 {
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	utils.SetFlagStringSliceVar(fs, &cellsToWatch, "cells-to-watch", cellsToWatch, "Comma-separated list of cells that this instance will monitor and repair. Defaults to all cells in the topology. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
@@ -238,19 +242,28 @@ func getAllTablets(ctx context.Context, cells []string) (tabletsByCell map[strin
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
 func refreshAllTablets(ctx context.Context) error {
-	return refreshTabletsUsing(ctx, func(tabletAlias string) {
+	return refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {
 		DiscoverInstance(tabletAlias, false /* forceDiscovery */)
 	}, false /* forceRefresh */)
 }
 
 // refreshTabletsUsing refreshes tablets using a provided loader.
-func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), forceRefresh bool) error {
+func refreshTabletsUsing(ctx context.Context, loader func(*topodatapb.TabletAlias), forceRefresh bool) error {
 	// Get all cells.
 	cellsCtx, cellsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cellsCancel()
 	cells, err := ts.GetKnownCells(cellsCtx)
 	if err != nil {
 		return err
+	}
+
+	if len(cellsToWatch) > 0 {
+		for _, cellToWatch := range cellsToWatch {
+			if !slices.Contains(cells, cellToWatch) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %v does not exist in the topo", cellToWatch)
+			}
+		}
+		cells = cellsToWatch
 	}
 
 	// Get all tablets from all cells.
@@ -279,7 +292,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 		}()
 
 		// Refresh the filtered tablets and forget stale tablets.
-		query := "select alias from vitess_tablet where cell = ?"
+		query := "SELECT alias FROM vitess_tablet WHERE cell = ?"
 		args := sqlutils.Args(cell)
 		refreshTablets(matchedTablets, query, args, loader, forceRefresh, nil)
 	}
@@ -290,10 +303,10 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 // forceRefreshAllTabletsInShard is used to refresh all the tablet's information (both MySQL information and topo records)
 // for a given shard. This function is meant to be called before or after a cluster-wide operation that we know will
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
-func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, tabletsToIgnore []string) {
+func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, tabletsToIgnore []*topodatapb.TabletAlias) {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
-	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(tabletAlias string) {
+	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {
 		DiscoverInstance(tabletAlias, true)
 	}, true, tabletsToIgnore)
 }
@@ -302,32 +315,40 @@ func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, 
 // of the given keyspace-shard.
 func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	log.Info(fmt.Sprintf("refresh of tablet records of shard - %v/%v", keyspace, shard))
-	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {
 		// No-op
 		// We only want to refresh the tablet information for the given shard
 	}, false, nil)
 }
 
-func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
+	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, cellsToWatch)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
 		return
 	}
-	query := "select alias from vitess_tablet where keyspace = ? and shard = ?"
+	query := "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?"
 	args := sqlutils.Args(keyspace, shard)
 	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
-func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
+// getShardTabletsByCell gets tablets for the given keyspace/shard and cells with a timeout.
+func getShardTabletsByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
+}
+
+func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
 	// Discover new tablets.
-	latestInstances := make(map[string]bool)
+	latestInstances := make(map[string]bool, len(tablets))
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
-		old, err := inst.ReadTablet(tabletAliasString)
+		old, err := inst.ReadTablet(tablet.Alias)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err.Error())
 			continue
@@ -340,21 +361,25 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 			continue
 		}
 		wg.Go(func() {
-			if slices.Contains(tabletsToIgnore, topoproto.TabletAliasString(tablet.Alias)) {
-				return
+			for _, tabletToIgnore := range tabletsToIgnore {
+				if topoproto.TabletAliasEqual(tabletToIgnore, tablet.Alias) {
+					return
+				}
 			}
-			loader(tabletAliasString)
+			loader(tablet.Alias)
 		})
 		log.Info(fmt.Sprintf("Discovered: %v", tablet))
 	}
 	wg.Wait()
 
 	// Forget tablets that were removed.
-	var toForget []string
+	toForget := make([]*topodatapb.TabletAlias, 0)
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		tabletAlias := row.GetString("alias")
-		if !latestInstances[tabletAlias] {
-			toForget = append(toForget, tabletAlias)
+		tabletAliasString := row.GetString("alias")
+		if !latestInstances[tabletAliasString] {
+			if tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasString); err == nil {
+				toForget = append(toForget, tabletAlias)
+			}
 		}
 		return nil
 	})
@@ -407,7 +432,7 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
 	query := `SELECT
 		info
-	FROM 
+	FROM
 		vitess_tablet
 	WHERE
 		keyspace = ? AND shard = ?

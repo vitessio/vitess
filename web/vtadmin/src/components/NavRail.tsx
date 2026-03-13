@@ -96,7 +96,7 @@ interface LinkProps {
 
 const NavRailLink = ({ count, hotkey, icon, text, to }: LinkProps) => {
     return (
-        <NavLink activeClassName={style.navLinkActive} className={style.navLink} to={to}>
+        <NavLink className={({ isActive }) => `${style.navLink}${isActive ? ` ${style.navLinkActive}` : ''}`} to={to}>
             {icon && <Icon className={style.icon} icon={icon} />}
             {hotkey && !icon && <div className={style.hotkey} data-hotkey={hotkey.toUpperCase()} />}
             <div className="ml-4">{text}</div>

@@ -53,9 +53,10 @@ var (
 	ExternalCompressorCmd           string
 	ExternalCompressorExt           string
 	ExternalDecompressorCmd         string
+	ExternalDecompressorUseManifest bool
 	ManifestExternalDecompressorCmd string
 
-	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine")
+	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine. Alternatively, set --external-decompressor-use-manifest to use the decompressor command from the backup manifest, but this is NOT RECOMMENDED as it is a security risk")
 	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
@@ -78,6 +79,7 @@ func registerBackupCompressionFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup.")
 	fs.StringVar(&ExternalCompressorExt, "external-compressor-extension", ExternalCompressorExt, "extension to use when using an external compressor.")
 	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup.")
+	fs.BoolVar(&ExternalDecompressorUseManifest, "external-decompressor-use-manifest", ExternalDecompressorUseManifest, "allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.")
 	fs.StringVar(&ManifestExternalDecompressorCmd, "manifest-external-decompressor", ManifestExternalDecompressorCmd, "command with arguments to store in the backup manifest when compressing a backup with an external compression engine.")
 }
 
@@ -88,6 +90,20 @@ func getExtensionFromEngine(engine string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%w %q", errUnsupportedCompressionEngine, engine)
+}
+
+// resolveExternalDecompressor returns the external decompressor command to use
+// at restore time. The CLI flag (--external-decompressor) takes precedence. The
+// backup manifest value is only used when --external-decompressor-use-manifest
+// is explicitly set to true.
+func resolveExternalDecompressor(manifestDecompressor string) string {
+	if ExternalDecompressorCmd != "" {
+		return ExternalDecompressorCmd
+	}
+	if ExternalDecompressorUseManifest && manifestDecompressor != "" {
+		return manifestDecompressor
+	}
+	return ""
 }
 
 // Validates if the external decompressor exists and return its path.

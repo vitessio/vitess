@@ -4098,6 +4098,11 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
 			return err
 		}
+		// We also set the ETA seconds to zero because progress is 100% and the migration is ready to complete, so ETA
+		// should also be zero.
+		if err = e.updateMigrationETASeconds(ctx, uuid, 0); err != nil {
+			return err
+		}
 	}
 	return nil
 }
