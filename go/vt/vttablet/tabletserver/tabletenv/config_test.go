@@ -171,7 +171,7 @@ schemaReloadIntervalSeconds: 30m0s
 semiSyncMonitor:
   intervalSeconds: 10s
 signalWhenSchemaChange: true
-streamBufferSize: 32768
+streamBufferSize: 262144
 txPool:
   idleTimeoutSeconds: 30m0s
   size: 20

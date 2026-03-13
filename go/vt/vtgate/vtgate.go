@@ -66,7 +66,7 @@ import (
 
 var (
 	normalizeQueries    = true
-	streamBufferSize    = 32 * 1024
+	streamBufferSize    = 256 * 1024
 	schemaTrackerHcName = "SchemaTracker"
 	txResolverHcName    = "TxResolver"
 

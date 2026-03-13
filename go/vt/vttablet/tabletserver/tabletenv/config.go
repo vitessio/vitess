@@ -1096,7 +1096,7 @@ var defaultConfig = TabletConfig{
 	// memory copies.  so with the encoding overhead, this seems to work
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
-	StreamBufferSize: 32 * 1024,
+	StreamBufferSize: 256 * 1024,
 	QueryCacheMemory: 32 * 1024 * 1024, // 32 mb for our query cache
 	// The doorkeeper for the plan cache is disabled by default in endtoend tests to ensure
 	// results are consistent between runs.

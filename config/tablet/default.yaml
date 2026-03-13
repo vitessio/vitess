@@ -1,109 +1,109 @@
 tabletID: zone-1234
 
 init:
-  dbName:            # init-db-name-override
-  keyspace:          # init-keyspace
-  shard:             # init-shard
-  tabletType:        # init-tablet-type
-  timeoutSeconds: 60 # init-timeout
+   dbName: # init-db-name-override
+   keyspace: # init-keyspace
+   shard: # init-shard
+   tabletType: # init-tablet-type
+   timeoutSeconds: 60 # init-timeout
 
 db:
-  socket:     # db-socket
-  host:       # db-host
-  port: 0     # db-port
-  charSet:    # db-charset
-  flags: 0    # db-flags
-  flavor:     # db-flavor
-  sslCa:      # db-ssl-ca
-  sslCaPath:  # db-ssl-ca-path
-  sslCert:    # db-ssl-cert
-  sslKey:     # db-ssl-key
-  serverName: # db-server-name
-  connectTimeoutMilliseconds: 0 # db-connect-timeout-ms
-  app:
-    user: vt_app      # db_app_user
-    password:         # db_app_password
-    useSsl: true      # db_app_use_ssl
-    preferTcp: false
-  dba:
-    user: vt_dba      # db-dba-user
-    password:         # db-dba-password
-    useSsl: true      # db-dba-use-ssl
-    preferTcp: false
-  filtered:
-    user: vt_filtered # db_filtered_user
-    password:         # db_filtered_password
-    useSsl: true      # db_filtered_use_ssl
-    preferTcp: false
-  repl:
-    user: vt_repl     # db_repl_user
-    password:         # db_repl_password
-    useSsl: true      # db_repl_use_ssl
-    preferTcp: false
-  appdebug:
-    user: vt_appdebug # db_appdebug_user
-    password:         # db_appdebug_password
-    useSsl: true      # db_appdebug_use_ssl
-    preferTcp: false
-  allprivs:
-    user: vt_allprivs # db_allprivs_user
-    password:         # db_allprivs_password
-    useSsl: true      # db_allprivs_use_ssl
-    preferTcp: false
+   socket: # db-socket
+   host: # db-host
+   port: 0 # db-port
+   charSet: # db-charset
+   flags: 0 # db-flags
+   flavor: # db-flavor
+   sslCa: # db-ssl-ca
+   sslCaPath: # db-ssl-ca-path
+   sslCert: # db-ssl-cert
+   sslKey: # db-ssl-key
+   serverName: # db-server-name
+   connectTimeoutMilliseconds: 0 # db-connect-timeout-ms
+   app:
+      user: vt_app # db_app_user
+      password: # db_app_password
+      useSsl: true # db_app_use_ssl
+      preferTcp: false
+   dba:
+      user: vt_dba # db-dba-user
+      password: # db-dba-password
+      useSsl: true # db-dba-use-ssl
+      preferTcp: false
+   filtered:
+      user: vt_filtered # db_filtered_user
+      password: # db_filtered_password
+      useSsl: true # db_filtered_use_ssl
+      preferTcp: false
+   repl:
+      user: vt_repl # db_repl_user
+      password: # db_repl_password
+      useSsl: true # db_repl_use_ssl
+      preferTcp: false
+   appdebug:
+      user: vt_appdebug # db_appdebug_user
+      password: # db_appdebug_password
+      useSsl: true # db_appdebug_use_ssl
+      preferTcp: false
+   allprivs:
+      user: vt_allprivs # db_allprivs_user
+      password: # db_allprivs_password
+      useSsl: true # db_allprivs_use_ssl
+      preferTcp: false
 
 oltpReadPool:
-  size: 16                 # queryserver-config-pool-size
-  timeoutSeconds: 0        # queryserver-config-query-pool-timeout
-  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
-  maxLifetimeSeconds: 0    # queryserver-config-pool-conn-max-lifetime
-  prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism
+   size: 16 # queryserver-config-pool-size
+   timeoutSeconds: 0 # queryserver-config-query-pool-timeout
+   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+   maxLifetimeSeconds: 0 # queryserver-config-pool-conn-max-lifetime
+   prefillParallelism: 0 # queryserver-config-pool-prefill-parallelism
 
 olapReadPool:
-  size: 200                # queryserver-config-stream-pool-size
-  timeoutSeconds: 0        # queryserver-config-query-pool-timeout
-  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
-  prefillParallelism: 0    # queryserver-config-stream-pool-prefill-parallelism
+   size: 200 # queryserver-config-stream-pool-size
+   timeoutSeconds: 0 # queryserver-config-query-pool-timeout
+   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+   prefillParallelism: 0 # queryserver-config-stream-pool-prefill-parallelism
 
 txPool:
-  size: 20                 # queryserver-config-transaction-cap
-  timeoutSeconds: 1        # queryserver-config-txpool-timeout
-  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
-  prefillParallelism: 0    # queryserver-config-transaction-prefill-parallelism
+   size: 20 # queryserver-config-transaction-cap
+   timeoutSeconds: 1 # queryserver-config-txpool-timeout
+   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+   prefillParallelism: 0 # queryserver-config-transaction-prefill-parallelism
 
 oltp:
-  queryTimeoutSeconds: 30 # queryserver-config-query-timeout
-  txTimeoutSeconds: 30    # queryserver-config-transaction-timeout
-  maxRows: 10000          # queryserver-config-max-result-size
-  warnRows: 0             # queryserver-config-warn-result-size
+   queryTimeoutSeconds: 30 # queryserver-config-query-timeout
+   txTimeoutSeconds: 30 # queryserver-config-transaction-timeout
+   maxRows: 10000 # queryserver-config-max-result-size
+   warnRows: 0 # queryserver-config-warn-result-size
 
 healthcheck:
-  intervalSeconds: 20             # health-check-interval
-  degradedThresholdSeconds: 30    # degraded-threshold
-  unhealthyThresholdSeconds: 7200 # unhealthy-threshold
+   intervalSeconds: 20 # health-check-interval
+   degradedThresholdSeconds: 30 # degraded-threshold
+   unhealthyThresholdSeconds: 7200 # unhealthy-threshold
 
 gracePeriods:
-  shutdownSeconds:   0 # shutdown-grace-period
-  transitionSeconds: 0 # serving-state-grace-period
+   shutdownSeconds: 0 # shutdown-grace-period
+   transitionSeconds: 0 # serving-state-grace-period
 
 replicationTracker:
-  mode: disable                    # enable-replication-reporter
-  heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
+   mode: disable # enable-replication-reporter
+   heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
 
 hotRowProtection:
-  mode: disable|dryRun|enable # enable-hot-row-protection, enable-hot-row-protection-dry-run
-  # Recommended value: same as txPool.size.
-  maxQueueSize: 20            # hot-row-protection-max-queue-size
-  maxGlobalQueueSize: 1000    # hot-row-protection-max-global-queue-size
-  maxConcurrency: 5           # hot-row-protection-concurrent-transactions
+   mode: disable|dryRun|enable # enable-hot-row-protection, enable-hot-row-protection-dry-run
+   # Recommended value: same as txPool.size.
+   maxQueueSize: 20 # hot-row-protection-max-queue-size
+   maxGlobalQueueSize: 1000 # hot-row-protection-max-global-queue-size
+   maxConcurrency: 5 # hot-row-protection-concurrent-transactions
 
 consolidator: enable|disable|notOnPrimary # enable-consolidator, enable-consolidator-replicas
-passthroughDML: false                    # queryserver-config-passthrough-dmls
-streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
-schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
-watchReplication: false                  # watch-replication-stream
-terseErrors: false                       # queryserver-config-terse-errors
-truncateErrorLen: 0                      # queryserver-config-truncate-error-len
-messagePostponeParallelism: 4            # queryserver-config-message-postpone-cap
+passthroughDML: false # queryserver-config-passthrough-dmls
+streamBufferSize: 262144 # queryserver-config-stream-buffer-size
+schemaReloadIntervalSeconds: 1800 # queryserver-config-schema-reload-time
+watchReplication: false # watch-replication-stream
+terseErrors: false # queryserver-config-terse-errors
+truncateErrorLen: 0 # queryserver-config-truncate-error-len
+messagePostponeParallelism: 4 # queryserver-config-message-postpone-cap
 
 
 # The following flags are currently not supported.
