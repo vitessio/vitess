@@ -460,7 +460,29 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
 		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
 	}
+	// For scopes with no tables (virtual dual), check if the column matches
+	// a SELECT alias. This allows subqueries like (SELECT x) to reference
+	// aliases from an outer SELECT without a FROM clause.
+	if deps.empty() && len(current.tables) == 0 && expr.Qualifier.IsEmpty() {
+		if sel, ok := current.stmt.(*sqlparser.Select); ok && hasMatchingAlias(sel, expr.Name.String()) {
+			return createUncertain(EmptyTableSet(), EmptyTableSet()), nil
+		}
+	}
 	return deps, nil
+}
+
+func hasMatchingAlias(sel *sqlparser.Select, name string) bool {
+	lowered := strings.ToLower(name)
+	for _, selExpr := range sel.SelectExprs.Exprs {
+		ae, ok := selExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		if ae.As.Lowered() == lowered {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery

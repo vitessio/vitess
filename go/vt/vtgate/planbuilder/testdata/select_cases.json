@@ -670,10 +670,7 @@
         },
         "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
         "Query": "select @@auto_increment_increment from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2143,10 +2140,7 @@
         },
         "FieldQuery": "select 42 from dual where 1 != 1",
         "Query": "select 42 from dual where 0"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2554,7 +2548,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2594,7 +2587,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2637,7 +2629,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2660,7 +2651,6 @@
         "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id <= 4"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2687,7 +2677,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2727,7 +2716,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2844,25 +2832,7 @@
   {
     "comment": "Merging dual with user",
     "query": "select 42, id from dual, user",
-    "plan": {
-      "Type": "Scatter",
-      "QueryType": "SELECT",
-      "Original": "select 42, id from dual, user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
-        "Query": "select 42, id from dual, `user`"
-      },
-      "TablesUsed": [
-        "main.dual",
-        "user.user"
-      ]
-    },
+    "plan": "syntax error at position 25",
     "skip_e2e": true
   },
   {
@@ -3701,10 +3671,7 @@
         "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.`TABLE_NAME` = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
         "SysTableTableName": "[TABLES_TABLE_NAME:'proc']",
         "SysTableTableSchema": "['mysql']"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3723,10 +3690,7 @@
         },
         "FieldQuery": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
         "Query": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3803,7 +3767,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -3824,10 +3787,7 @@
         },
         "FieldQuery": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual where 1 != 1",
         "Query": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3846,10 +3806,7 @@
         },
         "FieldQuery": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
         "Query": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3914,10 +3871,7 @@
         },
         "FieldQuery": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual where 1 != 1",
         "Query": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3936,10 +3890,7 @@
         },
         "FieldQuery": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
         "Query": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3958,10 +3909,7 @@
         },
         "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual where 1 != 1",
         "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3980,10 +3928,7 @@
         },
         "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual where 1 != 1",
         "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -4008,7 +3953,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -4053,7 +3997,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -4120,10 +4063,7 @@
         },
         "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
         "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -5552,9 +5492,85 @@
         },
         "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
         "Query": "select 1 as x, (select x from dual) from dual"
+      }
+    }
+  },
+  {
+    "comment": "Nested subqueries can reference outer aliases in dual context",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1), (select x from dual where 1 != 1) as `(select (select x from dual) from dual)` from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual), (select x from dual) as `(select (select x from dual) from dual)` from dual"
+      }
+    }
+  },
+  {
+    "comment": "Unresolved column in dual subquery should fail",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT y FROM dual)",
+    "plan": "column 'y' not found"
+  },
+  {
+    "comment": "Duplicate uncorrelated subqueries should not be deduplicated in the projection",
+    "query": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
-        "main.dual"
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -5683,7 +5699,6 @@
         "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1"
       },
       "TablesUsed": [
-        "main.dual",
         "main.unsharded_a"
       ]
     },
