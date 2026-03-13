@@ -33,8 +33,8 @@ if [ "$base_release_branch" != "" ]; then
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
   target_major_release=$((major_release-1))
 else
-  target_major_release=$(gh release list --repo vitessio/vitess --limit 1 --json tagName \
-    --jq '.[0].tagName | capture("v(?<major>[0-9]+)\\.") | .major')
+  target_major_release=$(gh release list --repo vitessio/vitess --limit 100 --json tagName,isPrerelease \
+    --jq '[.[] | select(.isPrerelease == false) | .tagName | capture("v(?<major>[0-9]+)\\.") | .major | tonumber] | max')
 fi
 
 # Find the latest stable (non-prerelease) release tag for the target major version.
