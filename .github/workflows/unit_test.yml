@@ -115,7 +115,7 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || github.ref_name == 'main') && 'true' || 'false' }}
+          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
