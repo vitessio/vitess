@@ -254,3 +254,206 @@ func TestKeyspaceToNonQualifiedTable(t *testing.T) {
 	AddKeyspace(stmt, "ks2")
 	require.Equal(t, "select col, col + (select 1 from ks2.t4) from ks.t join ks2.t2 join (select 1 from ks2.t3) as x where t.id = t2.id and x.id = t.id", String(stmt))
 }
+
+func TestAggrNameCapitalization(t *testing.T) {
+	parser := NewTestParser()
+
+	tests := []struct {
+		name          string
+		upperInput    string
+		lowerInput    string
+		upperExpected string
+		lowerExpected string
+	}{
+		{
+			name:          "COUNT",
+			upperInput:    "select COUNT(a) from t",
+			lowerInput:    "select count(a) from t",
+			upperExpected: "select COUNT(a) from t",
+			lowerExpected: "select count(a) from t",
+		},
+		{
+			name:          "COUNT(*)",
+			upperInput:    "select COUNT(*) from t",
+			lowerInput:    "select count(*) from t",
+			upperExpected: "select COUNT(*) from t",
+			lowerExpected: "select count(*) from t",
+		},
+		{
+			name:          "SUM",
+			upperInput:    "select SUM(a) from t",
+			lowerInput:    "select sum(a) from t",
+			upperExpected: "select SUM(a) from t",
+			lowerExpected: "select sum(a) from t",
+		},
+		{
+			name:          "MIN",
+			upperInput:    "select MIN(a) from t",
+			lowerInput:    "select min(a) from t",
+			upperExpected: "select MIN(a) from t",
+			lowerExpected: "select min(a) from t",
+		},
+		{
+			name:          "MAX",
+			upperInput:    "select MAX(a) from t",
+			lowerInput:    "select max(a) from t",
+			upperExpected: "select MAX(a) from t",
+			lowerExpected: "select max(a) from t",
+		},
+		{
+			name:          "AVG",
+			upperInput:    "select AVG(a) from t",
+			lowerInput:    "select avg(a) from t",
+			upperExpected: "select AVG(a) from t",
+			lowerExpected: "select avg(a) from t",
+		},
+		{
+			name:          "GROUP_CONCAT",
+			upperInput:    "select GROUP_CONCAT(a) from t",
+			lowerInput:    "select group_concat(a) from t",
+			upperExpected: "select GROUP_CONCAT(a) from t",
+			lowerExpected: "select group_concat(a) from t",
+		},
+		{
+			name:          "BIT_AND",
+			upperInput:    "select BIT_AND(a) from t",
+			lowerInput:    "select bit_and(a) from t",
+			upperExpected: "select BIT_AND(a) from t",
+			lowerExpected: "select bit_and(a) from t",
+		},
+		{
+			name:          "BIT_OR",
+			upperInput:    "select BIT_OR(a) from t",
+			lowerInput:    "select bit_or(a) from t",
+			upperExpected: "select BIT_OR(a) from t",
+			lowerExpected: "select bit_or(a) from t",
+		},
+		{
+			name:          "BIT_XOR",
+			upperInput:    "select BIT_XOR(a) from t",
+			lowerInput:    "select bit_xor(a) from t",
+			upperExpected: "select BIT_XOR(a) from t",
+			lowerExpected: "select bit_xor(a) from t",
+		},
+		{
+			name:          "STD",
+			upperInput:    "select STD(a) from t",
+			lowerInput:    "select std(a) from t",
+			upperExpected: "select STD(a) from t",
+			lowerExpected: "select std(a) from t",
+		},
+		{
+			name:          "STDDEV",
+			upperInput:    "select STDDEV(a) from t",
+			lowerInput:    "select stddev(a) from t",
+			upperExpected: "select STDDEV(a) from t",
+			lowerExpected: "select stddev(a) from t",
+		},
+		{
+			name:          "STDDEV_POP",
+			upperInput:    "select STDDEV_POP(a) from t",
+			lowerInput:    "select stddev_pop(a) from t",
+			upperExpected: "select STDDEV_POP(a) from t",
+			lowerExpected: "select stddev_pop(a) from t",
+		},
+		{
+			name:          "STDDEV_SAMP",
+			upperInput:    "select STDDEV_SAMP(a) from t",
+			lowerInput:    "select stddev_samp(a) from t",
+			upperExpected: "select STDDEV_SAMP(a) from t",
+			lowerExpected: "select stddev_samp(a) from t",
+		},
+		{
+			name:          "VAR_POP",
+			upperInput:    "select VAR_POP(a) from t",
+			lowerInput:    "select var_pop(a) from t",
+			upperExpected: "select VAR_POP(a) from t",
+			lowerExpected: "select var_pop(a) from t",
+		},
+		{
+			name:          "VAR_SAMP",
+			upperInput:    "select VAR_SAMP(a) from t",
+			lowerInput:    "select var_samp(a) from t",
+			upperExpected: "select VAR_SAMP(a) from t",
+			lowerExpected: "select var_samp(a) from t",
+		},
+		{
+			name:          "VARIANCE",
+			upperInput:    "select VARIANCE(a) from t",
+			lowerInput:    "select variance(a) from t",
+			upperExpected: "select VARIANCE(a) from t",
+			lowerExpected: "select variance(a) from t",
+		},
+		{
+			name:          "ANY_VALUE",
+			upperInput:    "select ANY_VALUE(a) from t",
+			lowerInput:    "select any_value(a) from t",
+			upperExpected: "select ANY_VALUE(a) from t",
+			lowerExpected: "select any_value(a) from t",
+		},
+		{
+			name:          "JSON_ARRAYAGG",
+			upperInput:    "select JSON_ARRAYAGG(a) from t",
+			lowerInput:    "select json_arrayagg(a) from t",
+			upperExpected: "select JSON_ARRAYAGG(a) from t",
+			lowerExpected: "select json_arrayagg(a) from t",
+		},
+		{
+			name:          "JSON_OBJECTAGG",
+			upperInput:    "select JSON_OBJECTAGG(a, b) from t",
+			lowerInput:    "select json_objectagg(a, b) from t",
+			upperExpected: "select JSON_OBJECTAGG(a, b) from t",
+			lowerExpected: "select json_objectagg(a, b) from t",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test uppercase input preserves uppercase
+			tree, err := parser.Parse(tt.upperInput)
+			require.NoError(t, err)
+			assert.Equal(t, tt.upperExpected, String(tree))
+
+			// Test lowercase input preserves lowercase
+			tree, err = parser.Parse(tt.lowerInput)
+			require.NoError(t, err)
+			assert.Equal(t, tt.lowerExpected, String(tree))
+		})
+	}
+}
+
+func TestAggrNameDefault(t *testing.T) {
+	// Programmatically-created aggregate nodes without Name should default to lowercase
+	tests := []struct {
+		name     string
+		node     AggrFunc
+		expected string
+	}{
+		{"Count", &Count{Args: []Expr{NewIntLiteral("1")}}, "count"},
+		{"CountStar", &CountStar{}, "count"},
+		{"Sum", &Sum{Arg: NewIntLiteral("1")}, "sum"},
+		{"Min", &Min{Arg: NewIntLiteral("1")}, "min"},
+		{"Max", &Max{Arg: NewIntLiteral("1")}, "max"},
+		{"Avg", &Avg{Arg: NewIntLiteral("1")}, "avg"},
+		{"GroupConcatExpr", &GroupConcatExpr{Exprs: []Expr{NewIntLiteral("1")}}, "group_concat"},
+		{"BitAnd", &BitAnd{Arg: NewIntLiteral("1")}, "bit_and"},
+		{"BitOr", &BitOr{Arg: NewIntLiteral("1")}, "bit_or"},
+		{"BitXor", &BitXor{Arg: NewIntLiteral("1")}, "bit_xor"},
+		{"Std", &Std{Arg: NewIntLiteral("1")}, "std"},
+		{"StdDev", &StdDev{Arg: NewIntLiteral("1")}, "stddev"},
+		{"StdPop", &StdPop{Arg: NewIntLiteral("1")}, "stddev_pop"},
+		{"StdSamp", &StdSamp{Arg: NewIntLiteral("1")}, "stddev_samp"},
+		{"VarPop", &VarPop{Arg: NewIntLiteral("1")}, "var_pop"},
+		{"VarSamp", &VarSamp{Arg: NewIntLiteral("1")}, "var_samp"},
+		{"Variance", &Variance{Arg: NewIntLiteral("1")}, "variance"},
+		{"AnyValue", &AnyValue{Arg: NewIntLiteral("1")}, "any_value"},
+		{"JSONArrayAgg", &JSONArrayAgg{Expr: NewIntLiteral("1")}, "json_arrayagg"},
+		{"JSONObjectAgg", &JSONObjectAgg{Key: NewIntLiteral("1"), Value: NewIntLiteral("2")}, "json_objectagg"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.node.AggrName())
+		})
+	}
+}

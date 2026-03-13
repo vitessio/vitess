@@ -505,10 +505,10 @@ var validSQL = []struct {
 	output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 }, {
 	input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
-	output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
 }, {
 	input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
-	output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
+	output: "with count_a as (select COUNT(id) as num from tbl_a) , count_b as (select COUNT(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
 }, {
 	input: "select 1 from t",
 }, {
@@ -1192,7 +1192,7 @@ var validSQL = []struct {
 	output: "select /* TIMESTAMPDIFF */ timestampdiff(minute, '2008-01-02', '2008-01-04') from t",
 }, {
 	input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
-	output: "select date_add(min(FROM_UNIXTIME(1673444922)), interval -DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1 day) from dual",
+	output: "select date_add(MIN(FROM_UNIXTIME(1673444922)), interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922))) + 1 day) from dual",
 }, {
 	input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
 	output: "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month)) - 1 month from dual",
@@ -2146,7 +2146,7 @@ var validSQL = []struct {
 	output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 }, {
 	input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e;`,
-	output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e;",
+	output: "create procedure p1 (in a CHAR(3), out b INT) select COUNT(*) from x where d = e;",
 }, {
 	input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
 	output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
@@ -2839,7 +2839,7 @@ var validSQL = []struct {
 	input: "select * from t group by a collate utf8_general_ci",
 }, {
 	input:  "select MAX(k collate latin1_german2_ci) from t1",
-	output: "select max(k collate latin1_german2_ci) from t1",
+	output: "select MAX(k collate latin1_german2_ci) from t1",
 }, {
 	input: "select distinct k collate latin1_german2_ci from t1",
 }, {
@@ -4054,55 +4054,55 @@ var validSQL = []struct {
 	output: "select _ascii 'bac' from dual",
 }, {
 	input:  "SELECT time, subject, AVG(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, avg(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, AVG(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, BIT_AND(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, bit_and(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, BIT_AND(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, BIT_OR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, bit_or(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, BIT_OR(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, BIT_XOR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, bit_xor(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, BIT_XOR(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, COUNT(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, count(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, COUNT(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, COUNT(*) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, count(*) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, COUNT(*) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, MAX(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, max(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, MAX(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, MIN(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, min(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, MIN(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, STD(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, std(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, STD(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, STDDEV(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, stddev(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, STDDEV(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, STDDEV_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, stddev_pop(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, STDDEV_POP(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, STDDEV_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, stddev_samp(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, STDDEV_SAMP(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, SUM(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, sum(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, SUM(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, VAR_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, var_pop(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, VAR_POP(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, VAR_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, var_samp(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, VAR_SAMP(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-	output: "select `time`, subject, variance(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
+	output: "select `time`, subject, VARIANCE(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 }, {
 	input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
-	output: "select id, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over (order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over (order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+	output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over (order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over (order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
 }, {
 	input: `kill connection 18446744073709551615`,
 }, {

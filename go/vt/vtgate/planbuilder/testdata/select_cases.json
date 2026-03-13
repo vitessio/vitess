@@ -3467,7 +3467,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music, `user` where 1 != 1",
-        "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
+        "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.id = (select MAX(m2.id) from music as m2 where m2.user_id = `user`.id)",
         "Values": [
           "5"
         ],
@@ -4831,7 +4831,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id in (5, 6) group by music.user_id)",
+        "Query": "select music.id from music where music.id in (select MAX(music.id) from music where music.user_id in (5, 6) group by music.user_id)",
         "Values": [
           "(5, 6)"
         ],
@@ -4862,7 +4862,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0|1) AS max(music.id)",
+            "Aggregates": "max(0|1) AS MAX(music.id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4871,8 +4871,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(max(music.id)) from music where 1 != 1",
-                "Query": "select max(music.id), weight_string(max(music.id)) from music where music.user_id in ::__vals",
+                "FieldQuery": "select MAX(music.id), weight_string(MAX(music.id)) from music where 1 != 1",
+                "Query": "select MAX(music.id), weight_string(MAX(music.id)) from music where music.user_id in ::__vals",
                 "Values": [
                   "(5, 6)"
                 ],
@@ -4941,7 +4941,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id = 5)",
+        "Query": "select music.id from music where music.id in (select MAX(music.id) from music where music.user_id = 5)",
         "Values": [
           "5"
         ],
@@ -4967,7 +4967,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id = 5 limit 10)",
+        "Query": "select music.id from music where music.id in (select MAX(music.id) from music where music.user_id = 5 limit 10)",
         "Values": [
           "5"
         ],
@@ -5303,8 +5303,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
-        "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
+        "FieldQuery": "select music.id from (select MAX(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select MAX(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
         "Values": [
           "5"
         ],
@@ -5329,8 +5329,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
-        "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5 and music.col not in (select col from `user` where `user`.id = 5)) as other, music where other.maxt = music.id",
+        "FieldQuery": "select music.id from (select MAX(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select MAX(id) as maxt from music where music.user_id = 5 and music.col not in (select col from `user` where `user`.id = 5)) as other, music where other.maxt = music.id",
         "Values": [
           "5"
         ],
@@ -5524,8 +5524,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
-        "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
+        "FieldQuery": "select music.id from (select MAX(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select MAX(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
         "Values": [
           "5"
         ],
@@ -5679,8 +5679,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
-        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1"
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select MAX(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Query": "select * from unsharded_a as t1 join (select trim((select MAX(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1"
       },
       "TablesUsed": [
         "main.dual",
@@ -6284,8 +6284,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select sum(id) over (partition by `name`) from `user` where 1 != 1",
-        "Query": "select sum(id) over (partition by `name`) from `user` where id = 5",
+        "FieldQuery": "select Sum(id) over (partition by `name`) from `user` where 1 != 1",
+        "Query": "select Sum(id) over (partition by `name`) from `user` where id = 5",
         "Values": [
           "5"
         ],

@@ -276,8 +276,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select sum(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
-        "Query": "select sum(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */",
+        "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
+        "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */",
         "SysTableTableSchema": "[:v1]"
       }
     }
@@ -520,8 +520,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select count(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select count(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
+        "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+        "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
         "SysTableTableName": "[table_name:'foo']",
         "SysTableTableSchema": "['performance_schema']"
       }

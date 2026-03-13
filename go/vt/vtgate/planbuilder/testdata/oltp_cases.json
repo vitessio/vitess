@@ -57,7 +57,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(k)",
+        "Aggregates": "sum(0) AS SUM(k)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -66,8 +66,8 @@
               "Name": "main",
               "Sharded": true
             },
-            "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
-            "Query": "select sum(k) from sbtest43 where id between 90 and 990"
+            "FieldQuery": "select SUM(k) from sbtest43 where 1 != 1",
+            "Query": "select SUM(k) from sbtest43 where id between 90 and 990"
           }
         ]
       },

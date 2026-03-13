@@ -18,6 +18,7 @@ package asthelpergen
 
 import (
 	"go/types"
+	"reflect"
 	"strings"
 
 	"github.com/dave/jennifer/jen"
@@ -168,10 +169,16 @@ func (e *equalsGen) structMethod(t types.Type, strct *types.Struct, spi generato
 func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 	var basicsPred []*jen.Statement
 	var others []*jen.Statement
-	for field := range strct.Fields() {
+	for i := range strct.NumFields() {
+		field := strct.Field(i)
 		if field.Type().Underlying().String() == anyTypeName || strings.HasPrefix(field.Name(), "_") {
 			// we can safely ignore this, we do not want ast to contain `any` types.
 			continue
+		}
+		if tag := strct.Tag(i); tag != "" {
+			if reflect.StructTag(tag).Get("ast") == "noEquals" {
+				continue
+			}
 		}
 		fieldA := jen.Id("a").Dot(field.Name())
 		fieldB := jen.Id("b").Dot(field.Name())

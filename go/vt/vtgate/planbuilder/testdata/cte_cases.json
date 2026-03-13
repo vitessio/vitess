@@ -1862,8 +1862,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "with count_a as (select count(id) as num from unsharded_a where 1 != 1) , count_b as (select count(id) as num from unsharded_b where 1 != 1) select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
-        "Query": "with count_a as (select count(id) as num from unsharded_a) , count_b as (select count(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b"
+        "FieldQuery": "with count_a as (select COUNT(id) as num from unsharded_a where 1 != 1) , count_b as (select COUNT(id) as num from unsharded_b where 1 != 1) select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
+        "Query": "with count_a as (select COUNT(id) as num from unsharded_a) , count_b as (select COUNT(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -1907,8 +1907,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(user_id) as num from user_metadata where 1 != 1",
-                        "Query": "select count(user_id) as num from user_metadata"
+                        "FieldQuery": "select COUNT(user_id) as num from user_metadata where 1 != 1",
+                        "Query": "select COUNT(user_id) as num from user_metadata"
                       }
                     ]
                   }
@@ -1933,8 +1933,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(user_id) as num from user_extra where 1 != 1",
-                        "Query": "select count(user_id) as num from user_extra"
+                        "FieldQuery": "select COUNT(user_id) as num from user_extra where 1 != 1",
+                        "Query": "select COUNT(user_id) as num from user_extra"
                       }
                     ]
                   }
@@ -1971,13 +1971,13 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "least(1000, sum(num)) as num"
+                  "least(1000, SUM(num)) as num"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "constant_aggr(1000) AS 1000, sum(1) AS sum(num)",
+                    "Aggregates": "constant_aggr(1000) AS 1000, sum(1) AS SUM(num)",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",

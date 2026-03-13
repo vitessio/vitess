@@ -488,7 +488,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		if sqlparser.IsDistinct(expr) {
 			return nil, fmt.Errorf("unsupported distinct expression usage: %v", sqlparser.String(expr))
 		}
-		switch fname := expr.AggrName(); fname {
+		switch fname := strings.ToLower(expr.AggrName()); fname {
 		case "count":
 			if _, ok := expr.(*sqlparser.CountStar); !ok {
 				return nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))

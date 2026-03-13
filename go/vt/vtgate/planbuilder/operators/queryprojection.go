@@ -512,7 +512,7 @@ orderBy:
 }
 
 func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
-	code := opcode.SupportedAggregates[fnc.AggrName()]
+	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 
 	if code == opcode.AggregateCount {
 		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
