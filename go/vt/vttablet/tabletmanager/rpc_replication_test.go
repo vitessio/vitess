@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -88,6 +89,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	tm := &TabletManager{
 		actionSema:  semaphore.NewWeighted(1),
 		MysqlDaemon: fakeDb,
+		Gossip:      gossip.New(gossip.Config{}, nil, nil),
 		tmState: &tmState{
 			displayState: displayState{
 				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
