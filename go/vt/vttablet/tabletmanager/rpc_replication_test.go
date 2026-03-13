@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -325,4 +327,76 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
 	require.False(t, isReadOnly)
+}
+
+func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
+	testCases := []struct {
+		name          string
+		inputErr      error
+		shouldRestart bool
+	}{
+		{
+			name:          "relay log info repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "master info error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			shouldRestart: true,
+		},
+		{
+			name:          "connection metadata repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "applier metadata error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "applier metadata message with wrong errno",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			shouldRestart: false,
+		},
+		{
+			name:          "unrelated error",
+			inputErr:      errors.New("unexpected replication failure"),
+			shouldRestart: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			if tc.shouldRestart {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+					"STOP REPLICA",
+					"RESET REPLICA",
+					"START REPLICA",
+				}
+			}
+
+			tablet := newTestTablet(t, 100, "ks", "0", nil)
+			tm := &TabletManager{
+				MysqlDaemon: fakeMysqlDaemon,
+				tabletAlias: tablet.Alias,
+				tmState: &tmState{
+					displayState: displayState{
+						tablet: tablet,
+					},
+				},
+			}
+
+			err := tm.handleRecoverableReplicationError(context.Background(), tc.inputErr)
+			if tc.shouldRestart {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.inputErr)
+			}
+
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
 }

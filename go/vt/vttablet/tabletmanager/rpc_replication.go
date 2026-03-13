@@ -19,8 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"runtime"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -950,7 +950,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
@@ -958,12 +958,12 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
 		if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
+			if err := tm.handleRecoverableReplicationError(ctx, err); err != nil {
 				return err
 			}
 		}
@@ -1237,19 +1237,38 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	return nil
 }
 
-// handleRelayLogError resets replication of the instance.
-// This is required because sometimes MySQL gets stuck due to improper initialization of
-// master info structure or related failures and throws errors like
-// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
-// These errors can only be resolved by resetting the replication, otherwise START REPLICA fails.
-func (tm *TabletManager) handleRelayLogError(ctx context.Context, err error) error {
-	// attempt to fix this error:
-	// Replica failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START REPLICA
+// recoverableReplicationInitializationErrorCodes is the set of replication initialization error
+// codes that can be recovered from by restarting replication.
+var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
+	sqlerror.ERMasterInfo:                              {},
+	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
+	sqlerror.ERReplicaApplierMetadataInitRepository:    {},
+}
+
+// isRecoverableReplicationInitializationError reports whether an error can be recovered from by
+// restarting replication.
+func isRecoverableReplicationInitializationError(err error) bool {
+	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if !ok || sqlErr == nil {
+		return false
+	}
+
+	_, ok = recoverableReplicationInitializationErrorCodes[sqlErr.Number()]
+	return ok
+}
+
+// handleRecoverableReplicationError repairs recoverable replication initialization
+// failures by restarting replication.
+func (tm *TabletManager) handleRecoverableReplicationError(ctx context.Context, err error) error {
+	// Attempt to self-heal by restarting replication when initialization fails.
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
-	if strings.Contains(err.Error(), "Replica failed to initialize relay log info structure from the repository") ||
-		strings.Contains(err.Error(), "Could not initialize master info structure") {
-		// Stop, reset and start replication again to resolve this error
+	if isRecoverableReplicationInitializationError(err) {
+		log.Warn(
+			"Encountered recoverable replication initialization error, restarting replication",
+			slog.Any("error", err),
+		)
+
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}
