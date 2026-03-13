@@ -81,6 +81,9 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
+	// mysqlEnableZstdCompression controls whether vtgate advertises and uses zstd compression.
+	// When false (the default) we don't touch anything (no extra capability bits, no compression).
+	mysqlEnableZstdCompression = false
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -108,6 +111,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mysqlDefaultWorkloadName, "mysql-default-workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work")
 	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+	utils.SetFlagBoolVar(fs, &mysqlEnableZstdCompression, "mysql-enable-zstd-compression", mysqlEnableZstdCompression, "Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -622,18 +626,19 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			log.Error(fmt.Sprintf("servenv.Listen failed: %v", err))
 			os.Exit(1)
 		}
-		srv.tcpListener, err = mysql.NewFromListener(
-			listener,
-			authServer,
-			srv.vtgateHandle,
-			mysqlConnReadTimeout,
-			mysqlConnWriteTimeout,
-			mysqlProxyProtocol,
-			mysqlConnBufferPooling,
-			mysqlKeepAlivePeriod,
-			mysqlServerFlushDelay,
-			mysqlServerMultiQuery,
-		)
+		srv.tcpListener, err = mysql.NewListenerWithConfig(mysql.ListenerConfig{
+			Listener:              listener,
+			AuthServer:            authServer,
+			Handler:               srv.vtgateHandle,
+			ConnReadTimeout:       mysqlConnReadTimeout,
+			ConnWriteTimeout:      mysqlConnWriteTimeout,
+			ConnBufferPooling:     mysqlConnBufferPooling,
+			ConnKeepAlivePeriod:   mysqlKeepAlivePeriod,
+			FlushDelay:            mysqlServerFlushDelay,
+			ProxyProtocol:         mysqlProxyProtocol,
+			MultiQuery:            mysqlServerMultiQuery,
+			EnableZstdCompression: mysqlEnableZstdCompression,
+		})
 		if err != nil {
 			log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
 			os.Exit(1)
@@ -670,19 +675,21 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 // newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
 // to clean it up.
 func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
-	listener, err := mysql.NewListener(
-		"unix",
-		address,
-		authServer,
-		handler,
-		mysqlConnReadTimeout,
-		mysqlConnWriteTimeout,
-		false,
-		mysqlConnBufferPooling,
-		mysqlKeepAlivePeriod,
-		mysqlServerFlushDelay,
-		mysqlServerMultiQuery,
-	)
+	unixSocketCfg := mysql.ListenerConfig{
+		Protocol:              "unix",
+		Address:               address,
+		AuthServer:            authServer,
+		Handler:               handler,
+		ConnReadTimeout:       mysqlConnReadTimeout,
+		ConnWriteTimeout:      mysqlConnWriteTimeout,
+		ConnBufferPooling:     mysqlConnBufferPooling,
+		ConnKeepAlivePeriod:   mysqlKeepAlivePeriod,
+		FlushDelay:            mysqlServerFlushDelay,
+		MultiQuery:            mysqlServerMultiQuery,
+		EnableZstdCompression: mysqlEnableZstdCompression,
+	}
+
+	listener, err := mysql.NewListenerWithConfig(unixSocketCfg)
 
 	switch err := err.(type) {
 	case nil:
@@ -704,19 +711,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			log.Error("Couldn't remove existent socket file: " + address)
 			return nil, err
 		}
-		listener, listenerErr := mysql.NewListener(
-			"unix",
-			address,
-			authServer,
-			handler,
-			mysqlConnReadTimeout,
-			mysqlConnWriteTimeout,
-			false,
-			mysqlConnBufferPooling,
-			mysqlKeepAlivePeriod,
-			mysqlServerFlushDelay,
-			mysqlServerMultiQuery,
-		)
+		listener, listenerErr := mysql.NewListenerWithConfig(unixSocketCfg)
 		return listener, listenerErr
 	default:
 		return nil, err

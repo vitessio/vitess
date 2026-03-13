@@ -75,6 +75,10 @@ var (
 		}
 		return connCount.Get() - totalUsers
 	})
+
+	// Compression metrics — we track active zstd connections and total accepted.
+	connCountZstd  = stats.NewGauge("MysqlServerConnCountZstd", "Active MySQL server connections using zstd compression")
+	connAcceptZstd = stats.NewCounter("MysqlServerConnAcceptedZstd", "Total MySQL server connections accepted with zstd compression")
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -227,9 +231,12 @@ type Listener struct {
 	charset collations.ID
 	// parser to use for this listener, configured with the correct version.
 	truncateErrLen int
+
+	// EnableZstdCompression turns on zstd connection compression for this listener (MySQL 8.0+).
+	EnableZstdCompression bool
 }
 
-// NewFromListener creates a new mysql listener from an existing net.Listener
+// NewFromListener creates a new mysql listener from an existing net.Listener.Deprecated: prefer NewListenerWithConfig (this function has too many positional parameters and is easy to get wrong.)
 func NewFromListener(
 	l net.Listener,
 	authServer AuthServer,
@@ -241,18 +248,20 @@ func NewFromListener(
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
 	multiQuery bool,
+	enableZstdCompression bool,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
-		Listener:            l,
-		AuthServer:          authServer,
-		Handler:             handler,
-		ConnReadTimeout:     connReadTimeout,
-		ConnWriteTimeout:    connWriteTimeout,
-		ConnReadBufferSize:  connBufferSize,
-		ConnBufferPooling:   connBufferPooling,
-		ConnKeepAlivePeriod: keepAlivePeriod,
-		FlushDelay:          flushDelay,
-		MultiQuery:          multiQuery,
+		Listener:              l,
+		AuthServer:            authServer,
+		Handler:               handler,
+		ConnReadTimeout:       connReadTimeout,
+		ConnWriteTimeout:      connWriteTimeout,
+		ConnReadBufferSize:    connBufferSize,
+		ConnBufferPooling:     connBufferPooling,
+		ConnKeepAlivePeriod:   keepAlivePeriod,
+		FlushDelay:            flushDelay,
+		MultiQuery:            multiQuery,
+		EnableZstdCompression: enableZstdCompression,
 	}
 
 	if proxyProtocol {
@@ -263,6 +272,8 @@ func NewFromListener(
 }
 
 // NewListener creates a new Listener.
+//
+// Deprecated: prefer NewListenerWithConfig, this function has too many positional parameters and is easy to get wrong.
 func NewListener(
 	protocol, address string,
 	authServer AuthServer,
@@ -274,30 +285,33 @@ func NewListener(
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
 	multiQuery bool,
+	enableZstdCompression bool,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery, enableZstdCompression)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
 type ListenerConfig struct {
 	// Protocol-Address pair and Listener are mutually exclusive parameters
-	Protocol            string
-	Address             string
-	Listener            net.Listener
-	AuthServer          AuthServer
-	Handler             Handler
-	ConnReadTimeout     time.Duration
-	ConnWriteTimeout    time.Duration
-	ConnReadBufferSize  int
-	ConnBufferPooling   bool
-	ConnKeepAlivePeriod time.Duration
-	FlushDelay          time.Duration
-	MultiQuery          bool
+	Protocol              string
+	Address               string
+	Listener              net.Listener
+	AuthServer            AuthServer
+	Handler               Handler
+	ConnReadTimeout       time.Duration
+	ConnWriteTimeout      time.Duration
+	ConnReadBufferSize    int
+	ConnBufferPooling     bool
+	ConnKeepAlivePeriod   time.Duration
+	FlushDelay            time.Duration
+	ProxyProtocol         bool
+	MultiQuery            bool
+	EnableZstdCompression bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -314,21 +328,26 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		l = listener
 	}
 
+	if cfg.ProxyProtocol {
+		l = &proxyproto.Listener{Listener: l}
+	}
+
 	return &Listener{
-		authServer:          cfg.AuthServer,
-		handler:             cfg.Handler,
-		listener:            l,
-		ServerVersion:       cfg.Handler.Env().MySQLVersion(),
-		connectionID:        1,
-		connReadTimeout:     cfg.ConnReadTimeout,
-		connWriteTimeout:    cfg.ConnWriteTimeout,
-		connReadBufferSize:  cfg.ConnReadBufferSize,
-		connBufferPooling:   cfg.ConnBufferPooling,
-		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
-		flushDelay:          cfg.FlushDelay,
-		multiQuery:          cfg.MultiQuery,
-		truncateErrLen:      cfg.Handler.Env().TruncateErrLen(),
-		charset:             cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
+		authServer:            cfg.AuthServer,
+		handler:               cfg.Handler,
+		listener:              l,
+		ServerVersion:         cfg.Handler.Env().MySQLVersion(),
+		connectionID:          1,
+		connReadTimeout:       cfg.ConnReadTimeout,
+		connWriteTimeout:      cfg.ConnWriteTimeout,
+		connReadBufferSize:    cfg.ConnReadBufferSize,
+		connBufferPooling:     cfg.ConnBufferPooling,
+		connKeepAlivePeriod:   cfg.ConnKeepAlivePeriod,
+		flushDelay:            cfg.FlushDelay,
+		multiQuery:            cfg.MultiQuery,
+		truncateErrLen:        cfg.Handler.Env().TruncateErrLen(),
+		charset:               cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
+		EnableZstdCompression: cfg.EnableZstdCompression,
 	}, nil
 }
 
@@ -393,7 +412,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			c.returnReader()
 		}
 
-		conn.Close()
+		c.Close()
 	}()
 
 	// Tell the handler about the connection coming and going.
@@ -547,6 +566,19 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		return
 	}
 
+	// Now that the handshake and auth OK are sent in cleartext, we can flip zstd on
+	// for this connection if both sides agreed to it during negotiation.
+	if c.wantZstdCompression {
+		if err := c.initZstdCompression(); err != nil {
+			log.Error(fmt.Sprintf("Failed to init zstd compression for %s: %v", c, err))
+			c.writeErrorPacketFromError(vterrors.Wrap(err, "failed to init zstd compression"))
+			return
+		}
+		connAcceptZstd.Add(1)
+		connCountZstd.Add(1)
+		defer connCountZstd.Add(-1)
+	}
+
 	// Record how long we took to establish the connection
 	timings.Record(connectTimingKey, acceptTime)
 
@@ -601,6 +633,10 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 		CapabilityClientConnAttr
 	if enableTLS {
 		capabilities |= CapabilityClientSSL
+	}
+	// When EnableZstdCompression is off (the default) we don't advertise any compression bits at all, so existing clients keep working exactly as before.
+	if c.listener.EnableZstdCompression {
+		capabilities |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm
 	}
 
 	// Grab the default auth method. This can only be either
@@ -815,14 +851,34 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		}
 	}
 
-	// Decode connection attributes send by the client
+	// Decode connection attributes the client sent us.
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		clientAttributes, _, err := parseConnAttrs(data, pos)
+		var err error
+		c.Attributes, pos, err = parseConnAttrs(data, pos)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Decode connection attributes send by the client: %v", err))
 		}
+	}
 
-		c.Attributes = clientAttributes
+	// zstd_compression_level (MySQL 8.0+): right after the connection attributes there's a
+	// single byte with the requested compression level. The wire layout is documented at:
+	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
+	// if capabilities & CLIENT_ZSTD_COMPRESSION_ALGORITHM
+	// We always consume this byte when the flag is set so our parser stays in sync with the packet.
+	// Compression only kicks in when the client sends BOTH CLIENT_COMPRESS and
+	// CLIENT_ZSTD_COMPRESSION_ALGORITHM(that's the MySQL 8.0 protocol requirement).
+	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
+		level := zstdCompressionLevelDefault
+		if pos < len(data) {
+			if levelByte, _, ok := readByte(data, pos); ok {
+				level = clampZstdLevel(int(levelByte))
+			}
+		}
+		// Both capability bits present and the listener opted in (let's do it).
+		if l.EnableZstdCompression && clientFlags&CapabilityClientCompress != 0 {
+			c.zstdCompressionLevel = level
+			c.wantZstdCompression = true
+		}
 	}
 
 	return username, AuthMethodDescription(authMethod), authResponse, nil

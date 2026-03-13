@@ -567,7 +567,12 @@ func TestCloneFromDonor(t *testing.T) {
 	authServer := mysql.NewAuthServerStatic("", jsonConfig, 0)
 	handler := &mockDonorHandler{t: t}
 
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", authServer, handler, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListenerWithConfig(mysql.ListenerConfig{
+		Protocol:   "tcp",
+		Address:    "127.0.0.1:",
+		AuthServer: authServer,
+		Handler:    handler,
+	})
 	require.NoError(t, err)
 
 	// Start accepting connections

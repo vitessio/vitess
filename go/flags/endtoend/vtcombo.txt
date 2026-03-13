@@ -228,6 +228,7 @@ Flags:
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
+      --mysql-enable-zstd-compression                                    Enable ZSTD connection compression (MySQL 8.0+). When false (default), behavior is unchanged: no new capability bits, no compression.
       --mysql-port int                                                   mysql port (default 3306)
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
