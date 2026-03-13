@@ -75,12 +75,33 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	if subq == nil {
 		return nil
 	}
-	argName := ctx.GetReservedArgumentFor(subq)
+	filterType := pulloutOpcodeFromParent(parentExpr)
+	argName := ctx.GetReservedArgumentForSubQuery(subq, filterType)
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
-	ctx.AddSubQueryArg(argName, sqInner.FilterType)
 
 	return sqInner
+}
+
+// pulloutOpcodeFromParent determines the pullout opcode for a subquery based on its
+// parent expression type. This mirrors the dispatch logic in createSubqueryOp.
+func pulloutOpcodeFromParent(parent sqlparser.Expr) opcode.PulloutOpcode {
+	switch parent := parent.(type) {
+	case *sqlparser.NotExpr:
+		if _, ok := parent.Expr.(*sqlparser.ExistsExpr); ok {
+			return opcode.PulloutNotExists
+		}
+	case *sqlparser.ExistsExpr:
+		return opcode.PulloutExists
+	case *sqlparser.ComparisonExpr:
+		switch parent.Operator {
+		case sqlparser.InOp:
+			return opcode.PulloutIn
+		case sqlparser.NotInOp:
+			return opcode.PulloutNotIn
+		}
+	}
+	return opcode.PulloutValue
 }
 
 // getSubQuery searches for a subquery within the given expression and returns it along with its parent and path.
@@ -396,7 +417,6 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
-		ctx.AddSubQueryArg(argName, filterType)
 	}
 
 	return sqe.new, allSubqs
@@ -440,31 +460,11 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 
 // extractSubQueries recursively walks an expression tree to find and extract all subqueries.
 // Replaces subqueries with arguments (for DML) or column names (for SELECT).
-// Uses PlanningContext.SubQueryArgIndex for global cross-SQB conflict detection.
 // Returns nil if no subqueries found.
 func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
-		sqName := ctx.GetReservedArgumentFor(sq)
-		// If the same subquery AST appears in a different pullout context
-		// (e.g., scalar value vs IN), we need a distinct bind variable name
-		// to avoid conflicts when the planner rewrites arguments later.
-		// Check both previously extracted subqueries from this expression
-		// and existing operators from prior expressions.
-		needsNewName := false
-		for i, existingName := range sqe.cols {
-			if existingName == sqName && sqe.pullOutCode[i] != t {
-				needsNewName = true
-				break
-			}
-		}
-		if !needsNewName {
-			needsNewName = ctx.HasConflictingSubQueryArg(sqName, t)
-		}
-		if needsNewName {
-			sqName = ctx.ReservedVars.ReserveSubQuery()
-			ctx.ReservedArguments[sq] = sqName
-		}
+		sqName := ctx.GetReservedArgumentForSubQuery(sq, t)
 		sqe.cols = append(sqe.cols, sqName)
 		sqe.pullOutCode = append(sqe.pullOutCode, t)
 		if isDML {

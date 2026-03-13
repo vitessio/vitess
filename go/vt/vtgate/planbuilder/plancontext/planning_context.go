@@ -46,7 +46,13 @@ type PlanningContext struct {
 	VerifyAllFKs bool
 
 	// Projected subqueries that have been merged
-	MergedSubqueries []*sqlparser.Subquery
+	MergedSubqueries []MergedSubquery
+
+	// SubQueryArgs is the authoritative cache for subquery arg name reservations,
+	// keyed on (subquery, pullout opcode). Same subquery + same opcode reuses a name;
+	// same subquery + different opcode gets a distinct name. This replaces the
+	// expression-only keying in ReservedArguments which couldn't distinguish opcodes.
+	SubQueryArgs []SubQueryReservedArg
 
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
@@ -75,16 +81,17 @@ type PlanningContext struct {
 	PredTracker *predicates.Tracker
 
 	Conditions []engine.Condition
-
-	// SubQueryArgIndex is a global, append-only index of (argName, pulloutOpcode) pairs
-	// shared across all SubQueryBuilders. It enables cross-SQB conflict detection when
-	// the same subquery text appears in different pullout contexts (e.g., WHERE vs SELECT).
-	SubQueryArgIndex []SubQueryArgEntry
 }
 
-type SubQueryArgEntry struct {
-	ArgName    string
+type MergedSubquery struct {
+	Subquery   *sqlparser.Subquery
 	FilterType opcode.PulloutOpcode
+}
+
+type SubQueryReservedArg struct {
+	Subquery   *sqlparser.Subquery
+	FilterType opcode.PulloutOpcode
+	ArgName    string
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -133,8 +140,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
 		bvName = ctx.ReservedVars.ReserveColName(expr)
-	case *sqlparser.Subquery:
-		bvName = ctx.ReservedVars.ReserveSubQuery()
 	default:
 		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
 	}
@@ -392,7 +397,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,
 		MergedSubqueries:  ctx.MergedSubqueries,
-		SubQueryArgIndex:  ctx.SubQueryArgIndex,
+		SubQueryArgs:      ctx.SubQueryArgs,
 		CurrentPhase:      ctx.CurrentPhase,
 		Statement:         ctx.Statement,
 		OuterTables:       ctx.OuterTables,
@@ -446,18 +451,22 @@ func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
 	ctx.Conditions = append(ctx.Conditions, conditions...)
 }
 
-func (ctx *PlanningContext) AddSubQueryArg(argName string, filterType opcode.PulloutOpcode) {
-	ctx.SubQueryArgIndex = append(ctx.SubQueryArgIndex, SubQueryArgEntry{
-		ArgName:    argName,
-		FilterType: filterType,
-	})
-}
-
-func (ctx *PlanningContext) HasConflictingSubQueryArg(argName string, filterType opcode.PulloutOpcode) bool {
-	for _, entry := range ctx.SubQueryArgIndex {
-		if entry.ArgName == argName && entry.FilterType != filterType {
-			return true
+// GetReservedArgumentForSubQuery returns a reserved argument name for a subquery,
+// keyed on both expression identity (via SemTable.EqualsExpr) and pullout opcode.
+// Same subquery + same opcode reuses the cached name; same subquery + different
+// opcode allocates a fresh name. This is the only method that should be used to
+// reserve names for subqueries — GetReservedArgumentFor does not handle them.
+func (ctx *PlanningContext) GetReservedArgumentForSubQuery(subq *sqlparser.Subquery, filterType opcode.PulloutOpcode) string {
+	for _, entry := range ctx.SubQueryArgs {
+		if entry.FilterType == filterType && ctx.SemTable.EqualsExpr(entry.Subquery, subq) {
+			return entry.ArgName
 		}
 	}
-	return false
+	argName := ctx.ReservedVars.ReserveSubQuery()
+	ctx.SubQueryArgs = append(ctx.SubQueryArgs, SubQueryReservedArg{
+		Subquery:   subq,
+		FilterType: filterType,
+		ArgName:    argName,
+	})
+	return argName
 }

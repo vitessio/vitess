@@ -117,17 +117,17 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
 	for idx, order := range o.Order {
-		for _, sq := range ctx.MergedSubqueries {
-			arg := ctx.GetReservedArgumentFor(sq)
+		for _, msq := range ctx.MergedSubqueries {
+			arg := ctx.GetReservedArgumentForSubQuery(msq.Subquery, msq.FilterType)
 			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
 				switch expr := cursor.Node().(type) {
 				case *sqlparser.ColName:
 					if expr.Name.String() == arg {
-						cursor.Replace(sq)
+						cursor.Replace(msq.Subquery)
 					}
 				case *sqlparser.Argument:
 					if expr.Name == arg {
-						cursor.Replace(sq)
+						cursor.Replace(msq.Subquery)
 					}
 				}
 
@@ -158,8 +158,8 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 		// this is because we might have subqueries inside subqueries, and we need to merge them all
 		merged = false
 		for _, sq := range se {
-			for _, sq2 := range ctx.MergedSubqueries {
-				if sq.originalSubquery == sq2 {
+			for _, msq := range ctx.MergedSubqueries {
+				if sq.originalSubquery == msq.Subquery {
 					expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 						switch expr := cursor.Node().(type) {
 						case *sqlparser.ColName:
@@ -340,7 +340,10 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner.originalSubquery)
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, plancontext.MergedSubquery{
+		Subquery:   inner.originalSubquery,
+		FilterType: inner.FilterType,
+	})
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -556,7 +559,10 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
 	}
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, plancontext.MergedSubquery{
+		Subquery:   subQuery.originalSubquery,
+		FilterType: subQuery.FilterType,
+	})
 	return op, Rewrote("merged subquery with outer")
 }
 
