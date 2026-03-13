@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -470,7 +470,7 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, er
 		return 0, err
 	}
 	if len(res.Rows) != 1 {
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
 	}
 	return res.Rows[0][0].ToInt32()
 }
@@ -908,7 +908,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// We don't want to interrupt replication for no reason.
 	if parentAlias == nil {
 		// if there is no primary in the shard, return an error so that we can retry
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primaryAlias is nil")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "Shard primaryAlias is nil")
 	}
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
@@ -919,7 +919,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	port := parent.MysqlPort
 	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
 	if host == "" {
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
 	}
 	// Errant GTID detection.
 	{
@@ -944,7 +944,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return err
 		}
 		if errantGtid != "" {
-			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
@@ -1014,8 +1014,9 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 }
 
-// StopReplicationAndGetStatus stops MySQL replication, and returns the
-// current status.
+// StopReplicationAndGetStatus stops MySQL replication, and returns the current status. It is primarily
+// used for EmergencyReparentShard operations and requires tablets that use MySQL GTIDs. An error is
+// returned on tablets using other replication.Position implementations.
 func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
 	log.Info(fmt.Sprintf("StopReplicationAndGetStatus: mode: %v", stopReplicationMode))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -1034,11 +1035,32 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
 	before := replication.ReplicationStatusToProto(rs)
-	before.BackupRunning = tm.IsBackupRunning()
 
 	// Get semi-sync state before replication is stopped.
 	before.SemiSyncPrimaryEnabled, before.SemiSyncReplicaEnabled = tm.MysqlDaemon.SemiSyncEnabled(ctx)
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
+	before.BackupRunning = tm.IsBackupRunning()
+
+	// Validate we are using MySQL GTIDs using the "before" status.
+	status := &replicationdatapb.StopReplicationStatus{
+		Before: before,
+	}
+	if before.RelayLogPosition == "" {
+		return StopReplicationAndGetStatusResponse{
+			Status: status,
+		}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+	}
+	pos, err := replication.DecodePosition(before.RelayLogPosition)
+	if err != nil {
+		return StopReplicationAndGetStatusResponse{
+			Status: status,
+		}, vterrors.Wrap(err, "failed to decode relay log position")
+	}
+	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+		return StopReplicationAndGetStatusResponse{
+			Status: status,
+		}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+	}
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
@@ -1177,7 +1199,7 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
 }
 
