@@ -23,6 +23,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -968,6 +969,116 @@ func testScheduler(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("low wait_timeout", func(t *testing.T) {
+		// Validate that OnlineDDL cutover increases wait_timeout on its connections
+		// when the server has a low wait_timeout configured. Without this protection,
+		// MySQL would kill cutover connections mid-operation, potentially causing
+		// data corruption.
+		ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+		defer cancel()
+
+		// Read the original wait_timeout.
+		rs, err := primaryTablet.VttabletProcess.QueryTabletWithDB("select @@global.wait_timeout as wait_timeout", "performance_schema")
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		originalWaitTimeout := row.AsInt64("wait_timeout", 0)
+		require.NotZero(t, originalWaitTimeout)
+
+		// Ensure the table exists (may not if running this subtest in isolation).
+		t.Run("ensure table exists", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy, "vtgate", "", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		})
+
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+		t.Run("wait for t1 ready to complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+
+		// Set a dangerously low wait_timeout AFTER the migration is running and
+		// ready to complete. This way VReplication and other connections survive
+		// setup, but new connections (the cutover connections) inherit the low value.
+		t.Run("set low wait_timeout", func(t *testing.T) {
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithDB("set global wait_timeout=5", "performance_schema")
+			require.NoError(t, err)
+		})
+		defer primaryTablet.VttabletProcess.QueryTabletWithDB(fmt.Sprintf("set global wait_timeout=%d", originalWaitTimeout), "performance_schema")
+
+		// Hold a WRITE lock on the table to stall the cutover's RENAME TABLE.
+		lockConn, err := primaryTablet.VttabletProcess.TabletConn(keyspaceName, true)
+		require.NoError(t, err)
+		defer lockConn.Close()
+		// Ensure our lock connection itself won't be killed.
+		_, err = lockConn.ExecuteFetch("set @@session.wait_timeout=28800", 0, false)
+		require.NoError(t, err)
+
+		t.Run("lock table to stall cutover", func(t *testing.T) {
+			_, err := lockConn.ExecuteFetch("lock tables t1_test write", 0, false)
+			require.NoError(t, err)
+		})
+		defer lockConn.ExecuteFetch("unlock tables", 0, false)
+
+		t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for {
+					throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+		})
+
+		t.Run("complete migration", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		})
+
+		t.Run("validate cutover connections have increased wait_timeout", func(t *testing.T) {
+			// Wait for the cutover to be in-progress. The LOCK TABLES will be blocked by
+			// our held WRITE lock, so the lock connection should be visible in the
+			// processlist with state "Waiting for table metadata lock".
+			query := `
+				SELECT v.VARIABLE_VALUE as wait_timeout
+				FROM performance_schema.threads t
+				JOIN performance_schema.variables_by_thread v ON v.THREAD_ID = t.THREAD_ID
+				WHERE v.VARIABLE_NAME = 'wait_timeout'
+				AND t.PROCESSLIST_STATE = 'Waiting for table metadata lock'
+				AND t.PROCESSLIST_INFO LIKE 'LOCK TABLES%'
+			`
+			assert.Eventually(t, func() bool {
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithDB(query, "performance_schema")
+				if err != nil {
+					return false
+				}
+				for _, row := range rs.Named().Rows {
+					waitTimeout, _ := strconv.ParseInt(row.AsString("wait_timeout", "0"), 10, 64)
+					if waitTimeout == 31536000 {
+						// Validated! Release the lock so the cutover can proceed.
+						lockConn.ExecuteFetch("unlock tables", 0, false)
+						return true
+					}
+				}
+				return false
+			}, normalWaitTime, time.Second, "expected cutover connection to have wait_timeout == 31536000")
+		})
+
+		t.Run("expect completion", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
 
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
