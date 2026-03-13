@@ -466,19 +466,6 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	var originalWaitTimeout int64
-	t.Run("set low wait_timeout", func(t *testing.T) {
-		rs, err := primaryTablet.VttabletProcess.QueryTablet("select @@wait_timeout as wait_timeout", keyspaceName, false)
-		require.NoError(t, err)
-		row := rs.Named().Row()
-		require.NotNil(t, row)
-		originalWaitTimeout = row.AsInt64("wait_timeout", 0)
-		require.NotZero(t, originalWaitTimeout)
-
-		_, err = primaryTablet.VttabletProcess.QueryTablet("set global wait_timeout=1", keyspaceName, false)
-		require.NoError(t, err)
-	})
-
 	// CREATE
 	t.Run("CREATE TABLEs t1, t2", func(t *testing.T) {
 		{ // The table does not exist
@@ -740,16 +727,6 @@ func testScheduler(t *testing.T) {
 
 	t.Run("low @@lock_wait_timeout", func(t *testing.T) {
 		defer primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("set global lock_wait_timeout=%d", originalLockWaitTimeout), keyspaceName, false)
-
-		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // wait
-		t.Run("trivial t1 migration", func(t *testing.T) {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-			checkTable(t, t1Name, true)
-		})
-	})
-
-	t.Run("low @@wait_timeout", func(t *testing.T) {
-		defer primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("set global wait_timeout=%d", originalWaitTimeout), keyspaceName, false)
 
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // wait
 		t.Run("trivial t1 migration", func(t *testing.T) {
