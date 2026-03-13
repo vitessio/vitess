@@ -30,7 +30,6 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
 3. Once all CI passes:
    a. If the PR is a draft, mark as ready: `gh pr ready <number> --repo vitessio/vitess`
    b. Enable auto-merge: `gh pr merge <number> --repo vitessio/vitess --squash --auto`
-   c. Approve the PR (if not already approved — check with `gh pr view <number> --repo vitessio/vitess --json reviews` first): `gh pr review <number> --repo vitessio/vitess --approve`
 4. Report completion and stop — do not continue to Step 2.
 
 ## Step 2: Gather context
@@ -92,6 +91,7 @@ The backport branch may be based on a stale version of the release branch. **Alw
 
 - Compare the set of modified files (from `git diff --name-only`) against the upstream PR's file list.
 - Any file that is changed but NOT in the upstream PR's file list should be reverted with `git checkout HEAD -- <file>`.
+- **File addition mismatch**: Check if any file that was a *modification* in the upstream PR appears as a *new file addition* on the backport branch (i.e., the file doesn't exist on the base release branch). This usually means the file was introduced by a prerequisite PR that hasn't been backported yet. **Ask the user** before proceeding — they may want to backport the prerequisite PR first or skip the file entirely.
 
 ## Step 7: Run unit tests
 
@@ -170,8 +170,7 @@ The backport branch may be based on a stale version of the release branch. **Alw
     ```
     gh pr merge <number> --repo vitessio/vitess --squash --auto
     ```
-  - Approve the PR (if not already approved — check with `gh pr view <number> --repo vitessio/vitess --json reviews` first): `gh pr review <number> --repo vitessio/vitess --approve`
-- If we created a git worktree in Step 2, clean it up after approval:
+- If we created a git worktree in Step 2, clean it up:
   ```
   cd <original-directory>
   git worktree remove <worktree-path>
