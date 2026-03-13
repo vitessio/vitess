@@ -27,6 +27,9 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+    - **[Tracing](#minor-changes-tracing)**
+        - [OpenTelemetry tracing support](#tracing-opentelemetry)
+        - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -214,6 +217,32 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
+
+### <a id="minor-changes-tracing"/>Tracing</a>
+
+#### <a id="tracing-opentelemetry"/>OpenTelemetry tracing support</a>
+
+Vitess now supports [OpenTelemetry](https://opentelemetry.io/) as a tracing backend. To use it, set `--tracer opentelemetry` on any Vitess binary. Traces are exported via OTLP/gRPC, configurable with the following flags:
+
+- `--otel-endpoint` (default `localhost:4317`): OpenTelemetry collector endpoint.
+- `--otel-insecure` (default `false`): use insecure connection to the collector.
+- `--tracing-sampling-rate` (default `0.1`): sampling rate for traces (shared across all tracing backends).
+
+Any OTLP-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
+
+#### <a id="tracing-opentracing-deprecation"/>Deprecation of OpenTracing-based tracing backends</a>
+
+The following tracing backends are deprecated as of v24 and will be removed in v25:
+
+- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTLP-compatible Jaeger endpoint (v1.35+).
+- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTLP ingestion endpoint.
+
+The `--tracer opentracing-jaeger` and `--tracer opentracing-datadog` options continue to work in v24 but will log a deprecation warning at startup. The following Jaeger-specific flags are also deprecated and will be removed in v25:
+
+- `--jaeger-agent-host`
+- `--tracing-sampling-type`
+
+**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTLP (Jaeger v1.35+ listens on port 4317 by default).
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 

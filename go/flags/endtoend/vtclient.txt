@@ -47,6 +47,8 @@ Flags:
       --max-sequence-id int                                         max sequence ID.
       --min-sequence-id int                                         min sequence ID to generate. When max-sequence-id > min-sequence-id, for each query, a number is generated in [min-sequence-id, max-sequence-id) and attached to the end of the bind variables.
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
+      --otel-endpoint string                                        OpenTelemetry collector endpoint (host:port for gRPC) (default "localhost:4317")
+      --otel-insecure                                               use insecure connection to OpenTelemetry collector
       --parallel int                                                DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing. (default 1)
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
@@ -60,7 +62,7 @@ Flags:
       --timeout duration                                            timeout for queries (default 30s)
       --tracer string                                               tracing service to use (default "noop")
       --tracing-enable-logging                                      whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                 sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-rate float                                 sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
       --tracing-sampling-type string                                sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --use-random-sequence                                         use random sequence for generating [min-sequence-id, max-sequence-id)
       --v Level                                                     log level for V logs
