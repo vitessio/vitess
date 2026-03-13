@@ -218,7 +218,13 @@ func TestLastInsertIDOnDupKey(t *testing.T) {
 	t.Run("SQL function stickiness", func(t *testing.T) {
 		resetTable(t)
 
-		// Step 1: Insert a new row — both wire and SQL function show the new ID
+		// Seed an existing row FIRST on each connection, so we have a row
+		// with a DIFFERENT id than the one we'll insert next.
+		utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Existing')")
+		utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Existing')")
+
+		// Step 1: Insert a NEW row — both wire and SQL function show the new ID.
+		// This is the value that should remain "sticky" throughout the test.
 		myIns := utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Sticky')")
 		vtIns := utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Sticky')")
 
@@ -234,9 +240,16 @@ func TestLastInsertIDOnDupKey(t *testing.T) {
 		assert.EqualValues(t, myIns.InsertID, myFnVal, "MySQL: SQL function should match wire InsertID after insert")
 		assert.EqualValues(t, vtIns.InsertID, vtFnVal, "Vitess: SQL function should match wire InsertID after insert")
 
-		// Step 2: ON DUP KEY that updates — wire changes, SQL function should stay sticky
-		utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Updated') on duplicate key update name = values(name)")
-		utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Updated') on duplicate key update name = values(name)")
+		// Step 2: ON DUP KEY UPDATE on the EXISTING row (different id than sticky@).
+		// Wire protocol should change to existing row's id, but SQL function must stay sticky.
+		myDup := utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Updated') on duplicate key update name = values(name)")
+		vtDup := utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Updated') on duplicate key update name = values(name)")
+
+		// Wire protocol should show the existing row's id (different from sticky@'s id)
+		assert.EqualValues(t, 2, myDup.RowsAffected)
+		assert.EqualValues(t, 2, vtDup.RowsAffected)
+		assert.NotEqual(t, myIns.InsertID, myDup.InsertID, "MySQL: wire InsertID should be existing row's id, not sticky")
+		assert.NotEqual(t, vtIns.InsertID, vtDup.InsertID, "Vitess: wire InsertID should be existing row's id, not sticky")
 
 		myFn2 := utils.Exec(t, mcmp.MySQLConn, "select last_insert_id()")
 		vtFn2 := utils.Exec(t, mcmp.VtConn, "select last_insert_id()")
@@ -246,15 +259,15 @@ func TestLastInsertIDOnDupKey(t *testing.T) {
 		vtFnVal2, err := vtFn2.Rows[0][0].ToUint64()
 		require.NoError(t, err)
 
-		// MySQL: SQL function stays sticky at the original insert value
+		// MySQL: SQL function stays sticky at the insert value from step 1
 		assert.EqualValues(t, myIns.InsertID, myFnVal2, "MySQL: SQL function should stay sticky after ON DUP KEY UPDATE")
 
-		// Vitess should match (but currently doesn't — SafeSession.LastInsertId gets overwritten)
+		// Vitess should match
 		assert.EqualValues(t, vtIns.InsertID, vtFnVal2, "Vitess: SQL function should stay sticky after ON DUP KEY UPDATE")
 
 		// Step 3: ON DUP KEY no-change — wire = 0, SQL function should still stay sticky
-		utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Updated') on duplicate key update name = values(name)")
-		utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('sticky@test.com', 'Updated') on duplicate key update name = values(name)")
+		utils.Exec(t, mcmp.MySQLConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Updated') on duplicate key update name = values(name)")
+		utils.Exec(t, mcmp.VtConn, "insert into lid_tbl(email, name) values ('existing@test.com', 'Updated') on duplicate key update name = values(name)")
 
 		myFn3 := utils.Exec(t, mcmp.MySQLConn, "select last_insert_id()")
 		vtFn3 := utils.Exec(t, mcmp.VtConn, "select last_insert_id()")
