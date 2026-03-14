@@ -40,9 +40,6 @@ import (
 
 func TestExecutorSet(t *testing.T) {
 	executorEnv, _, _, _, ctx := createExecutorEnv(t)
-	// No TransactionModeLimit set (nil) = user did not pass --transaction-mode-limit.
-	// This is the default/backward-compat state: SET is unrestricted.
-	// Enforcement is tested separately in TestExecutorSetTransactionModeLimit.
 
 	testcases := []struct {
 		in  string
@@ -753,14 +750,16 @@ func TestExecutorSetTransactionModeLimit(t *testing.T) {
 		})
 	}
 
-	t.Run("no_limit_nil_backward_compat_allows_all", func(t *testing.T) {
-		// nil TransactionModeLimit simulates the user NOT passing --transaction-mode-limit.
+	t.Run("unspecified_limit_backward_compat_allows_all", func(t *testing.T) {
+		// UNSPECIFIED limit = --transaction-mode-limit was not set.
 		// This is the backward-compat path: existing users see zero behavior change.
-		executor.vConfig.TransactionModeLimit = nil
+		executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+			return vtgatepb.TransactionMode_UNSPECIFIED
+		}
 		for _, mode := range []string{"single", "multi", "twopc", "unspecified"} {
 			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+mode+"'", nil)
-			require.NoError(t, err, "nil limit must allow all modes (backward compat), failed for mode=%s", mode)
+			require.NoError(t, err, "UNSPECIFIED limit must allow all modes (backward compat), failed for mode=%s", mode)
 		}
 	})
 }

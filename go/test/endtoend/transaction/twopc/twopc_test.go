@@ -1867,7 +1867,6 @@ func TestVindexes(t *testing.T) {
 
 // TestTransactionModeLimitTWOPC verifies legacy backward compatibility:
 // no --transaction-mode-limit flag -> no enforcement -> all SET modes allowed.
-
 func TestTransactionModeLimitTWOPC(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

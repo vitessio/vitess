@@ -179,6 +179,10 @@ var (
 							result = mode
 						}
 					}
+					if limit := transactionModeLimit.Get(); limit != vtgatepb.TransactionMode_UNSPECIFIED && result > limit {
+						log.Error(fmt.Sprintf("transaction-mode-default %s exceeds transaction-mode-limit %s, clamping to limit", result.String(), limit.String()))
+						return limit
+					}
 					return result
 				}
 			},
@@ -209,8 +213,6 @@ var (
 		},
 	)
 
-	effectiveTransactionModeLimit func() vtgatepb.TransactionMode
-
 	// schema tracking flags
 	enableSchemaChangeSignal = true
 	enableViews              = true
@@ -234,15 +236,10 @@ var (
 	warmingReadsConcurrency  = 500
 )
 
-var transactionModeFlagSet *pflag.FlagSet
-
 func registerFlags(fs *pflag.FlagSet) {
-	transactionModeFlagSet = fs
-	fs.String("transaction-mode", "MULTI",
-	"SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Acts as the default mode for sessions.")
-	fs.String("transaction-mode-default", "",
-	"Default transaction mode for new sessions. Falls back to --transaction-mode if not set.Valid values: SINGLE, MULTI, TWOPC")
-	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET. If not set, no limit is enforced (existing behavior). Valid values: SINGLE, MULTI, TWOPC")
+	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit. Used as fallback by --transaction-mode-default when that flag is not set")
+	fs.String("transaction-mode-default", "", "Default transaction mode for new sessions. Falls back to --transaction-mode if not set. Valid values: SINGLE, MULTI, TWOPC")
+	fs.String("transaction-mode-limit", "", "Maximum transaction mode allowed via SET transaction_mode. If not set, no limit is enforced (existing behavior). Valid values: SINGLE, MULTI, TWOPC")
 	utils.SetFlagBoolVar(fs, &normalizeQueries, "normalize-queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
@@ -405,15 +402,9 @@ func Init(
 
 	dynamicConfig := NewDynamicViperConfig()
 
-	// Enforcement is only activated when --transaction-mode-limit is explicitly set.
-	// Using --transaction-mode or --transaction-mode-default alone preserves the
-	// existing behavior: SET transaction_mode is unrestricted (backward compatible).
-	if transactionModeFlagSet != nil && transactionModeFlagSet.Changed("transaction-mode-limit") {
-		limitMode := transactionModeLimit.Get()
-		effectiveTransactionModeLimit = func() vtgatepb.TransactionMode { return limitMode }
-		log.Info(fmt.Sprintf("Opt-in enforcement enabled: limit=%s", limitMode.String()))
-	} else {
-		effectiveTransactionModeLimit = nil
+	if txDefault, txLimit := transactionModeDefault.Get(), transactionModeLimit.Get(); txLimit != vtgatepb.TransactionMode_UNSPECIFIED && txDefault > txLimit {
+		log.Error(fmt.Sprintf("transaction-mode-default %s exceeds transaction-mode-limit %s", txDefault.String(), txLimit.String()))
+		os.Exit(1)
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a

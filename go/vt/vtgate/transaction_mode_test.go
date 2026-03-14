@@ -61,20 +61,19 @@ func TestParseTransactionModeString(t *testing.T) {
 	}
 }
 
-// TestSetTransactionModeLimitNilNoEnforcement verifies core BC guarantee:
-// no --transaction-mode-limit flag -> nil limit -> unrestricted SET transaction_mode.
-
-func TestSetTransactionModeLimitNilNoEnforcement(t *testing.T) {
+// TestSetTransactionModeLimitUnspecifiedNoEnforcement verifies the BC guarantee: when --transaction-mode-limit is not set, transactionModeLimit.Get() returns UNSPECIFIED, which means no enforcement regardless of the config source.
+func TestSetTransactionModeLimitUnspecifiedNoEnforcement(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	// nil = --transaction-mode-limit was never passed -> no enforcement
-	executor.vConfig.TransactionModeLimit = nil
+	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+		return vtgatepb.TransactionMode_UNSPECIFIED
+	}
 
 	for _, mode := range []string{"single", "multi", "twopc", "unspecified"} {
 		t.Run(mode, func(t *testing.T) {
 			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorExecSession(ctx, executor, session, "set transaction_mode = '"+mode+"'", nil)
-			require.NoError(t, err, "nil limit must never enforce anything, failed for mode=%s", mode)
+			require.NoError(t, err, "UNSPECIFIED limit must never enforce anything, failed for mode=%s", mode)
 		})
 	}
 }
@@ -100,13 +99,13 @@ func TestSetTransactionModeLimitWithUnspecifiedLimit(t *testing.T) {
 // TestBackwardCompatOldFlagOnly verifies that a user who passes only
 // --transaction-mode=SINGLE (the old flag) without --transaction-mode-limit
 // can still SET transaction_mode to any value including TWOPC.
-// This is the critical backward-compat guarantee of the whole feature.
+// When --transaction-mode-limit is not set, transactionModeLimit.Get() returns UNSPECIFIED, which disables enforcement.
 func TestBackwardCompatOldFlagOnly(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	// Simulate --transaction-mode=SINGLE but no --transaction-mode-limit.
-	// effectiveTransactionModeLimit will be nil (as set by vtgate.go Changed() check).
-	executor.vConfig.TransactionModeLimit = nil
+	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+		return vtgatepb.TransactionMode_UNSPECIFIED
+	}
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 	_, err := executorExecSession(ctx, executor, session, "set transaction_mode = 'twopc'", nil)
@@ -114,9 +113,7 @@ func TestBackwardCompatOldFlagOnly(t *testing.T) {
 	assert.Equal(t, vtgatepb.TransactionMode_TWOPC, session.TransactionMode)
 }
 
-// TestSetTransactionModeLimitErrorCode verifies that a limit violation returns
-// MySQL error code 1231 (ERWrongValueForVar) so that clients receive a standard
-// MySQL-compatible error.
+// TestSetTransactionModeLimitErrorCode verifies that a limit violation returns MySQL error code 1231 (ERWrongValueForVar) so that clients receive a standard MySQL-compatible error.
 func TestSetTransactionModeLimitErrorCode(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
@@ -203,25 +200,47 @@ func TestSelectTransactionModeRoundtrip(t *testing.T) {
 	})
 }
 
-// TestSequentialSetWithDynamicLimitChange verifies that dynamically changing the
-// TransactionModeLimit between SET calls correctly affects enforcement: a mode
-// allowed under one limit is rejected after the limit is tightened.
+// TestSequentialSetWithDynamicLimitChange verifies that dynamically changing the TransactionModeLimit between SET calls correctly affects enforcement: a mode allowed under one limit is rejected after the limit is tightened. This simulates a viper dynamic config reload changing the limit at runtime.
 func TestSequentialSetWithDynamicLimitChange(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
+	var currentLimit vtgatepb.TransactionMode
 	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
-		return vtgatepb.TransactionMode_TWOPC
+		return currentLimit
 	}
+
+	currentLimit = vtgatepb.TransactionMode_TWOPC
 	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 	_, err := executorExecSession(ctx, executor, session, "set transaction_mode = 'twopc'", nil)
 	require.NoError(t, err)
 
-	executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
-		return vtgatepb.TransactionMode_SINGLE
-	}
-
+	currentLimit = vtgatepb.TransactionMode_SINGLE
 	session2 := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 	_, err = executorExecSession(ctx, executor, session2, "set transaction_mode = 'twopc'", nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "exceeds vtgate limit")
+}
+
+// TestLimitEnforcementViaFuncNotNilCheck verifies that enforcement is driven by the return value of the TransactionModeLimit func (UNSPECIFIED = no enforcement),not by whether the func is nil. This ensures limits set via config file, envvvar, or dynamic viper reload are enforced identically to CLI flags.
+func TestLimitEnforcementViaFuncNotNilCheck(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	t.Run("func_returning_MULTI_enforces", func(t *testing.T) {
+		executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+			return vtgatepb.TransactionMode_MULTI
+		}
+		session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+		_, err := executorExecSession(ctx, executor, session, "set transaction_mode = 'twopc'", nil)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "exceeds vtgate limit")
+	})
+
+	t.Run("func_returning_UNSPECIFIED_does_not_enforce", func(t *testing.T) {
+		executor.vConfig.TransactionModeLimit = func() vtgatepb.TransactionMode {
+			return vtgatepb.TransactionMode_UNSPECIFIED
+		}
+		session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
+		_, err := executorExecSession(ctx, executor, session, "set transaction_mode = 'twopc'", nil)
+		require.NoError(t, err, "UNSPECIFIED limit must allow all modes")
+	})
 }
