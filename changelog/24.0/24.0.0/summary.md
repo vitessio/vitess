@@ -19,6 +19,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [Deny cross-keyspace joins](#vtgate-deny-cross-keyspace-joins)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -156,6 +157,28 @@ To enable session mode, set the flag when starting VTGate:
 
 ```
 --vtgate-balancer-mode=session
+```
+
+#### <a id="vtgate-deny-cross-keyspace-joins"/>Deny cross-keyspace joins</a>
+
+VTGate now supports denying cross-keyspace joins, preventing queries that would join tables across different keyspaces. This can be configured at two levels:
+
+**VTGate flag** (applies to all queries):
+
+```
+--deny-cross-keyspace-joins
+```
+
+**Per-keyspace VSchema setting** (applies to specific keyspaces):
+
+```bash
+vtctldclient ApplyVSchema --vschema='{"deny_cross_keyspace_joins": true}' my_keyspace
+```
+
+When enabled, the planner will reject queries that require joining tables from different keyspaces. This can be overridden on a per-query basis using the `ALLOW_CROSS_KEYSPACE_JOINS` comment directive:
+
+```sql
+/*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ SELECT * FROM ks1.t1 JOIN ks2.t2 ON t1.id = t2.id;
 ```
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>

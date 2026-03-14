@@ -67,6 +67,10 @@ func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyM
 	return vschemapb.Keyspace_unmanaged, nil
 }
 
+func (s *FakeSI) DenyCrossKeyspaceJoins(keyspace string) (bool, error) {
+	return false, nil
+}
+
 func (s *FakeSI) GetForeignKeyChecksState() *bool {
 	return nil
 }

@@ -18,6 +18,7 @@ package operators
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -300,6 +301,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
+	checkCrossKeyspaceJoin(ctx, lhs, rhs)
+
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {
 			// we can't switch sides, so let's see if we can use a HashJoin to solve it
@@ -324,6 +327,38 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	}
 
 	return join, Rewrote("logical join to applyJoin ")
+}
+
+// checkCrossKeyspaceJoin checks if the given operators would create a cross-keyspace join
+// and if cross-keyspace joins are denied for either keyspace. If denied, it panics with an
+// error unless the ALLOW_CROSS_KEYSPACE_JOINS comment directive is set.
+func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator) {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
+		return
+	}
+
+	lhsKs := lhsRoute.Routing.Keyspace()
+	rhsKs := rhsRoute.Routing.Keyspace()
+	if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+		return
+	}
+
+	if sqlparser.AllowCrossKeyspaceJoinsDirective(ctx.Statement) {
+		return
+	}
+
+	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
+		denied, err := ctx.VSchema.DenyCrossKeyspaceJoins(ks.Name)
+		if err != nil {
+			panic(err)
+		}
+		if denied {
+			panic(vterrors.VT12001(
+				fmt.Sprintf("cross-keyspace join between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ to override)", lhsKs.Name, rhsKs.Name),
+			))
+		}
+	}
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {

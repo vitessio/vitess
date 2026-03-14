@@ -113,9 +113,11 @@ type (
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
-		AllowScatter        bool
-		WarmingReadsPercent int
-		QueryLogToFile      string
+		AllowScatter bool
+		// AllowCrossKeyspaceJoins will fail planning if set to false and a plan contains any cross-keyspace joins
+		AllowCrossKeyspaceJoins bool
+		WarmingReadsPercent     int
+		QueryLogToFile          string
 	}
 
 	Executor struct {
@@ -1564,9 +1566,10 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.config.WarmingReadsPercent,
-		WarmingReadsTimeout: warmingReadsQueryTimeout,
-		WarmingReadsChannel: e.warmingReadsChannel,
+		WarmingReadsPercent:    e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:    warmingReadsQueryTimeout,
+		WarmingReadsChannel:    e.warmingReadsChannel,
+		DenyCrossKeyspaceJoins: !e.config.AllowCrossKeyspaceJoins,
 	}
 }
 
