@@ -331,7 +331,7 @@ func (t *noopVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+func (t *noopVCursor) SetTransactionMode(vtgatepb.TransactionMode) error {
 	panic("implement me")
 }
 
@@ -846,7 +846,7 @@ func (f *loggingVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) error {
 	panic("implement me")
 }
 

@@ -522,7 +522,7 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		case sysvars.TransactionMode.Name:
 			txMode := session.TransactionMode
 			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
-				txMode = transactionMode.Get()
+				txMode = transactionModeDefault.Get()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
@@ -1567,6 +1567,8 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,
+
+		TransactionModeLimit: transactionModeLimit.Get,
 	}
 }
 

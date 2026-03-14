@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
@@ -69,9 +68,10 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE"}
+		// Start vtgate with opt-in enforcement: --transaction-mode-limit is set
+		// so SET transaction_mode is capped at MULTI (tested in TestTransactionModeLimitSingle).
+		// Without --transaction-mode-limit we would not enforce (backward compat).
+		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE", "--transaction-mode-limit", "MULTI"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -269,6 +269,26 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
 		utils.Exec(t, conn, `commit`)
 	})
+}
+
+// TestTransactionModeLimitSingle verifies limit enforcement in an E2E cluster
+// configured with --transaction-mode=SINGLE --transaction-mode-limit=MULTI:
+// the default is SINGLE, SET to MULTI is allowed, SET to TWOPC is rejected,
+// and SET to 'unspecified' resets to the server default (SINGLE).
+func TestTransactionModeLimitSingle(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
+
+	utils.Exec(t, conn, "set transaction_mode = 'multi'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("MULTI")]]`)
+
+	utils.AssertContainsError(t, conn, "set transaction_mode = 'twopc'", "exceeds vtgate limit")
+
+	utils.Exec(t, conn, "set transaction_mode = 'unspecified'")
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {

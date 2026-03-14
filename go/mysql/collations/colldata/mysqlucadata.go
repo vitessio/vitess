@@ -312,6 +312,7 @@ var (
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	}
 )
+
 var (
 	weightTable_uca900_ja_page030 = weightsUCA_embed(287744, 2560)
 	weightTable_uca900_ja_page031 = weightsUCA_embed(290304, 1792)
@@ -537,6 +538,7 @@ var (
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	}
 )
+
 var (
 	weightTable_uca900_zh_page000 = weightsUCA_embed(440832, 2560)
 	weightTable_uca900_zh_page001 = weightsUCA_embed(443392, 3328)
@@ -1106,6 +1108,7 @@ var (
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	}
 )
+
 var (
 	weightTable_uca400_page000 = weightsUCA_embed(1175808, 769)
 	weightTable_uca400_page001 = weightsUCA_embed(1176577, 513)
@@ -1177,6 +1180,7 @@ var (
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, &weightTable_uca400_page0F9, &weightTable_uca400_page0FA, &weightTable_uca400_page0FB, &weightTable_uca400_page0FC, &weightTable_uca400_page0FD, &weightTable_uca400_page0FE, &weightTable_uca400_page0FF,
 	}
 )
+
 var (
 	weightTable_uca520_page000 = weightsUCA_embed(1211451, 769)
 	weightTable_uca520_page001 = weightsUCA_embed(1212220, 513)
