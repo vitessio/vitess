@@ -146,7 +146,7 @@ func TestCompoundSetWithLimitFailure(t *testing.T) {
 			"set autocommit = 1, transaction_mode = 'twopc'", nil)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "exceeds vtgate limit")
-		assert.True(t, session.Session.Autocommit, "autocommit should be set despite later failure")
+		assert.True(t, session.Autocommit, "autocommit should be set despite later failure")
 	})
 
 	t.Run("later_ops_skipped_after_failure", func(t *testing.T) {
@@ -154,7 +154,7 @@ func TestCompoundSetWithLimitFailure(t *testing.T) {
 		_, err := executorExecSession(ctx, executor, session,
 			"set transaction_mode = 'twopc', autocommit = 1", nil)
 		require.Error(t, err)
-		assert.False(t, session.Session.Autocommit, "autocommit must NOT be set when prior op fails")
+		assert.False(t, session.Autocommit, "autocommit must NOT be set when prior op fails")
 	})
 }
 
