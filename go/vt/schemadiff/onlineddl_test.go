@@ -80,18 +80,132 @@ func TestPrioritizedUniqueKeys(t *testing.T) {
 	}
 	expect := []string{
 		"PRIMARY",
-		"uk42",
 		"uk2",
 		"uk3",
+		"uk42",
 		"ukidsha",
 		"ukv",
-		"uk2vprefix",
 		"ukvprefix",
-		"uk41",
+		"uk2vprefix",
 		"uk1",
+		"uk41",
 		"uk1f",
 	}
 	assert.Equal(t, expect, names)
+}
+
+func TestGetPrimaryKeyEquivalent(t *testing.T) {
+	env := NewTestEnv()
+	tests := []struct {
+		name      string
+		ddl       string
+		wantCols  []string
+		wantIndex string
+	}{
+		{
+			name: "WITHPK",
+			ddl: `CREATE TABLE withpk_t (pkid INT NOT NULL AUTO_INCREMENT, col1 VARCHAR(25),
+				PRIMARY KEY (pkid))`,
+			wantCols:  []string{"pkid"},
+			wantIndex: "PRIMARY",
+		},
+		{
+			name: "PRIMARYVSSECONDARYUNIQUE",
+			ddl: `CREATE TABLE primary_vs_secondary_unique_t (
+				bigint_id BIGINT NOT NULL,
+				tinyint_col TINYINT NOT NULL,
+				PRIMARY KEY (bigint_id),
+				UNIQUE KEY tiny_uid (tinyint_col)
+			)`,
+			wantCols:  []string{"tinyint_col"},
+			wantIndex: "tiny_uid",
+		},
+		{
+			name:      "0PKE",
+			ddl:       `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			wantCols:  nil,
+			wantIndex: "",
+		},
+		{
+			name:      "1PKE",
+			ddl:       `CREATE TABLE onepke_t (id INT NOT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			wantCols:  []string{"id"},
+			wantIndex: "id",
+		},
+		{
+			name: "3MULTICOL1PKE",
+			ddl: `CREATE TABLE onemcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
+					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY c1_c2_c4 (col1, col2, col4),
+					KEY nc1_nc2 (col1, col2))`,
+			wantCols:  []string{"col1", "col2"},
+			wantIndex: "c1_c2",
+		},
+		{
+			name: "3MULTICOL2PKE",
+			ddl: `CREATE TABLE twomcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col4), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
+					UNIQUE KEY c1_c2_c3 (col1, col2, col3), UNIQUE KEY c1_c2 (col1, col2))`,
+			wantCols:  []string{"col1", "col2"},
+			wantIndex: "c1_c2",
+		},
+		{
+			name: "1INTPKE1CHARPKE",
+			ddl: `CREATE TABLE oneintpke1charpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					col3 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL,
+					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY id1_id2 (id1, id2))`,
+			wantCols:  []string{"id1", "id2"},
+			wantIndex: "id1_id2",
+		},
+		{
+			name: "INTINTVSVCHAR",
+			ddl: `CREATE TABLE twointvsvcharpke_t (col1 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL,
+					UNIQUE KEY c1 (col1), UNIQUE KEY id1_id2 (id1, id2))`,
+			wantCols:  []string{"id1", "id2"},
+			wantIndex: "id1_id2",
+		},
+		{
+			name: "TINYINTVSBIGINT",
+			ddl: `CREATE TABLE tinyintvsbigint_t (tid1 TINYINT NOT NULL, id1 INT NOT NULL,
+					UNIQUE KEY tid1 (tid1), UNIQUE KEY id1 (id1))`,
+			wantCols:  []string{"tid1"},
+			wantIndex: "tid1",
+		},
+		{
+			name: "VCHARINTVSINT2VARCHAR",
+			ddl: `CREATE TABLE vcharintvsinttwovchar_t (id1 INT NOT NULL, col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					UNIQUE KEY col1_id1 (col1, id1), UNIQUE KEY id1_col1_col2 (id1, col1, col2))`,
+			wantCols:  []string{"col1", "id1"},
+			wantIndex: "col1_id1",
+		},
+		{
+			name: "VCHARVSINT3",
+			ddl: `CREATE TABLE vcharvsintthree_t (id1 INT NOT NULL, id2 INT NOT NULL, id3 INT NOT NULL, col1 VARCHAR(50) NOT NULL,
+					UNIQUE KEY col1 (col1), UNIQUE KEY id1_id2_id3 (id1, id2, id3))`,
+			wantCols:  []string{"id1", "id2", "id3"},
+			wantIndex: "id1_id2_id3",
+		},
+		{
+			name: "PREFIXVSMOREEXPENSIVENONPREFIX",
+			ddl: `CREATE TABLE prefix_vs_nonprefix_t (
+				char_col CHAR(32) NOT NULL,
+				varchar_col VARCHAR(64) NOT NULL,
+				UNIQUE KEY char_prefix (char_col(8)),
+				UNIQUE KEY varchar_full (varchar_col)
+			)`,
+			wantCols:  []string{"char_col"},
+			wantIndex: "char_prefix",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			createTableEntity, err := NewCreateTableEntityFromSQL(env, tt.ddl)
+			require.NoError(t, err)
+			cols, indexName := GetPrimaryKeyEquivalent(createTableEntity)
+			assert.Equal(t, tt.wantCols, cols)
+			assert.Equal(t, tt.wantIndex, indexName)
+		})
+	}
 }
 
 func TestRemovedForeignKeyNames(t *testing.T) {
@@ -644,7 +758,7 @@ func TestIntroducedUniqueConstraints(t *testing.T) {
 					unique key ukv3 (v(3)),
 					key k2 (c2)
 				)`,
-			expectIntroduced: []string{"uk1v2", "ukv3"},
+			expectIntroduced: []string{"ukv3", "uk1v2"},
 			expectRemoved:    []string{"uk12"},
 		},
 	}
@@ -732,11 +846,11 @@ func TestUniqueKeysCoveredByColumns(t *testing.T) {
 		},
 		{
 			columns: []string{"v", "c2", "c3"},
-			expect:  []string{"uk3", "uk23", "uk3v", "ukv"},
+			expect:  []string{"uk3", "uk23", "ukv", "uk3v"},
 		},
 		{
 			columns: []string{"id", "c1", "c2", "c3", "v"},
-			expect:  []string{"PRIMARY", "uk1", "uk3", "uk12", "uk13", "uk23", "uk21", "uk3v", "uk123", "ukv"},
+			expect:  []string{"PRIMARY", "uk1", "uk3", "uk12", "uk13", "uk23", "uk21", "uk123", "ukv", "uk3v"},
 		},
 	}
 
@@ -754,11 +868,11 @@ func TestUniqueKeysCoveredByColumns(t *testing.T) {
 		"uk13",
 		"uk23",
 		"uk21",
-		"uk3v",
 		"uk123",
 		"ukv",
-		"uk2v5",
+		"uk3v",
 		"ukv3",
+		"uk2v5",
 		"uk9",
 	}, tableKeys.Names())
 

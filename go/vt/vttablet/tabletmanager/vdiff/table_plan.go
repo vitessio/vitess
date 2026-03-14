@@ -17,15 +17,15 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -166,7 +166,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	if len(tp.table.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
-		pkeCols, err := tp.getPKEquivalentColumns(dbClient)
+		senv := schemadiff.NewEnvWithDefaults(td.wd.ct.vde.env)
+		pkeCols, err := tp.getPKEquivalentColumns(dbClient, senv)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "error getting PK equivalent columns for table %s", tp.table.Name)
 		}
@@ -298,16 +299,20 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 	return nil
 }
 
-func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
-	defer cancel()
-	executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-		// This sets wantfields to true.
-		return dbClient.ExecuteFetch(query, maxrows)
-	}
-	pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient, env *schemadiff.Environment) ([]string, error) {
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(tp.dbName), sqlescape.EscapeID(tp.table.Name))
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
 	}
+	if len(qr.Rows) == 0 {
+		return nil, fmt.Errorf("empty SHOW CREATE TABLE result for %s", tp.table.Name)
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(env, createTableSQL)
+	if err != nil {
+		return nil, err
+	}
+	pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	return pkeCols, nil
 }

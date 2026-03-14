@@ -108,6 +108,18 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			wantIndex: "PRIMARY",
 		},
 		{
+			name:  "PRIMARYVSSECONDARYUNIQUE",
+			table: "primary_vs_secondary_unique_t",
+			ddl: `CREATE TABLE primary_vs_secondary_unique_t (
+					bigint_id BIGINT NOT NULL,
+					tinyint_col TINYINT NOT NULL,
+					PRIMARY KEY (bigint_id),
+					UNIQUE KEY tiny_uid (tinyint_col)
+				)`,
+			wantCols:  []string{"tinyint_col"},
+			wantIndex: "tiny_uid",
+		},
+		{
 			name:      "0PKE",
 			table:     "zeropke_t",
 			ddl:       `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
@@ -181,6 +193,18 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			wantCols:  []string{"id1", "id2", "id3"},
 			wantIndex: "id1_id2_id3",
 		},
+		{
+			name:  "PREFIXVSMOREEXPENSIVENONPREFIX",
+			table: "prefix_vs_nonprefix_t",
+			ddl: `CREATE TABLE prefix_vs_nonprefix_t (
+					char_col CHAR(32) NOT NULL,
+					varchar_col VARCHAR(64) NOT NULL,
+					UNIQUE KEY char_prefix (char_col(8)),
+					UNIQUE KEY varchar_full (varchar_col)
+				)`,
+			wantCols:  []string{"char_col"},
+			wantIndex: "char_prefix",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -188,10 +212,21 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			conn, err := env.Mysqld.GetDbaConnection(ctx)
 			require.NoError(t, err, "could not connect to mysqld: %v", err)
 			defer conn.Close()
-			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
+			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table) //nolint:staticcheck // Intentionally testing deprecated function for parity with schemadiff
 			assert.NoError(t, err)
-			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
-			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
+			require.Equalf(t, tt.wantCols, cols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
+			require.Equalf(t, tt.wantIndex, indexName, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
+
+			senv := schemadiff.NewTestEnv()
+			createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, tt.ddl)
+			require.NoError(t, err)
+			sdCols, sdIndex := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+			if len(tt.wantCols) == 0 {
+				assert.Empty(t, sdCols, "schemadiff columns should be empty")
+			} else {
+				assert.Equalf(t, tt.wantCols, sdCols, "schemadiff.GetPrimaryKeyEquivalent() columns = %v, want %v", sdCols, tt.wantCols)
+			}
+			assert.Equalf(t, tt.wantIndex, sdIndex, "schemadiff.GetPrimaryKeyEquivalent() index = %v, want %v", sdIndex, tt.wantIndex)
 		})
 	}
 }

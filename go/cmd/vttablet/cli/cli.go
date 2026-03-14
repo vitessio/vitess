@@ -172,7 +172,7 @@ func run(cmd *cobra.Command, args []string) error {
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine(), env.Parser()),
 		VREngine:            vreplication.NewEngine(env, config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 		SemiSyncMonitor:     semisyncmonitor.NewMonitor(config, qsc.Exporter()),
-		VDiffEngine:         vdiff.NewEngine(ts, tablet, env.CollationEnv(), env.Parser()),
+		VDiffEngine:         vdiff.NewEngine(ts, tablet, env),
 	}
 	if err := tm.Start(tablet, config); err != nil {
 		return fmt.Errorf("failed to parse --tablet-path or initialize DB credentials: %w", err)

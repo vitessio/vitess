@@ -29,11 +29,12 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -599,18 +600,29 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 	return fmt.Sprintf("%s:%d", host, port), nil
 }
 
-// mapPKEquivalentCols gets a PK equivalent from mysqld for the table
-// and maps the column names to field indexes in the MinimalTable struct.
+// mapPKEquivalentCols gets a PK equivalent for the table and maps the
+// column names to field indexes in the MinimalTable struct.
 func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connector, table *binlogdatapb.MinimalTable) ([]int, error) {
 	conn, err := db.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	pkeColNames, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(vse.env.Config().DB.DBName), sqlescape.EscapeID(table.Name))
+	qr, err := conn.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
 	}
+	if len(qr.Rows) == 0 {
+		return nil, fmt.Errorf("empty SHOW CREATE TABLE result for %s", table.Name)
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	senv := schemadiff.NewEnvWithDefaults(vse.env.Environment())
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, createTableSQL)
+	if err != nil {
+		return nil, err
+	}
+	pkeColNames, indexName := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	if len(pkeColNames) > 0 && indexName != "" {
 		table.PKIndexName = indexName
 	}
