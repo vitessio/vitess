@@ -1139,6 +1139,7 @@ func (e *Executor) fetchOrCreatePlan(
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
+	vcursor.SetRequestContext(ctx)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {

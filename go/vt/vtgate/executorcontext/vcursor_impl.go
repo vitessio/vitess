@@ -128,6 +128,7 @@ type (
 
 	Resolver interface {
 		GetGateway() srvtopo.Gateway
+		GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error)
 		ResolveDestinations(
 			ctx context.Context,
 			keyspace string,
@@ -162,6 +163,10 @@ type (
 		topoServer     *topo.Server
 		logStats       *logstats.LogStats
 		metrics        Metrics
+
+		// requestCtx is the request-scoped context set by the executor for cancellation and tracing.
+		// When nil (e.g. in tests), AnyKeyspace/FirstSortedKeyspace use context.Background().
+		requestCtx context.Context
 
 		// fkChecksState stores the state of foreign key checks variable.
 		// This state is meant to be the final fk checks state after consulting the
@@ -246,6 +251,11 @@ func NewVCursorImpl(
 	}, nil
 }
 
+// SetRequestContext sets the request-scoped context so AnyKeyspace/FirstSortedKeyspace and related calls can respect cancellation and deadlines. The executor sets this before building or executing a plan.
+func (vc *VCursorImpl) SetRequestContext(ctx context.Context) {
+	vc.requestCtx = ctx
+}
+
 func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 	return vc.SafeSession
 }
@@ -285,6 +295,7 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		logStats:       &logstats.LogStats{Ctx: clonedCtx},
 		metrics:        vc.metrics,
 
+		requestCtx:          clonedCtx,
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
@@ -318,6 +329,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		logStats:       &logstats.LogStats{Ctx: clonedCtx},
 		metrics:        vc.metrics,
 
+		requestCtx:          clonedCtx,
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
@@ -344,6 +356,7 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		logStats:       vc.logStats,
 		metrics:        vc.metrics,
 
+		requestCtx: vc.requestCtx,
 		resolver:   vc.resolver,
 		vschema:    vc.vschema,
 		vm:         vc.vm,
@@ -597,6 +610,10 @@ func (vc *VCursorImpl) SelectedKeyspace() (*vindexes.Keyspace, error) {
 
 var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
+// AnyKeyspace returns a keyspace to use when no specific keyspace is selected.
+// It filters out keyspaces that do not serve vc.tabletType (e.g. skips PRIMARY-only
+// keyspaces for @replica queries), then prefers a sharded keyspace over unsharded.
+// Falls back to the unfiltered list when the resolver is nil or no keyspace matches.
 func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	keyspace, err := vc.SelectedKeyspace()
 	if err == nil {
@@ -610,7 +627,11 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	keyspaces := vc.getSortedServingKeyspaces()
+	ctx := vc.requestCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	keyspaces := vc.filterKeyspacesByTabletType(ctx, vc.getSortedServingKeyspaces())
 
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
@@ -622,7 +643,39 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
-// getSortedServingKeyspaces gets the sorted serving keyspaces
+// canResolveKeyspace reports whether the keyspace has a SrvKeyspace partition for
+// vc.tabletType. It uses GetKeyspaceShards (partition metadata only), not live
+// resolution, so the result is deterministic and does not depend on health or RPC timing.
+// The passed-in ctx is used so the caller's cancellation and deadlines are respected.
+func (vc *VCursorImpl) canResolveKeyspace(ctx context.Context, ksName string) bool {
+	if vc.resolver == nil {
+		return true
+	}
+	_, _, _, err := vc.resolver.GetKeyspaceShards(ctx, ksName, vc.tabletType)
+	return err == nil
+}
+
+// filterKeyspacesByTabletType filters keyspaces to those that can serve vc.tabletType.
+// Returns the original list unchanged when the resolver is nil (no filtering possible)
+// or when no keyspaces pass the filter (backwards compatibility).
+func (vc *VCursorImpl) filterKeyspacesByTabletType(ctx context.Context, keyspaces []*vindexes.Keyspace) []*vindexes.Keyspace {
+	if vc.resolver == nil {
+		return keyspaces
+	}
+
+	var filtered []*vindexes.Keyspace
+	for _, ks := range keyspaces {
+		if vc.canResolveKeyspace(ctx, ks.Name) {
+			filtered = append(filtered, ks)
+		}
+	}
+	if len(filtered) > 0 {
+		return filtered
+	}
+	return keyspaces
+}
+
+// getSortedServingKeyspaces returns serving keyspaces sorted alphabetically by name.
 func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	var keyspaces []*vindexes.Keyspace
 
@@ -647,11 +700,18 @@ func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	return keyspaces
 }
 
+// FirstSortedKeyspace returns the alphabetically first serving keyspace that can
+// serve vc.tabletType, falling back to the first serving keyspace if none match.
 func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := vc.getSortedServingKeyspaces()
+
+	ctx := vc.requestCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	keyspaces := vc.filterKeyspacesByTabletType(ctx, vc.getSortedServingKeyspaces())
 
 	return keyspaces[0], nil
 }
