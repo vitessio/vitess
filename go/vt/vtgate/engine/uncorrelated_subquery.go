@@ -29,15 +29,19 @@ import (
 
 var _ Primitive = (*UncorrelatedSubquery)(nil)
 
-// UncorrelatedSubquery executes a subquery once and uses
-// the result as a bind variable for the underlying primitive.
-type UncorrelatedSubquery struct {
-	Opcode opcode.PulloutOpcode
-
-	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
+// SubqueryOutput describes one set of bind variables to produce from a subquery result.
+type SubqueryOutput struct {
+	Opcode         opcode.PulloutOpcode
 	SubqueryResult string
 	HasValues      string
+}
 
+// UncorrelatedSubquery executes a subquery once and uses
+// the result as bind variables for the underlying primitive.
+// Multiple outputs can be produced from a single execution when
+// the same subquery is used in different contexts (e.g., scalar and IN).
+type UncorrelatedSubquery struct {
+	Outputs  []SubqueryOutput
 	Subquery Primitive
 	Outer    Primitive
 }
@@ -71,19 +75,21 @@ func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VC
 
 // GetFields fetches the field info.
 func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
+	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+len(ps.Outputs)*2)
 	maps.Copy(combinedVars, bindVars)
-	switch ps.Opcode {
-	case opcode.PulloutValue:
-		combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
-	case opcode.PulloutIn, opcode.PulloutNotIn:
-		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-		combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+	for _, out := range ps.Outputs {
+		switch out.Opcode {
+		case opcode.PulloutValue:
+			combinedVars[out.SubqueryResult] = sqltypes.NullBindVariable
+		case opcode.PulloutIn, opcode.PulloutNotIn:
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(0)
+			combinedVars[out.SubqueryResult] = &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+			}
+		case opcode.PulloutExists:
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(0)
 		}
-	case opcode.PulloutExists:
-		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
 	return ps.Outer.GetFields(ctx, vcursor, combinedVars)
 }
@@ -102,29 +108,38 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 	if err != nil {
 		return nil, err
 	}
-	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
+	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+len(ps.Outputs)*2)
 	maps.Copy(combinedVars, bindVars)
-	switch ps.Opcode {
+	for _, out := range ps.Outputs {
+		if err := ps.bindOutput(out, result, combinedVars); err != nil {
+			return nil, err
+		}
+	}
+	return combinedVars, nil
+}
+
+func (ps *UncorrelatedSubquery) bindOutput(out SubqueryOutput, result *sqltypes.Result, combinedVars map[string]*querypb.BindVariable) error {
+	switch out.Opcode {
 	case opcode.PulloutValue:
 		switch len(result.Rows) {
 		case 0:
-			combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
+			combinedVars[out.SubqueryResult] = sqltypes.NullBindVariable
 		case 1:
-			combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
+			combinedVars[out.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
 		default:
-			return nil, errSqRow
+			return errSqRow
 		}
 	case opcode.PulloutIn, opcode.PulloutNotIn:
 		switch len(result.Rows) {
 		case 0:
-			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(0)
 			// Add a bogus value. It will not be checked.
-			combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
+			combinedVars[out.SubqueryResult] = &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
 				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
 			}
 		default:
-			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(1)
 			values := &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
 				Values: make([]*querypb.Value, len(result.Rows)),
@@ -132,34 +147,44 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 			for i, v := range result.Rows {
 				values.Values[i] = sqltypes.ValueToProto(v[0])
 			}
-			combinedVars[ps.SubqueryResult] = values
+			combinedVars[out.SubqueryResult] = values
 		}
 	case opcode.PulloutExists:
 		switch len(result.Rows) {
 		case 0:
-			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(0)
 		default:
-			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
+			combinedVars[out.HasValues] = sqltypes.Int64BindVariable(1)
 		}
 	}
-	return combinedVars, nil
+	return nil
 }
 
 func (ps *UncorrelatedSubquery) description() PrimitiveDescription {
 	other := map[string]any{}
 	var pulloutVars []string
-	if ps.HasValues != "" {
-		pulloutVars = append(pulloutVars, ps.HasValues)
-	}
-	if ps.SubqueryResult != "" {
-		pulloutVars = append(pulloutVars, ps.SubqueryResult)
+	for _, out := range ps.Outputs {
+		if out.HasValues != "" {
+			pulloutVars = append(pulloutVars, out.HasValues)
+		}
+		if out.SubqueryResult != "" {
+			pulloutVars = append(pulloutVars, out.SubqueryResult)
+		}
 	}
 	if len(pulloutVars) > 0 {
 		other["PulloutVars"] = pulloutVars
 	}
+
+	variant := ""
+	if len(ps.Outputs) == 1 {
+		variant = ps.Outputs[0].Opcode.String()
+	} else {
+		variant = "MultiOutput"
+	}
+
 	return PrimitiveDescription{
 		OperatorType: "UncorrelatedSubquery",
-		Variant:      ps.Opcode.String(),
+		Variant:      variant,
 		Other:        other,
 	}
 }

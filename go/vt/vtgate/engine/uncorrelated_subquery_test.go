@@ -56,10 +56,12 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		results: []*sqltypes.Result{underlyingResult},
 	}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutValue,
+			SubqueryResult: "sq",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	result, err := ps.TryExecute(context.Background(), &noopVCursor{}, bindVars, false)
@@ -81,10 +83,12 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutValue,
+			SubqueryResult: "sq",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -107,9 +111,11 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 		results: []*sqltypes.Result{sqResult},
 	}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutValue,
+			SubqueryResult: "sq",
+		}},
+		Subquery: sfp,
 	}
 
 	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
@@ -130,11 +136,13 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutIn,
-		SubqueryResult: "sq",
-		HasValues:      "has_values",
-		Subquery:       sfp,
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutIn,
+			SubqueryResult: "sq",
+			HasValues:      "has_values",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -146,7 +154,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	// Test the NOT IN case just once even though it's common code.
 	sfp.rewind()
 	ufp.rewind()
-	ps.Opcode = PulloutNotIn
+	ps.Outputs[0].Opcode = PulloutNotIn
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
@@ -166,11 +174,13 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutIn,
-		SubqueryResult: "sq",
-		HasValues:      "has_values",
-		Subquery:       sfp,
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutIn,
+			SubqueryResult: "sq",
+			HasValues:      "has_values",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -193,10 +203,12 @@ func TestPulloutSubqueryExists(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:    PulloutExists,
-		HasValues: "has_values",
-		Subquery:  sfp,
-		Outer:     ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:    PulloutExists,
+			HasValues: "has_values",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -218,10 +230,12 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:    PulloutExists,
-		HasValues: "has_values",
-		Subquery:  sfp,
-		Outer:     ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:    PulloutExists,
+			HasValues: "has_values",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
@@ -236,9 +250,11 @@ func TestPulloutSubqueryError(t *testing.T) {
 		sendErr: errors.New("err"),
 	}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutExists,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutExists,
+			SubqueryResult: "sq",
+		}},
+		Subquery: sfp,
 	}
 
 	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
@@ -270,10 +286,12 @@ func TestPulloutSubqueryStream(t *testing.T) {
 		results: []*sqltypes.Result{underlyingResult},
 	}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutValue,
+			SubqueryResult: "sq",
+		}},
+		Subquery: sfp,
+		Outer:    ufp,
 	}
 
 	result, err := wrapStreamExecute(ps, &noopVCursor{}, bindVars, true)
@@ -289,10 +307,11 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 	}
 	ufp := &fakePrimitive{}
 	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		HasValues:      "has_values",
-		Outer:          ufp,
+		Outputs: []SubqueryOutput{{
+			Opcode:         PulloutValue,
+			SubqueryResult: "sq",
+		}},
+		Outer: ufp,
 	}
 
 	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
@@ -304,7 +323,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 	})
 
 	ufp.rewind()
-	ps.Opcode = PulloutIn
+	ps.Outputs[0].Opcode = PulloutIn
+	ps.Outputs[0].HasValues = "has_values"
 	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
@@ -314,7 +334,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 	})
 
 	ufp.rewind()
-	ps.Opcode = PulloutNotIn
+	ps.Outputs[0].Opcode = PulloutNotIn
 	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
@@ -324,7 +344,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 	})
 
 	ufp.rewind()
-	ps.Opcode = PulloutExists
+	ps.Outputs[0].Opcode = PulloutExists
+	ps.Outputs[0].SubqueryResult = ""
 	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
@@ -332,4 +353,70 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		fmt.Sprintf(`GetFields aa: %v has_values: %v`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0)),
 		fmt.Sprintf(`Execute aa: %v has_values: %v true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0)),
 	})
+}
+
+func TestPulloutSubqueryMultiOutput(t *testing.T) {
+	// Test that a single subquery execution produces bind vars for multiple outputs.
+	sqResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1", "int64"),
+		"42",
+	)
+	sfp := &fakePrimitive{
+		results: []*sqltypes.Result{sqResult},
+	}
+	ufp := &fakePrimitive{}
+	ps := &UncorrelatedSubquery{
+		Outputs: []SubqueryOutput{
+			{
+				Opcode:         PulloutValue,
+				SubqueryResult: "sq_val",
+			},
+			{
+				Opcode:         PulloutIn,
+				SubqueryResult: "sq_list",
+				HasValues:      "sq_has",
+			},
+		},
+		Subquery: sfp,
+		Outer:    ufp,
+	}
+
+	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+		t.Error(err)
+	}
+	sfp.ExpectLog(t, []string{`Execute  false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute sq_has: %v sq_list: %v sq_val: %v false`,
+		sqltypes.Int64BindVariable(1),
+		&querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("42")}}},
+		sqltypes.Int64BindVariable(42),
+	)})
+}
+
+func TestPulloutSubqueryMultiOutputValueError(t *testing.T) {
+	// When PulloutValue is mixed with PulloutIn and >1 row, PulloutValue should error.
+	sqResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1", "int64"),
+		"1",
+		"2",
+	)
+	sfp := &fakePrimitive{
+		results: []*sqltypes.Result{sqResult},
+	}
+	ps := &UncorrelatedSubquery{
+		Outputs: []SubqueryOutput{
+			{
+				Opcode:         PulloutValue,
+				SubqueryResult: "sq_val",
+			},
+			{
+				Opcode:         PulloutIn,
+				SubqueryResult: "sq_list",
+				HasValues:      "sq_has",
+			},
+		},
+		Subquery: sfp,
+	}
+
+	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.EqualError(t, err, "subquery returned more than one row")
 }

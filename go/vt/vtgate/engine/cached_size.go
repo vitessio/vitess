@@ -1291,6 +1291,21 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *SubqueryOutput) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field SubqueryResult string
+	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
+	// field HasValues string
+	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
+	return size
+}
+
 func (cached *SysVarCheckAndIgnore) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1401,12 +1416,15 @@ func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
-	// field SubqueryResult string
-	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
-	// field HasValues string
-	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
+	// field Outputs []vitess.io/vitess/go/vt/vtgate/engine.SubqueryOutput
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Outputs)) * int64(40))
+		for _, elem := range cached.Outputs {
+			size += elem.CachedSize(false)
+		}
+	}
 	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Subquery.(cachedObject); ok {
 		size += cc.CachedSize(true)
