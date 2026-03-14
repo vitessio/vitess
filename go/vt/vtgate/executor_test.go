@@ -83,6 +83,10 @@ func (f *fakeResolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace
 	panic("implement me")
 }
 
+func (f *fakeResolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+	return keyspace, &topodatapb.SrvKeyspace{}, []*topodatapb.ShardReference{{Name: "0"}}, nil
+}
+
 var _ econtext.Resolver = (*fakeResolver)(nil)
 
 func TestPlanKey(t *testing.T) {

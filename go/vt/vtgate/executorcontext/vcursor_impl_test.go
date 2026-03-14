@@ -472,6 +472,17 @@ func (f *fakeResolver) ResolveDestinationsMultiCol(context.Context, string, topo
 	panic("not implemented")
 }
 
+func (f *fakeResolver) GetKeyspaceShards(_ context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+	types, ok := f.servingKeyspaceTypes[keyspace]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("keyspace %s not found", keyspace)
+	}
+	if slices.Contains(types, tabletType) {
+		return keyspace, &topodatapb.SrvKeyspace{}, []*topodatapb.ShardReference{{Name: "0"}}, nil
+	}
+	return "", nil, nil, fmt.Errorf("no partition for tablet type %v in keyspace %s", tabletType, keyspace)
+}
+
 func TestAnyKeyspaceFiltersByTabletType(t *testing.T) {
 	alpha := &vindexes.Keyspace{Name: "alpha", Sharded: true}
 	alphaSchema := &vindexes.KeyspaceSchema{Keyspace: alpha}
