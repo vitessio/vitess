@@ -6584,8 +6584,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 in __sq2 as b from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ as a, 1 in __sq2 as b from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 in ::__sq2 as b from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as a, 1 in ::__sq2 as b from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6642,8 +6642,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ + (1 in __sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ + (1 in __sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ + (1 in ::__sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ + (1 in ::__sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6700,8 +6700,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 not in __sq2 as b from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ as a, 1 not in __sq2 as b from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq2 as b from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq2 as b from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6868,8 +6868,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 in ::__sq2 as a, __sq3 as b from `user` where 1 != 1",
-                "Query": "select 1 in ::__sq2 as a, __sq3 as b from `user` where :__sq_has_values and id in ::__vals",
+                "FieldQuery": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where 1 != 1",
+                "Query": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where :__sq_has_values and id in ::__vals",
                 "Values": [
                   "::__sq1"
                 ],

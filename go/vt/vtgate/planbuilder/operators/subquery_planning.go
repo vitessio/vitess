@@ -398,15 +398,36 @@ func rewriteColNameToArgument(
 	// when the column is representing a subquery
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		var sq1, sq2 *SubQuery
+		var filterType opcode.PulloutOpcode
 		for _, sq := range se {
 			if sq.ArgName == s || sq.HasValuesName == s {
 				sq1 = sq
+				filterType = sq.FilterType
+				break
+			}
+			for _, ao := range sq.AdditionalOutputs {
+				if ao.ArgName == s || ao.HasValuesName == s {
+					sq1 = sq
+					filterType = ao.FilterType
+					break
+				}
+			}
+			if sq1 != nil {
 				break
 			}
 		}
 		for _, sq := range subqueries {
 			if s == sq.ArgName {
 				sq2 = sq
+				break
+			}
+			for _, ao := range sq.AdditionalOutputs {
+				if ao.ArgName == s {
+					sq2 = sq
+					break
+				}
+			}
+			if sq2 != nil {
 				break
 			}
 		}
@@ -416,9 +437,9 @@ func rewriteColNameToArgument(
 		}
 
 		switch {
-		case sq1.FilterType.NeedsListArg():
+		case filterType.NeedsListArg():
 			return sqlparser.NewListArg(s)
-		case sq1.FilterType == opcode.PulloutExists:
+		case filterType == opcode.PulloutExists:
 			if sq1.HasValuesName == "" {
 				sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
 				sq2.HasValuesName = sq1.HasValuesName
