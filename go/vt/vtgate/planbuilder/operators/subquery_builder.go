@@ -392,11 +392,19 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 			allSubqs = append(allSubqs, existing)
 			continue
 		}
-		// Check if an equivalent subquery (same SQL + same opcode) already exists
-		// in this SQB from a previous expression. If so, reuse it instead of
-		// executing the same subquery twice.
-		if existing := sqb.findEquivalent(ctx, subq, filterType); existing != nil {
-			sqe.replaceArgName(argName, existing.ArgName, isDML)
+		// Check if an equivalent subquery (same SQL) already exists in this SQB.
+		// Same opcode: reuse directly (same bind variable).
+		// Different opcode: add as an additional output (single execution, multiple bindings).
+		if existing := sqb.findEquivalentSubquery(ctx, subq); existing != nil {
+			if existing.FilterType == filterType || existing.hasOutputForOpcode(filterType) {
+				sqe.replaceArgName(argName, existing.argNameForOpcode(filterType), isDML)
+			} else {
+				existing.AdditionalOutputs = append(existing.AdditionalOutputs, SubQueryAdditionalOutput{
+					FilterType: filterType,
+					ArgName:    argName,
+					IsArgument: true,
+				})
+			}
 			allSubqs = append(allSubqs, existing)
 			continue
 		}
@@ -417,12 +425,13 @@ func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
 	return nil
 }
 
-// findEquivalent looks for an existing SubQuery in this builder that has an equivalent
-// subquery expression and the same pullout opcode. This deduplicates identical subqueries
-// within a single SQB so the same subquery is only executed once.
-func (sqb *SubQueryBuilder) findEquivalent(ctx *plancontext.PlanningContext, subq *sqlparser.Subquery, filterType opcode.PulloutOpcode) *SubQuery {
+// findEquivalentSubquery looks for an existing SubQuery in this builder that has an
+// equivalent subquery expression (regardless of opcode). Returns the matching SubQuery
+// or nil if no match is found. The caller checks the opcode to decide whether to reuse
+// directly (same opcode) or add an additional output (different opcode).
+func (sqb *SubQueryBuilder) findEquivalentSubquery(ctx *plancontext.PlanningContext, subq *sqlparser.Subquery) *SubQuery {
 	for _, sq := range sqb.Inner {
-		if sq.FilterType == filterType && ctx.SemTable.EqualsExpr(sq.originalSubquery, subq) {
+		if !sq.correlated && ctx.SemTable.EqualsExpr(sq.originalSubquery, subq) {
 			return sq
 		}
 	}

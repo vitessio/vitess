@@ -279,12 +279,20 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
+		outputs := []engine.SubqueryOutput{{
+			Opcode:         op.FilterType,
+			SubqueryResult: op.SubqueryValueName,
+			HasValues:      op.HasValuesName,
+		}}
+		for _, ao := range op.AdditionalOutputs {
+			outputs = append(outputs, engine.SubqueryOutput{
+				Opcode:         ao.FilterType,
+				SubqueryResult: ao.SubqueryValueName,
+				HasValues:      ao.HasValuesName,
+			})
+		}
 		return &engine.UncorrelatedSubquery{
-			Outputs: []engine.SubqueryOutput{{
-				Opcode:         op.FilterType,
-				SubqueryResult: op.SubqueryValueName,
-				HasValues:      op.HasValuesName,
-			}},
+			Outputs:  outputs,
 			Subquery: inner,
 			Outer:    outer,
 		}, nil

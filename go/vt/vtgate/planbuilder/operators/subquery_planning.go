@@ -339,6 +339,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 
 	outer.RHS = newOp
 	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
+	for _, ao := range inner.AdditionalOutputs {
+		ctx.MergedSubqueries[ao.ArgName] = inner.originalSubquery
+	}
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -555,6 +558,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		op.Comments = outer.Comments
 	}
 	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
+	for _, ao := range subQuery.AdditionalOutputs {
+		ctx.MergedSubqueries[ao.ArgName] = subQuery.originalSubquery
+	}
 	return op, Rewrote("merged subquery with outer")
 }
 
