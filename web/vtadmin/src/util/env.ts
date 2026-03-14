@@ -22,3 +22,16 @@ export const env: () => Vite.ImportMetaEnv = () => {
 // to transmute it into a boolean. It is a function, rather than a constant,
 // to support dynamic updates to import.meta.env in tests.
 export const isReadOnlyMode = (): boolean => env().VITE_READONLY_MODE === 'true';
+
+// Monitoring templates.
+// These functions retrieve the URL templates for various monitoring dashboards from the environment variables.
+export const getVTClusterMonitoringTemplate = (): string | undefined => env().VITE_VITESS_MONITORING_CLUSTER_TEMPLATE;
+export const getVTTabletMonitoringTemplate = (): string | undefined => env().VITE_VITESS_MONITORING_VTTABLET_TEMPLATE;
+export const getVTGateMonitoringTemplate = (): string | undefined => env().VITE_VITESS_MONITORING_VTGATE_TEMPLATE;
+export const getMysqlMonitoringTemplate = (): string | undefined => env().VITE_MYSQL_MONITORING_TEMPLATE;
+
+// Column titles for monitoring dashboards.
+export const getVitessMonitoringDashboardTitle = (): string =>
+    env().VITE_VITESS_MONITORING_DASHBOARD_TITLE || 'Vt Monitoring Dashboard';
+export const getMysqlMonitoringDashboardTitle = (): string =>
+    env().VITE_MYSQL_MONITORING_DASHBOARD_TITLE || 'DB Monitoring Dashboard';
