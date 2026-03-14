@@ -339,9 +339,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 
 	outer.RHS = newOp
 	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
-	for _, ao := range inner.AdditionalOutputs {
-		ctx.MergedSubqueries[ao.ArgName] = inner.originalSubquery
-	}
+	ctx.MergedSubqueries[inner.ScalarArgName] = inner.originalSubquery
+	ctx.MergedSubqueries[inner.ListArgName] = inner.originalSubquery
+	ctx.MergedSubqueries[inner.HasValuesArgName] = inner.originalSubquery
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -398,36 +398,17 @@ func rewriteColNameToArgument(
 	// when the column is representing a subquery
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		var sq1, sq2 *SubQuery
-		var filterType opcode.PulloutOpcode
 		for _, sq := range se {
-			if sq.ArgName == s || sq.HasValuesName == s {
+			if sq.ArgName == s || sq.HasValuesName == s ||
+				sq.ScalarArgName == s || sq.ListArgName == s || sq.HasValuesArgName == s {
 				sq1 = sq
-				filterType = sq.FilterType
-				break
-			}
-			for _, ao := range sq.AdditionalOutputs {
-				if ao.ArgName == s || ao.HasValuesName == s {
-					sq1 = sq
-					filterType = ao.FilterType
-					break
-				}
-			}
-			if sq1 != nil {
 				break
 			}
 		}
 		for _, sq := range subqueries {
-			if s == sq.ArgName {
+			if sq.ArgName == s ||
+				sq.ScalarArgName == s || sq.ListArgName == s || sq.HasValuesArgName == s {
 				sq2 = sq
-				break
-			}
-			for _, ao := range sq.AdditionalOutputs {
-				if ao.ArgName == s {
-					sq2 = sq
-					break
-				}
-			}
-			if sq2 != nil {
 				break
 			}
 		}
@@ -437,14 +418,10 @@ func rewriteColNameToArgument(
 		}
 
 		switch {
-		case filterType.NeedsListArg():
+		case s == sq1.ListArgName:
 			return sqlparser.NewListArg(s)
-		case filterType == opcode.PulloutExists:
-			if sq1.HasValuesName == "" {
-				sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
-				sq2.HasValuesName = sq1.HasValuesName
-			}
-			return sqlparser.NewArgument(sq1.HasValuesName)
+		case s == sq1.HasValuesArgName:
+			return sqlparser.NewArgument(s)
 		default:
 			// for scalar value subqueries, the argument is typed based on the first expression in the subquery
 			// so here we make an attempt at figuring out the type of the argument
@@ -579,9 +556,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		op.Comments = outer.Comments
 	}
 	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
-	for _, ao := range subQuery.AdditionalOutputs {
-		ctx.MergedSubqueries[ao.ArgName] = subQuery.originalSubquery
-	}
+	ctx.MergedSubqueries[subQuery.ScalarArgName] = subQuery.originalSubquery
+	ctx.MergedSubqueries[subQuery.ListArgName] = subQuery.originalSubquery
+	ctx.MergedSubqueries[subQuery.HasValuesArgName] = subQuery.originalSubquery
 	return op, Rewrote("merged subquery with outer")
 }
 

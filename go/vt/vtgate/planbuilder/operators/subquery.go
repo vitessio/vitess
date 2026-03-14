@@ -29,18 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// SubQueryAdditionalOutput tracks an extra opcode/binding requirement when an
-// identical subquery was deduplicated with a different pullout opcode. This
-// allows a single subquery execution to produce bind variables for multiple
-// usage contexts (e.g., scalar + IN).
-type SubQueryAdditionalOutput struct {
-	FilterType        opcode.PulloutOpcode
-	ArgName           string
-	IsArgument        bool
-	SubqueryValueName string // Populated during settle.
-	HasValuesName     string // Populated during settle.
-}
-
 // SubQuery represents a subquery used for filtering rows in an
 // outer query through a join.
 type SubQuery struct {
@@ -58,10 +46,12 @@ type SubQuery struct {
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
 	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
 
-	// AdditionalOutputs tracks extra opcode/binding requirements from cross-opcode
-	// deduplication. When the same uncorrelated subquery appears with different opcodes,
-	// only one SubQuery operator is created, and the extra opcodes are stored here.
-	AdditionalOutputs []SubQueryAdditionalOutput
+	// Deterministic bind variable names for the three output types.
+	// Set at creation time from ReserveSubQueryGroup().
+	ScalarArgName    string // e.g. "__sq1" — scalar value
+	ListArgName      string // e.g. "__sq1_list" — tuple of values
+	HasValuesArgName string // e.g. "__sq1_has_values" — boolean flag
+	NeedsScalar      bool   // true when any usage is PulloutValue — enforces ≤1 row
 
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
@@ -72,32 +62,6 @@ type SubQuery struct {
 
 	// IsArgument is set to true if the subquery puts the
 	IsArgument bool
-}
-
-// hasOutputForOpcode returns true if the primary or any additional output matches the given opcode.
-func (sq *SubQuery) hasOutputForOpcode(filterType opcode.PulloutOpcode) bool {
-	if sq.FilterType == filterType {
-		return true
-	}
-	for _, ao := range sq.AdditionalOutputs {
-		if ao.FilterType == filterType {
-			return true
-		}
-	}
-	return false
-}
-
-// argNameForOpcode returns the arg name for the given opcode, checking primary and additional outputs.
-func (sq *SubQuery) argNameForOpcode(filterType opcode.PulloutOpcode) string {
-	if sq.FilterType == filterType {
-		return sq.ArgName
-	}
-	for _, ao := range sq.AdditionalOutputs {
-		if ao.FilterType == filterType {
-			return ao.ArgName
-		}
-	}
-	return ""
 }
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -265,7 +229,6 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 			panic(correlatedSubqueryErr)
 		}
 		sq.SubqueryValueName = sq.ArgName
-		sq.settleAdditionalOutputs(ctx)
 		return outer
 	}
 	return sq.settleFilter(ctx, outer)
@@ -290,11 +253,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		return outer
 	}
 
-	hasValuesArg := func() string {
-		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
-		sq.HasValuesName = s
-		return s
-	}
+	sq.HasValuesName = sq.HasValuesArgName
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		// For IN and NOT IN type filters, we have to add a Expression that checks if we got any rows back or not
@@ -302,10 +261,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		if compExpr, isCompExpr := node.(*sqlparser.ComparisonExpr); sq.FilterType.NeedsListArg() && isCompExpr {
 			if listArg, isListArg := compExpr.Right.(sqlparser.ListArg); isListArg && listArg.String() == sq.ArgName {
 				if sq.FilterType == opcode.PulloutIn {
-					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(hasValuesArg()), compExpr))
+					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(sq.HasValuesArgName), compExpr))
 				} else {
 					cursor.Replace(&sqlparser.OrExpr{
-						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
+						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(sq.HasValuesArgName)),
 						Right: compExpr,
 					})
 				}
@@ -329,11 +288,11 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	switch sq.FilterType {
 	case opcode.PulloutExists:
 		sq.addLimit()
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
+		predicates = append(predicates, sqlparser.NewArgument(sq.HasValuesArgName))
 	case opcode.PulloutNotExists:
 		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(sq.HasValuesArgName)))
 	case opcode.PulloutIn:
 		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
 		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
@@ -352,25 +311,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		predicates = append(predicates, rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	}
-	sq.settleAdditionalOutputs(ctx)
 	return newFilter(outer, predicates...)
-}
-
-// settleAdditionalOutputs populates SubqueryValueName and HasValuesName for each
-// additional output, mirroring the primary output's settle logic per opcode.
-func (sq *SubQuery) settleAdditionalOutputs(ctx *plancontext.PlanningContext) {
-	for i := range sq.AdditionalOutputs {
-		ao := &sq.AdditionalOutputs[i]
-		switch ao.FilterType {
-		case opcode.PulloutValue:
-			ao.SubqueryValueName = ao.ArgName
-		case opcode.PulloutIn, opcode.PulloutNotIn:
-			ao.SubqueryValueName = ao.ArgName
-			ao.HasValuesName = ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
-		case opcode.PulloutExists, opcode.PulloutNotExists:
-			ao.HasValuesName = ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
-		}
-	}
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

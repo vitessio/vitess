@@ -6182,8 +6182,10 @@
       "Original": "SELECT (select count(*) from user) + (select count(*) from user_extra)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq2_has_values",
+          "__sq2_list",
           "__sq2"
         ],
         "Inputs": [
@@ -6208,8 +6210,10 @@
           {
             "InputName": "Outer",
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -6796,8 +6800,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -6852,8 +6858,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -6964,8 +6972,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [

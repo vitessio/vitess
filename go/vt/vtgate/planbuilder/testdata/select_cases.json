@@ -973,9 +973,10 @@
       "Original": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -999,7 +1000,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select /* comment */ `user`.col from `user` where :__sq_has_values and foo in ::__sq1"
+            "Query": "select /* comment */ `user`.col from `user` where :__sq1_has_values and foo in ::__sq1"
           }
         ]
       },
@@ -1585,8 +1586,10 @@
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -1630,8 +1633,10 @@
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2163,9 +2168,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -2189,7 +2195,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq_has_values and `user`.id in ::__sq1"
+                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq1_has_values and `user`.id in ::__sq1"
               }
             ]
           }
@@ -2216,9 +2222,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutNotIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -2242,7 +2249,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq_has_values or `user`.id not in ::__sq1)"
+                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq1_has_values or `user`.id not in ::__sq1)"
               }
             ]
           }
@@ -2879,8 +2886,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -2947,8 +2956,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -3144,8 +3155,10 @@
       "Original": "select (select sum(col) from user) from user_extra",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -3738,8 +3751,10 @@
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4022,9 +4037,10 @@
       "Original": "select exists(select * from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutExists",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values2",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4047,8 +4063,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual where 1 != 1",
-            "Query": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual"
+            "FieldQuery": "select :__sq1 /* INT64 */ as `exists (select 1 from ``user``)` from dual where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as `exists (select 1 from ``user``)` from dual"
           }
         ]
       },
@@ -4447,9 +4463,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.col1 = 'bar' LIMIT 0, 100) _inner)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4506,7 +4523,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -4664,9 +4681,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4725,7 +4743,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -4746,9 +4764,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4804,7 +4823,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -4852,9 +4871,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4915,7 +4935,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -5070,9 +5090,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -5132,7 +5153,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -5153,9 +5174,10 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -5211,7 +5233,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+                "Query": "select music.id from music where :__sq1_has_values and music.id in ::__vals"
               }
             ]
           }
@@ -5567,8 +5589,10 @@
       "Original": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -6551,11 +6575,11 @@
       "Original": "select (select count(*) from user_extra) as a, 1 in (select count(*) from user_extra) as b from user where id = 1",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "MultiOutput",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1",
-          "__sq_has_values",
-          "__sq2"
+          "__sq1_has_values",
+          "__sq1_list",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -6584,8 +6608,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 in ::__sq2 as b from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ as a, 1 in ::__sq2 as b from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 in ::__sq1_list as b from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as a, 1 in ::__sq1_list as b from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6609,11 +6633,11 @@
       "Original": "select (select count(*) from user_extra) + (1 in (select count(*) from user_extra)) from user where id = 1",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "MultiOutput",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1",
-          "__sq_has_values",
-          "__sq2"
+          "__sq1_has_values",
+          "__sq1_list",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -6642,8 +6666,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ + (1 in ::__sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ + (1 in ::__sq2) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ + (1 in ::__sq1_list) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ + (1 in ::__sq1_list) as `(select count(*) from user_extra) + (1 in (select count(*) from user_extra))` from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6667,11 +6691,11 @@
       "Original": "select (select count(*) from user_extra) as a, 1 not in (select count(*) from user_extra) as b from user where id = 1",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "MultiOutput",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1",
-          "__sq_has_values",
-          "__sq2"
+          "__sq1_has_values",
+          "__sq1_list",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -6700,8 +6724,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq2 as b from `user` where 1 != 1",
-            "Query": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq2 as b from `user` where id = 1",
+            "FieldQuery": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq1_list as b from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as a, 1 not in ::__sq1_list as b from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -6725,8 +6749,10 @@
       "Original": "select (select count(*) from user_extra) as a from user where id in (select count(*) from user_extra)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq2_has_values",
+          "__sq2_list",
           "__sq2"
         ],
         "Inputs": [
@@ -6751,9 +6777,10 @@
           {
             "InputName": "Outer",
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -6784,7 +6811,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select :__sq2 /* INT64 */ as a from `user` where 1 != 1",
-                "Query": "select :__sq2 /* INT64 */ as a from `user` where :__sq_has_values and id in ::__vals",
+                "Query": "select :__sq2 /* INT64 */ as a from `user` where :__sq1_has_values and id in ::__vals",
                 "Values": [
                   "::__sq1"
                 ],
@@ -6809,10 +6836,11 @@
       "Original": "select 1 in (select count(*) from user_extra) as a, (select count(*) from user_extra) as b from user where id in (select count(*) from user_extra) order by (select count(*) from user_extra) desc",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "MultiOutput",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq2",
-          "__sq3"
+          "__sq2_has_values",
+          "__sq2_list",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -6836,9 +6864,10 @@
           {
             "InputName": "Outer",
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -6868,8 +6897,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where 1 != 1",
-                "Query": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where :__sq_has_values and id in ::__vals",
+                "FieldQuery": "select 1 in ::__sq2_list as a, :__sq2 /* INT64 */ as b from `user` where 1 != 1",
+                "Query": "select 1 in ::__sq2_list as a, :__sq2 /* INT64 */ as b from `user` where :__sq1_has_values and id in ::__vals",
                 "Values": [
                   "::__sq1"
                 ],
