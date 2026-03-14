@@ -2031,7 +2031,7 @@
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where :__sq1_has_values and id in ::__vals",
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "user_index"
           }
@@ -2078,7 +2078,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq1_has_values or id not in ::__sq1"
+            "Query": "select id from `user` where not :__sq1_has_values or id not in ::__sq1_list"
           }
         ]
       },
@@ -2233,7 +2233,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id2 from `user` where 1 != 1",
-                "Query": "select id2 from `user` where :__sq2_has_values and id2 in ::__sq2"
+                "Query": "select id2 from `user` where :__sq2_has_values and id2 in ::__sq2_list"
               }
             ]
           },
@@ -2628,9 +2628,9 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where (not :__sq1_has_values or id not in ::__sq1) and :__sq2_has_values and id in ::__vals",
+                "Query": "select id from `user` where (not :__sq1_has_values or id not in ::__sq1_list) and :__sq2_has_values and id in ::__vals",
                 "Values": [
-                  "::__sq2"
+                  "::__sq2_list"
                 ],
                 "Vindex": "user_index"
               }
@@ -2781,7 +2781,7 @@
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where :__sq1_has_values and id in ::__vals",
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "user_index"
           }
@@ -3026,7 +3026,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq2_has_values and id in ::__sq2",
+            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq2_has_values and id in ::__sq2_list",
             "Values": [
               "5"
             ],
@@ -3081,7 +3081,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq1_has_values or id not in ::__sq1)",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq1_has_values or id not in ::__sq1_list)",
             "Values": [
               "5"
             ],
@@ -3386,7 +3386,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq1_has_values and `user`.col in ::__sq1"
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq1_has_values and `user`.col in ::__sq1_list"
               }
             ]
           }

@@ -76,11 +76,16 @@ func (sqb *SubQueryBuilder) handleSubquery(
 		return nil
 	}
 	group := ctx.ReservedVars.ReserveSubQueryGroup()
-	argName := group.Scalar // default to scalar name
-	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
+	// Use scalar name as default ArgName; createSubqueryOp determines the opcode.
+	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, group.Scalar, path)
 	sqInner.ScalarArgName = group.Scalar
 	sqInner.ListArgName = group.List
 	sqInner.HasValuesArgName = group.HasValues
+	// Set ArgName to the right variant based on the determined opcode.
+	if sqInner.FilterType.NeedsListArg() {
+		sqInner.ArgName = group.List
+	}
+	sqInner.NeedsScalar = sqInner.FilterType == opcode.PulloutValue
 	sqb.Inner = append(sqb.Inner, sqInner)
 
 	return sqInner

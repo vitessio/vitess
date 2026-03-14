@@ -1000,7 +1000,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select /* comment */ `user`.col from `user` where :__sq1_has_values and foo in ::__sq1"
+            "Query": "select /* comment */ `user`.col from `user` where :__sq1_has_values and foo in ::__sq1_list"
           }
         ]
       },
@@ -2195,7 +2195,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq1_has_values and `user`.id in ::__sq1"
+                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq1_has_values and `user`.id in ::__sq1_list"
               }
             ]
           }
@@ -2249,7 +2249,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from `user` where 1 != 1",
-                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq1_has_values or `user`.id not in ::__sq1)"
+                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq1_has_values or `user`.id not in ::__sq1_list)"
               }
             ]
           }
@@ -4497,7 +4497,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -4717,7 +4717,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -4797,7 +4797,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -4909,7 +4909,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -5127,7 +5127,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -5207,7 +5207,7 @@
               "Sharded": true
             },
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "music_user_map",
             "Inputs": [
@@ -6813,7 +6813,7 @@
                 "FieldQuery": "select :__sq2 /* INT64 */ as a from `user` where 1 != 1",
                 "Query": "select :__sq2 /* INT64 */ as a from `user` where :__sq1_has_values and id in ::__vals",
                 "Values": [
-                  "::__sq1"
+                  "::__sq1_list"
                 ],
                 "Vindex": "user_index"
               }
@@ -6900,7 +6900,7 @@
                 "FieldQuery": "select 1 in ::__sq2_list as a, :__sq2 /* INT64 */ as b from `user` where 1 != 1",
                 "Query": "select 1 in ::__sq2_list as a, :__sq2 /* INT64 */ as b from `user` where :__sq1_has_values and id in ::__vals",
                 "Values": [
-                  "::__sq1"
+                  "::__sq1_list"
                 ],
                 "Vindex": "user_index"
               }

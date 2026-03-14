@@ -1153,7 +1153,7 @@
               "Sharded": false
             },
             "FieldQuery": "select COLLATION_NAME from information_schema.`COLUMNS` as t where 1 != 1",
-            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq1_has_values and `COLUMN_NAME` in ::__sq1"
+            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq1_has_values and `COLUMN_NAME` in ::__sq1_list"
           }
         ]
       }

@@ -144,7 +144,7 @@
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where :__sq1_has_values and `user`.id in ::__vals",
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "user_index"
           }
@@ -498,7 +498,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1 order by `user`.col asc"
+            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1_list order by `user`.col asc"
           }
         ]
       },
@@ -768,7 +768,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1"
+            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1_list"
           }
         ]
       },
@@ -910,7 +910,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1 order by rand()"
+            "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1_list order by rand()"
           }
         ]
       },
@@ -1436,7 +1436,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1"
+                "Query": "select col from `user` where :__sq1_has_values and col in ::__sq1_list"
               }
             ]
           }

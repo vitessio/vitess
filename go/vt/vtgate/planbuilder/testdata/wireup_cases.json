@@ -645,7 +645,7 @@
             "FieldQuery": "select 1 from `user` where 1 != 1",
             "Query": "select 1 from `user` where :__sq1_has_values and id in ::__vals",
             "Values": [
-              "::__sq1"
+              "::__sq1_list"
             ],
             "Vindex": "user_index"
           }
