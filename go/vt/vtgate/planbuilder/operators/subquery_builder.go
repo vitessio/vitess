@@ -75,33 +75,11 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	if subq == nil {
 		return nil
 	}
-	filterType := pulloutOpcodeFromParent(parentExpr)
-	argName := ctx.GetReservedArgumentForSubQuery(subq, filterType)
+	argName := ctx.ReservedVars.ReserveSubQuery()
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
 	return sqInner
-}
-
-// pulloutOpcodeFromParent determines the pullout opcode for a subquery based on its
-// parent expression type. This mirrors the dispatch logic in createSubqueryOp.
-func pulloutOpcodeFromParent(parent sqlparser.Expr) opcode.PulloutOpcode {
-	switch parent := parent.(type) {
-	case *sqlparser.NotExpr:
-		if _, ok := parent.Expr.(*sqlparser.ExistsExpr); ok {
-			return opcode.PulloutNotExists
-		}
-	case *sqlparser.ExistsExpr:
-		return opcode.PulloutExists
-	case *sqlparser.ComparisonExpr:
-		switch parent.Operator {
-		case sqlparser.InOp:
-			return opcode.PulloutIn
-		case sqlparser.NotInOp:
-			return opcode.PulloutNotIn
-		}
-	}
-	return opcode.PulloutValue
 }
 
 // getSubQuery searches for a subquery within the given expression and returns it along with its parent and path.
@@ -414,6 +392,14 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 			allSubqs = append(allSubqs, existing)
 			continue
 		}
+		// Check if an equivalent subquery (same SQL + same opcode) already exists
+		// in this SQB from a previous expression. If so, reuse it instead of
+		// executing the same subquery twice.
+		if existing := sqb.findEquivalent(ctx, subq, filterType); existing != nil {
+			sqe.replaceArgName(argName, existing.ArgName, isDML)
+			allSubqs = append(allSubqs, existing)
+			continue
+		}
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
@@ -431,6 +417,18 @@ func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
 	return nil
 }
 
+// findEquivalent looks for an existing SubQuery in this builder that has an equivalent
+// subquery expression and the same pullout opcode. This deduplicates identical subqueries
+// within a single SQB so the same subquery is only executed once.
+func (sqb *SubQueryBuilder) findEquivalent(ctx *plancontext.PlanningContext, subq *sqlparser.Subquery, filterType opcode.PulloutOpcode) *SubQuery {
+	for _, sq := range sqb.Inner {
+		if sq.FilterType == filterType && ctx.SemTable.EqualsExpr(sq.originalSubquery, subq) {
+			return sq
+		}
+	}
+	return nil
+}
+
 // subqueryExtraction holds the result of extracting subqueries from an expression.
 // Contains the rewritten expression with arguments replacing subqueries, the extracted subquery nodes, their pullout opcodes, and generated argument names.
 type subqueryExtraction struct {
@@ -438,6 +436,33 @@ type subqueryExtraction struct {
 	subq        []*sqlparser.Subquery
 	pullOutCode []opcode.PulloutOpcode
 	cols        []string
+}
+
+// replaceArgName rewrites the extracted expression to use an existing arg name instead of
+// the freshly generated one. This is used when deduplicating equivalent subqueries.
+func (sqe *subqueryExtraction) replaceArgName(oldName, newName string, isDML bool) {
+	if isDML {
+		sqe.new = sqlparser.Rewrite(sqe.new, nil, func(cursor *sqlparser.Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.Argument:
+				if node.Name == oldName {
+					cursor.Replace(sqlparser.NewArgument(newName))
+				}
+			case sqlparser.ListArg:
+				if string(node) == oldName {
+					cursor.Replace(sqlparser.NewListArg(newName))
+				}
+			}
+			return true
+		}).(sqlparser.Expr)
+	} else {
+		sqe.new = sqlparser.Rewrite(sqe.new, nil, func(cursor *sqlparser.Cursor) bool {
+			if node, ok := cursor.Node().(*sqlparser.ColName); ok && node.Name.EqualString(oldName) {
+				cursor.Replace(sqlparser.NewColName(newName))
+			}
+			return true
+		}).(sqlparser.Expr)
+	}
 }
 
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
@@ -464,7 +489,7 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
-		sqName := ctx.GetReservedArgumentForSubQuery(sq, t)
+		sqName := ctx.ReservedVars.ReserveSubQuery()
 		sqe.cols = append(sqe.cols, sqName)
 		sqe.pullOutCode = append(sqe.pullOutCode, t)
 		if isDML {

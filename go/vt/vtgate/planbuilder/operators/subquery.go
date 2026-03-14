@@ -319,9 +319,8 @@ func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	return slices.IndexFunc(ctx.MergedSubqueries, func(msq plancontext.MergedSubquery) bool {
-		return msq.Subquery == sq.originalSubquery
-	}) >= 0
+	_, ok := ctx.MergedSubqueries[sq.ArgName]
+	return ok
 }
 
 // mapExpr rewrites all expressions according to the provided function

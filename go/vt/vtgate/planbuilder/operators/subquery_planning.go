@@ -117,17 +117,16 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
 	for idx, order := range o.Order {
-		for _, msq := range ctx.MergedSubqueries {
-			arg := ctx.GetReservedArgumentForSubQuery(msq.Subquery, msq.FilterType)
+		for arg, subq := range ctx.MergedSubqueries {
 			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
 				switch expr := cursor.Node().(type) {
 				case *sqlparser.ColName:
 					if expr.Name.String() == arg {
-						cursor.Replace(msq.Subquery)
+						cursor.Replace(subq)
 					}
 				case *sqlparser.Argument:
 					if expr.Name == arg {
-						cursor.Replace(msq.Subquery)
+						cursor.Replace(subq)
 					}
 				}
 
@@ -158,32 +157,31 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 		// this is because we might have subqueries inside subqueries, and we need to merge them all
 		merged = false
 		for _, sq := range se {
-			for _, msq := range ctx.MergedSubqueries {
-				if sq.originalSubquery == msq.Subquery {
-					expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-						switch expr := cursor.Node().(type) {
-						case *sqlparser.ColName:
-							if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
-								return true
-							}
-						case *sqlparser.Argument:
-							if expr.Name != sq.ArgName {
-								return true
-							}
-						default:
-							return true
-						}
-						rewritten = true
-						if sq.FilterType == opcode.PulloutExists {
-							cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
-						} else {
-							cursor.Replace(sq.originalSubquery)
-						}
-						merged = true
-						return false
-					}).(sqlparser.Expr)
-				}
+			if _, ok := ctx.MergedSubqueries[sq.ArgName]; !ok {
+				continue
 			}
+			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+						return true
+					}
+				case *sqlparser.Argument:
+					if expr.Name != sq.ArgName {
+						return true
+					}
+				default:
+					return true
+				}
+				rewritten = true
+				if sq.FilterType == opcode.PulloutExists {
+					cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+				} else {
+					cursor.Replace(sq.originalSubquery)
+				}
+				merged = true
+				return false
+			}).(sqlparser.Expr)
 		}
 	}
 	return expr, rewritten
@@ -340,10 +338,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, plancontext.MergedSubquery{
-		Subquery:   inner.originalSubquery,
-		FilterType: inner.FilterType,
-	})
+	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -559,10 +554,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
 	}
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, plancontext.MergedSubquery{
-		Subquery:   subQuery.originalSubquery,
-		FilterType: subQuery.FilterType,
-	})
+	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
 	return op, Rewrote("merged subquery with outer")
 }
 

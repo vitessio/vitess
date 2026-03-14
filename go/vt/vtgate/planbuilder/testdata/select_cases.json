@@ -6889,7 +6889,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq2"
+          "__sq3"
         ],
         "Inputs": [
           {
@@ -6915,7 +6915,7 @@
             "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq1"
+              "__sq2"
             ],
             "Inputs": [
               {
@@ -6971,8 +6971,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1 in ::__sq1 as a, :__sq2 /* INT64 */ as b from `user` where 1 != 1",
-                    "Query": "select 1 in ::__sq1 as a, :__sq2 /* INT64 */ as b from `user` where :__sq_has_values and id in ::__vals",
+                    "FieldQuery": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where 1 != 1",
+                    "Query": "select 1 in ::__sq2 as a, :__sq3 /* INT64 */ as b from `user` where :__sq_has_values and id in ::__vals",
                     "Values": [
                       "::__sq1"
                     ],
