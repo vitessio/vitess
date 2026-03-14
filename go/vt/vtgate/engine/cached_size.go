@@ -1401,10 +1401,12 @@ func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
-	// field SubqueryResult string
-	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
+	// field ScalarResult string
+	size += hack.RuntimeAllocSize(int64(len(cached.ScalarResult)))
+	// field ListResult string
+	size += hack.RuntimeAllocSize(int64(len(cached.ListResult)))
 	// field HasValues string
 	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
 	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive

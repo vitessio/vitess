@@ -993,9 +993,11 @@
       "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutExists",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values"
+          "__sq1_has_values",
+          "__sq1_list",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -1041,7 +1043,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and :__sq_has_values",
+            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and :__sq1_has_values",
             "SysTableTableName": "[table_name:'Music']"
           }
         ]
@@ -1100,9 +1102,10 @@
       "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -1150,7 +1153,7 @@
               "Sharded": false
             },
             "FieldQuery": "select COLLATION_NAME from information_schema.`COLUMNS` as t where 1 != 1",
-            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq_has_values and `COLUMN_NAME` in ::__sq1"
+            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq1_has_values and `COLUMN_NAME` in ::__sq1_list"
           }
         ]
       }

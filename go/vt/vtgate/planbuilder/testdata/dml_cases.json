@@ -4269,8 +4269,10 @@
       "Original": "update user set col = (select id from unsharded)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4313,8 +4315,10 @@
       "Original": "update unsharded set col = (select id from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -4357,8 +4361,10 @@
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -6226,8 +6232,10 @@
       "Original": "delete from user where id = (select id from music where user_id = 1)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -6281,8 +6289,10 @@
       "Original": "delete from user where col = (select id from unsharded)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -6328,8 +6338,10 @@
       "Original": "delete from unsharded where col = (select id from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -6372,16 +6384,20 @@
       "Original": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
+              "__sq2_has_values",
+              "__sq2_list",
               "__sq2"
             ],
             "Inputs": [
@@ -6437,8 +6453,10 @@
       "Original": "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -7124,6 +7142,63 @@
       },
       "TablesUsed": [
         "user.authoritative"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "update with same subquery as scalar value and IN across SET clauses",
+    "query": "update user set col = (select count(*) from user_extra), textcol1 = 1 in (select count(*) from user_extra) where id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select count(*) from user_extra), textcol1 = 1 in (select count(*) from user_extra) where id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutSubquery",
+        "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra lock in share mode"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update `user` set col = :__sq1, textcol1 = 1 in ::__sq1_list where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     },
     "skip_e2e": true

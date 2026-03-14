@@ -46,6 +46,13 @@ type SubQuery struct {
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
 	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
 
+	// Deterministic bind variable names for the three output types.
+	// Set at creation time from ReserveSubQueryGroup().
+	ScalarArgName    string // e.g. "__sq1" — scalar value
+	ListArgName      string // e.g. "__sq1_list" — tuple of values
+	HasValuesArgName string // e.g. "__sq1_has_values" — boolean flag
+	NeedsScalar      bool   // true when any usage is PulloutValue — enforces ≤1 row
+
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
 	outerID semantics.TableSet
@@ -246,11 +253,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		return outer
 	}
 
-	hasValuesArg := func() string {
-		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
-		sq.HasValuesName = s
-		return s
-	}
+	sq.HasValuesName = sq.HasValuesArgName
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		// For IN and NOT IN type filters, we have to add a Expression that checks if we got any rows back or not
@@ -258,10 +261,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		if compExpr, isCompExpr := node.(*sqlparser.ComparisonExpr); sq.FilterType.NeedsListArg() && isCompExpr {
 			if listArg, isListArg := compExpr.Right.(sqlparser.ListArg); isListArg && listArg.String() == sq.ArgName {
 				if sq.FilterType == opcode.PulloutIn {
-					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(hasValuesArg()), compExpr))
+					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(sq.HasValuesArgName), compExpr))
 				} else {
 					cursor.Replace(&sqlparser.OrExpr{
-						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
+						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(sq.HasValuesArgName)),
 						Right: compExpr,
 					})
 				}
@@ -285,11 +288,11 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	switch sq.FilterType {
 	case opcode.PulloutExists:
 		sq.addLimit()
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
+		predicates = append(predicates, sqlparser.NewArgument(sq.HasValuesArgName))
 	case opcode.PulloutNotExists:
 		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(sq.HasValuesArgName)))
 	case opcode.PulloutIn:
 		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
 		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
@@ -319,7 +322,8 @@ func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	return slices.Index(ctx.MergedSubqueries, sq.originalSubquery) >= 0
+	_, ok := ctx.MergedSubqueries[sq.ArgName]
+	return ok
 }
 
 // mapExpr rewrites all expressions according to the provided function

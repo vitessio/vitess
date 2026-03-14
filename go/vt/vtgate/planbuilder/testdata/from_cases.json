@@ -2294,8 +2294,10 @@
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2339,8 +2341,10 @@
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2384,9 +2388,10 @@
       "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2410,7 +2415,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
-            "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values and unsharded_a.col in ::__sq1"
+            "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq1_has_values and unsharded_a.col in ::__sq1_list"
           }
         ]
       },
@@ -2430,9 +2435,10 @@
       "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq_has_values",
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2450,7 +2456,7 @@
           {
             "InputName": "Outer",
             "OperatorType": "Filter",
-            "Predicate": ":__sq_has_values and `user`.col in ::__sq1",
+            "Predicate": ":__sq1_has_values and `user`.col in ::__sq1_list",
             "ResultColumns": 1,
             "Inputs": [
               {
@@ -2504,9 +2510,10 @@
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -2524,7 +2531,7 @@
               {
                 "InputName": "Outer",
                 "OperatorType": "Filter",
-                "Predicate": ":__sq_has_values and `user`.col in ::__sq1",
+                "Predicate": ":__sq1_has_values and `user`.col in ::__sq1_list",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
@@ -3386,8 +3393,10 @@
       "Original": "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq2_has_values",
+          "__sq2_list",
           "__sq2"
         ],
         "Inputs": [
@@ -3411,9 +3420,10 @@
           {
             "InputName": "Outer",
             "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
+            "Variant": "PulloutSubquery",
             "PulloutVars": [
-              "__sq_has_values",
+              "__sq1_has_values",
+              "__sq1_list",
               "__sq1"
             ],
             "Inputs": [
@@ -3437,9 +3447,9 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where :__sq_has_values and id in ::__vals and col = :__sq2",
+                "Query": "select id from `user` where :__sq1_has_values and id in ::__vals and col = :__sq2",
                 "Values": [
-                  "::__sq1"
+                  "::__sq1_list"
                 ],
                 "Vindex": "user_index"
               }

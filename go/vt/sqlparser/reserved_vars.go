@@ -76,6 +76,44 @@ func (r *ReservedVars) ReserveVariable(compliantName string) string {
 	}
 }
 
+// SubQueryGroup holds the three deterministic bind variable names for an uncorrelated subquery.
+type SubQueryGroup struct {
+	Scalar    string // e.g. "__sq1" — scalar value (first row, first col)
+	List      string // e.g. "__sq1_list" — tuple of all first-col values
+	HasValues string // e.g. "__sq1_has_values" — boolean flag (0/1)
+}
+
+var (
+	subQueryListSuffix      = []byte("_list")
+	subQueryHasValuesSuffix = []byte("_has_values")
+)
+
+// ReserveSubQueryGroup reserves all three bind variable names for an uncorrelated subquery
+// atomically (scalar, list, has_values). Returns a SubQueryGroup with the reserved names.
+func (r *ReservedVars) ReserveSubQueryGroup() SubQueryGroup {
+	for {
+		r.sqNext++
+		scalar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		list := append(append([]byte(nil), scalar...), subQueryListSuffix...)
+		hasValues := append(append([]byte(nil), scalar...), subQueryHasValuesSuffix...)
+
+		_, scalarOK := r.reserved[string(scalar)]
+		_, listOK := r.reserved[string(list)]
+		_, hasValuesOK := r.reserved[string(hasValues)]
+
+		if !scalarOK && !listOK && !hasValuesOK {
+			r.reserved[string(scalar)] = struct{}{}
+			r.reserved[string(list)] = struct{}{}
+			r.reserved[string(hasValues)] = struct{}{}
+			return SubQueryGroup{
+				Scalar:    string(scalar),
+				List:      string(list),
+				HasValues: string(hasValues),
+			}
+		}
+	}
+}
+
 // ReserveSubQuery returns the next argument name to replace subquery with pullout value.
 func (r *ReservedVars) ReserveSubQuery() string {
 	for {

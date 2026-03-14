@@ -87,7 +87,8 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		}
 	}
 
-	op := createProjectionFromSelect(ctx, horizon)
+	sqc := &SubQueryBuilder{}
+	op := createProjectionFromSelect(ctx, horizon, sqc)
 	if qp.HasAggr {
 		extracted = append(extracted, "Aggregation")
 	} else {
@@ -104,8 +105,6 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	if qp.HasWindow {
 		// Window functions are evaluated after HAVING but before DISTINCT, ORDER BY, and LIMIT.
 		// SQL execution order: Projection → Aggregation → HAVING → Window → Distinct → Order → Limit
-		// We wrap the current operator (which is either a Projection or Aggregation)
-		// with the Window operator to handle these calculations.
 		op = newWindow(op, qp)
 		extracted = append(extracted, "Window")
 	}
@@ -116,7 +115,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = expandOrderBy(ctx, op, qp, horizon.Alias)
+		op = expandOrderBy(ctx, op, qp, horizon.Alias, sqc)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -128,9 +127,8 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
-func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string) Operator {
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string, sqc *SubQueryBuilder) Operator {
 	var newOrder []OrderBy
-	sqc := &SubQueryBuilder{}
 	proj, ok := op.(*Projection)
 
 	for _, expr := range qp.OrderExprs {
@@ -192,7 +190,7 @@ func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection,
 	return orderBy
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon, sqc *SubQueryBuilder) Operator {
 	qp := horizon.getQP(ctx)
 
 	var dt *DerivedTable
@@ -209,7 +207,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		return createProjectionWithAggr(ctx, qp, dt, horizon)
 	}
 
-	projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
+	projX := createProjectionWithoutAggr(ctx, qp, horizon.src(), sqc)
 	projX.DT = dt
 	return projX
 }
@@ -322,7 +320,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) O
 	return p
 }
 
-func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator) *Projection {
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator, sqc *SubQueryBuilder) *Projection {
 	// first we need to check if we have all columns or there are still unexpanded stars
 	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
 		ae, ok := from.Col.(*sqlparser.AliasedExpr)
@@ -337,7 +335,6 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	}
 
 	proj := newAliasedProjection(nil)
-	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for _, ae := range aes {
 		org := ctx.SemTable.Clone(ae).(*sqlparser.AliasedExpr)
