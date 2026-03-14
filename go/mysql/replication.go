@@ -42,6 +42,10 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "binlog position %d is too large, it must fit into 32 bits", binlogPos)
 	}
 	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
 	length := 1 + // ComBinlogDump
 		4 + // binlog-pos
 		2 + // flags
@@ -84,6 +88,10 @@ func (c *Conn) AnalyzeSemiSyncAckRequest(buf []byte) (strippedBuf []byte, ackReq
 // sidBlock must be the result of a gtidSet.SIDBlock() function.
 func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16, sidBlock []byte) error {
 	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
 	length := 1 + // ComBinlogDumpGTID
 		2 + // flags
 		4 + // server-id
@@ -112,6 +120,10 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 // see https://dev.mysql.com/doc/internals/en/semi-sync-ack-packet.html
 func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
 	length := 1 + // ComSemiSyncAck
 		8 + // binlog-pos
 		len(binlogFilename) // binlog-filename

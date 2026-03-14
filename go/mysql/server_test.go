@@ -2121,6 +2121,100 @@ func TestZstdRoundTrip(t *testing.T) {
 	utils.MustMatch(t, result, selectRowsResult)
 }
 
+func TestZstdRoundTripTLS(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := newZstdTestHandler()
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	root := t.TempDir()
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		SslMode:               vttls.VerifyIdentity,
+		SslCa:                 path.Join(root, "ca-cert.pem"),
+		SslCert:               path.Join(root, "client-cert.pem"),
+		SslKey:                path.Join(root, "client-key.pem"),
+		ServerName:            "server.example.com",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  3,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	snap := <-th.ready
+	assert.True(t, snap.zstdActive, "server should have zstd active for TLS+zstd connection")
+	assert.Equal(t, 3, snap.zstdCompressionLevel)
+
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, result, selectRowsResult)
+}
+
+func TestZstdCompressedPingAfterQuery(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false, true)
+	require.NoError(t, err)
+	host, port := getHostPort(t, l.Addr())
+	go l.Accept()
+	params := &ConnParams{
+		Host:                  host,
+		Port:                  port,
+		Uname:                 "user1",
+		Pass:                  "password1",
+		EnableZstdCompression: true,
+		ZstdCompressionLevel:  3,
+	}
+	defer cleanupListener(ctx, l, params)
+
+	conn, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, result, selectRowsResult)
+
+	// Ping after a compressed query should reset the frame sequence properly.
+	require.NoError(t, conn.Ping(), "Ping after compressed query must not fail with sequence mismatch")
+
+	result, err = conn.ExecuteFetch("select rows", 10000, true)
+	require.NoError(t, err, "query after compressed Ping must succeed")
+	utils.MustMatch(t, result, selectRowsResult)
+}
+
 func TestZstdMultipleQueriesSameConnection(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
@@ -2193,4 +2287,38 @@ func TestZstdRoundTripMysqlCli(t *testing.T) {
 	assert.Contains(t, output, "nice name")
 	assert.Contains(t, output, "nicer name")
 	assert.Contains(t, output, "2 rows in set")
+}
+
+func TestHandshakeZstdMissingLevelByte(t *testing.T) {
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1", UserData: "userData1"}}
+	defer authServer.close()
+
+	l := &Listener{
+		authServer:            authServer,
+		EnableZstdCompression: true,
+	}
+	c := newConn(testConn{}, 0, 0)
+
+	flags := uint32(CapabilityClientProtocol41 |
+		CapabilityClientSecureConnection |
+		CapabilityClientPluginAuth |
+		CapabilityClientCompress |
+		CapabilityClientZstdCompressionAlgorithm)
+
+	var buf []byte
+	buf = append(buf, byte(flags), byte(flags>>8), byte(flags>>16), byte(flags>>24))
+	buf = append(buf, 0, 0, 0, 0)          // max packet size
+	buf = append(buf, 0)                   // charset
+	buf = append(buf, make([]byte, 23)...) // reserved
+	buf = append(buf, []byte("user1")...)
+	buf = append(buf, 0) // null terminator
+	buf = append(buf, 0) // auth-response length = 0
+	buf = append(buf, []byte("mysql_native_password")...)
+	buf = append(buf, 0) // null terminator
+	// Deliberately omit the zstd_compression_level byte.
+
+	_, _, _, err := l.parseClientHandshakePacket(c, true, buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "zstd_compression_level byte missing")
 }

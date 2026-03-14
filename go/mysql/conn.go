@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -842,40 +841,21 @@ func (c *Conn) writePacketUncompressed(data []byte) error {
 	}
 }
 
-// writePacketCompressed does the same job as writePacketUncompressed but wraps everything in the compressed frame format. We build the logical packets (4-byte headers, using c.sequence),then compress them and ship each chunk with a 7-byte frame header (using zstd.writeSequence).
-// If compression actually makes the data bigger (common for tiny packets), we send the payload as-is and set uncompressedLen=0 in the frame header(the MySQL protocol allows this).
+// writePacketCompressed does the same job as writePacketUncompressed but wraps each chunk in
+// compressed frames. We overlay the 4-byte logical header in-place (same trick as the
+// uncompressed path) so we can compress a contiguous [header+payload] slice without copying
+// the entire packet into an intermediate buffer. This keeps peak memory close to the
+// uncompressed write path.
+//
+// When a logical chunk (header + payload) exceeds MaxPacketSize we split it across multiple
+// compressed frames so each frame's uncompressed length fits in the 3-byte header field.
 func (c *Conn) writePacketCompressed(data []byte) error {
-	var uncompressed bytes.Buffer
-
 	index := 0
 	dataLength := len(data) - packetHeaderSize
 	seq := c.sequence
 
-	for {
-		toBeSent := min(dataLength, MaxPacketSize)
-		// Build the standard 4-byte MySQL packet header for this chunk.
-		uncompressed.WriteByte(byte(toBeSent))
-		uncompressed.WriteByte(byte(toBeSent >> 8))
-		uncompressed.WriteByte(byte(toBeSent >> 16))
-		uncompressed.WriteByte(seq)
-		seq++
-		uncompressed.Write(data[packetHeaderSize+index : packetHeaderSize+index+toBeSent])
-
-		dataLength -= toBeSent
-		if dataLength == 0 {
-			if toBeSent == MaxPacketSize {
-				uncompressed.WriteByte(0)
-				uncompressed.WriteByte(0)
-				uncompressed.WriteByte(0)
-				uncompressed.WriteByte(seq)
-				seq++
-			}
-			break
-		}
-		index += toBeSent
-	}
-	c.sequence = seq
-
+	// Hold bufMu for the whole write so the 7-byte header and payload for each frame stay
+	// back-to-back and we don't interleave with other goroutines.
 	c.bufMu.Lock()
 
 	var w io.Writer = c.conn
@@ -890,26 +870,65 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 		w = c.conn
 	}
 
-	payload := uncompressed.Bytes()
+	var saved [packetHeaderSize]byte
 	var hdr [compressedPacketHeaderSize]byte
 
-	for offset := 0; offset < len(payload); {
-		remaining := len(payload) - offset
-		chunkSize := min(remaining, MaxPacketSize)
-		chunk := payload[offset : offset+chunkSize]
+	for {
+		toBeSent := min(dataLength, MaxPacketSize)
 
-		// We reuse writeScratch here so EncodeAll doesn't allocate a new buffer every time.
-		c.zstd.writeScratch = c.zstd.encoder.EncodeAll(chunk, c.zstd.writeScratch[:0])
+		// Overlay the 4-byte logical header in place, just like writePacketUncompressed does.
+		copy(saved[:], data[index:index+packetHeaderSize])
+		data[index] = byte(toBeSent)
+		data[index+1] = byte(toBeSent >> 8)
+		data[index+2] = byte(toBeSent >> 16)
+		data[index+3] = seq
+		seq++
+
+		chunk := data[index : index+packetHeaderSize+toBeSent]
+		err := c.writeCompressedFrames(w, hdr[:], chunk)
+
+		// Always restore the original bytes so we don't corrupt the caller's buffer.
+		copy(data[index:index+packetHeaderSize], saved[:])
+		if err != nil {
+			return err
+		}
+
+		dataLength -= toBeSent
+		if dataLength == 0 {
+			if toBeSent == MaxPacketSize {
+				// Protocol requires an empty packet when the last chunk was exactly MaxPacketSize.
+				var empty [packetHeaderSize]byte
+				empty[3] = seq
+				seq++
+				if err := c.writeCompressedFrames(w, hdr[:], empty[:]); err != nil {
+					return err
+				}
+			}
+			break
+		}
+		index += toBeSent
+	}
+	c.sequence = seq
+	return nil
+}
+
+// writeCompressedFrames sends chunk as one or more compressed frames. When chunk fits in a
+// single frame (len <= MaxPacketSize) we compress and send it directly. When it's larger
+// (happens when a logical packet is exactly MaxPacketSize and the 4-byte header pushes it
+// over) we split it into MaxPacketSize-sized frames so the 3-byte length fields stay valid.
+func (c *Conn) writeCompressedFrames(w io.Writer, hdr []byte, chunk []byte) error {
+	for offset := 0; offset < len(chunk); {
+		frameSize := min(len(chunk)-offset, MaxPacketSize)
+		frame := chunk[offset : offset+frameSize]
+
+		c.zstd.writeScratch = c.zstd.encoder.EncodeAll(frame, c.zstd.writeScratch[:0])
 
 		compressedLen := uint32(len(c.zstd.writeScratch))
-		uncompressedLen := uint32(len(chunk))
+		uncompressedLen := uint32(len(frame))
 
-		// If compression made things bigger (happens a lot with small packets), just send
-		// the raw data instead. The protocol uses uncompressedLen=0 to signal this.
 		var framePayload []byte
 		if compressedLen >= uncompressedLen {
-			// Passthrough — send raw, tell the other side via uncompressedLen=0.
-			framePayload = chunk
+			framePayload = frame
 			compressedLen = uncompressedLen
 			uncompressedLen = 0
 		} else {
@@ -920,17 +939,17 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "frame payload length exceeds 3-byte max")
 		}
 
-		writeCompressedPacketHeader(hdr[:], compressedLen, uncompressedLen, c.zstd.writeSequence)
+		writeCompressedPacketHeader(hdr, compressedLen, uncompressedLen, c.zstd.writeSequence)
 		c.zstd.writeSequence++
 
-		if _, err := w.Write(hdr[:]); err != nil {
+		if _, err := w.Write(hdr[:compressedPacketHeaderSize]); err != nil {
 			return vterrors.Wrapf(err, "Write(compressed header) failed")
 		}
 		if _, err := w.Write(framePayload); err != nil {
 			return vterrors.Wrapf(err, "Write(compressed payload) failed")
 		}
 
-		offset += chunkSize
+		offset += frameSize
 	}
 	return nil
 }

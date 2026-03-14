@@ -867,14 +867,15 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// We always consume this byte when the flag is set so our parser stays in sync with the packet.
 	// Compression only kicks in when the client sends BOTH CLIENT_COMPRESS and
 	// CLIENT_ZSTD_COMPRESSION_ALGORITHM(that's the MySQL 8.0 protocol requirement).
-	if firstTime && clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
-		level := zstdCompressionLevelDefault
-		if pos < len(data) {
-			if levelByte, _, ok := readByte(data, pos); ok {
-				level = clampZstdLevel(int(levelByte))
-			}
+	if clientFlags&CapabilityClientZstdCompressionAlgorithm != 0 {
+		if pos >= len(data) {
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: CLIENT_ZSTD_COMPRESSION_ALGORITHM set but zstd_compression_level byte missing")
 		}
-		// Both capability bits present and the listener opted in (let's do it).
+		levelByte, _, ok := readByte(data, pos)
+		if !ok {
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read zstd_compression_level")
+		}
+		level := clampZstdLevel(int(levelByte))
 		if l.EnableZstdCompression && clientFlags&CapabilityClientCompress != 0 {
 			c.zstdCompressionLevel = level
 			c.wantZstdCompression = true

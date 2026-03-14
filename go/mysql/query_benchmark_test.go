@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"net"
 	"strings"
@@ -145,4 +146,49 @@ func BenchmarkParallelMediumQueriesWithReadBufferPooling(b *testing.B) {
 
 func BenchmarkParallelRandomQueriesWithReadBufferPooling(b *testing.B) {
 	benchmarkQuery(b, 10, "", mkReadBufferPoolingCfg)
+}
+
+func BenchmarkWritePacketCompressed(b *testing.B) {
+	for _, size := range []int{1024, 64 * 1024, 1024 * 1024} {
+		name := fmt.Sprintf("%dB", size)
+		b.Run(name, func(b *testing.B) {
+			srvConn, cliConn := net.Pipe()
+			c := newConn(cliConn, 0, 0)
+			c.wantZstdCompression = true
+			c.zstdCompressionLevel = zstdCompressionLevelDefault
+			if err := c.initZstdCompression(); err != nil {
+				b.Fatal(err)
+			}
+
+			payload := make([]byte, packetHeaderSize+size)
+			for i := packetHeaderSize; i < len(payload); i++ {
+				payload[i] = byte(i)
+			}
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				buf := make([]byte, 32*1024)
+				for {
+					if _, err := srvConn.Read(buf); err != nil {
+						return
+					}
+				}
+			}()
+
+			b.SetBytes(int64(size))
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				c.sequence = 0
+				c.zstd.writeSequence = 0
+				if err := c.writePacket(payload); err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			c.Close()
+			<-done
+		})
+	}
 }

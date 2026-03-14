@@ -182,8 +182,11 @@ func ConnectWithAttributes(ctx context.Context, params *ConnParams, attributes C
 
 // Ping implements mysql ping command.
 func (c *Conn) Ping() error {
-	// This is a new command, need to reset the sequence.
 	c.sequence = 0
+	if c.zstd != nil {
+		c.zstd.writeSequence = 0
+		c.zstd.readSequence = 0
+	}
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComPing
 
