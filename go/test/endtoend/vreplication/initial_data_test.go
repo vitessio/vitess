@@ -97,17 +97,16 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 
 	// Now let's insert the records using the sequence
 	// values we reserved.
-	sql := "insert into customer (cid, name) values "
-	var sqlSb101 strings.Builder
+	var sql strings.Builder
+	sql.WriteString("insert into customer (cid, name) values ")
 	for i := 1; i <= numCustomers; i++ {
-		sqlSb101.WriteString(fmt.Sprintf("(%d, 'customer%d')", cid, i))
+		fmt.Fprintf(&sql, "(%d, 'customer%d')", cid, i)
 		if i != numCustomers {
-			sqlSb101.WriteString(",")
+			sql.WriteString(",")
 		}
 		cid++
 	}
-	sql += sqlSb101.String()
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, sql)
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, sql.String())
 }
 
 func insertMoreProducts(t *testing.T) {

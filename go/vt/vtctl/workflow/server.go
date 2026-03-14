@@ -382,6 +382,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("active_only", req.ActiveOnly)
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
+	span.Annotate("summary_only", req.SummaryOnly)
 
 	w := &workflowFetcher{
 		ts:     s.ts,
@@ -403,6 +404,37 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	workflows, err := w.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
 	if err != nil {
 		return nil, err
+	}
+
+	if req.SummaryOnly {
+		var (
+			rec concurrency.AllErrorRecorder
+			wg  sync.WaitGroup
+		)
+
+		for _, workflow := range workflows {
+			wg.Add(1)
+			go func(workflow *vtctldatapb.Workflow) {
+				defer wg.Done()
+
+				targetKeyspace := req.Keyspace
+				if workflow.Target != nil && workflow.Target.Keyspace != "" {
+					targetKeyspace = workflow.Target.Keyspace
+				}
+
+				_, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow.Name)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+				workflow.Status.TrafficState = state.String()
+			}(workflow)
+		}
+
+		wg.Wait()
+		if rec.HasErrors() {
+			return nil, rec.Error()
+		}
 	}
 
 	return &vtctldatapb.GetWorkflowsResponse{
