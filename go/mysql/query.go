@@ -1069,10 +1069,20 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 		return nil
 	}
 
-	c.bufMu.Lock()
-	defer c.bufMu.Unlock()
+	var w *bufio.Writer
 
-	w := c.bufferedWriter
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "writeRows: buffered writer is not initialized")
+	}
+
 	for _, row := range result.Rows {
 		if err := c.writeRow(w, row); err != nil {
 			return err
