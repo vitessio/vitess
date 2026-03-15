@@ -67,10 +67,31 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "${RGW_PORT:-}" ]; then echo "RGW_PORT not set"; exit 1; fi
-        sudo radosgw-admin user create --uid=vitess --display-name=Vitess || true
-        sudo radosgw-admin key create --uid=vitess --key-type=s3 \
-          --access-key=ACCESS_KEY --secret-key=SECRET_KEY || true
-        sudo radosgw-admin bucket create --bucket=vitess-test --uid=vitess || true
+
+        if ! output=$(sudo radosgw-admin user create --uid=vitess --display-name=Vitess 2>&1); then
+          if echo "$output" | grep -q "user: vitess exists"; then
+            echo "User already exists, skipping"
+          else
+            echo "Failed to create user: $output"; exit 1
+          fi
+        fi
+
+        if ! output=$(sudo radosgw-admin key create --uid=vitess --key-type=s3 \
+            --access-key=ACCESS_KEY --secret-key=SECRET_KEY 2>&1); then
+          if echo "$output" | grep -q "key already exists"; then
+            echo "Key already exists, skipping"
+          else
+            echo "Failed to create key: $output"; exit 1
+          fi
+        fi
+
+        if ! output=$(sudo radosgw-admin bucket create --bucket=vitess-test --uid=vitess 2>&1); then
+          if echo "$output" | grep -q "BucketAlreadyExists\|BucketAlreadyOwnedByYou"; then
+            echo "Bucket already exists, skipping"
+          else
+            echo "Failed to create bucket: $output"; exit 1
+          fi
+        fi
 
     - name: Detect RGW endpoint
       id: endpoint

@@ -1217,6 +1217,10 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		cluster.TopoPort,
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
+	if cluster.S3BackupConfig != nil {
+		cluster.VtbackupProcess.BackupStorageImplementation = "s3"
+		cluster.VtbackupProcess.S3BackupConfig = cluster.S3BackupConfig
+	}
 	return cluster.VtbackupProcess.Setup()
 }
 

@@ -245,7 +245,9 @@
       "Tags": [
         "upgrade_downgrade_backups"
       ],
-      "Needs": []
+      "Needs": [
+        "microceph"
+      ]
     },
     "backup_xtrabackup": {
       "File": "unused.go",

@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
+	"vitess.io/vitess/go/test/endtoend/backup/s3"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -167,6 +168,38 @@ func TestTabletBackupOnly(t *testing.T) {
 	firstBackupTest(t, true)
 
 	tearDown(t, false)
+}
+
+// TestVtBackupS3MicroCeph verifies that StartVtbackup propagates
+// LocalProcessCluster.S3BackupConfig to the vtbackup process.
+// Skipped when MicroCeph is not configured (AWS_ENDPOINT unset).
+func TestVtBackupS3MicroCeph(t *testing.T) {
+	cfg := s3.SkipIfMicroCephUnavailable(t)
+	if cfg == nil {
+		return
+	}
+	os.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
+	t.Cleanup(func() {
+		os.Unsetenv("AWS_ACCESS_KEY_ID")
+		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	})
+
+	localCluster.S3BackupConfig = &cluster.S3BackupConfig{
+		Endpoint:       cfg.Endpoint,
+		Bucket:         cfg.Bucket,
+		Region:         cfg.Region,
+		ForcePathStyle: true,
+	}
+	t.Cleanup(func() { localCluster.S3BackupConfig = nil })
+
+	err := localCluster.StartVtbackup(newInitDBFile, true, keyspaceName, shardName, cell,
+		"--allow_first_backup",
+		"--db-credentials-file", dbCredentialFile)
+	require.NoError(t, err)
+
+	assert.Equal(t, "s3", localCluster.VtbackupProcess.BackupStorageImplementation)
+	assert.NotNil(t, localCluster.VtbackupProcess.S3BackupConfig)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {
