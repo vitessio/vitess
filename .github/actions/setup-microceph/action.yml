@@ -25,6 +25,18 @@ runs:
         cd microceph-snap-cache
         snap download microceph --channel=squid/stable
 
+    - name: Fix libeatmydata preload for snap confinement
+      shell: bash
+      run: |
+        # GitHub Actions runners ship /etc/ld.so.preload referencing
+        # libeatmydata.so with an unexpanded ${LIB}. Snap-confined
+        # services (like microceph OSD) inherit this and fail to start.
+        # Truncate the file AND restart snapd so it picks up the clean
+        # environment before any snap services are spawned.
+        sudo truncate -s 0 /etc/ld.so.preload
+        sudo systemctl restart snapd
+        sudo snap wait system seed.loaded
+
     - name: Install MicroCeph
       shell: bash
       run: |
@@ -34,14 +46,6 @@ runs:
         else
           sudo snap install microceph --channel=squid/stable
         fi
-
-    - name: Clear ld.so.preload
-      shell: bash
-      run: |
-        # GitHub Actions runners ship /etc/ld.so.preload referencing
-        # libeatmydata.so with an unexpanded ${LIB}. Snap-confined
-        # services (like microceph OSD) inherit this and fail to start.
-        sudo truncate -s 0 /etc/ld.so.preload
 
     - name: Bootstrap cluster
       shell: bash
@@ -75,31 +79,10 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "${RGW_PORT:-}" ]; then echo "RGW_PORT not set"; exit 1; fi
-
-        if ! output=$(sudo radosgw-admin user create --uid=vitess --display-name=Vitess 2>&1); then
-          if echo "$output" | grep -q "user: vitess exists"; then
-            echo "User already exists, skipping"
-          else
-            echo "Failed to create user: $output"; exit 1
-          fi
-        fi
-
-        if ! output=$(sudo radosgw-admin key create --uid=vitess --key-type=s3 \
-            --access-key=ACCESS_KEY --secret-key=SECRET_KEY 2>&1); then
-          if echo "$output" | grep -q "key already exists"; then
-            echo "Key already exists, skipping"
-          else
-            echo "Failed to create key: $output"; exit 1
-          fi
-        fi
-
-        if ! output=$(sudo radosgw-admin bucket create --bucket=vitess-test --uid=vitess 2>&1); then
-          if echo "$output" | grep -q "BucketAlreadyExists\|BucketAlreadyOwnedByYou"; then
-            echo "Bucket already exists, skipping"
-          else
-            echo "Failed to create bucket: $output"; exit 1
-          fi
-        fi
+        sudo radosgw-admin user create --uid=vitess --display-name=Vitess
+        sudo radosgw-admin key create --uid=vitess --key-type=s3 \
+          --access-key=ACCESS_KEY --secret-key=SECRET_KEY
+        sudo radosgw-admin bucket create --bucket=vitess-test --uid=vitess
 
     - name: Detect RGW endpoint
       id: endpoint
