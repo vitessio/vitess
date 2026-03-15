@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -85,10 +86,12 @@ type Bench struct {
 	lock sync.RWMutex
 
 	Rows    *stats.Counter
+	Errors  *stats.CountersWithSingleLabel
 	Bytes   *stats.Counter
 	Timings *stats.Timings
 
-	TotalTime time.Duration
+	ContinueOnError bool
+	TotalTime       time.Duration
 }
 
 type benchThread struct {
@@ -107,6 +110,7 @@ func NewBench(threads, count int, cp ConnParams, query string) *Bench {
 		ConnParams: cp,
 		Query:      query,
 		Rows:       stats.NewCounter("", ""),
+		Errors:     stats.NewCountersWithSingleLabel("", "", "code"),
 		Timings:    stats.NewTimings("", "", ""),
 	}
 	return &bench
@@ -230,6 +234,10 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 		b.Timings.Record("query", start)
 		if err != nil {
 			log.Error(fmt.Sprintf("query error: %v", err))
+			b.Errors.Add(vterrors.Code(err).String(), 1)
+			if b.ContinueOnError {
+				continue
+			}
 			break
 		} else {
 			b.Rows.Add(int64(len(result.Rows)))

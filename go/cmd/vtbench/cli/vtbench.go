@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/logutil"
@@ -89,6 +91,7 @@ var (
 	deadline                        = 5 * time.Minute
 	threads                         = 2
 	count                           = 1000
+	continueOnError                 bool
 
 	Main = &cobra.Command{
 		Use:   "vtbench",
@@ -149,6 +152,7 @@ func init() {
 	Main.Flags().StringVar(&sql, "sql", sql, "SQL statement to execute")
 	Main.Flags().IntVar(&threads, "threads", threads, "Number of parallel threads to run")
 	Main.Flags().IntVar(&count, "count", count, "Number of queries per thread")
+	Main.Flags().BoolVar(&continueOnError, "continue-on-error", continueOnError, "Continue running on query errors instead of stopping")
 
 	Main.MarkFlagRequired("sql")
 
@@ -214,6 +218,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	b := vtbench.NewBench(threads, count, connParams, sql)
+	b.ContinueOnError = continueOnError
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), deadline)
 	defer cancel()
@@ -226,6 +231,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Average Rows Returned: %d\n", b.Rows.Get()/int64(b.Threads*b.Count))
+	printSortedErrors(b.Errors)
 	fmt.Printf("Average Query Time: %v\n", time.Duration(b.Timings.Time()/b.Timings.Count()))
 	fmt.Printf("Total Test Time: %v\n", b.TotalTime)
 	fmt.Printf("QPS (Per Thread): %v\n", float64(b.Count)/b.TotalTime.Seconds())
@@ -246,4 +252,21 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func printSortedErrors(errStats *stats.CountersWithSingleLabel) {
+	counts := errStats.Counts()
+	if len(counts) == 0 {
+		fmt.Printf("Errors: 0\n")
+		return
+	}
+	fmt.Printf("Errors:\n")
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Printf("  %s: %d\n", k, counts[k])
+	}
 }
