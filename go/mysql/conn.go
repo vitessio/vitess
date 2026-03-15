@@ -858,7 +858,7 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 	// back-to-back and we don't interleave with other goroutines.
 	c.bufMu.Lock()
 
-	var w io.Writer = c.conn
+	var w io.Writer
 	if c.bufferedWriter != nil {
 		w = c.bufferedWriter
 		defer func() {
