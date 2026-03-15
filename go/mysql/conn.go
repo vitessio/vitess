@@ -867,7 +867,6 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 		}()
 	} else {
 		c.bufMu.Unlock()
-		w = c.conn
 	}
 
 	var saved [packetHeaderSize]byte
