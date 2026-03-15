@@ -35,6 +35,14 @@ runs:
           sudo snap install microceph --channel=squid/stable
         fi
 
+    - name: Clear ld.so.preload
+      shell: bash
+      run: |
+        # GitHub Actions runners ship /etc/ld.so.preload referencing
+        # libeatmydata.so with an unexpanded ${LIB}. Snap-confined
+        # services (like microceph OSD) inherit this and fail to start.
+        sudo truncate -s 0 /etc/ld.so.preload
+
     - name: Bootstrap cluster
       shell: bash
       run: |
