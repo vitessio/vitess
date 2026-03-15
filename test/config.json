@@ -224,7 +224,7 @@
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "21",
+      "Shard": "backup_microceph",
       "Tags": [],
       "Needs": [
         "microceph"

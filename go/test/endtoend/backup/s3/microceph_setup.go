@@ -19,13 +19,8 @@ package s3
 import (
 	"os"
 	"testing"
-)
 
-const (
-	microcephBucket    = "vitess-test"
-	microcephRegion    = "us-east-1"
-	microcephAccessKey = "ACCESS_KEY"
-	microcephSecretKey = "SECRET_KEY"
+	"github.com/stretchr/testify/require"
 )
 
 // MicroCephConfig holds endpoint and credentials for a MicroCeph RGW (S3) instance.
@@ -48,21 +43,13 @@ func SkipIfMicroCephUnavailable(t *testing.T) *MicroCephConfig {
 		return nil
 	}
 	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	if accessKey == "" {
-		accessKey = microcephAccessKey
-	}
+	require.NotEmpty(t, accessKey, "AWS_ENDPOINT is set but AWS_ACCESS_KEY_ID is missing")
 	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	if secretKey == "" {
-		secretKey = microcephSecretKey
-	}
+	require.NotEmpty(t, secretKey, "AWS_ENDPOINT is set but AWS_SECRET_ACCESS_KEY is missing")
 	bucket := os.Getenv("AWS_BUCKET")
-	if bucket == "" {
-		bucket = microcephBucket
-	}
+	require.NotEmpty(t, bucket, "AWS_ENDPOINT is set but AWS_BUCKET is missing")
 	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = microcephRegion
-	}
+	require.NotEmpty(t, region, "AWS_ENDPOINT is set but AWS_REGION is missing")
 	return &MicroCephConfig{
 		Endpoint:  endpoint,
 		AccessKey: accessKey,
