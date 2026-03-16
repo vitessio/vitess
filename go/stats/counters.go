@@ -22,6 +22,9 @@ import (
 	"maps"
 	"strings"
 	"sync"
+	"sync/atomic"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // counters is similar to expvar.Map, except that it doesn't allow floats.
@@ -155,25 +158,36 @@ func (c *CountersWithSingleLabel) ResetAll() {
 	c.reset()
 }
 
+// separatorByte is used between labels in hash computation.
+// Using 0xff avoids collisions with any valid UTF-8 label value.
+var separatorByte = []byte{0xff}
+
+// counterEntry stores a single label combination's counter.
+type counterEntry struct {
+	names []string     // safe label values, for collision disambiguation
+	key   string       // dot-joined key, computed once, used for Counts() export
+	value atomic.Int64 // the actual counter
+}
+
 // CountersWithMultiLabels is a multidimensional counters implementation.
-// Internally, each tuple of dimensions ("labels") is stored as a single
-// label value where all label values are joined with ".".
+// Internally, each unique tuple of label values is stored once and looked
+// up via xxhash, making Add on existing combinations zero-allocation.
 type CountersWithMultiLabels struct {
-	counters
+	mu             sync.RWMutex
+	entries        map[uint64][]*counterEntry // hash -> collision chain
 	labels         []string
 	combinedLabels []bool
+	help           string
 }
 
 // NewCountersWithMultiLabels creates a new CountersWithMultiLabels
 // instance, and publishes it if name is set.
 func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWithMultiLabels {
 	t := &CountersWithMultiLabels{
-		counters: counters{
-			counts: make(map[string]int64),
-			help:   help,
-		},
+		entries:        make(map[uint64][]*counterEntry),
 		labels:         labels,
 		combinedLabels: make([]bool, len(labels)),
+		help:           help,
 	}
 	for i, label := range labels {
 		t.combinedLabels[i] = IsDimensionCombined(label)
@@ -185,18 +199,98 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 	return t
 }
 
+// hashLabels computes an xxhash of the label values, applying safeLabel
+// normalization and combined-label substitution to match safeJoinLabels
+// semantics. The xxhash.Digest is stack-allocated (zero allocation).
+func (mc *CountersWithMultiLabels) hashLabels(names []string) uint64 {
+	var d xxhash.Digest
+	for i, name := range names {
+		if i > 0 {
+			_, _ = d.Write(separatorByte)
+		}
+		if mc.combinedLabels[i] {
+			_, _ = d.WriteString(StatsAllStr)
+		} else {
+			_, _ = d.WriteString(safeLabel(name))
+		}
+	}
+	return d.Sum64()
+}
+
+// namesMatch compares stored safe names against incoming raw names.
+func (mc *CountersWithMultiLabels) namesMatch(stored, incoming []string) bool {
+	for i := range stored {
+		if mc.combinedLabels[i] {
+			continue
+		}
+		if stored[i] != safeLabel(incoming[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// getOrCreateEntry returns the counterEntry for the given label values,
+// creating it if necessary. The fast path (existing entry) takes only an
+// RLock and performs zero allocations.
+func (mc *CountersWithMultiLabels) getOrCreateEntry(names []string) *counterEntry {
+	h := mc.hashLabels(names)
+
+	mc.mu.RLock()
+	if chain, ok := mc.entries[h]; ok {
+		for _, e := range chain {
+			if mc.namesMatch(e.names, names) {
+				mc.mu.RUnlock()
+				return e
+			}
+		}
+	}
+	mc.mu.RUnlock()
+
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if chain, ok := mc.entries[h]; ok {
+		for _, e := range chain {
+			if mc.namesMatch(e.names, names) {
+				return e
+			}
+		}
+	}
+
+	safeNames := make([]string, len(names))
+	for i, name := range names {
+		if mc.combinedLabels[i] {
+			safeNames[i] = StatsAllStr
+		} else {
+			safeNames[i] = safeLabel(name)
+		}
+	}
+	entry := &counterEntry{
+		names: safeNames,
+		key:   strings.Join(safeNames, "."),
+	}
+	mc.entries[h] = append(mc.entries[h], entry)
+	return entry
+}
+
 // Labels returns the list of labels.
 func (mc *CountersWithMultiLabels) Labels() []string {
 	return mc.labels
 }
 
+// Help returns the help string.
+func (mc *CountersWithMultiLabels) Help() string {
+	return mc.help
+}
+
 // Add adds a value to a named counter.
-// len(names) must be equal to len(Labels)
+// len(names) must be equal to len(Labels).
 func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
-	mc.add(safeJoinLabels(names, mc.combinedLabels), value)
+	mc.getOrCreateEntry(names).value.Add(value)
 }
 
 // Reset resets the value of a named counter back to 0.
@@ -205,20 +299,55 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
 	if len(names) != len(mc.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Reset")
 	}
-
-	mc.set(safeJoinLabels(names, mc.combinedLabels), 0)
+	mc.getOrCreateEntry(names).value.Store(0)
 }
 
-// ResetAll clears the counters
+// ResetAll clears the counters.
 func (mc *CountersWithMultiLabels) ResetAll() {
-	mc.reset()
+	mc.mu.Lock()
+	mc.entries = make(map[uint64][]*counterEntry)
+	mc.mu.Unlock()
 }
 
 // Counts returns a copy of the Counters' map.
 // The key is a single string where all labels are joined by a "." e.g.
 // "label1.label2".
 func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
-	return mc.counters.Counts()
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	counts := make(map[string]int64, len(mc.entries))
+	for _, chain := range mc.entries {
+		for _, e := range chain {
+			counts[e.key] = e.value.Load()
+		}
+	}
+	return counts
+}
+
+// String implements the expvar.Var interface.
+func (mc *CountersWithMultiLabels) String() string {
+	counts := mc.Counts()
+	b := &strings.Builder{}
+	fmt.Fprintf(b, "{")
+	prefix := ""
+	for k, v := range counts {
+		fmt.Fprintf(b, "%s%q: %v", prefix, k, v)
+		prefix = ", "
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
+}
+
+// ZeroAll zeroes out all counter values without removing entries.
+func (mc *CountersWithMultiLabels) ZeroAll() {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	for _, chain := range mc.entries {
+		for _, e := range chain {
+			e.value.Store(0)
+		}
+	}
 }
 
 // CountersFuncWithMultiLabels is a multidimensional counters implementation
@@ -357,11 +486,10 @@ type GaugesWithMultiLabels struct {
 func NewGaugesWithMultiLabels(name, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
 		CountersWithMultiLabels: CountersWithMultiLabels{
-			counters: counters{
-				counts: make(map[string]int64),
-				help:   help,
-			},
-			labels: labels,
+			entries:        make(map[uint64][]*counterEntry),
+			labels:         labels,
+			combinedLabels: make([]bool, len(labels)),
+			help:           help,
 		},
 	}
 	if name != "" {
@@ -382,7 +510,7 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	if len(names) != len(mg.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	mg.set(safeJoinLabels(names, nil), value)
+	mg.getOrCreateEntry(names).value.Store(value)
 }
 
 // ResetKey resets a specific key.
@@ -393,7 +521,16 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 // This is useful when you range over all internal counts and you want to reset
 // specific keys.
 func (mg *GaugesWithMultiLabels) ResetKey(key string) {
-	mg.set(key, 0)
+	mg.mu.RLock()
+	defer mg.mu.RUnlock()
+	for _, chain := range mg.entries {
+		for _, e := range chain {
+			if e.key == key {
+				e.value.Store(0)
+				return
+			}
+		}
+	}
 }
 
 // GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels

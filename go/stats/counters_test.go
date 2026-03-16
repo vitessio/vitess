@@ -269,3 +269,50 @@ func TestCountersCombineDimension(t *testing.T) {
 	c4.Add([]string{"c4", "c2", "c5"}, 1)
 	assert.Equal(t, `{"all.c2.all": 2}`, c4.String())
 }
+
+func TestMultiCountersZeroAll(t *testing.T) {
+	clearStats()
+	c := NewCountersWithMultiLabels("mapCounterZeroAll", "help", []string{"a", "b"})
+	c.Add([]string{"x", "y"}, 5)
+	c.Add([]string{"p", "q"}, 3)
+
+	c.ZeroAll()
+
+	counts := c.Counts()
+	assert.Equal(t, int64(0), counts["x.y"])
+	assert.Equal(t, int64(0), counts["p.q"])
+}
+
+func TestMultiCountersReset(t *testing.T) {
+	clearStats()
+	c := NewCountersWithMultiLabels("mapCounterReset", "help", []string{"a", "b"})
+	c.Add([]string{"x", "y"}, 5)
+	c.Add([]string{"p", "q"}, 3)
+
+	c.Reset([]string{"x", "y"})
+
+	counts := c.Counts()
+	assert.Equal(t, int64(0), counts["x.y"])
+	assert.Equal(t, int64(3), counts["p.q"])
+}
+
+func TestGaugesWithMultiLabelsSet(t *testing.T) {
+	clearStats()
+	g := NewGaugesWithMultiLabels("gaugeMulti1", "help", []string{"a", "b"})
+	g.Set([]string{"x", "y"}, 10)
+	g.Set([]string{"x", "y"}, 20)
+
+	counts := g.Counts()
+	assert.Equal(t, int64(20), counts["x.y"])
+}
+
+func TestGaugesWithMultiLabelsResetKey(t *testing.T) {
+	clearStats()
+	g := NewGaugesWithMultiLabels("gaugeMulti2", "help", []string{"a", "b"})
+	g.Set([]string{"x", "y"}, 10)
+
+	g.ResetKey("x.y")
+
+	counts := g.Counts()
+	assert.Equal(t, int64(0), counts["x.y"])
+}
