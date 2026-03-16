@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
@@ -591,6 +592,62 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 			assert.Equal(t, tcase.expUDFs, tracker.UDFs(keyspace), "mismatch for udfs")
 		})
 	}
+}
+
+func TestTrackerTables(t *testing.T) {
+	tracker := NewTracker(make(chan *discovery.TabletHealth), false, false, sqlparser.NewTestParser())
+
+	got := tracker.Tables("unknown")
+	assert.Empty(t, got)
+
+	tracker.tables.set("ks", "t1", []vindexes.Column{{Name: sqlparser.NewIdentifierCI("id")}}, nil, nil)
+	got = tracker.Tables("ks")
+	assert.Len(t, got, 1)
+	assert.NotNil(t, got["t1"])
+
+	got["t1"] = nil
+	got2 := tracker.Tables("ks")
+	assert.NotNil(t, got2["t1"])
+}
+
+func TestTrackerViews(t *testing.T) {
+	tracker := NewTracker(make(chan *discovery.TabletHealth), false, false, sqlparser.NewTestParser())
+	assert.Nil(t, tracker.Views("ks"))
+
+	tracker = NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
+	assert.Nil(t, tracker.Views("unknown"))
+
+	tracker.views.set("ks", "v1", "create view v1 as select 1 from t1")
+	got := tracker.Views("ks")
+	assert.Len(t, got, 1)
+	assert.NotNil(t, got["v1"])
+}
+
+func TestTrackerAddNewKeyspace(t *testing.T) {
+	target := &querypb.Target{Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY, Cell: cell}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+
+	t.Run("success", func(t *testing.T) {
+		tracker := NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
+		sbc := sandboxconn.NewSandboxConn(tablet)
+		sbc.SetSchemaResult([]sandboxconn.SchemaResult{
+			tables(tbl("t1", "create table t1(id int primary key)")),
+			empty(),
+		})
+		err := tracker.AddNewKeyspace(sbc, target)
+		require.NoError(t, err)
+		_, ok := tracker.tracked[keyspace]
+		assert.True(t, ok)
+		assert.NotNil(t, tracker.GetColumns(keyspace, "t1"))
+	})
+
+	t.Run("load failure", func(t *testing.T) {
+		tracker := NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
+		err := tracker.AddNewKeyspace(fakes.ErrorQueryService, target)
+		require.Error(t, err)
+		_, ok := tracker.tracked[keyspace]
+		require.True(t, ok)
+	})
 }
 
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
