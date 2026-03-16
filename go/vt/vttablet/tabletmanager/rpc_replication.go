@@ -306,7 +306,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
-	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // RestartReplication will stop replication and then start it again
@@ -335,7 +335,7 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 	}
 
 	// Start replication
-	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up
@@ -525,7 +525,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
-		return err
+		if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+			return err
+		}
 	}
 
 	// wait until we get the replicated row, or our context times out
@@ -1231,8 +1233,18 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "failed to StopReplication")
 	}
-	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+	if err := tm.startReplicationRecoverable(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to StartReplication")
+	}
+	return nil
+}
+
+// startReplicationRecoverable starts replication and handles recoverable errors by resetting replication.
+func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error {
+	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+		if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+			return err
+		}
 	}
 	return nil
 }

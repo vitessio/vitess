@@ -38,6 +38,28 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeMysqlDaemon, ts *topo.Server) *TabletManager {
+	waitForGrantsComplete := make(chan struct{})
+	close(waitForGrantsComplete)
+
+	return &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		TopoServer:             ts,
+		MysqlDaemon:            mysqlDaemon,
+		tabletAlias:            tablet.Alias,
+		_waitForGrantsComplete: waitForGrantsComplete,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: tablet,
+			},
+		},
+	}
+}
+
+func recoverableReplicationInitErrorForTests() error {
+	return sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
+}
+
 // TestWaitForGrantsToHaveApplied tests that waitForGrantsToHaveApplied only succeeds after waitForDBAGrants has been called.
 func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	tm := &TabletManager{
@@ -399,4 +421,93 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 		})
 	}
+}
+
+// TestStartReplicationRecoversFromRecoverableReplicationInitError verifies StartReplication self-heals recoverable init failures.
+func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.StartReplication(context.Background(), false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.
+func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.RestartReplication(context.Background(), false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError verifies semi-sync restart path self-heals recoverable init failures.
+func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.fixSemiSyncAndReplication(context.Background(), topodatapb.TabletType_REPLICA, SemiSyncActionUnset)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestInitReplicaRecoversFromRecoverableReplicationInitializationError verifies InitReplica self-heals recoverable init failures from SetReplicationSource(startReplicationAfter=true).
+func TestInitReplicaRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+
+	parent := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  200,
+		},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, parent))
+
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+	fakeMysqlDaemon.SetReplicationSourceError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts)
+	err = tm.InitReplica(ctx, parent.Alias, "", 0, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
