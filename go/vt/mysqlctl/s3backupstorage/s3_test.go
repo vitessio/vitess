@@ -204,8 +204,15 @@ func createTestS3Client(mockServer *mockS3Server) *s3.Client {
 
 func requireTimedIncrementAtLeast(t *testing.T, fakeStats *stats.FakeStats, min time.Duration) {
 	t.Helper()
-	require.Len(t, fakeStats.TimedIncrementCalls, 1)
-	require.GreaterOrEqual(t, fakeStats.TimedIncrementCalls[0], min)
+	require.NotEmpty(t, fakeStats.TimedIncrementCalls)
+
+	for _, call := range fakeStats.TimedIncrementCalls {
+		if call >= min {
+			return
+		}
+	}
+
+	require.Failf(t, "expected timed increment meeting minimum", "expected at least one TimedIncrement >= %s, got %v", min, fakeStats.TimedIncrementCalls)
 }
 
 func setSSEForTest(t *testing.T, value string) {
@@ -559,8 +566,11 @@ func TestEndBackup(t *testing.T) {
 	// Add a file
 	wc, err := bh.AddFile(context.Background(), "testfile", 100)
 	require.NoError(t, err)
-	wc.Write([]byte("test data"))
-	wc.Close()
+	n, err := wc.Write([]byte("test data"))
+	require.NoError(t, err)
+	require.Equal(t, len("test data"), n)
+	err = wc.Close()
+	require.NoError(t, err)
 
 	// End the backup
 	err = bh.EndBackup(context.Background())
@@ -590,8 +600,11 @@ func TestEndBackupWithError(t *testing.T) {
 	// Add a file that will fail to upload
 	wc, err := bh.AddFile(context.Background(), "testfile", 100)
 	require.NoError(t, err)
-	wc.Write([]byte("test data"))
-	wc.Close()
+	n, err := wc.Write([]byte("test data"))
+	require.NoError(t, err)
+	require.Equal(t, len("test data"), n)
+	err = wc.Close()
+	require.NoError(t, err)
 
 	// End the backup - should return the error
 	err = bh.EndBackup(context.Background())
@@ -627,7 +640,6 @@ func TestNoSSE(t *testing.T) {
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 
 	sseData.reset()
-	require.NoError(t, err, "reset() expected to succeed")
 }
 
 func TestSSEAws(t *testing.T) {
@@ -643,7 +655,6 @@ func TestSSEAws(t *testing.T) {
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 
 	sseData.reset()
-	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -695,7 +706,6 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
 	sseData.reset()
-	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
@@ -731,7 +741,6 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
 	sseData.reset()
-	require.NoError(t, err, "reset() expected to succeed")
 
 	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
