@@ -2,8 +2,11 @@ package vstreamclient
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"math"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,9 +15,71 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
+
+type testVTGateImpl struct {
+	reader vtgateconn.VStreamReader
+}
+
+func (t *testVTGateImpl) Execute(context.Context, *vtgatepb.Session, string, map[string]*querypb.BindVariable, bool) (*vtgatepb.Session, *sqltypes.Result, error) {
+	return nil, nil, fmt.Errorf("unexpected Execute call")
+}
+
+func (t *testVTGateImpl) ExecuteBatch(context.Context, *vtgatepb.Session, []string, []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	return nil, nil, fmt.Errorf("unexpected ExecuteBatch call")
+}
+
+func (t *testVTGateImpl) StreamExecute(context.Context, *vtgatepb.Session, string, map[string]*querypb.BindVariable, func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error) {
+	return nil, fmt.Errorf("unexpected StreamExecute call")
+}
+
+func (t *testVTGateImpl) ExecuteMulti(context.Context, *vtgatepb.Session, string) (*vtgatepb.Session, []*sqltypes.Result, error) {
+	return nil, nil, fmt.Errorf("unexpected ExecuteMulti call")
+}
+
+func (t *testVTGateImpl) StreamExecuteMulti(context.Context, *vtgatepb.Session, string, func(*vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error) {
+	return nil, fmt.Errorf("unexpected StreamExecuteMulti call")
+}
+
+func (t *testVTGateImpl) Prepare(context.Context, *vtgatepb.Session, string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
+	return nil, nil, 0, fmt.Errorf("unexpected Prepare call")
+}
+
+func (t *testVTGateImpl) CloseSession(context.Context, *vtgatepb.Session) error {
+	return fmt.Errorf("unexpected CloseSession call")
+}
+
+func (t *testVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	return t.reader, nil
+}
+
+func (t *testVTGateImpl) Close() {}
+
+type testVStreamReader struct {
+	batches [][]*binlogdatapb.VEvent
+	err     error
+	index   int
+}
+
+func (r *testVStreamReader) Recv() ([]*binlogdatapb.VEvent, error) {
+	if r.index < len(r.batches) {
+		batch := r.batches[r.index]
+		r.index++
+		return batch, nil
+	}
+
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	return nil, io.EOF
+}
 
 func TestResolveLatestVGtid(t *testing.T) {
 	explicit := &binlogdatapb.VGtid{
@@ -204,6 +269,77 @@ func TestRun_RejectsClosedClient(t *testing.T) {
 	err := v.Run(context.Background())
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
+}
+
+func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
+	reader := &testVStreamReader{
+		batches: [][]*binlogdatapb.VEvent{{
+			{
+				Type: binlogdatapb.VEventType_FIELD,
+				FieldEvent: &binlogdatapb.FieldEvent{
+					TableName: "ks.t",
+					Shard:     "0",
+					Fields: []*querypb.Field{{
+						Name: "id",
+						Type: querypb.Type_INT64,
+					}},
+				},
+			},
+			{
+				Type: binlogdatapb.VEventType_ROW,
+				RowEvent: &binlogdatapb.RowEvent{
+					TableName: "ks.t",
+					Shard:     "0",
+					RowChanges: []*binlogdatapb.RowChange{{
+						After: &querypb.Row{Lengths: []int64{1}, Values: []byte("7")},
+					}},
+				},
+			},
+			{
+				Type:  binlogdatapb.VEventType_VGTID,
+				Vgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}}},
+			},
+		}},
+		err: io.EOF,
+	}
+
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		DataType:        &testRowSmall{},
+		MaxRowsPerFlush: 10,
+		FlushFn: func(context.Context, []Row, FlushMeta) error {
+			return nil
+		},
+		shards: map[string]shardConfig{},
+	}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	table.resetBatch()
+
+	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return &testVTGateImpl{reader: reader}, nil
+	}, "")
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	v := &VStreamClient{
+		conn:                      conn,
+		tables:                    map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+		flags:                     DefaultFlags(),
+		filter:                    &binlogdatapb.Filter{},
+		gracefulShutdownFlushChan: make(chan struct{}),
+	}
+
+	err = v.Run(context.Background())
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "unexpected EOF")
+	assert.Nil(t, v.lastFlushedVgtid)
+	if assert.Len(t, table.currentBatch, 1) {
+		row, ok := table.currentBatch[0].Data.(*testRowSmall)
+		if assert.True(t, ok) {
+			assert.Equal(t, int64(7), row.ID)
+		}
+	}
 }
 
 func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
