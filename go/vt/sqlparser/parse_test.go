@@ -6821,6 +6821,134 @@ func BenchmarkParseStress(b *testing.B) {
 	}
 }
 
+func BenchmarkParseWithArena(b *testing.B) {
+	parser := NewTestParser()
+	const (
+		sql1 = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+	)
+
+	for i, sql := range []string{sql1, sql2} {
+		b.Run(fmt.Sprintf("sql%d/heap", i), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := parser.Parse(sql)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(fmt.Sprintf("sql%d/arena", i), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				result, err := parser.Parse2WithArena(sql)
+				if err != nil {
+					b.Fatal(err)
+				}
+				result.Release()
+			}
+		})
+	}
+}
+
+func BenchmarkParseTracesWithArena(b *testing.B) {
+	parser := NewTestParser()
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		queries := loadQueries(b, trace)
+		if len(queries) > 10000 {
+			queries = queries[:10000]
+		}
+
+		b.Run(trace+"/heap", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				for _, query := range queries {
+					_, _ = parser.Parse(query)
+				}
+			}
+		})
+		b.Run(trace+"/arena", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				for _, query := range queries {
+					result, err := parser.Parse2WithArena(query)
+					if err == nil {
+						result.Release()
+					}
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkParseParallel(b *testing.B) {
+	parser := NewTestParser()
+	const (
+		sql1 = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+	)
+
+	for i, sql := range []string{sql1, sql2} {
+		b.Run(fmt.Sprintf("sql%d/heap", i), func(b *testing.B) {
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					_, err := parser.Parse(sql)
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		})
+		b.Run(fmt.Sprintf("sql%d/arena", i), func(b *testing.B) {
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					result, err := parser.Parse2WithArena(sql)
+					if err != nil {
+						b.Fatal(err)
+					}
+					result.Release()
+				}
+			})
+		})
+	}
+}
+
+func BenchmarkParseTracesParallel(b *testing.B) {
+	parser := NewTestParser()
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		queries := loadQueries(b, trace)
+		if len(queries) > 10000 {
+			queries = queries[:10000]
+		}
+
+		b.Run(trace+"/heap", func(b *testing.B) {
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				i := 0
+				for pb.Next() {
+					_, _ = parser.Parse(queries[i%len(queries)])
+					i++
+				}
+			})
+		})
+		b.Run(trace+"/arena", func(b *testing.B) {
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				i := 0
+				for pb.Next() {
+					result, err := parser.Parse2WithArena(queries[i%len(queries)])
+					if err == nil {
+						result.Release()
+					}
+					i++
+				}
+			})
+		})
+	}
+}
+
 func BenchmarkParse3(b *testing.B) {
 	largeQueryBenchmark := func(b *testing.B, escape bool) {
 		b.Helper()

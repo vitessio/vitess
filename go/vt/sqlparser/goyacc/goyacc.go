@@ -3416,6 +3416,7 @@ type $$ParserImpl struct {
 	lval  $$SymType
 	stack [$$InitialStackSize]$$SymType
 	char  int
+	Arena *Arena
 }
 
 func (p *$$ParserImpl) Lookahead() int {

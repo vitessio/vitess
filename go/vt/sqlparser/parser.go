@@ -40,6 +40,14 @@ var parserPool = sync.Pool{
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser yyParserImpl
 
+// arenaPool pools Arena objects for reuse across parse calls.
+var arenaPool = sync.Pool{
+	New: func() any {
+		return newArena()
+	},
+}
+
+
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
 //
@@ -49,7 +57,15 @@ var zeroParser yyParserImpl
 //	showCollationFilterOpt := $4
 //	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
+	return yyParsePooledArena(yylex, nil)
+}
+
+// yyParsePooledArena is like yyParsePooled but attaches an Arena to the parser
+// for AST node allocation. The arena is detached before the parser returns to
+// the pool; the caller is responsible for the arena's lifetime.
+func yyParsePooledArena(yylex yyLexer, arena *Arena) int {
 	parser := parserPool.Get().(*yyParserImpl)
+	parser.Arena = arena
 	defer func() {
 		*parser = zeroParser
 		parserPool.Put(parser)
@@ -98,6 +114,66 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 		return nil, nil, err
 	}
 	return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+}
+
+// ParseResult bundles a parsed AST with the arena that backs its memory.
+// Callers must call Release() when the AST is no longer needed to return the
+// arena to the pool for reuse.
+type ParseResult struct {
+	Statement Statement
+	BindVars  BindVars
+	arena     *Arena
+}
+
+// Release returns the arena memory to the pool. The Statement and all AST
+// nodes within it must not be accessed after Release is called.
+func (r *ParseResult) Release() {
+	if r.arena != nil {
+		r.arena.Reset()
+		arenaPool.Put(r.arena)
+		r.arena = nil
+	}
+}
+
+// Parse2WithArena is like Parse2 but allocates AST nodes from a pooled arena.
+// This reduces per-parse heap allocations. The caller must call Release() on
+// the returned ParseResult when done with the AST.
+func (p *Parser) Parse2WithArena(sql string) (*ParseResult, error) {
+	arena := arenaPool.Get().(*Arena)
+	tokenizer := p.NewStringTokenizer(sql)
+	if yyParsePooledArena(tokenizer, arena) != 0 || tokenizer.LastError != nil {
+		if tokenizer.partialDDL != nil {
+			if typ, val := tokenizer.Scan(); typ != 0 {
+				arenaPool.Put(arena)
+				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
+			}
+			log.Warn(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
+			switch x := tokenizer.partialDDL.(type) {
+			case DBDDLStatement:
+				x.SetFullyParsed(false)
+			case DDLStatement:
+				x.SetFullyParsed(false)
+			}
+			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
+			return &ParseResult{
+				Statement: tokenizer.ParseTrees[0],
+				BindVars:  tokenizer.BindVars,
+				arena:     arena,
+			}, nil
+		}
+		arenaPool.Put(arena)
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+	}
+	err := checkParseTreesError(tokenizer)
+	if err != nil {
+		arenaPool.Put(arena)
+		return nil, err
+	}
+	return &ParseResult{
+		Statement: tokenizer.ParseTrees[0],
+		BindVars:  tokenizer.BindVars,
+		arena:     arena,
+	}, nil
 }
 
 // ParseMultiple parses the SQL in full and returns a list of Statements, which
