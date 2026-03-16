@@ -129,6 +129,10 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
+	// Match VTGate's default session state (Autocommit: true) so the
+	// handshake packet reports correct status flags to the client.
+	c.StatusFlags |= mysql.ServerStatusAutocommit
+
 	vh.mu.Lock()
 	defer vh.mu.Unlock()
 	vh.connections[c.ConnectionID] = c
