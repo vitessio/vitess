@@ -35,6 +35,7 @@ type mockS3Server struct {
 	shouldError   bool
 	errorAfter    int
 	uploadedParts map[string][][]byte
+	handler       http.Handler
 	mu            sync.Mutex
 }
 
@@ -50,6 +51,7 @@ func newMockS3Server() *mockS3Server {
 		delay := m.requestDelay
 		shouldError := m.shouldError
 		errorAfter := m.errorAfter
+		handler := m.handler
 		m.mu.Unlock()
 
 		if delay > 0 {
@@ -66,86 +68,95 @@ func newMockS3Server() *mockS3Server {
 			return
 		}
 
-		// Handle different S3 operations
-		if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "uploads") {
-			// InitiateMultipartUpload
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		if handler != nil {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		m.serveDefault(w, r)
+	}))
+
+	return m
+}
+
+func (m *mockS3Server) serveDefault(w http.ResponseWriter, r *http.Request) {
+	// Handle different S3 operations
+	if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "uploads") {
+		// InitiateMultipartUpload
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <InitiateMultipartUploadResult>
 	<Bucket>test-bucket</Bucket>
 	<Key>test-key</Key>
 	<UploadId>test-upload-id</UploadId>
 </InitiateMultipartUploadResult>`))
-		} else if r.Method == "PUT" && strings.Contains(r.URL.RawQuery, "partNumber") {
-			// UploadPart
-			body, _ := io.ReadAll(r.Body)
-			m.mu.Lock()
-			m.uploadedParts[r.URL.Path] = append(m.uploadedParts[r.URL.Path], body)
-			m.mu.Unlock()
+	} else if r.Method == "PUT" && strings.Contains(r.URL.RawQuery, "partNumber") {
+		// UploadPart
+		body, _ := io.ReadAll(r.Body)
+		m.mu.Lock()
+		m.uploadedParts[r.URL.Path] = append(m.uploadedParts[r.URL.Path], body)
+		m.mu.Unlock()
 
-			w.Header().Set("ETag", `"test-etag"`)
-			w.WriteHeader(http.StatusOK)
-		} else if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "uploadId") {
-			// CompleteMultipartUpload
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		w.Header().Set("ETag", `"test-etag"`)
+		w.WriteHeader(http.StatusOK)
+	} else if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "uploadId") {
+		// CompleteMultipartUpload
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <CompleteMultipartUploadResult>
 	<Location>https://test-bucket.s3.amazonaws.com/test-key</Location>
 	<Bucket>test-bucket</Bucket>
 	<Key>test-key</Key>
 	<ETag>"test-etag"</ETag>
 </CompleteMultipartUploadResult>`))
-		} else if r.Method == "PUT" {
-			// PutObject (single upload)
-			body, _ := io.ReadAll(r.Body)
-			m.mu.Lock()
-			m.uploadedParts[r.URL.Path] = [][]byte{body}
-			m.mu.Unlock()
+	} else if r.Method == "PUT" {
+		// PutObject (single upload)
+		body, _ := io.ReadAll(r.Body)
+		m.mu.Lock()
+		m.uploadedParts[r.URL.Path] = [][]byte{body}
+		m.mu.Unlock()
 
-			w.Header().Set("ETag", `"test-etag"`)
+		w.Header().Set("ETag", `"test-etag"`)
+		w.WriteHeader(http.StatusOK)
+	} else if r.Method == "GET" && !strings.Contains(r.URL.RawQuery, "list-type") {
+		// GetObject
+		m.mu.Lock()
+		parts := m.uploadedParts[r.URL.Path]
+		m.mu.Unlock()
+
+		if len(parts) > 0 {
 			w.WriteHeader(http.StatusOK)
-		} else if r.Method == "GET" && !strings.Contains(r.URL.RawQuery, "list-type") {
-			// GetObject
-			m.mu.Lock()
-			parts := m.uploadedParts[r.URL.Path]
-			m.mu.Unlock()
-
-			if len(parts) > 0 {
-				w.WriteHeader(http.StatusOK)
-				for _, part := range parts {
-					w.Write(part)
-				}
-			} else {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			for _, part := range parts {
+				w.Write(part)
+			}
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Error>
 	<Code>NoSuchKey</Code>
 	<Message>The specified key does not exist.</Message>
 </Error>`))
-			}
-		} else if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
-			// ListObjectsV2
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<ListObjectsV2Response>
+		}
+	} else if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
+		// ListObjectsV2
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
 	<IsTruncated>false</IsTruncated>
 	<Contents>
 		<Key>test-key</Key>
 		<ETag>"test-etag"</ETag>
 	</Contents>
-</ListObjectsV2Response>`))
-		} else if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "delete") {
-			// DeleteObjects
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+</ListBucketResult>`))
+	} else if r.Method == "POST" && strings.Contains(r.URL.RawQuery, "delete") {
+		// DeleteObjects
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <DeleteResult>
 </DeleteResult>`))
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-	}))
-
-	return m
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func (m *mockS3Server) Close() {
@@ -175,6 +186,12 @@ func (m *mockS3Server) SetError(shouldError bool, errorAfter int) {
 	m.errorAfter = errorAfter
 }
 
+func (m *mockS3Server) SetHandler(handler http.Handler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.handler = handler
+}
+
 func createTestS3Client(mockServer *mockS3Server) *s3.Client {
 	return s3.NewFromConfig(aws.Config{
 		Region:      "us-east-1",
@@ -189,6 +206,15 @@ func requireTimedIncrementAtLeast(t *testing.T, fakeStats *stats.FakeStats, min 
 	t.Helper()
 	require.Len(t, fakeStats.TimedIncrementCalls, 1)
 	require.GreaterOrEqual(t, fakeStats.TimedIncrementCalls[0], min)
+}
+
+func setSSEForTest(t *testing.T, value string) {
+	t.Helper()
+	originalSSE := sse
+	sse = value
+	t.Cleanup(func() {
+		sse = originalSSE
+	})
 }
 
 func TestAddFileError(t *testing.T) {
@@ -589,6 +615,8 @@ func TestCalculateUploadPartSizeEdgeCases(t *testing.T) {
 }
 
 func TestNoSSE(t *testing.T) {
+	setSSEForTest(t, "")
+
 	sseData := S3ServerSideEncryption{}
 	err := sseData.init()
 	require.NoError(t, err, "init() expected to succeed")
@@ -603,7 +631,8 @@ func TestNoSSE(t *testing.T) {
 }
 
 func TestSSEAws(t *testing.T) {
-	sse = "aws:kms"
+	setSSEForTest(t, "aws:kms")
+
 	sseData := S3ServerSideEncryption{}
 	err := sseData.init()
 	require.NoError(t, err, "init() expected to succeed")
@@ -633,7 +662,8 @@ func TestSSECustomerFileNotFound(t *testing.T) {
 	err = os.Remove(tempFile.Name())
 	require.NoError(t, err, "Remove() expected to succeed")
 
-	sse = sseCustomerPrefix + tempFile.Name()
+	setSSEForTest(t, sseCustomerPrefix+tempFile.Name())
+
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.Error(t, err, "init() expected to fail")
@@ -652,7 +682,8 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	err = tempFile.Close()
 	require.NoError(t, err, "Close() expected to succeed")
 
-	sse = sseCustomerPrefix + tempFile.Name()
+	setSSEForTest(t, sseCustomerPrefix+tempFile.Name())
+
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.NoError(t, err, "init() expected to succeed")
@@ -687,7 +718,8 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	err = tempFile.Close()
 	require.NoError(t, err, "Close() expected to succeed")
 
-	sse = sseCustomerPrefix + tempFile.Name()
+	setSSEForTest(t, sseCustomerPrefix+tempFile.Name())
+
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.NoError(t, err, "init() expected to succeed")
@@ -748,7 +780,7 @@ func TestAbortBackup(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	bh := &S3BackupHandle{
 		s3Client: client,
@@ -944,10 +976,10 @@ func TestListBackups(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	// Update mock to return proper list response
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -964,9 +996,9 @@ func TestListBackups(t *testing.T) {
 	</CommonPrefixes>
 </ListBucketResult>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	backups, err := bs.ListBackups(context.Background(), "testdir")
 	require.NoError(t, err, "ListBackups() should not error")
@@ -995,9 +1027,9 @@ func TestListBackupsRoot(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1009,9 +1041,9 @@ func TestListBackupsRoot(t *testing.T) {
 	</CommonPrefixes>
 </ListBucketResult>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	backups, err := bs.ListBackups(context.Background(), "/")
 	require.NoError(t, err, "ListBackups() should not error")
@@ -1032,10 +1064,10 @@ func TestListBackupsPagination(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	requestCount := 0
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			requestCount++
 			if requestCount == 1 {
@@ -1063,9 +1095,9 @@ func TestListBackupsPagination(t *testing.T) {
 </ListBucketResult>`))
 			}
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	backups, err := bs.ListBackups(context.Background(), "testdir")
 	require.NoError(t, err)
@@ -1086,7 +1118,7 @@ func TestStartBackup(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	bh, err := bs.StartBackup(context.Background(), "testdir", "newbackup")
 	require.NoError(t, err, "StartBackup() should not error")
@@ -1113,9 +1145,9 @@ func TestRemoveBackup(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1135,9 +1167,9 @@ func TestRemoveBackup(t *testing.T) {
 <DeleteResult>
 </DeleteResult>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
 	require.NoError(t, err, "RemoveBackup() should not error")
@@ -1156,9 +1188,9 @@ func TestRemoveBackupWithErrors(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1177,12 +1209,12 @@ func TestRemoveBackupWithErrors(t *testing.T) {
 		<Key>testdir/backup1/file1.txt</Key>
 		<Code>AccessDenied</Code>
 		<Message>Access Denied</Message>
-	</Error>
+			</Error>
 </DeleteResult>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
 	require.Error(t, err, "RemoveBackup() should error when delete fails")
@@ -1202,10 +1234,10 @@ func TestRemoveBackupPaginated(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	requestCount := 0
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			requestCount++
 			if requestCount == 1 {
@@ -1236,9 +1268,9 @@ func TestRemoveBackupPaginated(t *testing.T) {
 <DeleteResult>
 </DeleteResult>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
 	require.NoError(t, err)
@@ -1296,7 +1328,7 @@ func TestListBackupsError(t *testing.T) {
 		_client: client,
 		params:  backupstorage.NoParams(),
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	_, err := bs.ListBackups(context.Background(), "testdir")
 	require.Error(t, err, "ListBackups() should error when server returns error")
@@ -1350,7 +1382,7 @@ func TestRemoveBackupDeleteError(t *testing.T) {
 		params:  backupstorage.NoParams(),
 	}
 
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1369,9 +1401,9 @@ func TestRemoveBackupDeleteError(t *testing.T) {
 	<Message>Internal Error</Message>
 </Error>`))
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
 	require.Error(t, err, "RemoveBackup() should error when delete fails")
@@ -1464,7 +1496,7 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 		_client: client,
 		params:  backupstorage.Params{Logger: logutil.NewMemoryLogger(), Stats: stats.NewFakeStats()},
 	}
-	bs.s3SSE.init()
+	require.NoError(t, bs.s3SSE.init())
 
 	// Start a new backup
 	bh, err := bs.StartBackup(context.Background(), "testdir", "full-backup")
@@ -1501,10 +1533,10 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 		_client: client,
 		params:  backupstorage.Params{Logger: logutil.NewMemoryLogger(), Stats: stats.NewFakeStats()},
 	}
-	bs2.s3SSE.init()
+	require.NoError(t, bs2.s3SSE.init())
 
 	// Set up mock to return proper list for ListBackups
-	mockServer.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && strings.Contains(r.URL.RawQuery, "list-type=2") {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1515,25 +1547,10 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 		<Prefix>backups/testdir/full-backup/</Prefix>
 	</CommonPrefixes>
 </ListBucketResult>`))
-		} else if r.Method == "GET" && !strings.Contains(r.URL.RawQuery, "list-type") {
-			// GetObject
-			path := r.URL.Path
-			mockServer.mu.Lock()
-			parts := mockServer.uploadedParts[path]
-			mockServer.mu.Unlock()
-
-			if len(parts) > 0 {
-				w.WriteHeader(http.StatusOK)
-				for _, part := range parts {
-					w.Write(part)
-				}
-			} else {
-				w.WriteHeader(http.StatusNotFound)
-			}
 		} else {
-			w.WriteHeader(http.StatusOK)
+			mockServer.serveDefault(w, r)
 		}
-	})
+	}))
 
 	// List backups
 	backups, err := bs2.ListBackups(context.Background(), "testdir")
