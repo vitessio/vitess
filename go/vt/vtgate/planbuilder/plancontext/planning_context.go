@@ -70,6 +70,11 @@ type PlanningContext struct {
 	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 
+	// mirrorAborted indicates that mirror planning should be abandoned because
+	// a table was encountered without a mirror rule. This allows the planner
+	// to gracefully skip mirroring rather than failing the query.
+	mirrorAborted bool
+
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
 
@@ -324,6 +329,18 @@ func (ctx *PlanningContext) ContainsWindowFunc(e sqlparser.SQLNode) (hasWindow b
 
 func (ctx *PlanningContext) IsMirrored() bool {
 	return ctx.isMirrored
+}
+
+// AbortMirror signals that mirror planning should be abandoned for this query.
+// This is used when a table is encountered that has no mirror rule, to avoid
+// disrupting production traffic.
+func (ctx *PlanningContext) AbortMirror() {
+	ctx.mirrorAborted = true
+}
+
+// MirrorAborted returns true if mirror planning was aborted.
+func (ctx *PlanningContext) MirrorAborted() bool {
+	return ctx.mirrorAborted
 }
 
 type ContextCTE struct {
