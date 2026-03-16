@@ -120,17 +120,17 @@ service Query {
 
   // StreamExecuteRaw executes a streaming query and returns raw MySQL wire
   // protocol bytes instead of parsed result objects.
-  rpc StreamExecuteRaw(query.StreamExecuteRawRequest) returns (stream query.StreamExecuteRawResponse) {};
+  rpc StreamExecuteRaw(stream query.StreamExecuteRawRequest) returns (stream query.StreamExecuteRawResponse) {};
 
   // BeginStreamExecuteRaw starts a transaction and executes a streaming query,
   // returning raw MySQL wire protocol bytes.
-  rpc BeginStreamExecuteRaw(query.BeginStreamExecuteRawRequest) returns (stream query.BeginStreamExecuteRawResponse) {};
+  rpc BeginStreamExecuteRaw(stream query.BeginStreamExecuteRawRequest) returns (stream query.BeginStreamExecuteRawResponse) {};
 
   // ReserveStreamExecuteRaw executes a streaming query on a reserved connection,
   // returning raw MySQL wire protocol bytes.
-  rpc ReserveStreamExecuteRaw(query.ReserveStreamExecuteRawRequest) returns (stream query.ReserveStreamExecuteRawResponse) {};
+  rpc ReserveStreamExecuteRaw(stream query.ReserveStreamExecuteRawRequest) returns (stream query.ReserveStreamExecuteRawResponse) {};
 
   // ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
   // on a reserved connection, returning raw MySQL wire protocol bytes.
-  rpc ReserveBeginStreamExecuteRaw(query.ReserveBeginStreamExecuteRawRequest) returns (stream query.ReserveBeginStreamExecuteRawResponse) {};
+  rpc ReserveBeginStreamExecuteRaw(stream query.ReserveBeginStreamExecuteRawRequest) returns (stream query.ReserveBeginStreamExecuteRawResponse) {};
 }

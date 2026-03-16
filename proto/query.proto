@@ -1083,6 +1083,11 @@ message StreamExecuteRawResponse {
   // (header + payload). Headers are never split across messages.
   // Large packet payloads may span multiple messages.
   bytes raw = 1;
+  // done signals the end of a query's result stream on a bidi stream.
+  bool done = 2;
+  // error contains an application level error if necessary. Only set on
+  // the terminal message (done=true).
+  vtrpc.RPCError error = 3;
 }
 
 // BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
@@ -1105,6 +1110,9 @@ message BeginStreamExecuteRawResponse {
 
   // Raw MySQL wire protocol bytes.
   bytes raw = 2;
+
+  // done signals the end of a query's result stream on a bidi stream.
+  bool done = 3;
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 4;
@@ -1132,6 +1140,9 @@ message ReserveStreamExecuteRawResponse {
   // Raw MySQL wire protocol bytes.
   bytes raw = 2;
 
+  // done signals the end of a query's result stream on a bidi stream.
+  bool done = 3;
+
   // The following fields might be non-zero even if an error is present.
   int64 reserved_id = 4;
   topodata.TabletAlias tablet_alias = 5;
@@ -1157,6 +1168,9 @@ message ReserveBeginStreamExecuteRawResponse {
 
   // Raw MySQL wire protocol bytes.
   bytes raw = 2;
+
+  // done signals the end of a query's result stream on a bidi stream.
+  bool done = 3;
 
   // The following fields might be non-zero even if an error is present.
   int64 transaction_id = 4;

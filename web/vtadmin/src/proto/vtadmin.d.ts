@@ -50368,6 +50368,12 @@ export namespace query {
 
         /** StreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
+
+        /** StreamExecuteRawResponse done */
+        done?: (boolean|null);
+
+        /** StreamExecuteRawResponse error */
+        error?: (vtrpc.IRPCError|null);
     }
 
     /** Represents a StreamExecuteRawResponse. */
@@ -50381,6 +50387,12 @@ export namespace query {
 
         /** StreamExecuteRawResponse raw. */
         public raw: Uint8Array;
+
+        /** StreamExecuteRawResponse done. */
+        public done: boolean;
+
+        /** StreamExecuteRawResponse error. */
+        public error?: (vtrpc.IRPCError|null);
 
         /**
          * Creates a new StreamExecuteRawResponse instance using the specified properties.
@@ -50602,6 +50614,9 @@ export namespace query {
         /** BeginStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
+        /** BeginStreamExecuteRawResponse done */
+        done?: (boolean|null);
+
         /** BeginStreamExecuteRawResponse transaction_id */
         transaction_id?: (number|Long|null);
 
@@ -50626,6 +50641,9 @@ export namespace query {
 
         /** BeginStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
+
+        /** BeginStreamExecuteRawResponse done. */
+        public done: boolean;
 
         /** BeginStreamExecuteRawResponse transaction_id. */
         public transaction_id: (number|Long);
@@ -50856,6 +50874,9 @@ export namespace query {
         /** ReserveStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
+        /** ReserveStreamExecuteRawResponse done */
+        done?: (boolean|null);
+
         /** ReserveStreamExecuteRawResponse reserved_id */
         reserved_id?: (number|Long|null);
 
@@ -50877,6 +50898,9 @@ export namespace query {
 
         /** ReserveStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
+
+        /** ReserveStreamExecuteRawResponse done. */
+        public done: boolean;
 
         /** ReserveStreamExecuteRawResponse reserved_id. */
         public reserved_id: (number|Long);
@@ -51104,6 +51128,9 @@ export namespace query {
         /** ReserveBeginStreamExecuteRawResponse raw */
         raw?: (Uint8Array|null);
 
+        /** ReserveBeginStreamExecuteRawResponse done */
+        done?: (boolean|null);
+
         /** ReserveBeginStreamExecuteRawResponse transaction_id */
         transaction_id?: (number|Long|null);
 
@@ -51131,6 +51158,9 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteRawResponse raw. */
         public raw: Uint8Array;
+
+        /** ReserveBeginStreamExecuteRawResponse done. */
+        public done: boolean;
 
         /** ReserveBeginStreamExecuteRawResponse transaction_id. */
         public transaction_id: (number|Long);

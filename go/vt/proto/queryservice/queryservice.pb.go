@@ -43,7 +43,7 @@ var File_queryservice_proto protoreflect.FileDescriptor
 
 const file_queryservice_proto_rawDesc = "" +
 	"\n" +
-	"\x12queryservice.proto\x12\fqueryservice\x1a\vquery.proto\x1a\x10binlogdata.proto2\xc1\x15\n" +
+	"\x12queryservice.proto\x12\fqueryservice\x1a\vquery.proto\x1a\x10binlogdata.proto2\xc9\x15\n" +
 	"\x05Query\x12:\n" +
 	"\aExecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12N\n" +
 	"\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x000\x01\x124\n" +
@@ -74,11 +74,11 @@ const file_queryservice_proto_rawDesc = "" +
 	"\vVStreamRows\x12\x1e.binlogdata.VStreamRowsRequest\x1a\x1f.binlogdata.VStreamRowsResponse\"\x000\x01\x12X\n" +
 	"\rVStreamTables\x12 .binlogdata.VStreamTablesRequest\x1a!.binlogdata.VStreamTablesResponse\"\x000\x01\x12[\n" +
 	"\x0eVStreamResults\x12!.binlogdata.VStreamResultsRequest\x1a\".binlogdata.VStreamResultsResponse\"\x000\x01\x12B\n" +
-	"\tGetSchema\x12\x17.query.GetSchemaRequest\x1a\x18.query.GetSchemaResponse\"\x000\x01\x12W\n" +
-	"\x10StreamExecuteRaw\x12\x1e.query.StreamExecuteRawRequest\x1a\x1f.query.StreamExecuteRawResponse\"\x000\x01\x12f\n" +
-	"\x15BeginStreamExecuteRaw\x12#.query.BeginStreamExecuteRawRequest\x1a$.query.BeginStreamExecuteRawResponse\"\x000\x01\x12l\n" +
-	"\x17ReserveStreamExecuteRaw\x12%.query.ReserveStreamExecuteRawRequest\x1a&.query.ReserveStreamExecuteRawResponse\"\x000\x01\x12{\n" +
-	"\x1cReserveBeginStreamExecuteRaw\x12*.query.ReserveBeginStreamExecuteRawRequest\x1a+.query.ReserveBeginStreamExecuteRawResponse\"\x000\x01B+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3"
+	"\tGetSchema\x12\x17.query.GetSchemaRequest\x1a\x18.query.GetSchemaResponse\"\x000\x01\x12Y\n" +
+	"\x10StreamExecuteRaw\x12\x1e.query.StreamExecuteRawRequest\x1a\x1f.query.StreamExecuteRawResponse\"\x00(\x010\x01\x12h\n" +
+	"\x15BeginStreamExecuteRaw\x12#.query.BeginStreamExecuteRawRequest\x1a$.query.BeginStreamExecuteRawResponse\"\x00(\x010\x01\x12n\n" +
+	"\x17ReserveStreamExecuteRaw\x12%.query.ReserveStreamExecuteRawRequest\x1a&.query.ReserveStreamExecuteRawResponse\"\x00(\x010\x01\x12}\n" +
+	"\x1cReserveBeginStreamExecuteRaw\x12*.query.ReserveBeginStreamExecuteRawRequest\x1a+.query.ReserveBeginStreamExecuteRawResponse\"\x00(\x010\x01B+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3"
 
 var file_queryservice_proto_goTypes = []any{
 	(*query.ExecuteRequest)(nil),                       // 0: query.ExecuteRequest

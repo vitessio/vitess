@@ -89,16 +89,16 @@ type QueryClient interface {
 	GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error)
 	// StreamExecuteRaw executes a streaming query and returns raw MySQL wire
 	// protocol bytes instead of parsed result objects.
-	StreamExecuteRaw(ctx context.Context, in *query.StreamExecuteRawRequest, opts ...grpc.CallOption) (Query_StreamExecuteRawClient, error)
+	StreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_StreamExecuteRawClient, error)
 	// BeginStreamExecuteRaw starts a transaction and executes a streaming query,
 	// returning raw MySQL wire protocol bytes.
-	BeginStreamExecuteRaw(ctx context.Context, in *query.BeginStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_BeginStreamExecuteRawClient, error)
+	BeginStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_BeginStreamExecuteRawClient, error)
 	// ReserveStreamExecuteRaw executes a streaming query on a reserved connection,
 	// returning raw MySQL wire protocol bytes.
-	ReserveStreamExecuteRaw(ctx context.Context, in *query.ReserveStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_ReserveStreamExecuteRawClient, error)
+	ReserveStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_ReserveStreamExecuteRawClient, error)
 	// ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
 	// on a reserved connection, returning raw MySQL wire protocol bytes.
-	ReserveBeginStreamExecuteRaw(ctx context.Context, in *query.ReserveBeginStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_ReserveBeginStreamExecuteRawClient, error)
+	ReserveBeginStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_ReserveBeginStreamExecuteRawClient, error)
 }
 
 type queryClient struct {
@@ -623,28 +623,27 @@ func (x *queryGetSchemaClient) Recv() (*query.GetSchemaResponse, error) {
 	return m, nil
 }
 
-func (c *queryClient) StreamExecuteRaw(ctx context.Context, in *query.StreamExecuteRawRequest, opts ...grpc.CallOption) (Query_StreamExecuteRawClient, error) {
+func (c *queryClient) StreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_StreamExecuteRawClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[11], "/queryservice.Query/StreamExecuteRaw", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &queryStreamExecuteRawClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type Query_StreamExecuteRawClient interface {
+	Send(*query.StreamExecuteRawRequest) error
 	Recv() (*query.StreamExecuteRawResponse, error)
 	grpc.ClientStream
 }
 
 type queryStreamExecuteRawClient struct {
 	grpc.ClientStream
+}
+
+func (x *queryStreamExecuteRawClient) Send(m *query.StreamExecuteRawRequest) error {
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *queryStreamExecuteRawClient) Recv() (*query.StreamExecuteRawResponse, error) {
@@ -655,28 +654,27 @@ func (x *queryStreamExecuteRawClient) Recv() (*query.StreamExecuteRawResponse, e
 	return m, nil
 }
 
-func (c *queryClient) BeginStreamExecuteRaw(ctx context.Context, in *query.BeginStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_BeginStreamExecuteRawClient, error) {
+func (c *queryClient) BeginStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_BeginStreamExecuteRawClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[12], "/queryservice.Query/BeginStreamExecuteRaw", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &queryBeginStreamExecuteRawClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type Query_BeginStreamExecuteRawClient interface {
+	Send(*query.BeginStreamExecuteRawRequest) error
 	Recv() (*query.BeginStreamExecuteRawResponse, error)
 	grpc.ClientStream
 }
 
 type queryBeginStreamExecuteRawClient struct {
 	grpc.ClientStream
+}
+
+func (x *queryBeginStreamExecuteRawClient) Send(m *query.BeginStreamExecuteRawRequest) error {
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *queryBeginStreamExecuteRawClient) Recv() (*query.BeginStreamExecuteRawResponse, error) {
@@ -687,28 +685,27 @@ func (x *queryBeginStreamExecuteRawClient) Recv() (*query.BeginStreamExecuteRawR
 	return m, nil
 }
 
-func (c *queryClient) ReserveStreamExecuteRaw(ctx context.Context, in *query.ReserveStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_ReserveStreamExecuteRawClient, error) {
+func (c *queryClient) ReserveStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_ReserveStreamExecuteRawClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[13], "/queryservice.Query/ReserveStreamExecuteRaw", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &queryReserveStreamExecuteRawClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type Query_ReserveStreamExecuteRawClient interface {
+	Send(*query.ReserveStreamExecuteRawRequest) error
 	Recv() (*query.ReserveStreamExecuteRawResponse, error)
 	grpc.ClientStream
 }
 
 type queryReserveStreamExecuteRawClient struct {
 	grpc.ClientStream
+}
+
+func (x *queryReserveStreamExecuteRawClient) Send(m *query.ReserveStreamExecuteRawRequest) error {
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *queryReserveStreamExecuteRawClient) Recv() (*query.ReserveStreamExecuteRawResponse, error) {
@@ -719,28 +716,27 @@ func (x *queryReserveStreamExecuteRawClient) Recv() (*query.ReserveStreamExecute
 	return m, nil
 }
 
-func (c *queryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, in *query.ReserveBeginStreamExecuteRawRequest, opts ...grpc.CallOption) (Query_ReserveBeginStreamExecuteRawClient, error) {
+func (c *queryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_ReserveBeginStreamExecuteRawClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[14], "/queryservice.Query/ReserveBeginStreamExecuteRaw", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &queryReserveBeginStreamExecuteRawClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type Query_ReserveBeginStreamExecuteRawClient interface {
+	Send(*query.ReserveBeginStreamExecuteRawRequest) error
 	Recv() (*query.ReserveBeginStreamExecuteRawResponse, error)
 	grpc.ClientStream
 }
 
 type queryReserveBeginStreamExecuteRawClient struct {
 	grpc.ClientStream
+}
+
+func (x *queryReserveBeginStreamExecuteRawClient) Send(m *query.ReserveBeginStreamExecuteRawRequest) error {
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *queryReserveBeginStreamExecuteRawClient) Recv() (*query.ReserveBeginStreamExecuteRawResponse, error) {
@@ -820,16 +816,16 @@ type QueryServer interface {
 	GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error
 	// StreamExecuteRaw executes a streaming query and returns raw MySQL wire
 	// protocol bytes instead of parsed result objects.
-	StreamExecuteRaw(*query.StreamExecuteRawRequest, Query_StreamExecuteRawServer) error
+	StreamExecuteRaw(Query_StreamExecuteRawServer) error
 	// BeginStreamExecuteRaw starts a transaction and executes a streaming query,
 	// returning raw MySQL wire protocol bytes.
-	BeginStreamExecuteRaw(*query.BeginStreamExecuteRawRequest, Query_BeginStreamExecuteRawServer) error
+	BeginStreamExecuteRaw(Query_BeginStreamExecuteRawServer) error
 	// ReserveStreamExecuteRaw executes a streaming query on a reserved connection,
 	// returning raw MySQL wire protocol bytes.
-	ReserveStreamExecuteRaw(*query.ReserveStreamExecuteRawRequest, Query_ReserveStreamExecuteRawServer) error
+	ReserveStreamExecuteRaw(Query_ReserveStreamExecuteRawServer) error
 	// ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
 	// on a reserved connection, returning raw MySQL wire protocol bytes.
-	ReserveBeginStreamExecuteRaw(*query.ReserveBeginStreamExecuteRawRequest, Query_ReserveBeginStreamExecuteRawServer) error
+	ReserveBeginStreamExecuteRaw(Query_ReserveBeginStreamExecuteRawServer) error
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -924,16 +920,16 @@ func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest
 func (UnimplementedQueryServer) GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
 }
-func (UnimplementedQueryServer) StreamExecuteRaw(*query.StreamExecuteRawRequest, Query_StreamExecuteRawServer) error {
+func (UnimplementedQueryServer) StreamExecuteRaw(Query_StreamExecuteRawServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamExecuteRaw not implemented")
 }
-func (UnimplementedQueryServer) BeginStreamExecuteRaw(*query.BeginStreamExecuteRawRequest, Query_BeginStreamExecuteRawServer) error {
+func (UnimplementedQueryServer) BeginStreamExecuteRaw(Query_BeginStreamExecuteRawServer) error {
 	return status.Errorf(codes.Unimplemented, "method BeginStreamExecuteRaw not implemented")
 }
-func (UnimplementedQueryServer) ReserveStreamExecuteRaw(*query.ReserveStreamExecuteRawRequest, Query_ReserveStreamExecuteRawServer) error {
+func (UnimplementedQueryServer) ReserveStreamExecuteRaw(Query_ReserveStreamExecuteRawServer) error {
 	return status.Errorf(codes.Unimplemented, "method ReserveStreamExecuteRaw not implemented")
 }
-func (UnimplementedQueryServer) ReserveBeginStreamExecuteRaw(*query.ReserveBeginStreamExecuteRawRequest, Query_ReserveBeginStreamExecuteRawServer) error {
+func (UnimplementedQueryServer) ReserveBeginStreamExecuteRaw(Query_ReserveBeginStreamExecuteRawServer) error {
 	return status.Errorf(codes.Unimplemented, "method ReserveBeginStreamExecuteRaw not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
@@ -1505,15 +1501,12 @@ func (x *queryGetSchemaServer) Send(m *query.GetSchemaResponse) error {
 }
 
 func _Query_StreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.StreamExecuteRawRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(QueryServer).StreamExecuteRaw(m, &queryStreamExecuteRawServer{stream})
+	return srv.(QueryServer).StreamExecuteRaw(&queryStreamExecuteRawServer{stream})
 }
 
 type Query_StreamExecuteRawServer interface {
 	Send(*query.StreamExecuteRawResponse) error
+	Recv() (*query.StreamExecuteRawRequest, error)
 	grpc.ServerStream
 }
 
@@ -1525,16 +1518,21 @@ func (x *queryStreamExecuteRawServer) Send(m *query.StreamExecuteRawResponse) er
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_BeginStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.BeginStreamExecuteRawRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func (x *queryStreamExecuteRawServer) Recv() (*query.StreamExecuteRawRequest, error) {
+	m := new(query.StreamExecuteRawRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
 	}
-	return srv.(QueryServer).BeginStreamExecuteRaw(m, &queryBeginStreamExecuteRawServer{stream})
+	return m, nil
+}
+
+func _Query_BeginStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(QueryServer).BeginStreamExecuteRaw(&queryBeginStreamExecuteRawServer{stream})
 }
 
 type Query_BeginStreamExecuteRawServer interface {
 	Send(*query.BeginStreamExecuteRawResponse) error
+	Recv() (*query.BeginStreamExecuteRawRequest, error)
 	grpc.ServerStream
 }
 
@@ -1546,16 +1544,21 @@ func (x *queryBeginStreamExecuteRawServer) Send(m *query.BeginStreamExecuteRawRe
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_ReserveStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.ReserveStreamExecuteRawRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func (x *queryBeginStreamExecuteRawServer) Recv() (*query.BeginStreamExecuteRawRequest, error) {
+	m := new(query.BeginStreamExecuteRawRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
 	}
-	return srv.(QueryServer).ReserveStreamExecuteRaw(m, &queryReserveStreamExecuteRawServer{stream})
+	return m, nil
+}
+
+func _Query_ReserveStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(QueryServer).ReserveStreamExecuteRaw(&queryReserveStreamExecuteRawServer{stream})
 }
 
 type Query_ReserveStreamExecuteRawServer interface {
 	Send(*query.ReserveStreamExecuteRawResponse) error
+	Recv() (*query.ReserveStreamExecuteRawRequest, error)
 	grpc.ServerStream
 }
 
@@ -1567,16 +1570,21 @@ func (x *queryReserveStreamExecuteRawServer) Send(m *query.ReserveStreamExecuteR
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_ReserveBeginStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.ReserveBeginStreamExecuteRawRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func (x *queryReserveStreamExecuteRawServer) Recv() (*query.ReserveStreamExecuteRawRequest, error) {
+	m := new(query.ReserveStreamExecuteRawRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
 	}
-	return srv.(QueryServer).ReserveBeginStreamExecuteRaw(m, &queryReserveBeginStreamExecuteRawServer{stream})
+	return m, nil
+}
+
+func _Query_ReserveBeginStreamExecuteRaw_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(QueryServer).ReserveBeginStreamExecuteRaw(&queryReserveBeginStreamExecuteRawServer{stream})
 }
 
 type Query_ReserveBeginStreamExecuteRawServer interface {
 	Send(*query.ReserveBeginStreamExecuteRawResponse) error
+	Recv() (*query.ReserveBeginStreamExecuteRawRequest, error)
 	grpc.ServerStream
 }
 
@@ -1586,6 +1594,14 @@ type queryReserveBeginStreamExecuteRawServer struct {
 
 func (x *queryReserveBeginStreamExecuteRawServer) Send(m *query.ReserveBeginStreamExecuteRawResponse) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func (x *queryReserveBeginStreamExecuteRawServer) Recv() (*query.ReserveBeginStreamExecuteRawRequest, error) {
+	m := new(query.ReserveBeginStreamExecuteRawRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
@@ -1728,21 +1744,25 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "StreamExecuteRaw",
 			Handler:       _Query_StreamExecuteRaw_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "BeginStreamExecuteRaw",
 			Handler:       _Query_BeginStreamExecuteRaw_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "ReserveStreamExecuteRaw",
 			Handler:       _Query_ReserveStreamExecuteRaw_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "ReserveBeginStreamExecuteRaw",
 			Handler:       _Query_ReserveBeginStreamExecuteRaw_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "queryservice.proto",

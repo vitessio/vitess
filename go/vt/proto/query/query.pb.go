@@ -5813,7 +5813,12 @@ type StreamExecuteRawResponse struct {
 	// Raw MySQL wire protocol bytes. Contains one or more complete MySQL packets
 	// (header + payload). Headers are never split across messages.
 	// Large packet payloads may span multiple messages.
-	Raw           []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
+	Raw []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
+	// done signals the end of a query's result stream on a bidi stream.
+	Done bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
+	// error contains an application level error if necessary. Only set on
+	// the terminal message (done=true).
+	Error         *vtrpc.RPCError `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5851,6 +5856,20 @@ func (*StreamExecuteRawResponse) Descriptor() ([]byte, []int) {
 func (x *StreamExecuteRawResponse) GetRaw() []byte {
 	if x != nil {
 		return x.Raw
+	}
+	return nil
+}
+
+func (x *StreamExecuteRawResponse) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
+func (x *StreamExecuteRawResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
 	}
 	return nil
 }
@@ -5957,6 +5976,8 @@ type BeginStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// done signals the end of a query's result stream on a bidi stream.
+	Done bool `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
 	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
@@ -6009,6 +6030,13 @@ func (x *BeginStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
+}
+
+func (x *BeginStreamExecuteRawResponse) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
 }
 
 func (x *BeginStreamExecuteRawResponse) GetTransactionId() int64 {
@@ -6131,6 +6159,8 @@ type ReserveStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// done signals the end of a query's result stream on a bidi stream.
+	Done bool `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
 	// The following fields might be non-zero even if an error is present.
 	ReservedId    int64                 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
 	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
@@ -6180,6 +6210,13 @@ func (x *ReserveStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
 }
 
 func (x *ReserveStreamExecuteRawResponse) GetReservedId() int64 {
@@ -6298,6 +6335,8 @@ type ReserveBeginStreamExecuteRawResponse struct {
 	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// Raw MySQL wire protocol bytes.
 	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+	// done signals the end of a query's result stream on a bidi stream.
+	Done bool `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
 	// The following fields might be non-zero even if an error is present.
 	TransactionId int64                 `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	ReservedId    int64                 `protobuf:"varint,5,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
@@ -6351,6 +6390,13 @@ func (x *ReserveBeginStreamExecuteRawResponse) GetRaw() []byte {
 		return x.Raw
 	}
 	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
 }
 
 func (x *ReserveBeginStreamExecuteRawResponse) GetTransactionId() int64 {
@@ -6885,9 +6931,11 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\",\n" +
+	"reservedId\"g\n" +
 	"\x18StreamExecuteRawResponse\x12\x10\n" +
-	"\x03raw\x18\x01 \x01(\fR\x03raw\"\xe9\x02\n" +
+	"\x03raw\x18\x01 \x01(\fR\x03raw\x12\x12\n" +
+	"\x04done\x18\x02 \x01(\bR\x04done\x12%\n" +
+	"\x05error\x18\x03 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\"\xe9\x02\n" +
 	"\x1cBeginStreamExecuteRawRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6897,10 +6945,11 @@ const file_query_proto_rawDesc = "" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"\xed\x01\n" +
+	"reservedId\"\x81\x02\n" +
 	"\x1dBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12%\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
+	"\x04done\x18\x03 \x01(\bR\x04done\x12%\n" +
 	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
 	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xf1\x02\n" +
@@ -6912,10 +6961,11 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xb5\x01\n" +
+	"preQueries\"\xc9\x01\n" +
 	"\x1fReserveStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x1f\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
+	"\x04done\x18\x03 \x01(\bR\x04done\x12\x1f\n" +
 	"\vreserved_id\x18\x04 \x01(\x03R\n" +
 	"reservedId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xfd\x02\n" +
@@ -6927,10 +6977,11 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12,\n" +
-	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\x95\x02\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xa9\x02\n" +
 	"$ReserveBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\x12%\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
+	"\x04done\x18\x03 \x01(\bR\x04done\x12%\n" +
 	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\x05 \x01(\x03R\n" +
 	"reservedId\x128\n" +
@@ -7290,36 +7341,37 @@ var file_query_proto_depIdxs = []int32{
 	13,  // 144: query.StreamExecuteRawRequest.target:type_name -> query.Target
 	18,  // 145: query.StreamExecuteRawRequest.query:type_name -> query.BoundQuery
 	19,  // 146: query.StreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
-	92,  // 147: query.BeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	14,  // 148: query.BeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	13,  // 149: query.BeginStreamExecuteRawRequest.target:type_name -> query.Target
-	18,  // 150: query.BeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
-	19,  // 151: query.BeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
-	93,  // 152: query.BeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
-	94,  // 153: query.BeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
-	92,  // 154: query.ReserveStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	14,  // 155: query.ReserveStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	13,  // 156: query.ReserveStreamExecuteRawRequest.target:type_name -> query.Target
-	18,  // 157: query.ReserveStreamExecuteRawRequest.query:type_name -> query.BoundQuery
-	19,  // 158: query.ReserveStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
-	93,  // 159: query.ReserveStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
-	94,  // 160: query.ReserveStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
-	92,  // 161: query.ReserveBeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	14,  // 162: query.ReserveBeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	13,  // 163: query.ReserveBeginStreamExecuteRawRequest.target:type_name -> query.Target
-	18,  // 164: query.ReserveBeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
-	19,  // 165: query.ReserveBeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
-	93,  // 166: query.ReserveBeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
-	94,  // 167: query.ReserveBeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
-	17,  // 168: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
-	12,  // 169: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
-	20,  // 170: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
-	21,  // 171: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
-	172, // [172:172] is the sub-list for method output_type
-	172, // [172:172] is the sub-list for method input_type
-	172, // [172:172] is the sub-list for extension type_name
-	172, // [172:172] is the sub-list for extension extendee
-	0,   // [0:172] is the sub-list for field type_name
+	93,  // 147: query.StreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	92,  // 148: query.BeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 149: query.BeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 150: query.BeginStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 151: query.BeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 152: query.BeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 153: query.BeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 154: query.BeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 155: query.ReserveStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 156: query.ReserveStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 157: query.ReserveStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 158: query.ReserveStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 159: query.ReserveStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 160: query.ReserveStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 161: query.ReserveStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	92,  // 162: query.ReserveBeginStreamExecuteRawRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	14,  // 163: query.ReserveBeginStreamExecuteRawRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	13,  // 164: query.ReserveBeginStreamExecuteRawRequest.target:type_name -> query.Target
+	18,  // 165: query.ReserveBeginStreamExecuteRawRequest.query:type_name -> query.BoundQuery
+	19,  // 166: query.ReserveBeginStreamExecuteRawRequest.options:type_name -> query.ExecuteOptions
+	93,  // 167: query.ReserveBeginStreamExecuteRawResponse.error:type_name -> vtrpc.RPCError
+	94,  // 168: query.ReserveBeginStreamExecuteRawResponse.tablet_alias:type_name -> topodata.TabletAlias
+	17,  // 169: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
+	12,  // 170: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
+	20,  // 171: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
+	21,  // 172: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
+	173, // [173:173] is the sub-list for method output_type
+	173, // [173:173] is the sub-list for method input_type
+	173, // [173:173] is the sub-list for extension type_name
+	173, // [173:173] is the sub-list for extension extendee
+	0,   // [0:173] is the sub-list for field type_name
 }
 
 func init() { file_query_proto_init() }
