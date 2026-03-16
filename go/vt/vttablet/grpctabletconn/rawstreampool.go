@@ -24,7 +24,7 @@ import (
 
 var ErrPoolClosed = errors.New("stream pool is closed")
 
-const defaultMaxIdleStreams = 2
+const defaultMaxIdleStreams = 10
 
 type pooledStream[T any] struct {
 	stream T
