@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -1709,11 +1710,28 @@ func (vc *VCursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
 }
 
+var (
+	mirrorSourceLatency = stats.NewTimings("MirrorSourceExecuteTime", "Time spent executing the source (primary) query for mirrored requests", "Keyspace")
+	mirrorTargetLatency = stats.NewTimings("MirrorTargetExecuteTime", "Time spent executing the mirror target query", "Keyspace")
+	mirrorTargetErrors  = stats.NewCountersWithSingleLabel("MirrorTargetErrors", "Number of mirror target query errors", "Keyspace")
+)
+
 // RecordMirrorStats is used to record stats about a mirror query.
 func (vc *VCursorImpl) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 	vc.logStats.MirrorSourceExecuteTime = sourceExecTime
 	vc.logStats.MirrorTargetExecuteTime = targetExecTime
 	vc.logStats.MirrorTargetError = targetErr
+
+	keyspace := vc.keyspace
+	if sourceExecTime > 0 {
+		mirrorSourceLatency.Add(keyspace, sourceExecTime)
+	}
+	if targetExecTime > 0 {
+		mirrorTargetLatency.Add(keyspace, targetExecTime)
+	}
+	if targetErr != nil {
+		mirrorTargetErrors.Add(keyspace, 1)
+	}
 }
 
 func (vc *VCursorImpl) GetMarginComments() sqlparser.MarginComments {

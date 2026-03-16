@@ -23,11 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var errMirrorTargetQueryTookTooLong = vterrors.Errorf(vtrpc.Code_ABORTED, "Mirror target query took too long")
 
 type (
 	// percentBasedMirror represents the instructions to execute an
@@ -38,17 +34,13 @@ type (
 		primitive Primitive
 		target    Primitive
 	}
-
-	mirrorResult struct {
-		execTime time.Duration
-		err      error
-	}
 )
 
 const (
-	// maxMirrorTargetLag limits how long a mirror target may continue
-	// executing after the main primitive has finished.
-	maxMirrorTargetLag = 100 * time.Millisecond
+	// maxMirrorTargetDuration is the maximum time a mirror target query
+	// may execute before being cancelled. This is a safety bound to
+	// prevent leaked goroutines; it does not affect primary query latency.
+	maxMirrorTargetDuration = 30 * time.Second
 )
 
 var _ Primitive = (*percentBasedMirror)(nil)
@@ -71,43 +63,23 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 		return vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 	}
 
-	mirrorCh := make(chan mirrorResult, 1)
-	mirrorCtx, mirrorCtxCancel := context.WithCancel(ctx)
-	defer mirrorCtxCancel()
-
-	go func() {
-		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
-		targetStartTime := time.Now()
-		_, targetErr := mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
-		mirrorCh <- mirrorResult{
-			execTime: time.Since(targetStartTime),
-			err:      targetErr,
-		}
-	}()
-
-	var (
-		sourceExecTime, targetExecTime time.Duration
-		targetErr                      error
-	)
-
+	// Execute the primary query first so we know its exec time.
 	sourceStartTime := time.Now()
 	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
-	sourceExecTime = time.Since(sourceStartTime)
+	sourceExecTime := time.Since(sourceStartTime)
 
-	// Cancel the mirror context if it continues executing too long.
-	select {
-	case r := <-mirrorCh:
-		// Mirror target finished on time.
-		targetExecTime = r.execTime
-		targetErr = r.err
-	case <-time.After(maxMirrorTargetLag):
-		// Mirror target took too long.
-		mirrorCtxCancel()
-		targetExecTime = sourceExecTime + maxMirrorTargetLag
-		targetErr = errMirrorTargetQueryTookTooLong
-	}
-
-	vcursor.RecordMirrorStats(sourceExecTime, targetExecTime, targetErr)
+	// Fire mirror query in the background. Use a detached context so it
+	// is not cancelled when this function returns the primary result.
+	// The cloned VCursor has an independent SafeSession and logStats,
+	// so it is safe to use after the primary request completes.
+	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
+	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
+	go func() {
+		defer mirrorCancel()
+		targetStartTime := time.Now()
+		_, targetErr := mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
+		mirrorVCursor.RecordMirrorStats(sourceExecTime, time.Since(targetStartTime), targetErr)
+	}()
 
 	return r, err
 }
@@ -117,45 +89,22 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 		return vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 	}
 
-	mirrorCh := make(chan mirrorResult, 1)
-	mirrorCtx, mirrorCtxCancel := context.WithCancel(ctx)
-	defer mirrorCtxCancel()
+	// Execute the primary stream first so we know its exec time.
+	sourceStartTime := time.Now()
+	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
+	sourceExecTime := time.Since(sourceStartTime)
 
+	// Fire mirror stream in the background.
+	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
+	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
-		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
-		mirrorStartTime := time.Now()
+		defer mirrorCancel()
+		targetStartTime := time.Now()
 		targetErr := mirrorVCursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {
 			return nil
 		})
-		mirrorCh <- mirrorResult{
-			execTime: time.Since(mirrorStartTime),
-			err:      targetErr,
-		}
+		mirrorVCursor.RecordMirrorStats(sourceExecTime, time.Since(targetStartTime), targetErr)
 	}()
-
-	var (
-		sourceExecTime, targetExecTime time.Duration
-		targetErr                      error
-	)
-
-	sourceStartTime := time.Now()
-	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
-	sourceExecTime = time.Since(sourceStartTime)
-
-	// Cancel the mirror context if it continues executing too long.
-	select {
-	case r := <-mirrorCh:
-		// Mirror target finished on time.
-		targetExecTime = r.execTime
-		targetErr = r.err
-	case <-time.After(maxMirrorTargetLag):
-		// Mirror target took too long.
-		mirrorCtxCancel()
-		targetExecTime = sourceExecTime + maxMirrorTargetLag
-		targetErr = errMirrorTargetQueryTookTooLong
-	}
-
-	vcursor.RecordMirrorStats(sourceExecTime, targetExecTime, targetErr)
 
 	return err
 }
