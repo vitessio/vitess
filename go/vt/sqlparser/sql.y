@@ -699,11 +699,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = yyrcvr.Arena.newWithV(With{ctes: $2, Recursive: false})
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = yyrcvr.Arena.newWithV(With{ctes: $3, Recursive: true})
   }
 
 with_clause_opt:
@@ -806,7 +806,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+	$$ = newSelectA(yyrcvr.Arena, Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: $7})}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -816,19 +816,19 @@ query_expression_body:
   }
 | query_expression_body union_op query_primary
   {
- 	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+ 	$$ = yyrcvr.Arena.newUnionV(Union{Left: $1, Distinct: $2, Right: $3})
   }
 | query_expression_parens union_op query_primary
   {
-	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+	$$ = yyrcvr.Arena.newUnionV(Union{Left: $1, Distinct: $2, Right: $3})
   }
 | query_expression_body union_op query_expression_parens
   {
-  	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+  	$$ = yyrcvr.Arena.newUnionV(Union{Left: $1, Distinct: $2, Right: $3})
   }
 | query_expression_parens union_op query_expression_parens
   {
-	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+	$$ = yyrcvr.Arena.newUnionV(Union{Left: $1, Distinct: $2, Right: $3})
   }
 
 select_statement:
@@ -887,7 +887,7 @@ stream_statement:
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: newWhereA(yyrcvr.Arena, WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -895,11 +895,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
+    $$ = newSelectA(yyrcvr.Arena, Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, newWhereA(yyrcvr.Arena, WhereClause, $7), GroupBy($8), newWhereA(yyrcvr.Arena, HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
+    $$ = newSelectA(yyrcvr.Arena, Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, newWhereA(yyrcvr.Arena, WhereClause, $6), GroupBy($7), newWhereA(yyrcvr.Arena, HavingClause, $8), $9)
   }
 
 insert_statement:
@@ -923,7 +923,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)})
   }
 
 insert_or_replace:
@@ -939,25 +939,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = yyrcvr.Arena.newUpdateV(Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: newWhereA(yyrcvr.Arena, WhereClause, $8), OrderBy: $9, Limit: $10})
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = yyrcvr.Arena.newDeleteV(Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr:$6, As: $7})}, Partitions: $8, Where: newWhereA(yyrcvr.Arena, WhereClause, $9), OrderBy: $10, Limit: $11})
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
+    $$ = yyrcvr.Arena.newDeleteV(Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: newWhereA(yyrcvr.Arena, WhereClause, $9)})
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = yyrcvr.Arena.newDeleteV(Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: newWhereA(yyrcvr.Arena, WhereClause, $8)})
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = yyrcvr.Arena.newDeleteV(Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: newWhereA(yyrcvr.Arena, WhereClause, $8)})
   }
 
 from_or_using:
@@ -1388,7 +1388,7 @@ column_definition:
     	$2.Options.Collate = $3
     }
     $2.Options.Reference = $5
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    $$ = yyrcvr.Arena.newColumnDefinitionV(ColumnDefinition{Name: $1, Type: $2})
   }
 | sql_id column_type collate_opt generated_always_opt AS '(' expression ')' generated_column_attribute_list_opt reference_definition_opt
   {
@@ -1396,7 +1396,7 @@ column_definition:
     $2.Options.As = $7
     $2.Options.Reference = $10
     $2.Options.Collate = $3
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    $$ = yyrcvr.Arena.newColumnDefinitionV(ColumnDefinition{Name: $1, Type: $2})
   }
 
 generated_always_opt:
@@ -1450,7 +1450,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = newStrLiteralA(yyrcvr.Arena, $3)
     $$ = $1
   }
 | column_attribute_list_opt keys
@@ -1473,7 +1473,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt SRID INTEGRAL
   {
-    $1.SRID = NewIntLiteral($3)
+    $1.SRID = newIntLiteralA(yyrcvr.Arena, $3)
     $$ = $1
   }
 | column_attribute_list_opt VISIBLE
@@ -1490,11 +1490,11 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.EngineAttribute = NewStrLiteral($4)
+    $1.EngineAttribute = newStrLiteralA(yyrcvr.Arena, $4)
   }
 | column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+    $1.SecondaryEngineAttribute = newStrLiteralA(yyrcvr.Arena, $4)
   }
 
 column_format:
@@ -1544,7 +1544,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = newStrLiteralA(yyrcvr.Arena, $3)
     $$ = $1
   }
 | generated_column_attribute_list_opt keys
@@ -1575,23 +1575,23 @@ now
 now:
 CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_timestamp"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("current_timestamp"), Fsp: $2})
   }
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtime"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("localtime"), Fsp: $2})
   }
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtimestamp"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("localtimestamp"), Fsp: $2})
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_timestamp"), Fsp:$2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("utc_timestamp"), Fsp:$2})
   }
 | NOW func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2})
   }
 
 signed_literal_or_null:
@@ -1601,7 +1601,7 @@ signed_literal
  null_as_literal:
 NULL
  {
-    $$ = &NullVal{}
+    $$ = yyrcvr.Arena.newNullValV(NullVal{})
  }
 
  signed_literal:
@@ -1612,7 +1612,7 @@ NULL
    }
 | '-' NUM_literal
    {
-   	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+   	$$ = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: UMinusOp, Expr: $2})
    }
 
 literal:
@@ -1630,19 +1630,19 @@ text_literal
   }
 | HEX
   {
-	$$ = NewHexLiteral($1)
+	$$ = newHexLiteralA(yyrcvr.Arena, $1)
   }
 | HEXNUM
   {
-  	$$ = NewHexNumLiteral($1)
+  	$$ = newHexNumLiteralA(yyrcvr.Arena, $1)
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1[2:])
+  	$$ = newBitLiteralA(yyrcvr.Arena, $1[2:])
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral($1)
+	$$ = newBitLiteralA(yyrcvr.Arena, $1)
   }
 | VALUE_ARG
   {
@@ -1651,19 +1651,19 @@ text_literal
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: newBitLiteralA(yyrcvr.Arena, $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: newHexNumLiteralA(yyrcvr.Arena, $2)}
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: newBitLiteralA(yyrcvr.Arena, $2[2:])}
   }
 | underscore_charsets HEX %prec UNARY
   {
-   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: newHexLiteralA(yyrcvr.Arena, $2)}
   }
 | underscore_charsets column_name_or_offset %prec UNARY
   {
@@ -1676,15 +1676,15 @@ text_literal
   }
 | DATE STRING
   {
-  $$ = NewDateLiteral($2)
+  $$ = newDateLiteralA(yyrcvr.Arena, $2)
   }
 | TIME STRING
   {
-  $$ = NewTimeLiteral($2)
+  $$ = newTimeLiteralA(yyrcvr.Arena, $2)
   }
 | TIMESTAMP STRING
   {
-  $$ = NewTimestampLiteral($2)
+  $$ = newTimestampLiteralA(yyrcvr.Arena, $2)
   }
 
 underscore_charsets:
@@ -1864,29 +1864,29 @@ literal
 NUM_literal:
 INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = newIntLiteralA(yyrcvr.Arena, $1)
   }
 | FLOAT
   {
-    $$ = NewFloatLiteral($1)
+    $$ = newFloatLiteralA(yyrcvr.Arena, $1)
   }
 | DECIMAL
   {
-    $$ = NewDecimalLiteral($1)
+    $$ = newDecimalLiteralA(yyrcvr.Arena, $1)
   }
 
 text_literal:
 STRING
   {
-	$$ = NewStrLiteral($1)
+	$$ = newStrLiteralA(yyrcvr.Arena, $1)
   }
 | NCHAR_STRING
   {
-	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+	$$ = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: NStringOp, Expr: newStrLiteralA(yyrcvr.Arena, $1)})
   }
  | underscore_charsets STRING %prec UNARY
    {
-   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: newStrLiteralA(yyrcvr.Arena, $2)}
    }
 
 text_literal_or_arg:
@@ -2152,7 +2152,7 @@ length_opt:
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntLiteral($2)
+    $$ = newIntLiteralA(yyrcvr.Arena, $2)
   }
 
 float_length_opt:
@@ -2162,8 +2162,8 @@ float_length_opt:
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: newIntLiteralA(yyrcvr.Arena, $2),
+        Scale: newIntLiteralA(yyrcvr.Arena, $4),
     }
   }
 
@@ -2174,14 +2174,14 @@ decimal_length_opt:
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: newIntLiteralA(yyrcvr.Arena, $2),
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: newIntLiteralA(yyrcvr.Arena, $2),
+        Scale: newIntLiteralA(yyrcvr.Arena, $4),
     }
   }
 
@@ -2304,31 +2304,31 @@ index_option:
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
     // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1), Value: newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1), Value: newStrLiteralA(yyrcvr.Arena, $2)})
   }
 | VISIBLE
   {
-    $$ = &IndexOption{Name: string($1) }
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1) })
   }
 | INVISIBLE
   {
-    $$ = &IndexOption{Name: string($1) }
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1) })
   }
 | WITH PARSER ci_identifier
   {
-    $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1) + " " + string($2), String: $3.String()})
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1), Value: newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1), Value: newStrLiteralA(yyrcvr.Arena, $3)})
   }
 
 equal_opt:
@@ -2638,127 +2638,127 @@ space_separated_table_option_list:
 table_option:
   AUTO_INCREMENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | AUTOEXTEND_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name: string($1), Value: newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | default_optional charset_or_character_set equal_opt charset
   {
-    $$ = &TableOption{Name:(string($2)), String:$4, CaseSensitive: true}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:(string($2)), String:$4, CaseSensitive: true})
   }
 | default_optional COLLATE equal_opt charset
   {
-    $$ = &TableOption{Name:string($2), String:$4, CaseSensitive: true}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($2), String:$4, CaseSensitive: true})
   }
 | CHECKSUM equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:(string($1)+" "+string($2)), Value:newStrLiteralA(yyrcvr.Arena, $4)})
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:(string($1)+" "+string($2)), Value:newStrLiteralA(yyrcvr.Arena, $4)})
   }
 | DELAY_KEY_WRITE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | ENGINE equal_opt table_alias
   {
-    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:$3.String(), CaseSensitive: true})
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name: string($1), Value: newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:string($3)})
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | MAX_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | MIN_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | PACK_KEYS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | PACK_KEYS equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:string($3)})
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | ROW_FORMAT equal_opt row_format_options
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:string($3)})
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name: string($1), Value: newStrLiteralA(yyrcvr.Arena, $3)})
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:string($3)})
   }
 | STATS_PERSISTENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String:string($3)})
   }
 | STATS_SAMPLE_PAGES equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Value:newIntLiteralA(yyrcvr.Arena, $3)})
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), String: ($3.String() + $4)})
   }
 | UNION equal_opt '(' table_name_list ')'
   {
-    $$ = &TableOption{Name:string($1), Tables: $4}
+    $$ = yyrcvr.Arena.newTableOptionV(TableOption{Name:string($1), Tables: $4})
   }
 
 storage_opt:
@@ -2840,11 +2840,11 @@ ratio_opt:
   }
 | RATIO INTEGRAL
   {
-    $$ = NewIntLiteral($2)
+    $$ = newIntLiteralA(yyrcvr.Arena, $2)
   }
 | RATIO DECIMAL
   {
-    $$ = NewDecimalLiteral($2)
+    $$ = newDecimalLiteralA(yyrcvr.Arena, $2)
   }
 
 alter_commands_list:
@@ -3541,7 +3541,7 @@ partition_operation:
   }
 | COALESCE PARTITION INTEGRAL
   {
-    $$ = &PartitionSpec{Action:CoalesceAction, Number:NewIntLiteral($3) }
+    $$ = &PartitionSpec{Action:CoalesceAction, Number:newIntLiteralA(yyrcvr.Arena, $3) }
   }
 | EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
   {
@@ -3777,19 +3777,19 @@ partition_engine:
 partition_comment:
   COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = NewStrLiteral($3)
+    $$ = newStrLiteralA(yyrcvr.Arena, $3)
   }
 
 partition_data_directory:
   DATA DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = newStrLiteralA(yyrcvr.Arena, $4)
   }
 
 partition_index_directory:
   INDEX DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = newStrLiteralA(yyrcvr.Arena, $4)
   }
 
 partition_max_rows:
@@ -3884,131 +3884,131 @@ analyze_statement:
 show_statement:
   SHOW charset_or_character_set like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Charset, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Charset, Filter: $3}})
   }
 | SHOW COLLATION like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Collation, Filter: $3}})
   }
 | SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Full: $2, Command: Column, Tbl: $5, DbName: $6, Filter: $7}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Full: $2, Command: Column, Tbl: $5, DbName: $6, Filter: $7}})
   }
 | SHOW DATABASES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Database, Filter: $3}})
   }
 | SHOW SCHEMAS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Database, Filter: $3}})
   }
 | SHOW KEYSPACES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Keyspace, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Keyspace, Filter: $3}})
   }
 | SHOW VITESS_KEYSPACES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Keyspace, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Keyspace, Filter: $3}})
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Function, Filter: $4}})
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Index, Tbl: $5, DbName: $6, Filter: $7}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Index, Tbl: $5, DbName: $6, Filter: $7}})
   }
 | SHOW OPEN TABLES from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: OpenTable, DbName:$4, Filter: $5}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: OpenTable, DbName:$4, Filter: $5}})
   }
 | SHOW PRIVILEGES
   {
-    $$ = &Show{&ShowBasic{Command: Privilege}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Privilege}})
   }
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Procedure, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Procedure, Filter: $4}})
   }
 | SHOW session_or_local_opt STATUS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: StatusSession, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: StatusSession, Filter: $4}})
   }
 | SHOW GLOBAL STATUS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: StatusGlobal, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: StatusGlobal, Filter: $4}})
   }
 | SHOW session_or_local_opt VARIABLES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VariableSession, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VariableSession, Filter: $4}})
   }
 | SHOW GLOBAL VARIABLES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VariableGlobal, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VariableGlobal, Filter: $4}})
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}})
   }
 | SHOW full_opt TABLES from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Table, Full: $2, DbName:$4, Filter: $5}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Table, Full: $2, DbName:$4, Filter: $5}})
   }
 | SHOW TRIGGERS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}})
   }
 | SHOW CREATE DATABASE table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateDb, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateDb, Op: $4}})
   }
 | SHOW CREATE EVENT table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateE, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateE, Op: $4}})
   }
 | SHOW CREATE FUNCTION table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateF, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateF, Op: $4}})
   }
 | SHOW CREATE PROCEDURE table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateProc, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateProc, Op: $4}})
   }
 | SHOW CREATE TABLE table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateTbl, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateTbl, Op: $4}})
   }
 | SHOW CREATE TRIGGER table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateTr, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateTr, Op: $4}})
   }
 | SHOW CREATE VIEW table_name
   {
-    $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateV, Op: $4}})
   }
 | SHOW ENGINES
   {
-    $$ = &Show{&ShowBasic{Command: Engines}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Engines}})
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{&ShowBasic{Command: Plugins}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Plugins}})
   }
 | SHOW GLOBAL GTID_EXECUTED from_database_opt
   {
-    $$ = &Show{&ShowBasic{Command: GtidExecGlobal, DbName: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: GtidExecGlobal, DbName: $4}})
   }
 | SHOW GLOBAL VGTID_EXECUTED from_database_opt
   {
-    $$ = &Show{&ShowBasic{Command: VGtidExecGlobal, DbName: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VGtidExecGlobal, DbName: $4}})
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessVariables, Filter: $4}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessVariables, Filter: $4}})
   }
 | SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}})
   }
 | SHOW VITESS_MIGRATION STRING LOGS
   {
@@ -4020,74 +4020,74 @@ show_statement:
   }
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}})
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{&ShowBasic{Command: VschemaTables}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaTables}})
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaVindexes}})
   }
 | SHOW VSCHEMA VINDEXES from_or_on table_name
   {
-    $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}})
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{&ShowBasic{Command: Warnings}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Warnings}})
   }
 | SHOW VITESS_SHARDS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessShards, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessShards, Filter: $3}})
   }
 | SHOW VITESS_TABLETS like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessTablets, Filter: $3}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessTablets, Filter: $3}})
   }
 | SHOW VITESS_TARGET
   {
-    $$ = &Show{&ShowBasic{Command: VitessTarget}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessTarget}})
   }
 /*
  * Catch-all for show statements without vitess keywords:
  */
 | SHOW ci_identifier ddl_skip_to_end
   {
-    $$ = &Show{&ShowOther{Command: string($2.String())}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2.String())}})
   }
 | SHOW CREATE USER ddl_skip_to_end
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2) + " " + string($3)}})
    }
 | SHOW BINARY ci_identifier ddl_skip_to_end /* SHOW BINARY ... */
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2) + " " + $3.String()}})
   }
 | SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2) + " " + string($3)}})
   }
 | SHOW ENGINE ddl_skip_to_end
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2)}})
   }
 | SHOW FUNCTION CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}})
   }
 | SHOW PROCEDURE CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}})
   }
 | SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowOther{Command: string($3)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($3)}})
   }
 | SHOW STORAGE ddl_skip_to_end
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string($2)}})
   }
 
 extended_opt:
@@ -4689,19 +4689,19 @@ select_expression_list:
 select_expression:
   '*'
   {
-    $$ = &StarExpr{}
+    $$ = yyrcvr.Arena.newStarExprV(StarExpr{})
   }
 | expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    $$ = yyrcvr.Arena.newAliasedExprV(AliasedExpr{Expr: $1, As: $2})
   }
 | table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Name: $1}}
+    $$ = yyrcvr.Arena.newStarExprV(StarExpr{TableName: TableName{Name: $1}})
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = yyrcvr.Arena.newStarExprV(StarExpr{TableName: TableName{Qualifier: $1, Name: $3}})
   }
 
 as_ci_opt:
@@ -4726,7 +4726,7 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}}}
+    $$ = TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}})}
   }
   | from_clause
   {
@@ -4760,11 +4760,11 @@ table_factor:
   }
 | derived_table as_opt table_id column_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
+    $$ = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr:$1, As: $3, Columns: $4})
   }
 | openb table_references closeb
   {
-    $$ = &ParenTableExpr{Exprs: $2}
+    $$ = yyrcvr.Arena.newParenTableExprV(ParenTableExpr{Exprs: $2})
   }
 | json_table_function
   {
@@ -4774,21 +4774,21 @@ table_factor:
 derived_table:
   openb query_expression closeb
   {
-    $$ = &DerivedTable{Lateral: false, Select: $2}
+    $$ = yyrcvr.Arena.newDerivedTableV(DerivedTable{Lateral: false, Select: $2})
   }
 | LATERAL openb query_expression closeb
   {
-    $$ = &DerivedTable{Lateral: true, Select: $3}
+    $$ = yyrcvr.Arena.newDerivedTableV(DerivedTable{Lateral: true, Select: $3})
   }
 
 aliased_table_name:
 table_name as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    $$ = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr:$1, As: $2, Hints: $3})
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    $$ = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7})
   }
 
 column_list_opt:
@@ -4867,38 +4867,38 @@ partition_list:
 join_table:
   table_reference inner_join table_factor join_condition_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    $$ = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4})
   }
 | table_reference straight_join table_factor on_expression_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    $$ = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4})
   }
 | table_reference outer_join table_reference join_condition
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    $$ = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4})
   }
 | table_reference natural_join table_factor
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
+    $$ = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3})
   }
 
 join_condition:
   ON expression
-  { $$ = &JoinCondition{On: $2} }
+  { $$ = yyrcvr.Arena.newJoinConditionV(JoinCondition{On: $2}) }
 | USING '(' column_list ')'
-  { $$ = &JoinCondition{Using: $3} }
+  { $$ = yyrcvr.Arena.newJoinConditionV(JoinCondition{Using: $3}) }
 
 join_condition_opt:
 %prec JOIN
-  { $$ = &JoinCondition{} }
+  { $$ = yyrcvr.Arena.newJoinConditionV(JoinCondition{}) }
 | join_condition
   { $$ = $1 }
 
 on_expression_opt:
 %prec JOIN
-  { $$ = &JoinCondition{} }
+  { $$ = yyrcvr.Arena.newJoinConditionV(JoinCondition{}) }
 | ON expression
-  { $$ = &JoinCondition{On: $2} }
+  { $$ = yyrcvr.Arena.newJoinConditionV(JoinCondition{On: $2}) }
 
 as_opt:
   { $$ = struct{}{} }
@@ -5025,19 +5025,19 @@ index_hint
 index_hint:
   USE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: $5}
+    $$ = yyrcvr.Arena.newIndexHintV(IndexHint{Type: UseOp, ForType:$3, Indexes: $5})
   }
 | USE index_or_key index_hint_for_opt openb closeb
   {
-    $$ = &IndexHint{Type: UseOp, ForType: $3}
+    $$ = yyrcvr.Arena.newIndexHintV(IndexHint{Type: UseOp, ForType: $3})
   }
 | IGNORE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5}
+    $$ = yyrcvr.Arena.newIndexHintV(IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5})
   }
 | FORCE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
+    $$ = yyrcvr.Arena.newIndexHintV(IndexHint{Type: ForceOp, ForType: $3, Indexes: $5})
   }
 
 index_hint_for_opt:
@@ -5071,23 +5071,23 @@ where_expression_opt:
 expression:
   expression OR expression %prec OR
   {
-	$$ = &OrExpr{Left: $1, Right: $3}
+	$$ = yyrcvr.Arena.newOrExprV(OrExpr{Left: $1, Right: $3})
   }
 | expression XOR expression %prec XOR
   {
-	$$ = &XorExpr{Left: $1, Right: $3}
+	$$ = yyrcvr.Arena.newXorExprV(XorExpr{Left: $1, Right: $3})
   }
 | expression AND expression %prec AND
   {
-	$$ = &AndExpr{Left: $1, Right: $3}
+	$$ = yyrcvr.Arena.newAndExprV(AndExpr{Left: $1, Right: $3})
   }
 | NOT expression %prec NOT
   {
-	  $$ = &NotExpr{Expr: $2}
+	  $$ = yyrcvr.Arena.newNotExprV(NotExpr{Expr: $2})
   }
 | bool_pri IS is_suffix %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: $3}
+	 $$ = yyrcvr.Arena.newIsExprV(IsExpr{Left: $1, Right: $3})
   }
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
@@ -5101,15 +5101,15 @@ expression:
 bool_pri:
 bool_pri IS NULL %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
+	 $$ = yyrcvr.Arena.newIsExprV(IsExpr{Left: $1, Right: IsNullOp})
   }
 | bool_pri IS NOT NULL %prec IS
   {
-  	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
+  	$$ = yyrcvr.Arena.newIsExprV(IsExpr{Left: $1, Right: IsNotNullOp})
   }
 | bool_pri compare predicate
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: $2, Right: $3})
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
@@ -5119,11 +5119,11 @@ bool_pri IS NULL %prec IS
 predicate:
 bit_expr IN col_tuple
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: InOp, Right: $3})
   }
 | bit_expr NOT IN col_tuple
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4})
   }
 | bit_expr BETWEEN bit_expr AND predicate
   {
@@ -5135,27 +5135,27 @@ bit_expr IN col_tuple
   }
 | bit_expr LIKE simple_expr
   {
-	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+	  $$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3})
   }
 | bit_expr NOT LIKE simple_expr
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4})
   }
 | bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+	  $$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5})
   }
 | bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6})
   }
 | bit_expr regexp_symbol bit_expr
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+	$$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3})
   }
 | bit_expr NOT regexp_symbol bit_expr
   {
-	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+	 $$ = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4})
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
@@ -5174,51 +5174,51 @@ regexp_symbol:
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3})
   }
 | bit_expr '&' bit_expr %prec '&'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3})
   }
 | bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3})
   }
 | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3})
   }
 | bit_expr '+' bit_expr %prec '+'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: PlusOp, Right: $3})
   }
 | bit_expr '-' bit_expr %prec '-'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: MinusOp, Right: $3})
   }
 | bit_expr '*' bit_expr %prec '*'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: MultOp, Right: $3})
   }
 | bit_expr '/' bit_expr %prec '/'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: DivOp, Right: $3})
   }
 | bit_expr '%' bit_expr %prec '%'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: ModOp, Right: $3})
   }
 | bit_expr DIV bit_expr %prec DIV
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3})
   }
 | bit_expr MOD bit_expr %prec MOD
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: ModOp, Right: $3})
   }
 | bit_expr '^' bit_expr %prec '^'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+	  $$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3})
   }
 | simple_expr %prec EXPRESSION_PREC_SETTER
   {
@@ -5244,7 +5244,7 @@ function_call_keyword
   }
 | simple_expr COLLATE charset %prec UNARY
   {
-	$$ = &CollateExpr{Expr: $1, Collation: $3}
+	$$ = yyrcvr.Arena.newCollateExprV(CollateExpr{Expr: $1, Collation: $3})
   }
 | literal_or_null
   {
@@ -5264,15 +5264,15 @@ function_call_keyword
   }
 | '-' simple_expr %prec UNARY
   {
-	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+	$$ = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: UMinusOp, Expr: $2})
   }
 | '~' simple_expr %prec UNARY
   {
-	$$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
+	$$ = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: TildaOp, Expr: $2})
   }
 | '!' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
+    $$ = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: BangOp, Expr: $2})
   }
 | subquery
   {
@@ -5284,11 +5284,11 @@ function_call_keyword
   }
 | EXISTS subquery
   {
-	$$ = &ExistsExpr{Subquery: $2}
+	$$ = yyrcvr.Arena.newExistsExprV(ExistsExpr{Subquery: $2})
   }
 | MATCH column_names_opt_paren AGAINST openb bit_expr match_option closeb
   {
-  $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
+  $$ = yyrcvr.Arena.newMatchExprV(MatchExpr{Columns: $2, Expr: $5, Option: $6})
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
@@ -5308,7 +5308,7 @@ function_call_keyword
     // To convert a string expression to a binary string, these constructs are equivalent:
     //    CAST(expr AS BINARY)
     //    BINARY expr
-    $$ = &ConvertExpr{Expr: $2, Type: &ConvertType{Type: $1}}
+    $$ = &ConvertExpr{Expr: $2, Type: yyrcvr.Arena.newConvertTypeV(ConvertType{Type: $1})}
   }
 | DEFAULT default_opt
   {
@@ -5328,17 +5328,17 @@ function_call_keyword
 }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+	$$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3})
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+	$$ = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3})
   }
 
 interval_value:
   INTERVAL simple_expr sql_id
   {
-     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+     $$ = yyrcvr.Arena.newIntervalExprV(IntervalExpr{Expr: $2, Unit: $3.String()})
   }
 
 column_names_opt_paren:
@@ -5485,11 +5485,11 @@ sql_id_opt window_partition_clause_opt order_by_opt frame_clause_opt
 over_clause:
   OVER openb window_spec closeb
   {
-    $$ = &OverClause{ WindowSpec: $3 }
+    $$ = yyrcvr.Arena.newOverClauseV(OverClause{ WindowSpec: $3 })
   }
 | OVER sql_id
   {
-    $$ = &OverClause{WindowName: $2}
+    $$ = yyrcvr.Arena.newOverClauseV(OverClause{WindowName: $2})
   }
 
 null_treatment_clause_opt:
@@ -5659,7 +5659,7 @@ col_tuple:
 subquery:
   query_expression_parens %prec SUBQUERY_AS_EXPR
   {
-  	$$ = &Subquery{$1}
+  	$$ = yyrcvr.Arena.newSubqueryV(Subquery{$1})
   }
 
 expression_list:
@@ -5679,11 +5679,11 @@ expression_list:
 function_call_generic:
   sql_id openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: $1, Exprs: $3})
   }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Qualifier: $1, Name: $3, Exprs: $5})
   }
 
 /*
@@ -5693,11 +5693,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3})
   }
 | RIGHT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3})
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -5717,7 +5717,7 @@ function_call_keyword:
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
-    $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
+    $$ = yyrcvr.Arena.newCaseExprV(CaseExpr{Expr: $2, Whens: $3, Else: $4})
   }
 | VALUES openb column_name closeb
   {
@@ -5729,7 +5729,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
+    $$ =  yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI($1)})
   }
 
 /*
@@ -5740,7 +5740,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name:NewIdentifierCI("utc_date")})
   }
 | now
   {
@@ -5750,16 +5750,16 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name:NewIdentifierCI("current_date")})
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2})
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_time"), Fsp: $2}
+    $$ = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name:NewIdentifierCI("current_time"), Fsp: $2})
   }
 | COUNT openb '*' closeb
   {
@@ -5827,7 +5827,7 @@ UTC_DATE func_paren_opt
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
+    $$ = yyrcvr.Arena.newGroupConcatExprV(GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7})
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
@@ -6081,7 +6081,7 @@ null_int_variable_arg:
   }
 | INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = newIntLiteralA(yyrcvr.Arena, $1)
   }
 | user_defined_variable
   {
@@ -6335,7 +6335,7 @@ func_datetime_precision:
   }
 | openb INTEGRAL closeb
   {
-  	$$ = NewIntLiteral($2)
+  	$$ = newIntLiteralA(yyrcvr.Arena, $2)
   }
 | openb VALUE_ARG closeb
   {
@@ -6350,23 +6350,23 @@ func_datetime_precision:
 function_call_conflict:
   IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3})
   }
 | DATABASE openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3})
   }
 | SCHEMA openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3})
   }
 | MOD openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3})
   }
 | REPLACE openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
+    $$ = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3})
   }
 
 match_option:
@@ -6412,75 +6412,75 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($2), Length: newIntLiteralA(yyrcvr.Arena, $4)})
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($2), Length: newIntLiteralA(yyrcvr.Arena, $4)})
   }
 
 convert_type:
   BINARY length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2})
   }
 | CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2, Charset: $3})
   }
 | DATE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | DATETIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2})
   }
 | DECIMAL_TYPE decimal_length_opt
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | JSON
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | NCHAR length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2})
   }
 | SIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | SIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | TIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2})
   }
 | UNSIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | UNSIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | FLOAT_TYPE length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1), Length: $2})
   }
 | DOUBLE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 | REAL
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string($1)})
   }
 
 array_opt:
@@ -6524,7 +6524,7 @@ when_expression_list:
 when_expression:
   WHEN expression THEN expression
   {
-    $$ = &When{Cond: $2, Val: $4}
+    $$ = yyrcvr.Arena.newWhenV(When{Cond: $2, Val: $4})
   }
 
 else_expression_opt:
@@ -6539,19 +6539,19 @@ else_expression_opt:
 column_name:
   ci_identifier
   {
-    $$ = &ColName{Name: $1}
+    $$ = yyrcvr.Arena.newColNameV(ColName{Name: $1})
   }
 | non_reserved_keyword
   {
-    $$ = &ColName{Name: NewIdentifierCI(string($1))}
+    $$ = yyrcvr.Arena.newColNameV(ColName{Name: NewIdentifierCI(string($1))})
   }
 | table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
+    $$ = yyrcvr.Arena.newColNameV(ColName{Qualifier: TableName{Name: $1}, Name: $3})
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+    $$ = yyrcvr.Arena.newColNameV(ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5})
   }
 
 column_name_or_offset:
@@ -6572,11 +6572,11 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntLiteral("1")
+    $$ = newIntLiteralA(yyrcvr.Arena, "1")
   }
 | INTEGRAL VALUES
   {
-    $$ = NewIntLiteral($1)
+    $$ = newIntLiteralA(yyrcvr.Arena, $1)
   }
 | VALUE_ARG VALUES
   {
@@ -6655,7 +6655,7 @@ order_list:
 order:
   expression asc_desc_opt
   {
-    $$ = &Order{Expr: $1, Direction: $2}
+    $$ = yyrcvr.Arena.newOrderV(Order{Expr: $1, Direction: $2})
   }
 
 asc_desc_opt:
@@ -6683,15 +6683,15 @@ limit_opt:
 limit_clause:
 LIMIT expression
   {
-    $$ = &Limit{Rowcount: $2}
+    $$ = yyrcvr.Arena.newLimitV(Limit{Rowcount: $2})
   }
 | LIMIT expression ',' expression
   {
-    $$ = &Limit{Offset: $2, Rowcount: $4}
+    $$ = yyrcvr.Arena.newLimitV(Limit{Offset: $2, Rowcount: $4})
   }
 | LIMIT expression OFFSET expression
   {
-    $$ = &Limit{Offset: $4, Rowcount: $2}
+    $$ = yyrcvr.Arena.newLimitV(Limit{Offset: $4, Rowcount: $2})
   }
 
 algorithm_lock_opt:
@@ -6872,15 +6872,15 @@ FOR UPDATE
 into_clause:
 INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
 {
-$$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+$$ = yyrcvr.Arena.newSelectIntoV(SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9})
 }
 | INTO DUMPFILE STRING
 {
-$$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:ColumnCharset{}, FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+$$ = yyrcvr.Arena.newSelectIntoV(SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:ColumnCharset{}, FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""})
 }
 | INTO OUTFILE STRING charset_opt export_options
 {
-$$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+$$ = yyrcvr.Arena.newSelectIntoV(SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""})
 }
 
 format_opt:
@@ -7018,23 +7018,23 @@ optionally_opt:
 insert_data:
   VALUES tuple_list
   {
-    $$ = &Insert{Rows: $2}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Rows: $2})
   }
 | select_statement
   {
-    $$ = &Insert{Rows: $1}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Rows: $1})
   }
 | openb ins_column_list closeb VALUES tuple_list
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Columns: $2, Rows: $5})
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Columns: []IdentifierCI{}, Rows: $4})
   }
 | openb ins_column_list closeb select_statement
   {
-    $$ = &Insert{Columns: $2, Rows: $4}
+    $$ = yyrcvr.Arena.newInsertV(Insert{Columns: $2, Rows: $4})
   }
 
 ins_column_list:
@@ -7116,7 +7116,7 @@ update_list:
 update_expression:
   column_name '=' expression
   {
-    $$ = &UpdateExpr{Name: $1, Expr: $3}
+    $$ = yyrcvr.Arena.newUpdateExprV(UpdateExpr{Name: $1, Expr: $3})
   }
 
 set_list:
@@ -7132,19 +7132,19 @@ set_list:
 set_expression:
   set_variable '=' ON
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+    $$ = yyrcvr.Arena.newSetExprV(SetExpr{Var: $1, Expr: newStrLiteralA(yyrcvr.Arena, "on")})
   }
 | set_variable '=' OFF
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+    $$ = yyrcvr.Arena.newSetExprV(SetExpr{Var: $1, Expr: newStrLiteralA(yyrcvr.Arena, "off")})
   }
 | set_variable '=' expression
   {
-    $$ = &SetExpr{Var: $1, Expr: $3}
+    $$ = yyrcvr.Arena.newSetExprV(SetExpr{Var: $1, Expr: $3})
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
+    $$ = yyrcvr.Arena.newSetExprV(SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2})
   }
 
 set_variable:
@@ -7175,11 +7175,11 @@ charset_or_character_set_or_names:
 charset_value:
   sql_id
   {
-    $$ = NewStrLiteral($1.String())
+    $$ = newStrLiteralA(yyrcvr.Arena, $1.String())
   }
 | STRING
   {
-    $$ = NewStrLiteral($1)
+    $$ = newStrLiteralA(yyrcvr.Arena, $1)
   }
 | DEFAULT
   {
@@ -7240,7 +7240,7 @@ using_opt:
 using_index_type:
   USING sql_id
   {
-    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+    $$ = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string($1), String: string($2.String())})
   }
 
 sql_id:

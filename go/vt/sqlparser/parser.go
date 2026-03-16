@@ -46,6 +46,13 @@ var zeroParser yyParserImpl
 // MySQLVersion is the version of MySQL that the parser would emulate
 var MySQLVersion = "50709" // default version if nothing else is stated
 
+// arenaPool pools Arena objects for reuse across parse calls.
+var arenaPool = sync.Pool{
+	New: func() any {
+		return newArena()
+	},
+}
+
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
 //
@@ -55,7 +62,15 @@ var MySQLVersion = "50709" // default version if nothing else is stated
 //	showCollationFilterOpt := $4
 //	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
+	return yyParsePooledArena(yylex, nil)
+}
+
+// yyParsePooledArena is like yyParsePooled but attaches an Arena to the parser
+// for AST node allocation. The arena is detached before the parser returns to
+// the pool; the caller is responsible for the arena's lifetime.
+func yyParsePooledArena(yylex yyLexer, arena *Arena) int {
 	parser := parserPool.Get().(*yyParserImpl)
+	parser.Arena = arena
 	defer func() {
 		*parser = zeroParser
 		parserPool.Put(parser)
@@ -103,6 +118,64 @@ func Parse2(sql string) (Statement, BindVars, error) {
 		return nil, nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
+}
+
+// ParseResult bundles a parsed AST with the arena that backs its memory.
+// Callers must call Release() when the AST is no longer needed to return the
+// arena to the pool for reuse.
+type ParseResult struct {
+	Statement Statement
+	BindVars  BindVars
+	arena     *Arena
+}
+
+// Release returns the arena memory to the pool. The Statement and all AST
+// nodes within it must not be accessed after Release is called.
+func (r *ParseResult) Release() {
+	if r.arena != nil {
+		arenaPool.Put(r.arena)
+		r.arena = nil
+	}
+}
+
+// Parse2WithArena is like Parse2 but allocates AST nodes from a pooled arena.
+// This reduces per-parse heap allocations. The caller must call Release() on
+// the returned ParseResult when done with the AST.
+func Parse2WithArena(sql string) (*ParseResult, error) {
+	arena := arenaPool.Get().(*Arena)
+	tokenizer := NewStringTokenizer(sql)
+	if yyParsePooledArena(tokenizer, arena) != 0 {
+		if tokenizer.partialDDL != nil {
+			if typ, val := tokenizer.Scan(); typ != 0 {
+				arenaPool.Put(arena)
+				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
+			}
+			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
+			switch x := tokenizer.partialDDL.(type) {
+			case DBDDLStatement:
+				x.SetFullyParsed(false)
+			case DDLStatement:
+				x.SetFullyParsed(false)
+			}
+			tokenizer.ParseTree = tokenizer.partialDDL
+			return &ParseResult{
+				Statement: tokenizer.ParseTree,
+				BindVars:  tokenizer.BindVars,
+				arena:     arena,
+			}, nil
+		}
+		arenaPool.Put(arena)
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+	}
+	if tokenizer.ParseTree == nil {
+		arenaPool.Put(arena)
+		return nil, ErrEmpty
+	}
+	return &ParseResult{
+		Statement: tokenizer.ParseTree,
+		BindVars:  tokenizer.BindVars,
+		arena:     arena,
+	}, nil
 }
 
 func checkParserVersionFlag() {

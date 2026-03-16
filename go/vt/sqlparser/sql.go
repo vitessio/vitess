@@ -8607,6 +8607,7 @@ type yyParserImpl struct {
 	lval  yySymType
 	stack [yyInitialStackSize]yySymType
 	char  int
+	Arena *Arena
 }
 
 func (p *yyParserImpl) Lookahead() int {
@@ -9016,7 +9017,7 @@ yydefault:
 		var yyLOCAL *With
 //line sql.y:701
 		{
-			yyLOCAL = &With{ctes: yyDollar[2].ctesUnion(), Recursive: false}
+			yyLOCAL = yyrcvr.Arena.newWithV(With{ctes: yyDollar[2].ctesUnion(), Recursive: false})
 		}
 		yyVAL.union = yyLOCAL
 	case 47:
@@ -9024,7 +9025,7 @@ yydefault:
 		var yyLOCAL *With
 //line sql.y:705
 		{
-			yyLOCAL = &With{ctes: yyDollar[3].ctesUnion(), Recursive: true}
+			yyLOCAL = yyrcvr.Arena.newWithV(With{ctes: yyDollar[3].ctesUnion(), Recursive: true})
 		}
 		yyVAL.union = yyLOCAL
 	case 48:
@@ -9163,7 +9164,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:808
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), SelectExprs{&Nextval{Expr: yyDollar[5].exprUnion()}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
+			yyLOCAL = newSelectA(yyrcvr.Arena, Comments(yyDollar[2].strs), SelectExprs{&Nextval{Expr: yyDollar[5].exprUnion()}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: yyDollar[7].tableName})}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
 		}
 		yyVAL.union = yyLOCAL
 	case 64:
@@ -9179,7 +9180,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:818
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnionV(Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 66:
@@ -9187,7 +9188,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:822
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnionV(Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 67:
@@ -9195,7 +9196,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:826
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnionV(Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 68:
@@ -9203,7 +9204,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:830
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnionV(Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 69:
@@ -9298,7 +9299,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:889
 		{
-			yyLOCAL = &VStream{Comments: Comments(yyDollar[2].strs).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName, Where: NewWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = &VStream{Comments: Comments(yyDollar[2].strs).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName, Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 80:
@@ -9306,7 +9307,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:897
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, NewWhere(WhereClause, yyDollar[7].exprUnion()), GroupBy(yyDollar[8].exprsUnion()), NewWhere(HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
+			yyLOCAL = newSelectA(yyrcvr.Arena, Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, newWhereA(yyrcvr.Arena, WhereClause, yyDollar[7].exprUnion()), GroupBy(yyDollar[8].exprsUnion()), newWhereA(yyrcvr.Arena, HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
 		}
 		yyVAL.union = yyLOCAL
 	case 81:
@@ -9314,7 +9315,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:901
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, NewWhere(WhereClause, yyDollar[6].exprUnion()), GroupBy(yyDollar[7].exprsUnion()), NewWhere(HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
+			yyLOCAL = newSelectA(yyrcvr.Arena, Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, newWhereA(yyrcvr.Arena, WhereClause, yyDollar[6].exprUnion()), GroupBy(yyDollar[7].exprsUnion()), newWhereA(yyrcvr.Arena, HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
 		}
 		yyVAL.union = yyLOCAL
 	case 82:
@@ -9344,7 +9345,7 @@ yydefault:
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())})
 		}
 		yyVAL.union = yyLOCAL
 	case 84:
@@ -9368,7 +9369,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:941
 		{
-			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()}
+			yyLOCAL = yyrcvr.Arena.newUpdateV(Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 87:
@@ -9376,7 +9377,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:947
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].identifierCS}}, Partitions: yyDollar[8].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()}
+			yyLOCAL = yyrcvr.Arena.newDeleteV(Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].identifierCS})}, Partitions: yyDollar[8].partitionsUnion(), Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 88:
@@ -9384,7 +9385,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:951
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[6].tableNamesUnion(), TableExprs: yyDollar[8].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion())}
+			yyLOCAL = yyrcvr.Arena.newDeleteV(Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[6].tableNamesUnion(), TableExprs: yyDollar[8].tableExprsUnion(), Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[9].exprUnion())})
 		}
 		yyVAL.union = yyLOCAL
 	case 89:
@@ -9392,7 +9393,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:955
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
+			yyLOCAL = yyrcvr.Arena.newDeleteV(Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[8].exprUnion())})
 		}
 		yyVAL.union = yyLOCAL
 	case 90:
@@ -9400,7 +9401,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:959
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
+			yyLOCAL = yyrcvr.Arena.newDeleteV(Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: newWhereA(yyrcvr.Arena, WhereClause, yyDollar[8].exprUnion())})
 		}
 		yyVAL.union = yyLOCAL
 	case 91:
@@ -10040,7 +10041,7 @@ yydefault:
 				yyDollar[2].columnType.Options.Collate = yyDollar[3].str
 			}
 			yyDollar[2].columnType.Options.Reference = yyDollar[5].referenceDefinitionUnion()
-			yyLOCAL = &ColumnDefinition{Name: yyDollar[1].identifierCI, Type: yyDollar[2].columnType}
+			yyLOCAL = yyrcvr.Arena.newColumnDefinitionV(ColumnDefinition{Name: yyDollar[1].identifierCI, Type: yyDollar[2].columnType})
 		}
 		yyVAL.union = yyLOCAL
 	case 175:
@@ -10052,7 +10053,7 @@ yydefault:
 			yyDollar[2].columnType.Options.As = yyDollar[7].exprUnion()
 			yyDollar[2].columnType.Options.Reference = yyDollar[10].referenceDefinitionUnion()
 			yyDollar[2].columnType.Options.Collate = yyDollar[3].str
-			yyLOCAL = &ColumnDefinition{Name: yyDollar[1].identifierCI, Type: yyDollar[2].columnType}
+			yyLOCAL = yyrcvr.Arena.newColumnDefinitionV(ColumnDefinition{Name: yyDollar[1].identifierCI, Type: yyDollar[2].columnType})
 		}
 		yyVAL.union = yyLOCAL
 	case 176:
@@ -10136,7 +10137,7 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1452
 		{
-			yyDollar[1].columnTypeOptionsUnion().Comment = NewStrLiteral(yyDollar[3].str)
+			yyDollar[1].columnTypeOptionsUnion().Comment = newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
 		yyVAL.union = yyLOCAL
@@ -10175,7 +10176,7 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1475
 		{
-			yyDollar[1].columnTypeOptionsUnion().SRID = NewIntLiteral(yyDollar[3].str)
+			yyDollar[1].columnTypeOptionsUnion().SRID = newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
 		yyVAL.union = yyLOCAL
@@ -10203,13 +10204,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1492
 		{
-			yyDollar[1].columnTypeOptionsUnion().EngineAttribute = NewStrLiteral(yyDollar[4].str)
+			yyDollar[1].columnTypeOptionsUnion().EngineAttribute = newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)
 		}
 	case 194:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1496
 		{
-			yyDollar[1].columnTypeOptionsUnion().SecondaryEngineAttribute = NewStrLiteral(yyDollar[4].str)
+			yyDollar[1].columnTypeOptionsUnion().SecondaryEngineAttribute = newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)
 		}
 	case 195:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10293,7 +10294,7 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1546
 		{
-			yyDollar[1].columnTypeOptionsUnion().Comment = NewStrLiteral(yyDollar[3].str)
+			yyDollar[1].columnTypeOptionsUnion().Comment = newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
 		yyVAL.union = yyLOCAL
@@ -10339,7 +10340,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1577
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_timestamp"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("current_timestamp"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 211:
@@ -10347,7 +10348,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1581
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtime"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("localtime"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 212:
@@ -10355,7 +10356,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1585
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtimestamp"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("localtimestamp"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 213:
@@ -10363,7 +10364,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1589
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_timestamp"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("utc_timestamp"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 214:
@@ -10371,7 +10372,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1593
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 217:
@@ -10379,7 +10380,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1603
 		{
-			yyLOCAL = &NullVal{}
+			yyLOCAL = yyrcvr.Arena.newNullValV(NullVal{})
 		}
 		yyVAL.union = yyLOCAL
 	case 219:
@@ -10395,7 +10396,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1614
 		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 221:
@@ -10427,7 +10428,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1632
 		{
-			yyLOCAL = NewHexLiteral(yyDollar[1].str)
+			yyLOCAL = newHexLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 225:
@@ -10435,7 +10436,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1636
 		{
-			yyLOCAL = NewHexNumLiteral(yyDollar[1].str)
+			yyLOCAL = newHexNumLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 226:
@@ -10443,7 +10444,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1640
 		{
-			yyLOCAL = NewBitLiteral(yyDollar[1].str[2:])
+			yyLOCAL = newBitLiteralA(yyrcvr.Arena, yyDollar[1].str[2:])
 		}
 		yyVAL.union = yyLOCAL
 	case 227:
@@ -10451,7 +10452,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1644
 		{
-			yyLOCAL = NewBitLiteral(yyDollar[1].str)
+			yyLOCAL = newBitLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 228:
@@ -10468,7 +10469,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1653
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: newBitLiteralA(yyrcvr.Arena, yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 230:
@@ -10476,7 +10477,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1657
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewHexNumLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: newHexNumLiteralA(yyrcvr.Arena, yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 231:
@@ -10484,7 +10485,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1661
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str[2:])}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: newBitLiteralA(yyrcvr.Arena, yyDollar[2].str[2:])}
 		}
 		yyVAL.union = yyLOCAL
 	case 232:
@@ -10492,7 +10493,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1665
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewHexLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: newHexLiteralA(yyrcvr.Arena, yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 233:
@@ -10517,7 +10518,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1678
 		{
-			yyLOCAL = NewDateLiteral(yyDollar[2].str)
+			yyLOCAL = newDateLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 236:
@@ -10525,7 +10526,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1682
 		{
-			yyLOCAL = NewTimeLiteral(yyDollar[2].str)
+			yyLOCAL = newTimeLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 237:
@@ -10533,7 +10534,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1686
 		{
-			yyLOCAL = NewTimestampLiteral(yyDollar[2].str)
+			yyLOCAL = newTimestampLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 238:
@@ -10793,7 +10794,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1866
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[1].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 283:
@@ -10801,7 +10802,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1870
 		{
-			yyLOCAL = NewFloatLiteral(yyDollar[1].str)
+			yyLOCAL = newFloatLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 284:
@@ -10809,7 +10810,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1874
 		{
-			yyLOCAL = NewDecimalLiteral(yyDollar[1].str)
+			yyLOCAL = newDecimalLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 285:
@@ -10817,7 +10818,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1880
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[1].str)
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 286:
@@ -10825,7 +10826,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1884
 		{
-			yyLOCAL = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: NStringOp, Expr: newStrLiteralA(yyrcvr.Arena, yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 287:
@@ -10833,7 +10834,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1888
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewStrLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: newStrLiteralA(yyrcvr.Arena, yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 288:
@@ -11202,7 +11203,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:2154
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[2].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 347:
@@ -11216,8 +11217,8 @@ yydefault:
 //line sql.y:2163
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntLiteral(yyDollar[2].str),
-				Scale:  NewIntLiteral(yyDollar[4].str),
+				Length: newIntLiteralA(yyrcvr.Arena, yyDollar[2].str),
+				Scale:  newIntLiteralA(yyrcvr.Arena, yyDollar[4].str),
 			}
 		}
 	case 349:
@@ -11231,7 +11232,7 @@ yydefault:
 //line sql.y:2175
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntLiteral(yyDollar[2].str),
+				Length: newIntLiteralA(yyrcvr.Arena, yyDollar[2].str),
 			}
 		}
 	case 351:
@@ -11239,8 +11240,8 @@ yydefault:
 //line sql.y:2181
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntLiteral(yyDollar[2].str),
-				Scale:  NewIntLiteral(yyDollar[4].str),
+				Length: newIntLiteralA(yyrcvr.Arena, yyDollar[2].str),
+				Scale:  newIntLiteralA(yyrcvr.Arena, yyDollar[4].str),
 			}
 		}
 	case 352:
@@ -11429,7 +11430,7 @@ yydefault:
 //line sql.y:2305
 		{
 			// should not be string
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 378:
@@ -11437,7 +11438,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2310
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[2].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[2].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 379:
@@ -11445,7 +11446,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2314
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 380:
@@ -11453,7 +11454,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2318
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 381:
@@ -11461,7 +11462,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2322
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str) + " " + string(yyDollar[2].str), String: yyDollar[3].identifierCI.String()}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str) + " " + string(yyDollar[2].str), String: yyDollar[3].identifierCI.String()})
 		}
 		yyVAL.union = yyLOCAL
 	case 382:
@@ -11469,7 +11470,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2326
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 383:
@@ -11477,7 +11478,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:2330
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 384:
@@ -11957,7 +11958,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2640
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 449:
@@ -11965,7 +11966,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2644
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 450:
@@ -11973,7 +11974,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2648
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 451:
@@ -11981,7 +11982,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2652
 		{
-			yyLOCAL = &TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str, CaseSensitive: true}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str, CaseSensitive: true})
 		}
 		yyVAL.union = yyLOCAL
 	case 452:
@@ -11989,7 +11990,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2656
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str, CaseSensitive: true}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str, CaseSensitive: true})
 		}
 		yyVAL.union = yyLOCAL
 	case 453:
@@ -11997,7 +11998,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2660
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 454:
@@ -12005,7 +12006,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2664
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 455:
@@ -12013,7 +12014,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2668
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 456:
@@ -12021,7 +12022,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2672
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 457:
@@ -12029,7 +12030,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2676
 		{
-			yyLOCAL = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 458:
@@ -12037,7 +12038,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2680
 		{
-			yyLOCAL = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 459:
@@ -12045,7 +12046,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2684
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 460:
@@ -12053,7 +12054,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2688
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 461:
@@ -12061,7 +12062,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2692
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: yyDollar[3].identifierCS.String(), CaseSensitive: true}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: yyDollar[3].identifierCS.String(), CaseSensitive: true})
 		}
 		yyVAL.union = yyLOCAL
 	case 462:
@@ -12069,7 +12070,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2696
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 463:
@@ -12077,7 +12078,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2700
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 464:
@@ -12085,7 +12086,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2704
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 465:
@@ -12093,7 +12094,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2708
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 466:
@@ -12101,7 +12102,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2712
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 467:
@@ -12109,7 +12110,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2716
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 468:
@@ -12117,7 +12118,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2720
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 469:
@@ -12125,7 +12126,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2724
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 470:
@@ -12133,7 +12134,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2728
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 471:
@@ -12141,7 +12142,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2732
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 472:
@@ -12149,7 +12150,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2736
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 473:
@@ -12157,7 +12158,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2740
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 474:
@@ -12165,7 +12166,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2744
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 475:
@@ -12173,7 +12174,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2748
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 476:
@@ -12181,7 +12182,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2752
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Value: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 477:
@@ -12189,7 +12190,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2756
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].identifierCI.String() + yyDollar[4].str)}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].identifierCI.String() + yyDollar[4].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 478:
@@ -12197,7 +12198,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2760
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), Tables: yyDollar[4].tableNamesUnion()}
+			yyLOCAL = yyrcvr.Arena.newTableOptionV(TableOption{Name: string(yyDollar[1].str), Tables: yyDollar[4].tableNamesUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 479:
@@ -12299,7 +12300,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:2842
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[2].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 504:
@@ -12307,7 +12308,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:2846
 		{
-			yyLOCAL = NewDecimalLiteral(yyDollar[2].str)
+			yyLOCAL = newDecimalLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 505:
@@ -13473,7 +13474,7 @@ yydefault:
 		var yyLOCAL *PartitionSpec
 //line sql.y:3543
 		{
-			yyLOCAL = &PartitionSpec{Action: CoalesceAction, Number: NewIntLiteral(yyDollar[3].str)}
+			yyLOCAL = &PartitionSpec{Action: CoalesceAction, Number: newIntLiteralA(yyrcvr.Arena, yyDollar[3].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 635:
@@ -13874,7 +13875,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:3779
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[3].str)
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[3].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 682:
@@ -13882,7 +13883,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:3785
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[4].str)
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 683:
@@ -13890,7 +13891,7 @@ yydefault:
 		var yyLOCAL *Literal
 //line sql.y:3791
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[4].str)
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[4].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 684:
@@ -14024,7 +14025,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3886
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Charset, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Charset, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 701:
@@ -14032,7 +14033,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3890
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Collation, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Collation, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 702:
@@ -14040,7 +14041,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3894
 		{
-			yyLOCAL = &Show{&ShowBasic{Full: yyDollar[2].booleanUnion(), Command: Column, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].identifierCS, Filter: yyDollar[7].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Full: yyDollar[2].booleanUnion(), Command: Column, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].identifierCS, Filter: yyDollar[7].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 703:
@@ -14048,7 +14049,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3898
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 704:
@@ -14056,7 +14057,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3902
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 705:
@@ -14064,7 +14065,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3906
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 706:
@@ -14072,7 +14073,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3910
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 707:
@@ -14080,7 +14081,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3914
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Function, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Function, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 708:
@@ -14088,7 +14089,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3918
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Index, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].identifierCS, Filter: yyDollar[7].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Index, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].identifierCS, Filter: yyDollar[7].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 709:
@@ -14096,7 +14097,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3922
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: OpenTable, DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: OpenTable, DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 710:
@@ -14104,7 +14105,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3926
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Privilege}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Privilege}})
 		}
 		yyVAL.union = yyLOCAL
 	case 711:
@@ -14112,7 +14113,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3930
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Procedure, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Procedure, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 712:
@@ -14120,7 +14121,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3934
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: StatusSession, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: StatusSession, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 713:
@@ -14128,7 +14129,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3938
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: StatusGlobal, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: StatusGlobal, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 714:
@@ -14136,7 +14137,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3942
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VariableSession, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VariableSession, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 715:
@@ -14144,7 +14145,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3946
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VariableGlobal, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VariableGlobal, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 716:
@@ -14152,7 +14153,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3950
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: TableStatus, DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: TableStatus, DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 717:
@@ -14160,7 +14161,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3954
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Table, Full: yyDollar[2].booleanUnion(), DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Table, Full: yyDollar[2].booleanUnion(), DbName: yyDollar[4].identifierCS, Filter: yyDollar[5].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 718:
@@ -14168,7 +14169,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3958
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Trigger, DbName: yyDollar[3].identifierCS, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Trigger, DbName: yyDollar[3].identifierCS, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 719:
@@ -14176,7 +14177,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3962
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateDb, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateDb, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 720:
@@ -14184,7 +14185,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3966
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateE, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateE, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 721:
@@ -14192,7 +14193,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3970
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateF, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateF, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 722:
@@ -14200,7 +14201,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3974
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateProc, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateProc, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 723:
@@ -14208,7 +14209,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3978
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateTbl, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateTbl, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 724:
@@ -14216,7 +14217,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3982
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateTr, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateTr, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 725:
@@ -14224,7 +14225,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3986
 		{
-			yyLOCAL = &Show{&ShowCreate{Command: CreateV, Op: yyDollar[4].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowCreate{Command: CreateV, Op: yyDollar[4].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 726:
@@ -14232,7 +14233,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3990
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Engines}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Engines}})
 		}
 		yyVAL.union = yyLOCAL
 	case 727:
@@ -14240,7 +14241,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3994
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Plugins}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Plugins}})
 		}
 		yyVAL.union = yyLOCAL
 	case 728:
@@ -14248,7 +14249,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3998
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: GtidExecGlobal, DbName: yyDollar[4].identifierCS}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: GtidExecGlobal, DbName: yyDollar[4].identifierCS}})
 		}
 		yyVAL.union = yyLOCAL
 	case 729:
@@ -14256,7 +14257,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4002
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VGtidExecGlobal, DbName: yyDollar[4].identifierCS}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VGtidExecGlobal, DbName: yyDollar[4].identifierCS}})
 		}
 		yyVAL.union = yyLOCAL
 	case 730:
@@ -14264,7 +14265,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4006
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessVariables, Filter: yyDollar[4].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessVariables, Filter: yyDollar[4].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 731:
@@ -14272,7 +14273,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4010
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].identifierCS}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].identifierCS}})
 		}
 		yyVAL.union = yyLOCAL
 	case 732:
@@ -14296,7 +14297,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4022
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessReplicationStatus, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 735:
@@ -14304,7 +14305,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4026
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VschemaTables}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaTables}})
 		}
 		yyVAL.union = yyLOCAL
 	case 736:
@@ -14312,7 +14313,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4030
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaVindexes}})
 		}
 		yyVAL.union = yyLOCAL
 	case 737:
@@ -14320,7 +14321,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4034
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: yyDollar[5].tableName}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VschemaVindexes, Tbl: yyDollar[5].tableName}})
 		}
 		yyVAL.union = yyLOCAL
 	case 738:
@@ -14328,7 +14329,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4038
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: Warnings}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: Warnings}})
 		}
 		yyVAL.union = yyLOCAL
 	case 739:
@@ -14336,7 +14337,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4042
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessShards, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessShards, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 740:
@@ -14344,7 +14345,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4046
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessTablets, Filter: yyDollar[3].showFilterUnion()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessTablets, Filter: yyDollar[3].showFilterUnion()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 741:
@@ -14352,7 +14353,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4050
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessTarget}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowBasic{Command: VitessTarget}})
 		}
 		yyVAL.union = yyLOCAL
 	case 742:
@@ -14360,7 +14361,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4057
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].identifierCI.String())}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].identifierCI.String())}})
 		}
 		yyVAL.union = yyLOCAL
 	case 743:
@@ -14368,7 +14369,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4061
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 744:
@@ -14376,7 +14377,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4065
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str) + " " + yyDollar[3].identifierCI.String()}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str) + " " + yyDollar[3].identifierCI.String()}})
 		}
 		yyVAL.union = yyLOCAL
 	case 745:
@@ -14384,7 +14385,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4069
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 746:
@@ -14392,7 +14393,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4073
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 747:
@@ -14400,7 +14401,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4077
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str) + " " + String(yyDollar[4].tableName)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str) + " " + String(yyDollar[4].tableName)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 748:
@@ -14408,7 +14409,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4081
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str) + " " + String(yyDollar[4].tableName)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str) + " " + string(yyDollar[3].str) + " " + String(yyDollar[4].tableName)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 749:
@@ -14416,7 +14417,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4085
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[3].str)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[3].str)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 750:
@@ -14424,7 +14425,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4089
 		{
-			yyLOCAL = &Show{&ShowOther{Command: string(yyDollar[2].str)}}
+			yyLOCAL = yyrcvr.Arena.newShowV(Show{&ShowOther{Command: string(yyDollar[2].str)}})
 		}
 		yyVAL.union = yyLOCAL
 	case 751:
@@ -15345,7 +15346,7 @@ yydefault:
 		var yyLOCAL SelectExpr
 //line sql.y:4691
 		{
-			yyLOCAL = &StarExpr{}
+			yyLOCAL = yyrcvr.Arena.newStarExprV(StarExpr{})
 		}
 		yyVAL.union = yyLOCAL
 	case 881:
@@ -15353,7 +15354,7 @@ yydefault:
 		var yyLOCAL SelectExpr
 //line sql.y:4695
 		{
-			yyLOCAL = &AliasedExpr{Expr: yyDollar[1].exprUnion(), As: yyDollar[2].identifierCI}
+			yyLOCAL = yyrcvr.Arena.newAliasedExprV(AliasedExpr{Expr: yyDollar[1].exprUnion(), As: yyDollar[2].identifierCI})
 		}
 		yyVAL.union = yyLOCAL
 	case 882:
@@ -15361,7 +15362,7 @@ yydefault:
 		var yyLOCAL SelectExpr
 //line sql.y:4699
 		{
-			yyLOCAL = &StarExpr{TableName: TableName{Name: yyDollar[1].identifierCS}}
+			yyLOCAL = yyrcvr.Arena.newStarExprV(StarExpr{TableName: TableName{Name: yyDollar[1].identifierCS}})
 		}
 		yyVAL.union = yyLOCAL
 	case 883:
@@ -15369,7 +15370,7 @@ yydefault:
 		var yyLOCAL SelectExpr
 //line sql.y:4703
 		{
-			yyLOCAL = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}}
+			yyLOCAL = yyrcvr.Arena.newStarExprV(StarExpr{TableName: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}})
 		}
 		yyVAL.union = yyLOCAL
 	case 884:
@@ -15401,7 +15402,7 @@ yydefault:
 		var yyLOCAL TableExprs
 //line sql.y:4728
 		{
-			yyLOCAL = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewIdentifierCS("dual")}}}
+			yyLOCAL = TableExprs{yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: TableName{Name: NewIdentifierCS("dual")}})}
 		}
 		yyVAL.union = yyLOCAL
 	case 890:
@@ -15448,7 +15449,7 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4762
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].derivedTableUnion(), As: yyDollar[3].identifierCS, Columns: yyDollar[4].columnsUnion()}
+			yyLOCAL = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: yyDollar[1].derivedTableUnion(), As: yyDollar[3].identifierCS, Columns: yyDollar[4].columnsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 898:
@@ -15456,7 +15457,7 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4766
 		{
-			yyLOCAL = &ParenTableExpr{Exprs: yyDollar[2].tableExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newParenTableExprV(ParenTableExpr{Exprs: yyDollar[2].tableExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 899:
@@ -15472,7 +15473,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:4776
 		{
-			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[2].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newDerivedTableV(DerivedTable{Lateral: false, Select: yyDollar[2].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 901:
@@ -15480,7 +15481,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:4780
 		{
-			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[3].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newDerivedTableV(DerivedTable{Lateral: true, Select: yyDollar[3].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 902:
@@ -15488,7 +15489,7 @@ yydefault:
 		var yyLOCAL *AliasedTableExpr
 //line sql.y:4786
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].identifierCS, Hints: yyDollar[3].indexHintsUnion()}
+			yyLOCAL = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].identifierCS, Hints: yyDollar[3].indexHintsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 903:
@@ -15496,7 +15497,7 @@ yydefault:
 		var yyLOCAL *AliasedTableExpr
 //line sql.y:4790
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitionsUnion(), As: yyDollar[6].identifierCS, Hints: yyDollar[7].indexHintsUnion()}
+			yyLOCAL = yyrcvr.Arena.newAliasedTableExprV(AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitionsUnion(), As: yyDollar[6].identifierCS, Hints: yyDollar[7].indexHintsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 904:
@@ -15611,7 +15612,7 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4869
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			yyLOCAL = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition})
 		}
 		yyVAL.union = yyLOCAL
 	case 919:
@@ -15619,7 +15620,7 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4873
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			yyLOCAL = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition})
 		}
 		yyVAL.union = yyLOCAL
 	case 920:
@@ -15627,7 +15628,7 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4877
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			yyLOCAL = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition})
 		}
 		yyVAL.union = yyLOCAL
 	case 921:
@@ -15635,26 +15636,26 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:4881
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion()}
+			yyLOCAL = yyrcvr.Arena.newJoinTableExprV(JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 922:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:4887
 		{
-			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
+			yyVAL.joinCondition = yyrcvr.Arena.newJoinConditionV(JoinCondition{On: yyDollar[2].exprUnion()})
 		}
 	case 923:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4889
 		{
-			yyVAL.joinCondition = &JoinCondition{Using: yyDollar[3].columnsUnion()}
+			yyVAL.joinCondition = yyrcvr.Arena.newJoinConditionV(JoinCondition{Using: yyDollar[3].columnsUnion()})
 		}
 	case 924:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:4893
 		{
-			yyVAL.joinCondition = &JoinCondition{}
+			yyVAL.joinCondition = yyrcvr.Arena.newJoinConditionV(JoinCondition{})
 		}
 	case 925:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15666,13 +15667,13 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:4899
 		{
-			yyVAL.joinCondition = &JoinCondition{}
+			yyVAL.joinCondition = yyrcvr.Arena.newJoinConditionV(JoinCondition{})
 		}
 	case 927:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:4901
 		{
-			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
+			yyVAL.joinCondition = yyrcvr.Arena.newJoinConditionV(JoinCondition{On: yyDollar[2].exprUnion()})
 		}
 	case 928:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15860,7 +15861,7 @@ yydefault:
 		var yyLOCAL *IndexHint
 //line sql.y:5027
 		{
-			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
+			yyLOCAL = yyrcvr.Arena.newIndexHintV(IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 955:
@@ -15868,7 +15869,7 @@ yydefault:
 		var yyLOCAL *IndexHint
 //line sql.y:5031
 		{
-			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion()}
+			yyLOCAL = yyrcvr.Arena.newIndexHintV(IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 956:
@@ -15876,7 +15877,7 @@ yydefault:
 		var yyLOCAL *IndexHint
 //line sql.y:5035
 		{
-			yyLOCAL = &IndexHint{Type: IgnoreOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
+			yyLOCAL = yyrcvr.Arena.newIndexHintV(IndexHint{Type: IgnoreOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 957:
@@ -15884,7 +15885,7 @@ yydefault:
 		var yyLOCAL *IndexHint
 //line sql.y:5039
 		{
-			yyLOCAL = &IndexHint{Type: ForceOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
+			yyLOCAL = yyrcvr.Arena.newIndexHintV(IndexHint{Type: ForceOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 958:
@@ -15940,7 +15941,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5073
 		{
-			yyLOCAL = &OrExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newOrExprV(OrExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 965:
@@ -15948,7 +15949,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5077
 		{
-			yyLOCAL = &XorExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newXorExprV(XorExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 966:
@@ -15956,7 +15957,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5081
 		{
-			yyLOCAL = &AndExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newAndExprV(AndExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 967:
@@ -15964,7 +15965,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5085
 		{
-			yyLOCAL = &NotExpr{Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newNotExprV(NotExpr{Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 968:
@@ -15972,7 +15973,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5089
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].isExprOperatorUnion()}
+			yyLOCAL = yyrcvr.Arena.newIsExprV(IsExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].isExprOperatorUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 969:
@@ -15996,7 +15997,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5103
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNullOp}
+			yyLOCAL = yyrcvr.Arena.newIsExprV(IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNullOp})
 		}
 		yyVAL.union = yyLOCAL
 	case 972:
@@ -16004,7 +16005,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5107
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNotNullOp}
+			yyLOCAL = yyrcvr.Arena.newIsExprV(IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNotNullOp})
 		}
 		yyVAL.union = yyLOCAL
 	case 973:
@@ -16012,7 +16013,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5111
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 974:
@@ -16028,7 +16029,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5121
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: InOp, Right: yyDollar[3].colTupleUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: InOp, Right: yyDollar[3].colTupleUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 976:
@@ -16036,7 +16037,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5125
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotInOp, Right: yyDollar[4].colTupleUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotInOp, Right: yyDollar[4].colTupleUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 977:
@@ -16060,7 +16061,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5137
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 980:
@@ -16068,7 +16069,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5141
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 981:
@@ -16076,7 +16077,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5145
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion(), Escape: yyDollar[5].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion(), Escape: yyDollar[5].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 982:
@@ -16084,7 +16085,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5149
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion(), Escape: yyDollar[6].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion(), Escape: yyDollar[6].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 983:
@@ -16092,7 +16093,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5153
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: RegexpOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: RegexpOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 984:
@@ -16100,7 +16101,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5157
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotRegexpOp, Right: yyDollar[4].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newComparisonExprV(ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotRegexpOp, Right: yyDollar[4].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 985:
@@ -16126,7 +16127,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5176
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitOrOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitOrOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 989:
@@ -16134,7 +16135,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5180
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitAndOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitAndOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 990:
@@ -16142,7 +16143,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5184
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftLeftOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftLeftOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 991:
@@ -16150,7 +16151,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5188
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftRightOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftRightOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 992:
@@ -16158,7 +16159,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5192
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: PlusOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: PlusOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 993:
@@ -16166,7 +16167,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5196
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MinusOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MinusOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 994:
@@ -16174,7 +16175,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5200
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MultOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MultOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 995:
@@ -16182,7 +16183,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5204
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: DivOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: DivOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 996:
@@ -16190,7 +16191,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5208
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 997:
@@ -16198,7 +16199,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5212
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 998:
@@ -16206,7 +16207,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5216
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 999:
@@ -16214,7 +16215,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5220
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1000:
@@ -16262,7 +16263,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5246
 		{
-			yyLOCAL = &CollateExpr{Expr: yyDollar[1].exprUnion(), Collation: yyDollar[3].str}
+			yyLOCAL = yyrcvr.Arena.newCollateExprV(CollateExpr{Expr: yyDollar[1].exprUnion(), Collation: yyDollar[3].str})
 		}
 		yyVAL.union = yyLOCAL
 	case 1006:
@@ -16302,7 +16303,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5266
 		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1011:
@@ -16310,7 +16311,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5270
 		{
-			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1012:
@@ -16318,7 +16319,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5274
 		{
-			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newUnaryExprV(UnaryExpr{Operator: BangOp, Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1013:
@@ -16342,7 +16343,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5286
 		{
-			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subqueryUnion()}
+			yyLOCAL = yyrcvr.Arena.newExistsExprV(ExistsExpr{Subquery: yyDollar[2].subqueryUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1016:
@@ -16350,7 +16351,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5290
 		{
-			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNamesUnion(), Expr: yyDollar[5].exprUnion(), Option: yyDollar[6].matchExprOptionUnion()}
+			yyLOCAL = yyrcvr.Arena.newMatchExprV(MatchExpr{Columns: yyDollar[2].colNamesUnion(), Expr: yyDollar[5].exprUnion(), Option: yyDollar[6].matchExprOptionUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1017:
@@ -16386,7 +16387,7 @@ yydefault:
 			// To convert a string expression to a binary string, these constructs are equivalent:
 			//    CAST(expr AS BINARY)
 			//    BINARY expr
-			yyLOCAL = &ConvertExpr{Expr: yyDollar[2].exprUnion(), Type: &ConvertType{Type: yyDollar[1].str}}
+			yyLOCAL = &ConvertExpr{Expr: yyDollar[2].exprUnion(), Type: yyrcvr.Arena.newConvertTypeV(ConvertType{Type: yyDollar[1].str})}
 		}
 		yyVAL.union = yyLOCAL
 	case 1021:
@@ -16422,7 +16423,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5330
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: JSONExtractOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: JSONExtractOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1025:
@@ -16430,7 +16431,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5334
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: JSONUnquoteExtractOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newBinaryExprV(BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: JSONUnquoteExtractOp, Right: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1026:
@@ -16438,7 +16439,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5340
 		{
-			yyLOCAL = &IntervalExpr{Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].identifierCI.String()}
+			yyLOCAL = yyrcvr.Arena.newIntervalExprV(IntervalExpr{Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].identifierCI.String()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1027:
@@ -16680,7 +16681,7 @@ yydefault:
 		var yyLOCAL *OverClause
 //line sql.y:5487
 		{
-			yyLOCAL = &OverClause{WindowSpec: yyDollar[3].windowSpecificationUnion()}
+			yyLOCAL = yyrcvr.Arena.newOverClauseV(OverClause{WindowSpec: yyDollar[3].windowSpecificationUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1058:
@@ -16688,7 +16689,7 @@ yydefault:
 		var yyLOCAL *OverClause
 //line sql.y:5491
 		{
-			yyLOCAL = &OverClause{WindowName: yyDollar[2].identifierCI}
+			yyLOCAL = yyrcvr.Arena.newOverClauseV(OverClause{WindowName: yyDollar[2].identifierCI})
 		}
 		yyVAL.union = yyLOCAL
 	case 1059:
@@ -16956,7 +16957,7 @@ yydefault:
 		var yyLOCAL *Subquery
 //line sql.y:5661
 		{
-			yyLOCAL = &Subquery{yyDollar[1].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newSubqueryV(Subquery{yyDollar[1].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1095:
@@ -16979,7 +16980,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5681
 		{
-			yyLOCAL = &FuncExpr{Name: yyDollar[1].identifierCI, Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: yyDollar[1].identifierCI, Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1098:
@@ -16987,7 +16988,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5685
 		{
-			yyLOCAL = &FuncExpr{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCI, Exprs: yyDollar[5].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCI, Exprs: yyDollar[5].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1099:
@@ -16995,7 +16996,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5695
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("left"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1100:
@@ -17003,7 +17004,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5699
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("right"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1101:
@@ -17043,7 +17044,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5719
 		{
-			yyLOCAL = &CaseExpr{Expr: yyDollar[2].exprUnion(), Whens: yyDollar[3].whensUnion(), Else: yyDollar[4].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCaseExprV(CaseExpr{Expr: yyDollar[2].exprUnion(), Whens: yyDollar[3].whensUnion(), Else: yyDollar[4].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1106:
@@ -17067,7 +17068,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5731
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1109:
@@ -17075,7 +17076,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5742
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("utc_date")}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("utc_date")})
 		}
 		yyVAL.union = yyLOCAL
 	case 1110:
@@ -17091,7 +17092,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5752
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("current_date")}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("current_date")})
 		}
 		yyVAL.union = yyLOCAL
 	case 1112:
@@ -17099,7 +17100,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5756
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_time"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("utc_time"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1113:
@@ -17107,7 +17108,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5761
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_time"), Fsp: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newCurTimeFuncExprV(CurTimeFuncExpr{Name: NewIdentifierCI("current_time"), Fsp: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1114:
@@ -17243,7 +17244,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5829
 		{
-			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = yyrcvr.Arena.newGroupConcatExprV(GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1131:
@@ -17739,7 +17740,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6083
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[1].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 1197:
@@ -18204,7 +18205,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6337
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[2].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[2].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 1257:
@@ -18221,7 +18222,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6352
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("if"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1259:
@@ -18229,7 +18230,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6356
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("database"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1260:
@@ -18237,7 +18238,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6360
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("schema"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1261:
@@ -18245,7 +18246,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6364
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("mod"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1262:
@@ -18253,7 +18254,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6368
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: yyDollar[3].selectExprsUnion()}
+			yyLOCAL = yyrcvr.Arena.newFuncExprV(FuncExpr{Name: NewIdentifierCI("replace"), Exprs: yyDollar[3].selectExprsUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1263:
@@ -18327,7 +18328,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6414
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str), Length: NewIntLiteral(yyDollar[4].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[2].str), Length: newIntLiteralA(yyrcvr.Arena, yyDollar[4].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1273:
@@ -18335,7 +18336,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6418
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str), Length: NewIntLiteral(yyDollar[4].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[2].str), Length: newIntLiteralA(yyrcvr.Arena, yyDollar[4].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1274:
@@ -18343,7 +18344,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6424
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1275:
@@ -18351,7 +18352,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6428
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset})
 		}
 		yyVAL.union = yyLOCAL
 	case 1276:
@@ -18359,7 +18360,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6432
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1277:
@@ -18367,7 +18368,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6436
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1278:
@@ -18375,7 +18376,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6440
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 			yyLOCAL.Length = yyDollar[2].LengthScaleOption.Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -18385,7 +18386,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6446
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1280:
@@ -18393,7 +18394,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6450
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1281:
@@ -18401,7 +18402,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6454
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1282:
@@ -18409,7 +18410,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6458
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1283:
@@ -18417,7 +18418,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6462
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1284:
@@ -18425,7 +18426,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6466
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1285:
@@ -18433,7 +18434,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6470
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1286:
@@ -18441,7 +18442,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6474
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1287:
@@ -18449,7 +18450,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6478
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1288:
@@ -18457,7 +18458,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:6482
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str)}
+			yyLOCAL = yyrcvr.Arena.newConvertTypeV(ConvertType{Type: string(yyDollar[1].str)})
 		}
 		yyVAL.union = yyLOCAL
 	case 1289:
@@ -18524,7 +18525,7 @@ yydefault:
 		var yyLOCAL *When
 //line sql.y:6526
 		{
-			yyLOCAL = &When{Cond: yyDollar[2].exprUnion(), Val: yyDollar[4].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newWhenV(When{Cond: yyDollar[2].exprUnion(), Val: yyDollar[4].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1298:
@@ -18548,7 +18549,7 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:6541
 		{
-			yyLOCAL = &ColName{Name: yyDollar[1].identifierCI}
+			yyLOCAL = yyrcvr.Arena.newColNameV(ColName{Name: yyDollar[1].identifierCI})
 		}
 		yyVAL.union = yyLOCAL
 	case 1301:
@@ -18556,7 +18557,7 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:6545
 		{
-			yyLOCAL = &ColName{Name: NewIdentifierCI(string(yyDollar[1].str))}
+			yyLOCAL = yyrcvr.Arena.newColNameV(ColName{Name: NewIdentifierCI(string(yyDollar[1].str))})
 		}
 		yyVAL.union = yyLOCAL
 	case 1302:
@@ -18564,7 +18565,7 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:6549
 		{
-			yyLOCAL = &ColName{Qualifier: TableName{Name: yyDollar[1].identifierCS}, Name: yyDollar[3].identifierCI}
+			yyLOCAL = yyrcvr.Arena.newColNameV(ColName{Qualifier: TableName{Name: yyDollar[1].identifierCS}, Name: yyDollar[3].identifierCI})
 		}
 		yyVAL.union = yyLOCAL
 	case 1303:
@@ -18572,7 +18573,7 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:6553
 		{
-			yyLOCAL = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}, Name: yyDollar[5].identifierCI}
+			yyLOCAL = yyrcvr.Arena.newColNameV(ColName{Qualifier: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}, Name: yyDollar[5].identifierCI})
 		}
 		yyVAL.union = yyLOCAL
 	case 1304:
@@ -18601,7 +18602,7 @@ yydefault:
 				yylex.Error("expecting value after next")
 				return 1
 			}
-			yyLOCAL = NewIntLiteral("1")
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, "1")
 		}
 		yyVAL.union = yyLOCAL
 	case 1307:
@@ -18609,7 +18610,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6578
 		{
-			yyLOCAL = NewIntLiteral(yyDollar[1].str)
+			yyLOCAL = newIntLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 1308:
@@ -18736,7 +18737,7 @@ yydefault:
 		var yyLOCAL *Order
 //line sql.y:6657
 		{
-			yyLOCAL = &Order{Expr: yyDollar[1].exprUnion(), Direction: yyDollar[2].orderDirectionUnion()}
+			yyLOCAL = yyrcvr.Arena.newOrderV(Order{Expr: yyDollar[1].exprUnion(), Direction: yyDollar[2].orderDirectionUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1324:
@@ -18784,7 +18785,7 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:6685
 		{
-			yyLOCAL = &Limit{Rowcount: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newLimitV(Limit{Rowcount: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1330:
@@ -18792,7 +18793,7 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:6689
 		{
-			yyLOCAL = &Limit{Offset: yyDollar[2].exprUnion(), Rowcount: yyDollar[4].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newLimitV(Limit{Offset: yyDollar[2].exprUnion(), Rowcount: yyDollar[4].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1331:
@@ -18800,7 +18801,7 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:6693
 		{
-			yyLOCAL = &Limit{Offset: yyDollar[4].exprUnion(), Rowcount: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newLimitV(Limit{Offset: yyDollar[4].exprUnion(), Rowcount: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1332:
@@ -19077,7 +19078,7 @@ yydefault:
 		var yyLOCAL *SelectInto
 //line sql.y:6874
 		{
-			yyLOCAL = &SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].str), Charset: yyDollar[5].columnCharset, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
+			yyLOCAL = yyrcvr.Arena.newSelectIntoV(SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].str), Charset: yyDollar[5].columnCharset, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str})
 		}
 		yyVAL.union = yyLOCAL
 	case 1370:
@@ -19085,7 +19086,7 @@ yydefault:
 		var yyLOCAL *SelectInto
 //line sql.y:6878
 		{
-			yyLOCAL = &SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].str), Charset: ColumnCharset{}, FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
+			yyLOCAL = yyrcvr.Arena.newSelectIntoV(SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].str), Charset: ColumnCharset{}, FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""})
 		}
 		yyVAL.union = yyLOCAL
 	case 1371:
@@ -19093,7 +19094,7 @@ yydefault:
 		var yyLOCAL *SelectInto
 //line sql.y:6882
 		{
-			yyLOCAL = &SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].str), Charset: yyDollar[4].columnCharset, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
+			yyLOCAL = yyrcvr.Arena.newSelectIntoV(SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].str), Charset: yyDollar[4].columnCharset, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""})
 		}
 		yyVAL.union = yyLOCAL
 	case 1372:
@@ -19263,7 +19264,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7020
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[2].valuesUnion()}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Rows: yyDollar[2].valuesUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1400:
@@ -19271,7 +19272,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7024
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[1].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Rows: yyDollar[1].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1401:
@@ -19279,7 +19280,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7028
 		{
-			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[5].valuesUnion()}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[5].valuesUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1402:
@@ -19287,7 +19288,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7032
 		{
-			yyLOCAL = &Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].valuesUnion()}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].valuesUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1403:
@@ -19295,7 +19296,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7036
 		{
-			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].selStmtUnion()}
+			yyLOCAL = yyrcvr.Arena.newInsertV(Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].selStmtUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1404:
@@ -19423,7 +19424,7 @@ yydefault:
 		var yyLOCAL *UpdateExpr
 //line sql.y:7118
 		{
-			yyLOCAL = &UpdateExpr{Name: yyDollar[1].colNameUnion(), Expr: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newUpdateExprV(UpdateExpr{Name: yyDollar[1].colNameUnion(), Expr: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1420:
@@ -19446,7 +19447,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:7134
 		{
-			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: NewStrLiteral("on")}
+			yyLOCAL = yyrcvr.Arena.newSetExprV(SetExpr{Var: yyDollar[1].variableUnion(), Expr: newStrLiteralA(yyrcvr.Arena, "on")})
 		}
 		yyVAL.union = yyLOCAL
 	case 1423:
@@ -19454,7 +19455,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:7138
 		{
-			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: NewStrLiteral("off")}
+			yyLOCAL = yyrcvr.Arena.newSetExprV(SetExpr{Var: yyDollar[1].variableUnion(), Expr: newStrLiteralA(yyrcvr.Arena, "off")})
 		}
 		yyVAL.union = yyLOCAL
 	case 1424:
@@ -19462,7 +19463,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:7142
 		{
-			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: yyDollar[3].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newSetExprV(SetExpr{Var: yyDollar[1].variableUnion(), Expr: yyDollar[3].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1425:
@@ -19470,7 +19471,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:7146
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].str), SessionScope), Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = yyrcvr.Arena.newSetExprV(SetExpr{Var: NewSetVariable(string(yyDollar[1].str), SessionScope), Expr: yyDollar[2].exprUnion()})
 		}
 		yyVAL.union = yyLOCAL
 	case 1426:
@@ -19508,7 +19509,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7177
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[1].identifierCI.String())
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[1].identifierCI.String())
 		}
 		yyVAL.union = yyLOCAL
 	case 1434:
@@ -19516,7 +19517,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7181
 		{
-			yyLOCAL = NewStrLiteral(yyDollar[1].str)
+			yyLOCAL = newStrLiteralA(yyrcvr.Arena, yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 1435:
@@ -19654,7 +19655,7 @@ yydefault:
 		var yyLOCAL *IndexOption
 //line sql.y:7242
 		{
-			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str), String: string(yyDollar[2].identifierCI.String())}
+			yyLOCAL = yyrcvr.Arena.newIndexOptionV(IndexOption{Name: string(yyDollar[1].str), String: string(yyDollar[2].identifierCI.String())})
 		}
 		yyVAL.union = yyLOCAL
 	case 1455:
