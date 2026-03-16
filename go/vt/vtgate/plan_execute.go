@@ -84,6 +84,7 @@ func (e *Executor) newExecute(
 		plan               *engine.Plan
 		vcursor            *econtext.VCursorImpl
 		stmt               sqlparser.Statement
+		releaseArena       func()
 		cancel             context.CancelFunc
 	)
 
@@ -119,7 +120,8 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		plan, vcursor, stmt, releaseArena, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		defer releaseArena()
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {

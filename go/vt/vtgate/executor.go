@@ -88,6 +88,10 @@ var (
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
+
+	// noop is a no-op release function used when an arena should not be
+	// returned to the pool (e.g. when the plan holds AST references).
+	noop = func() {}
 )
 
 const (
@@ -1131,10 +1135,10 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats *logstats.LogStats,
 	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
-	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error,
+	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, releaseArena func(), err error,
 ) {
 	if e.VSchema() == nil {
-		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
+		return nil, nil, nil, noop, vterrors.VT13001("vschema not initialized")
 	}
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
@@ -1152,19 +1156,24 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		plan, logStats.CachedPlan, stmt, releaseArena, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
+	} else {
+		releaseArena = noop
 	}
 	if err != nil {
-		return nil, nil, stmt, err
+		return nil, nil, stmt, releaseArena, err
 	}
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
-		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, optRelease, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		// Optimized plan always builds fresh (ignoreCache=true), so optRelease
+		// is a no-op, but call it for correctness.
+		defer optRelease()
 		if err == nil {
 			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
 				sp.Baseline = plan.Instructions
@@ -1181,7 +1190,7 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return plan, vcursor, stmt, nil
+	return plan, vcursor, stmt, releaseArena, nil
 }
 
 func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
@@ -1200,7 +1209,8 @@ func (e *Executor) tryOptimizedPlan(
 	prevErr error,
 ) (*engine.Plan, error) {
 	vcursor.SetBindVars(bindVars)
-	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	sPlan, _, _, optRelease, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	defer optRelease()
 	if err == nil {
 		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
 			sp.BaselineErr = prevErr
@@ -1244,11 +1254,12 @@ func (e *Executor) getCachedOrBuildPlan(
 	parameterize bool,
 	planKey engine.PlanKey,
 	ignoreCache bool,
-) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, releaseArena func(), err error) {
+	result, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, noop, err
 	}
+	stmt = result.Statement
 
 	defer func() {
 		if err == nil {
@@ -1258,7 +1269,8 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
-		return nil, false, nil, err
+		result.Release()
+		return nil, false, nil, noop, err
 	}
 
 	if qh.ForeignKeyChecks == nil {
@@ -1290,7 +1302,8 @@ func (e *Executor) getCachedOrBuildPlan(
 		vcursor,
 	)
 	if err != nil {
-		return nil, false, nil, err
+		result.Release()
+		return nil, false, nil, noop, err
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
@@ -1307,10 +1320,30 @@ func (e *Executor) getCachedOrBuildPlan(
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})
-		return plan, cached, stmt, err
+		if err != nil {
+			// Planning failed — no plan was cached, so no AST refs are retained.
+			// Return stmt (callers like handlePrepare use it for fallback field
+			// extraction) and let the caller release the arena when done.
+			return nil, false, stmt, result.Release, err
+		}
+		if cached {
+			// Cache hit: the plan has its own AST refs from the original build.
+			// Our freshly parsed AST is only used temporarily by callers, so the
+			// arena can be released once they're done with stmt.
+			return plan, true, stmt, result.Release, nil
+		}
+		// Cache miss: the plan was just built and its engine primitives may
+		// reference AST nodes allocated from this arena. Don't return the
+		// arena to the pool — let the GC reclaim it when the plan is evicted.
+		return plan, false, stmt, noop, nil
 	}
+	// Non-cacheable plan: same as cache miss — plan holds AST refs.
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
-	return plan, false, stmt, err
+	if err != nil {
+		// Same as above — return stmt for fallback use; arena is safe to release.
+		return nil, false, stmt, result.Release, err
+	}
+	return plan, false, stmt, noop, nil
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
@@ -1593,7 +1626,8 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	plan, vcursor, stmt, releaseArena, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	defer releaseArena()
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1653,15 +1687,16 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 	return fields, countArguments(stmt), true
 }
 
-func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
-	stmt, reserved, err := parser.Parse2(query)
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (*sqlparser.ParseResult, *sqlparser.ReservedVars, error) {
+	result, err := parser.Parse2WithArena(query)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !sqlparser.IgnoreMaxPayloadSizeDirective(stmt) && !isValidPayloadSize(query) {
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(result.Statement) && !isValidPayloadSize(query) {
+		result.Release()
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
 	}
-	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
+	return result, sqlparser.NewReservedVars("vtg", result.BindVars), nil
 }
 
 // ExecuteMultiShard implements the IExecutor interface
@@ -1794,7 +1829,8 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+	plan, _, _, releaseArena, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+	defer releaseArena()
 	return plan, err
 }
 

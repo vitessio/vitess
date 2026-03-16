@@ -137,7 +137,8 @@ func TestDeferredOptimization(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			sess := executorcontext.NewSafeSession(&vtgatepb.Session{})
 			ls := logstats.NewLogStats(ctx, "test", tcase.Query, "", nil, streamlog.GetQueryLogConfig())
-			_, _, _, _ = executor.fetchOrCreatePlan(ctx, sess, tcase.Query, nil, false, true, ls, false)
+			_, _, _, release, _ := executor.fetchOrCreatePlan(ctx, sess, tcase.Query, nil, false, true, ls, false)
+			defer release()
 
 			bv := make(map[string]*querypb.BindVariable)
 			for i, from := range tcase.BindVars {
@@ -145,7 +146,8 @@ func TestDeferredOptimization(t *testing.T) {
 				bv[key] = makeBindVar(t, from, cfg, exprEnv)
 			}
 
-			plan, _, _, err := executor.fetchOrCreatePlan(ctx, sess, tcase.Query, bv, false, true, ls, true)
+			plan, _, _, release2, err := executor.fetchOrCreatePlan(ctx, sess, tcase.Query, bv, false, true, ls, true)
+			defer release2()
 			out := getPlanOrErrorOutput(err, plan)
 
 			compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
