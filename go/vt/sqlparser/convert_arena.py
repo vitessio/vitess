@@ -23,7 +23,7 @@ POOLED_TYPES = [
     "AliasedExpr", "AliasedTableExpr", "AndExpr", "BinaryExpr", "CaseExpr",
     "ColName", "CollateExpr", "ColumnDefinition", "ComparisonExpr", "ConvertType",
     "CurTimeFuncExpr", "Delete", "DerivedTable", "ExistsExpr", "FuncExpr",
-    "GroupConcatExpr", "IndexHint", "IndexOption", "Insert", "IntervalExpr",
+    "GroupConcatExpr", "IndexHint", "IndexOption", "Insert", "IntervalDateExpr",
     "IsExpr", "JoinCondition", "JoinTableExpr", "Limit", "Literal",
     "MatchExpr", "NotExpr", "NullVal", "Order", "OrExpr",
     "OverClause", "ParenTableExpr", "Select", "SelectInto", "SetExpr",

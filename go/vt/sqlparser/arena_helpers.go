@@ -47,7 +47,7 @@ func newHexLiteralA(a *Arena, in string) *Literal {
 }
 
 func newBitLiteralA(a *Arena, in string) *Literal {
-	return a.newLiteralV(Literal{Type: BitVal, Val: in})
+	return a.newLiteralV(Literal{Type: BitNum, Val: in})
 }
 
 func newDateLiteralA(a *Arena, in string) *Literal {

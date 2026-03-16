@@ -93,7 +93,7 @@ type Arena struct {
 	indexHints        nodePool[IndexHint]
 	indexOptions      nodePool[IndexOption]
 	inserts           nodePool[Insert]
-	intervalExprs     nodePool[IntervalExpr]
+	intervalExprs     nodePool[IntervalDateExpr]
 	isExprs           nodePool[IsExpr]
 	joinConditions    nodePool[JoinCondition]
 	joinTableExprs    nodePool[JoinTableExpr]
@@ -248,7 +248,7 @@ func (a *Arena) newIndexOptionV(v IndexOption) *IndexOption {
 func (a *Arena) newInsertV(v Insert) *Insert {
 	if a == nil { p := v; return &p }; p := a.inserts.new(); *p = v; return p
 }
-func (a *Arena) newIntervalExprV(v IntervalExpr) *IntervalExpr {
+func (a *Arena) newIntervalDateExprV(v IntervalDateExpr) *IntervalDateExpr {
 	if a == nil { p := v; return &p }; p := a.intervalExprs.new(); *p = v; return p
 }
 func (a *Arena) newIsExprV(v IsExpr) *IsExpr {
