@@ -131,7 +131,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 		case err == nil: // no error, continue processing below
 
 		case errors.Is(err, io.EOF):
-			return nil
+			return fmt.Errorf("vstreamclient: remote error: %w", io.ErrUnexpectedEOF)
 
 		default:
 			return fmt.Errorf("vstreamclient: remote error: %w", err)
