@@ -595,40 +595,74 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 }
 
 func TestTrackerTables(t *testing.T) {
-	tracker := NewTracker(make(chan *discovery.TabletHealth), false, false, sqlparser.NewTestParser())
+	tabletHealthCh := make(chan *discovery.TabletHealth)
+	parser := sqlparser.NewTestParser()
 
-	got := tracker.Tables("unknown")
-	assert.Empty(t, got)
+	tracker := NewTracker(tabletHealthCh, false, false, parser)
 
-	tracker.tables.set("ks", "t1", []vindexes.Column{{Name: sqlparser.NewIdentifierCI("id")}}, nil, nil)
-	got = tracker.Tables("ks")
-	assert.Len(t, got, 1)
-	assert.NotNil(t, got["t1"])
+	t.Run("unknown keyspace returns empty map", func(t *testing.T) {
+		got := tracker.Tables("unknown")
+		assert.Empty(t, got)
+	})
 
-	got["t1"] = nil
-	got2 := tracker.Tables("ks")
-	assert.NotNil(t, got2["t1"])
+	t.Run("known keyspace returns data and clone", func(t *testing.T) {
+		tracker.tables.set(keyspace, "t1", []vindexes.Column{{Name: sqlparser.NewIdentifierCI("id")}}, nil, nil)
+
+		got := tracker.Tables(keyspace)
+		assert.Len(t, got, 1)
+		assert.NotNil(t, got["t1"])
+
+		// Mutating the returned map should not affect the tracker's internal state.
+		got["t1"] = nil
+		got2 := tracker.Tables(keyspace)
+		assert.NotNil(t, got2["t1"])
+	})
 }
 
 func TestTrackerViews(t *testing.T) {
-	tracker := NewTracker(make(chan *discovery.TabletHealth), false, false, sqlparser.NewTestParser())
-	assert.Nil(t, tracker.Views("ks"))
+	tabletHealthCh := make(chan *discovery.TabletHealth)
+	parser := sqlparser.NewTestParser()
 
-	tracker = NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
-	assert.Nil(t, tracker.Views("unknown"))
+	t.Run("views disabled returns nil", func(t *testing.T) {
+		tracker := NewTracker(tabletHealthCh, false, false, parser)
+		got := tracker.Views(keyspace)
+		assert.Nil(t, got)
+	})
 
-	tracker.views.set("ks", "v1", "create view v1 as select 1 from t1")
-	got := tracker.Views("ks")
-	assert.Len(t, got, 1)
-	assert.NotNil(t, got["v1"])
+	t.Run("views enabled unknown keyspace returns nil", func(t *testing.T) {
+		tracker := NewTracker(tabletHealthCh, true, false, parser)
+		got := tracker.Views("unknown")
+		assert.Nil(t, got)
+	})
+
+	t.Run("views enabled populated keyspace returns data", func(t *testing.T) {
+		tracker := NewTracker(tabletHealthCh, true, false, parser)
+		tracker.views.set(keyspace, "v1", "create view v1 as select 1 from t1")
+
+		got := tracker.Views(keyspace)
+		assert.Len(t, got, 1)
+		assert.NotNil(t, got["v1"])
+	})
 }
 
 func TestTrackerAddNewKeyspace(t *testing.T) {
-	target := &querypb.Target{Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY, Cell: cell}
-	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+	tabletHealthCh := make(chan *discovery.TabletHealth)
+	parser := sqlparser.NewTestParser()
+
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+		Cell:       cell,
+	}
+	tablet := &topodatapb.Tablet{
+		Keyspace: target.Keyspace,
+		Shard:    target.Shard,
+		Type:     target.TabletType,
+	}
 
 	t.Run("success", func(t *testing.T) {
-		tracker := NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
+		tracker := NewTracker(tabletHealthCh, true, false, parser)
 		sbc := sandboxconn.NewSandboxConn(tablet)
 		sbc.SetSchemaResult([]sandboxconn.SchemaResult{
 			tables(tbl("t1", "create table t1(id int primary key)")),
@@ -642,7 +676,7 @@ func TestTrackerAddNewKeyspace(t *testing.T) {
 	})
 
 	t.Run("load failure", func(t *testing.T) {
-		tracker := NewTracker(make(chan *discovery.TabletHealth), true, false, sqlparser.NewTestParser())
+		tracker := NewTracker(tabletHealthCh, true, false, parser)
 		err := tracker.AddNewKeyspace(fakes.ErrorQueryService, target)
 		require.Error(t, err)
 		_, ok := tracker.tracked[keyspace]
