@@ -193,17 +193,29 @@ func (a *Arena) NewColName() *ColName {
 
 ### 2.3 Threading the Arena Through the Parser
 
-The arena must be accessible from yacc grammar rule actions. The `Tokenizer` is the
-`yyLexer` implementation that grammar rules access via `yylex`. We add the arena
-there:
+The arena must be accessible from yacc grammar rule actions. There are two candidates
+for where to store it:
+
+#### Option A: On `yyParserImpl` (Recommended)
+
+Grammar rule actions execute inside `(yyrcvr *yyParserImpl).Parse(yylex)`. The
+receiver `yyrcvr` is directly in scope — no type assertion needed. Vitess owns its
+own goyacc fork (`go/vt/sqlparser/goyacc/goyacc.go`), so we can modify the
+`$$ParserImpl` template (line 3374) to add an `Arena` field:
 
 ```go
-// In token.go, add to Tokenizer struct:
-type Tokenizer struct {
-    // ... existing fields ...
+// In goyacc.go template (line ~3374), the generated struct becomes:
+type yyParserImpl struct {
+    lval  yySymType
+    stack [yyInitialStackSize]yySymType
+    char  int
     Arena *Arena  // Arena for AST node allocation during this parse
 }
 ```
+
+Since `yyParserImpl` is **already pooled** via `sync.Pool` (`parser.go:37-64`), the
+arena lifecycle piggybacks on the existing pool/reset mechanism. When the parser is
+returned to the pool, the arena is detached and returned to its own pool (or reset).
 
 In grammar rules, allocation changes from:
 
@@ -211,13 +223,49 @@ In grammar rules, allocation changes from:
 // Before:
 $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
 
-// After:
+// After (yyrcvr is directly in scope — no type assertion):
 {
-    node := yylex.(*Tokenizer).Arena.NewBinaryExpr()
+    node := yyrcvr.Arena.NewBinaryExpr()
     node.Left = $1
     node.Operator = PlusOp
     node.Right = $3
     $$ = node
+}
+```
+
+**Why this is better than the Tokenizer:**
+- **Conceptual correctness**: The parser constructs AST nodes, not the lexer. The
+  arena belongs with the component that allocates.
+- **No type assertion overhead**: `yyrcvr` is a typed receiver, while accessing the
+  tokenizer requires `yylex.(*Tokenizer)` on every allocation.
+- **Existing pool integration**: The parser is already pooled; the arena reset
+  naturally fits into `yyParsePooled()`'s defer block.
+- **Cleaner separation**: The `Tokenizer` remains focused on lexing. It doesn't
+  accumulate unrelated responsibilities.
+
+#### Option B: On the Tokenizer (Not Recommended)
+
+Storing the arena on the `Tokenizer` struct and accessing via
+`yylex.(*Tokenizer).Arena` works but is conceptually wrong — the tokenizer's job is
+lexing, not managing AST memory. It also adds a type assertion to every allocation
+site. This was the original proposal but is superseded by Option A.
+
+#### Arena Ownership and `yyParsePooled`
+
+The arena is **not owned by the parser**. It is passed in by the caller and must
+outlive the parse call (since the AST references arena memory). The updated pooling
+code:
+
+```go
+func yyParsePooled(yylex yyLexer, arena *Arena) int {
+    parser := parserPool.Get().(*yyParserImpl)
+    parser.Arena = arena
+    defer func() {
+        parser.Arena = nil  // Detach arena before returning parser to pool
+        *parser = zeroParser
+        parserPool.Put(parser)
+    }()
+    return parser.Parse(yylex)
 }
 ```
 
@@ -236,8 +284,9 @@ var arenaPool = sync.Pool{
 func Parse2(sql string) (Statement, BindVars, error) {
     arena := arenaPool.Get().(*Arena)
     tokenizer := NewStringTokenizer(sql)
-    tokenizer.Arena = arena
-    // ... existing parse logic ...
+    if yyParsePooled(tokenizer, arena) != 0 {
+        // ... existing error handling ...
+    }
     // NOTE: We do NOT return the arena to the pool here.
     // The caller must call Release() when done with the AST.
     return tokenizer.ParseTree, tokenizer.BindVars, nil
@@ -348,7 +397,9 @@ parsing.
 2. **Create `arena_alloc.go`** (generated) with typed `New<Type>()` methods for every
    AST struct type. Update the code generator that produces `ast_clone.go`,
    `ast_visit.go`, etc. to also produce `arena_alloc.go`.
-3. **Add `Arena` field to `Tokenizer`**.
+3. **Add `Arena` field to `yyParserImpl`** by modifying the goyacc template in
+   `goyacc/goyacc.go` (line ~3374). Update `yyParsePooled()` to accept and attach
+   the arena.
 4. **Add `ParseResult` struct** with `Release()` method.
 5. **Add `Parse2WithArena()` entry point** that creates an arena, parses, and returns
    a `ParseResult`.
@@ -360,13 +411,10 @@ parsing.
 
 This is the largest phase — changing ~556 allocation sites in `sql.y`.
 
-1. **Create a helper function** accessible from grammar rules:
-   ```go
-   // In sql.y preamble:
-   func arena(yylex yyLexer) *Arena {
-       return yylex.(*Tokenizer).Arena
-   }
-   ```
+1. **Grammar rules access the arena via `yyrcvr.Arena`** — no helper function
+   needed for the common case. For `New*()` constructor functions called from
+   `ast_funcs.go` (outside grammar actions), pass the arena explicitly or use
+   heap fallback.
 
 2. **Migrate grammar rules** in batches by AST node type, starting with the most
    frequently allocated:
@@ -379,17 +427,20 @@ This is the largest phase — changing ~556 allocation sites in `sql.y`.
 
 3. **Each batch**: Modify `sql.y`, regenerate `sql.go`, run full test suite.
 
-4. **Fallback for nil arena**: Grammar rules must handle the case where `Arena` is
-   nil (for backward compatibility with `Parse2()`):
+4. **Fallback for nil arena**: For backward compatibility (callers that don't use
+   arenas), the generated allocation helpers handle nil gracefully:
    ```go
-   func arenaNewBinaryExpr(yylex yyLexer) *BinaryExpr {
-       if a := yylex.(*Tokenizer).Arena; a != nil {
-           return a.NewBinaryExpr()
+   // Generated for each type:
+   func (a *Arena) NewBinaryExpr() *BinaryExpr {
+       if a == nil {
+           return &BinaryExpr{}  // heap fallback
        }
-       return &BinaryExpr{}
+       ptr := a.alloc(unsafe.Sizeof(BinaryExpr{}), unsafe.Alignof(BinaryExpr{}))
+       return (*BinaryExpr)(ptr)
    }
    ```
-   This can be generated for every type.
+   In grammar rules: `yyrcvr.Arena.NewBinaryExpr()` — works whether arena is
+   nil or not.
 
 ### Phase 3: Caller Migration (Medium Risk)
 
