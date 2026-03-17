@@ -9,7 +9,9 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -65,6 +67,23 @@ type testVStreamReader struct {
 	batches [][]*binlogdatapb.VEvent
 	err     error
 	index   int
+}
+
+func setLifecycleState(v *VStreamClient, runUsed, runActive, shutdownRequested bool, cancelRunCtxFn context.CancelFunc) {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	v.lifecycle.runUsed = runUsed
+	v.lifecycle.runActive = runActive
+	v.lifecycle.shutdownRequested = shutdownRequested
+	v.lifecycle.cancelRunCtxFn = cancelRunCtxFn
+	v.lifecycle.gracefulShutdownFlushChan = make(chan struct{})
+	v.lifecycle.gracefulShutdownFlushOnce = sync.Once{}
+}
+
+func getLifecycleState(v *VStreamClient) (runUsed, runActive, shutdownRequested bool) {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	return v.lifecycle.runUsed, v.lifecycle.runActive, v.lifecycle.shutdownRequested
 }
 
 func (r *testVStreamReader) Recv() ([]*binlogdatapb.VEvent, error) {
@@ -264,7 +283,7 @@ func TestIsFinalCopyCompletedEvent(t *testing.T) {
 // TestRun_RejectsClosedClient verifies a client cannot be reused after a prior Run attempt.
 func TestRun_RejectsClosedClient(t *testing.T) {
 	v := &VStreamClient{}
-	v.isClosing.Store(true)
+	setLifecycleState(v, true, false, false, nil)
 
 	err := v.Run(context.Background())
 	assert.Error(t, err)
@@ -323,11 +342,10 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	defer conn.Close()
 
 	v := &VStreamClient{
-		conn:                      conn,
-		tables:                    map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
-		flags:                     DefaultFlags(),
-		filter:                    &binlogdatapb.Filter{},
-		gracefulShutdownFlushChan: make(chan struct{}),
+		conn:   conn,
+		tables: map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+		flags:  DefaultFlags(),
+		filter: &binlogdatapb.Filter{},
 	}
 
 	err = v.Run(context.Background())
@@ -347,18 +365,17 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
 	}
 	v := &VStreamClient{
-		tables:                    map[string]*TableConfig{},
-		latestVgtid:               vgtid,
-		lastFlushedVgtid:          proto.Clone(vgtid).(*binlogdatapb.VGtid),
-		gracefulShutdownFlushChan: make(chan struct{}),
+		tables:           map[string]*TableConfig{},
+		latestVgtid:      vgtid,
+		lastFlushedVgtid: proto.Clone(vgtid).(*binlogdatapb.VGtid),
 	}
-	v.isClosing.Store(true)
+	setLifecycleState(v, false, false, true, nil)
 
 	err := v.flush(context.Background(), false)
 	assert.NoError(t, err)
 
 	select {
-	case <-v.gracefulShutdownFlushChan:
+	case <-v.getGracefulShutdownFlushChan():
 	default:
 		t.Fatal("expected graceful shutdown flush channel to be closed")
 	}
@@ -434,11 +451,53 @@ func TestShouldFlush_ReturnsReason(t *testing.T) {
 			minFlushDuration: time.Hour,
 			stats:            VStreamStats{LastFlushedAt: time.Now()},
 		}
-		v.isClosing.Store(true)
+		setLifecycleState(v, false, false, true, nil)
 
 		shouldFlush, reason := v.shouldFlush(false, false)
 		assert.True(t, shouldFlush)
 		assert.Equal(t, FlushReasonGracefulShutdown, reason)
+	})
+}
+
+func TestGracefulShutdown_BeforeRunDoesNothing(t *testing.T) {
+	v := &VStreamClient{}
+
+	v.GracefulShutdown(time.Second)
+
+	runUsed, runActive, shutdownRequested := getLifecycleState(v)
+	assert.False(t, runUsed)
+	assert.False(t, runActive)
+	assert.False(t, shutdownRequested)
+}
+
+func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		v := &VStreamClient{}
+		setLifecycleState(v, true, true, false, cancel)
+		defer v.endRun()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			v.GracefulShutdown(5 * time.Second)
+		}()
+
+		synctest.Wait()
+		assert.True(t, v.isShutdownRequested())
+		assert.NoError(t, ctx.Err())
+
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+
+		select {
+		case <-done:
+		default:
+			t.Fatal("GracefulShutdown did not return after wait elapsed")
+		}
+		assert.ErrorIs(t, ctx.Err(), context.Canceled)
 	})
 }
 
@@ -447,11 +506,10 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 	defer cancel()
 
 	v := &VStreamClient{
-		flags:                     DefaultFlags(),
-		gracefulShutdownFlushChan: make(chan struct{}),
-		gracefulShutdownWaitDur:   0,
-		cancelRunCtxFn:            cancel,
+		flags:                   DefaultFlags(),
+		gracefulShutdownWaitDur: 0,
 	}
+	setLifecycleState(v, true, true, false, cancel)
 
 	done := make(chan struct{})
 	go func() {
@@ -468,7 +526,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 		}
 	}, 2500*time.Millisecond, 100*time.Millisecond)
 	assert.NoError(t, ctx.Err())
-	assert.False(t, v.isClosing.Load())
+	assert.False(t, v.isShutdownRequested())
 
 	cancel()
 	assert.Eventually(t, func() bool {
@@ -480,7 +538,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 		}
 	}, time.Second, 50*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
-	assert.False(t, v.isClosing.Load())
+	assert.False(t, v.isShutdownRequested())
 }
 
 func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.T) {
@@ -488,11 +546,10 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 	defer cancel()
 
 	v := &VStreamClient{
-		flags:                     DefaultFlags(),
-		gracefulShutdownFlushChan: make(chan struct{}),
-		gracefulShutdownWaitDur:   0,
-		cancelRunCtxFn:            cancel,
+		flags:                   DefaultFlags(),
+		gracefulShutdownWaitDur: 0,
 	}
+	setLifecycleState(v, true, true, false, cancel)
 	v.lastEventProcessedAtUnixNano.Store(time.Now().Add(-3 * time.Second).UnixNano())
 
 	done := make(chan struct{})
@@ -510,5 +567,5 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 		}
 	}, 2*time.Second, 100*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
-	assert.True(t, v.isClosing.Load())
+	assert.True(t, v.isShutdownRequested())
 }
