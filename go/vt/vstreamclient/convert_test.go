@@ -485,6 +485,37 @@ func TestValidateTableConfig(t *testing.T) {
 		)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "provided tables do not match stored tables")
+		assert.ErrorContains(t, err, "table ks.t query changed")
+		assert.ErrorContains(t, err, "provided \"select * from t\"")
+		assert.ErrorContains(t, err, "stored \"select id from t\"")
+	})
+
+	t.Run("missing stored table is reported", func(t *testing.T) {
+		err := validateTableConfig(
+			map[string]*TableConfig{
+				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
+				"t2": {Keyspace: "ks", Table: "t2", Query: "select * from t2"},
+			},
+			map[string]*TableConfig{
+				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
+			},
+		)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "table ks.t2 is new in provided config")
+	})
+
+	t.Run("missing provided table is reported", func(t *testing.T) {
+		err := validateTableConfig(
+			map[string]*TableConfig{
+				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
+			},
+			map[string]*TableConfig{
+				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
+				"t2": {Keyspace: "ks", Table: "t2", Query: "select * from t2"},
+			},
+		)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "table ks.t2 is missing from provided config")
 	})
 }
 
