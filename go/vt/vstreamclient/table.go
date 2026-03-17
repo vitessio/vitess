@@ -3,7 +3,6 @@ package vstreamclient
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -224,12 +223,62 @@ func validateTableConfig(providedTables, dbTables map[string]*TableConfig) error
 	providedTablesMap := tablesToDBTableConfig(providedTables)
 	dbTablesMap := tablesToDBTableConfig(dbTables)
 
-	if !maps.Equal(providedTablesMap, dbTablesMap) {
-		// TODO: this could be more user-friendly and show the differences
-		return errors.New("vstreamclient: provided tables do not match stored tables")
+	keys := make([]string, 0, len(providedTablesMap)+len(dbTablesMap))
+	seen := make(map[string]struct{}, len(providedTablesMap)+len(dbTablesMap))
+	for key := range providedTablesMap {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	for key := range dbTablesMap {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	diffs := make([]string, 0)
+	for _, key := range keys {
+		provided, providedOK := providedTablesMap[key]
+		stored, storedOK := dbTablesMap[key]
+
+		switch {
+		case providedOK && !storedOK:
+			diffs = append(diffs, fmt.Sprintf("table %s is new in provided config", formatTableConfigName(key, provided)))
+
+		case !providedOK && storedOK:
+			diffs = append(diffs, fmt.Sprintf("table %s is missing from provided config", formatTableConfigName(key, stored)))
+
+		case provided != stored:
+			tableName := formatTableConfigName(key, provided)
+			if storedName := formatTableConfigName(key, stored); storedName != tableName {
+				diffs = append(diffs, fmt.Sprintf("table %s identity changed: provided %q, stored %q", key, tableName, storedName))
+				continue
+			}
+
+			if provided.Query != stored.Query {
+				diffs = append(diffs, fmt.Sprintf("table %s query changed: provided %q, stored %q", tableName, provided.Query, stored.Query))
+			}
+		}
+	}
+
+	if len(diffs) > 0 {
+		return fmt.Errorf("vstreamclient: provided tables do not match stored tables: %s", strings.Join(diffs, "; "))
 	}
 
 	return nil
+}
+
+func formatTableConfigName(key string, table dbTableConfig) string {
+	if table.Keyspace != "" && table.Table != "" {
+		return qualifiedTableName(table.Keyspace, table.Table)
+	}
+
+	return key
 }
 
 func (table *TableConfig) resetBatch() {
