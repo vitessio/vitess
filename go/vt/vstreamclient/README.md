@@ -239,6 +239,10 @@ advanced.
 
 That means restart behavior is tied to successful flushes, not just received events.
 
+The delivery contract at this boundary is at-least-once, not exactly-once. `FlushFn` runs before checkpoint
+persistence, so if your sink write succeeds but the checkpoint write fails, those same rows can be replayed on the next
+startup.
+
 ## Quick Start
 
 ```go
@@ -591,6 +595,7 @@ func newCustomerSink(ctx context.Context, conn *vtgateconn.VTGateConn, gcsClient
 
 Things to keep in mind with this pattern:
 
+- `vstreamclient` is at-least-once at the flush/checkpoint boundary, so replay is possible after sink success
 - if `FlushFn` returns an error, the checkpoint is not advanced and the same rows will be replayed
 - the load path should therefore be idempotent, or at least deduplicatable downstream
 - waiting synchronously gives simpler correctness semantics, but lower throughput
@@ -688,6 +693,9 @@ If `FlushFn` returns an error:
 - `Run()` returns that error
 - checkpoint state is not advanced
 - the next run resumes from the last successful flush
+
+Even if `FlushFn` succeeds, a later checkpoint write can still fail. In that case the same flushed rows may be replayed
+on restart, so downstream consumers should be idempotent or able to deduplicate.
 
 This is important for correctness, but it means your flush logic should be explicit about retry behavior.
 

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vstreamclient"
 )
 
@@ -152,6 +153,63 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 
 	te.runUntilTimeout(t, restartedClient, 2*time.Second)
 	assert.ElementsMatch(t, []*Customer{{ID: 1101, Email: "copy-a@domain.com"}, {ID: 1102, Email: "copy-b@domain.com"}, {ID: 1103, Email: "copy-c@domain.com"}}, got)
+}
+
+// TestVStreamClientReplaysRowsWhenCheckpointWriteFails verifies the package's
+// at-least-once contract: if FlushFn succeeds but the checkpoint write fails,
+// the same rows are replayed on the next startup.
+func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
+	te := newTestEnv(t)
+	streamName := t.Name()
+
+	newClient := func(flushFn vstreamclient.FlushFunc) *vstreamclient.VStreamClient {
+		return te.newDefaultClient(t, streamName, []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1700 and 1799",
+			MaxRowsPerFlush: 1,
+			DataType:        &Customer{},
+			FlushFn:         flushFn,
+		}})
+	}
+
+	// Finish the initial copy first so the replay we observe comes from a failed
+	// post-copy checkpoint write, not from an interrupted bootstrap copy.
+	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
+
+	want := &Customer{ID: 1701, Email: "checkpoint-replay@domain.com"}
+	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
+
+	var firstRun []*Customer
+	failingClient := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		for _, row := range rows {
+			firstRun = append(firstRun, row.Data.(*Customer))
+		}
+
+		te.execBackground(t, "delete from commerce.vstreams where name = :name", map[string]*querypb.BindVariable{
+			"name": {Type: querypb.Type_VARBINARY, Value: []byte(streamName)},
+		})
+
+		return nil
+	})
+
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	err := failingClient.Run(runCtx)
+	cancelRun()
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "unexpected number of rows affected")
+	assert.Equal(t, []*Customer{want}, firstRun)
+
+	var replayed []*Customer
+	replayClient := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		for _, row := range rows {
+			replayed = append(replayed, row.Data.(*Customer))
+		}
+		return nil
+	})
+
+	te.runUntilTimeout(t, replayClient, 2*time.Second)
+	assert.Equal(t, []*Customer{want}, replayed)
 }
 
 // TestVStreamClientStartingVGtidOverridesState verifies an explicit starting

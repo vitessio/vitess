@@ -30,6 +30,10 @@ type EventFunc func(ctx context.Context, event *binlogdatapb.VEvent) error
 //
 // Returning an error will stop the stream, and the last vgtid will not be stored. The stream will need to be
 // restarted from the last successful flushed vgtid.
+//
+// Delivery is at-least-once at the flush/checkpoint boundary: if FlushFn succeeds but the checkpoint write fails,
+// the same rows may be delivered again on the next startup. Downstream sinks should therefore be idempotent or
+// explicitly deduplicatable.
 type FlushFunc func(ctx context.Context, rows []Row, meta FlushMeta) error
 
 // Row is the data structure that will be passed to the FlushFunc. It contains the row event, the row change,
@@ -415,6 +419,9 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 // as we process events, we'll periodically need to checkpoint the last vgtid and persist the buffered data to
 // storage. You can control the frequency of this flush by adjusting the minFlushDuration and maxRowsPerFlush.
 // This is only called when we have an event that guarantees we're not flushing mid-transaction.
+//
+// The durability boundary is at-least-once, not exactly-once: FlushFn runs before checkpoint persistence, so any
+// failure after a successful flush can replay that same data on restart.
 //
 // The isCopyCompleted flag is used to indicate that we've received the final COPY_COMPLETED event, which means
 // we should flush all remaining data, even if it doesn't meet the usual thresholds for flushing. This ensures
