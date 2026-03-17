@@ -176,9 +176,10 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// instead of spawning a goroutine for every query execution. The
 	// callback only runs if the context is cancelled, avoiding goroutine
 	// and channel overhead on the happy path.
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	stop := context.AfterFunc(ctx, func() {
-		defer close(done)
+		defer wg.Done()
 		dbc.terminate(ctx, insideTxn, now)
 	})
 	result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
@@ -186,7 +187,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 		// The context was cancelled and terminate has started. Wait for
 		// it to finish so that the kill statement completes and the dba
 		// pool connection is released before we return.
-		<-done
+		wg.Wait()
 		return nil, dbc.Err()
 	}
 	// Check for errors set by an explicit Kill call from another
@@ -308,14 +309,15 @@ func (dbc *Conn) streamOnce(
 	now := time.Now()
 	defer dbc.stats.MySQLTimings.Record("ExecStream", now)
 
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	stop := context.AfterFunc(ctx, func() {
-		defer close(done)
+		defer wg.Done()
 		dbc.terminate(ctx, insideTxn, now)
 	})
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
 	if !stop() {
-		<-done
+		wg.Wait()
 		return dbc.Err()
 	}
 	// Check for errors set by an explicit Kill call from another
@@ -466,9 +468,10 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 	defer killConn.Recycle()
 
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	stop := context.AfterFunc(ctx, func() {
-		defer close(done)
+		defer wg.Done()
 		killConn.Close()
 		dbc.stats.InternalErrors.Add("HungConnection", 1)
 		log.Warn(fmt.Sprintf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
@@ -479,7 +482,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 		// for it to finish before returning so that the deferred Recycle
 		// does not return the connection to the pool while Close is
 		// still running.
-		<-done
+		wg.Wait()
 		return context.Cause(ctx)
 	}
 	if err != nil {
@@ -509,9 +512,10 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 	defer killConn.Recycle()
 
 	sql := fmt.Sprintf("kill query %d", dbc.conn.ID())
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	stop := context.AfterFunc(ctx, func() {
-		defer close(done)
+		defer wg.Done()
 		killConn.Close()
 		dbc.stats.InternalErrors.Add("HungQuery", 1)
 		log.Warn(fmt.Sprintf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
@@ -522,7 +526,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 		// for it to finish before returning so that the deferred Recycle
 		// does not return the connection to the pool while Close is
 		// still running.
-		<-done
+		wg.Wait()
 		return context.Cause(ctx)
 	}
 	if err != nil {
