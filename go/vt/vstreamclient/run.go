@@ -93,14 +93,14 @@ func (r FlushReason) String() string {
 //   - FlushFn returns an error
 //   - checkpoint state updates fail
 func (v *VStreamClient) Run(ctx context.Context) error {
-	if v.isClosing.Load() {
+	// make a cancelable context for GracefulShutdown to use, so it can signal the Run loop to exit
+	ctx, cancelRunCtxFn := context.WithCancel(ctx)
+	if !v.beginRun(cancelRunCtxFn) {
+		cancelRunCtxFn()
 		return errors.New("vstreamclient: client is closed; create a new client for each Run attempt")
 	}
-	defer v.isClosing.Store(true)
-
-	// make a cancelable context for GracefulShutdown to use, so it can signal the Run loop to exit
-	ctx, v.cancelRunCtxFn = context.WithCancel(ctx)
-	defer v.cancelRunCtxFn()
+	defer cancelRunCtxFn()
+	defer v.endRun()
 
 	// initialize the streamer
 	var err error
@@ -162,11 +162,13 @@ func (v *VStreamClient) shouldExitRun(ctx context.Context) (bool, error) {
 	// returning an error, whereas if the context is canceled, we want to return the context error. They'll often both
 	// happen around the same time, in which case the select would choose pseudo-randomly between the two.
 
+	gracefulShutdownFlushChan := v.getGracefulShutdownFlushChan()
+
 	select {
 	// if we enter this case, that means the last flush completed during the shutdown process, and closed
 	// the channel, so we can exit immediately without processing any more events. This is the happy
 	// path for graceful shutdown, since we were able to flush all buffered data
-	case <-v.gracefulShutdownFlushChan:
+	case <-gracefulShutdownFlushChan:
 		return true, nil
 
 	default:
@@ -432,11 +434,7 @@ func (v *VStreamClient) flush(ctx context.Context, force bool) error {
 	// if the lastFlushedVgtid is the same as the latestVgtid and there is no buffered data,
 	// we don't need to do anything.
 	if !force && !hasBufferedRows && proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
-		if v.isClosing.Load() {
-			v.gracefulShutdownFlushOnce.Do(func() {
-				close(v.gracefulShutdownFlushChan)
-			})
-		}
+		v.signalGracefulShutdownFlushed()
 		return nil
 	}
 
@@ -492,11 +490,7 @@ func (v *VStreamClient) flush(ctx context.Context, force bool) error {
 
 	// if we're in the middle of a graceful shutdown, and we've successfully flushed all the remaining data,
 	// we can close the channel to let the Run loop know it can exit
-	if v.isClosing.Load() {
-		v.gracefulShutdownFlushOnce.Do(func() {
-			close(v.gracefulShutdownFlushChan)
-		})
-	}
+	v.signalGracefulShutdownFlushed()
 
 	return nil
 }
@@ -534,7 +528,7 @@ func (v *VStreamClient) shouldFlush(hasBufferedRows, force bool) (bool, FlushRea
 
 	// even if we haven't hit either of minDuration or maxRows, if we're actively closing
 	// down, go ahead and force the flush.
-	if v.isClosing.Load() {
+	if v.isShutdownRequested() {
 		return true, FlushReasonGracefulShutdown
 	}
 

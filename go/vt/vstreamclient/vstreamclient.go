@@ -66,16 +66,23 @@ type VStreamClient struct {
 	// these are the optional functions that are called for each event type
 	eventFuncs map[binlogdatapb.VEventType]EventFunc
 
-	// keeping this here allows for us to cancel the context when GracefulShutdown is called
-	cancelRunCtxFn context.CancelFunc
+	lifecycle lifecycleState
 
-	// these fields are used by the graceful shutdown process
-	isClosing                 atomic.Bool
+	// these fields configure how graceful shutdown is requested from outside the run loop.
+	gracefulShutdownChan    <-chan struct{}
+	gracefulShutdownSignals []os.Signal
+	gracefulShutdownWaitDur time.Duration
+}
+
+type lifecycleState struct {
+	mu                sync.Mutex
+	runUsed           bool
+	runActive         bool
+	shutdownRequested bool
+	cancelRunCtxFn    context.CancelFunc
+
 	gracefulShutdownFlushChan chan struct{}
 	gracefulShutdownFlushOnce sync.Once
-	gracefulShutdownChan      <-chan struct{}
-	gracefulShutdownSignals   []os.Signal
-	gracefulShutdownWaitDur   time.Duration
 }
 
 // VStreamStats keeps track of the number of rows processed and flushed for the whole stream
@@ -120,10 +127,6 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		minFlushDuration:        DefaultMinFlushDuration,
 		tabletType:              topodatapb.TabletType_REPLICA,
 		gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
-
-		// we expect this channel to be closed by the last flush operation during GracefulShutdown, whether or not it
-		// succeeds. there is no guarantee that it will be closed before Run exits, if no flush boundary happens.
-		gracefulShutdownFlushChan: make(chan struct{}),
 	}
 
 	var err error
@@ -258,26 +261,83 @@ func resolveLatestVGtid(explicit, stored *binlogdatapb.VGtid) (*binlogdatapb.VGt
 // GracefulShutdown closes the client immediately. As with any completed Run attempt,
 // call New(...) to create a fresh client before running again.
 func (v *VStreamClient) GracefulShutdown(wait time.Duration) {
-	firstCaller := v.isClosing.CompareAndSwap(false, true)
-	if !firstCaller {
-		return
-	}
-
-	if v.cancelRunCtxFn == nil {
+	cancelRunCtxFn, gracefulShutdownFlushChan, ok := v.requestShutdown()
+	if !ok {
 		return
 	}
 
 	if wait == 0 {
-		v.cancelRunCtxFn()
+		cancelRunCtxFn()
 		return
 	}
 
 	select {
 	case <-time.After(wait):
-	case <-v.gracefulShutdownFlushChan:
+	case <-gracefulShutdownFlushChan:
 	}
 
-	v.cancelRunCtxFn()
+	cancelRunCtxFn()
+}
+
+func (v *VStreamClient) beginRun(cancelRunCtxFn context.CancelFunc) bool {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	if v.lifecycle.runUsed {
+		return false
+	}
+	v.lifecycle.runUsed = true
+	v.lifecycle.runActive = true
+	v.lifecycle.shutdownRequested = false
+	v.lifecycle.cancelRunCtxFn = cancelRunCtxFn
+	v.lifecycle.gracefulShutdownFlushChan = make(chan struct{})
+	v.lifecycle.gracefulShutdownFlushOnce = sync.Once{}
+	return true
+}
+
+func (v *VStreamClient) endRun() {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	v.lifecycle.runActive = false
+	v.lifecycle.shutdownRequested = false
+	v.lifecycle.cancelRunCtxFn = nil
+}
+
+func (v *VStreamClient) requestShutdown() (context.CancelFunc, <-chan struct{}, bool) {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	if !v.lifecycle.runActive || v.lifecycle.shutdownRequested || v.lifecycle.cancelRunCtxFn == nil {
+		return nil, nil, false
+	}
+	v.lifecycle.shutdownRequested = true
+	return v.lifecycle.cancelRunCtxFn, v.lifecycle.gracefulShutdownFlushChan, true
+}
+
+func (v *VStreamClient) isShutdownRequested() bool {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	return v.lifecycle.shutdownRequested
+}
+
+func (v *VStreamClient) getGracefulShutdownFlushChan() <-chan struct{} {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	return v.lifecycle.gracefulShutdownFlushChan
+}
+
+func (v *VStreamClient) signalGracefulShutdownFlushed() {
+	v.lifecycle.mu.Lock()
+	shutdownRequested := v.lifecycle.shutdownRequested
+	gracefulShutdownFlushChan := v.lifecycle.gracefulShutdownFlushChan
+	gracefulShutdownFlushOnce := &v.lifecycle.gracefulShutdownFlushOnce
+	v.lifecycle.mu.Unlock()
+
+	if !shutdownRequested || gracefulShutdownFlushChan == nil {
+		return
+	}
+
+	gracefulShutdownFlushOnce.Do(func() {
+		close(gracefulShutdownFlushChan)
+	})
 }
 
 func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession) (map[string][]string, error) {
