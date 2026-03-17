@@ -534,7 +534,7 @@ func TestTabletServerExecuteNoResult(t *testing.T) {
 	assert.Len(t, result.Fields, 1)
 	assert.Len(t, result.Rows, 1)
 
-	// With NoResult, the result should be empty.
+	// With NoResult, Fields and Rows should be empty.
 	options := &querypb.ExecuteOptions{NoResult: true}
 	result, err = tsv.Execute(ctx, nil, &target, executeSQL, nil, 0, 0, options)
 	require.NoError(t, err)

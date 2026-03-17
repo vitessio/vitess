@@ -973,7 +973,8 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				return err
 			}
 			if options.GetNoResult() {
-				result = &sqltypes.Result{}
+				result.Fields = nil
+				result.Rows = nil
 			} else {
 				result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 			}

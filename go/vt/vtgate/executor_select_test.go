@@ -4525,9 +4525,10 @@ func TestWarmingReads(t *testing.T) {
 		{Sql: "select age, city from `user`/* warming read */"},
 	}
 	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
-	require.Len(t, replica.Options, 1)
-	assert.True(t, replica.Options[0].GetNoResult(), "warming read should set NoResult option")
-	replica.Options = nil
+	replicaOptions := replica.GetOptions()
+	require.Len(t, replicaOptions, 1)
+	assert.True(t, replicaOptions[0].GetNoResult(), "warming read should set NoResult option")
+	replica.ClearOptions()
 	replica.ClearQueries()
 
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{}, false)

@@ -1405,9 +1405,10 @@ type ExecuteOptions struct {
 	// transaction_timeout specifies the transaction timeout in milliseconds. If not set, the default timeout is used.
 	TransactionTimeout *int64 `protobuf:"varint,20,opt,name=transaction_timeout,json=transactionTimeout,proto3,oneof" json:"transaction_timeout,omitempty"`
 	// no_result specifies that the caller does not need the query result rows.
-	// When set, the server will still execute the query but will not return
-	// rows or fields in the response. This is useful for warming reads where
-	// the goal is to warm the buffer pool, not to retrieve data.
+	// When set, the server will still execute the query via the Execute RPC
+	// but will not return rows or fields in the response. This flag is not
+	// currently honored by StreamExecute. This is useful for warming reads
+	// where the goal is to warm the buffer pool, not to retrieve data.
 	NoResult      bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

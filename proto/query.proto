@@ -381,9 +381,10 @@ message ExecuteOptions {
   optional int64 transaction_timeout = 20;
 
   // no_result specifies that the caller does not need the query result rows.
-  // When set, the server will still execute the query but will not return
-  // rows or fields in the response. This is useful for warming reads where
-  // the goal is to warm the buffer pool, not to retrieve data.
+  // When set, the server will still execute the query via the Execute RPC
+  // but will not return rows or fields in the response. This flag is not
+  // currently honored by StreamExecute. This is useful for warming reads
+  // where the goal is to warm the buffer pool, not to retrieve data.
   bool no_result = 21;
 }
 
