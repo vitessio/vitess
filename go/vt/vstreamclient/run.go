@@ -58,7 +58,7 @@ type FlushReason int8
 
 const (
 	FlushReasonNone             FlushReason = 1
-	FlushReasonForced           FlushReason = 2
+	FlushReasonCopyCompleted    FlushReason = 2
 	FlushReasonMinDuration      FlushReason = 3
 	FlushReasonMaxRowsPerFlush  FlushReason = 4
 	FlushReasonGracefulShutdown FlushReason = 5
@@ -68,7 +68,7 @@ func (r FlushReason) String() string {
 	switch r {
 	case FlushReasonNone:
 		return "none"
-	case FlushReasonForced:
+	case FlushReasonCopyCompleted:
 		return "forced"
 	case FlushReasonMinDuration:
 		return "minDuration"
@@ -281,11 +281,6 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 				if err != nil {
 					return err
 				}
-
-				err = setCopyCompleted(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable)
-				if err != nil {
-					return err
-				}
 			}
 
 		// heartbeat events are sent periodically if the source keyspace is idle and there are no other events.
@@ -420,11 +415,13 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 // as we process events, we'll periodically need to checkpoint the last vgtid and persist the buffered data to
 // storage. You can control the frequency of this flush by adjusting the minFlushDuration and maxRowsPerFlush.
 // This is only called when we have an event that guarantees we're not flushing mid-transaction.
-// ********************************************************************************************************
 //
-// we might consider exporting Flush, but we'd need to have a mutex or something to block the stream from
-// processing, and technically we'd need to let it run until a commit event happens.
-func (v *VStreamClient) flush(ctx context.Context, force bool) error {
+// The isCopyCompleted flag is used to indicate that we've received the final COPY_COMPLETED event, which means
+// we should flush all remaining data, even if it doesn't meet the usual thresholds for flushing. This ensures
+// that all copied data is flushed and checkpointed before we mark the stream as fully copied. It also sets
+// copy_completed to true in the state table.
+// ********************************************************************************************************
+func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("vstreamclient: context error before flush: %w", err)
 	}
@@ -433,12 +430,12 @@ func (v *VStreamClient) flush(ctx context.Context, force bool) error {
 
 	// if the lastFlushedVgtid is the same as the latestVgtid and there is no buffered data,
 	// we don't need to do anything.
-	if !force && !hasBufferedRows && proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
+	if !isCopyCompleted && !hasBufferedRows && proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
 		v.signalGracefulShutdownFlushed()
 		return nil
 	}
 
-	shouldFlush, flushReason := v.shouldFlush(hasBufferedRows, force)
+	shouldFlush, flushReason := v.shouldFlush(hasBufferedRows, isCopyCompleted)
 	if !shouldFlush {
 		return nil
 	}
@@ -479,7 +476,7 @@ func (v *VStreamClient) flush(ctx context.Context, force bool) error {
 	}
 
 	// always store the latest vgtid, even if there are no rows to store
-	err := updateLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid)
+	err := updateLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid, isCopyCompleted)
 	if err != nil {
 		return err
 	}
@@ -505,9 +502,9 @@ func (v *VStreamClient) hasBufferedRows() bool {
 	return false
 }
 
-func (v *VStreamClient) shouldFlush(hasBufferedRows, force bool) (bool, FlushReason) {
-	if force {
-		return true, FlushReasonForced
+func (v *VStreamClient) shouldFlush(hasBufferedRows, isCopyCompleted bool) (bool, FlushReason) {
+	if isCopyCompleted {
+		return true, FlushReasonCopyCompleted
 	}
 
 	// if we have exceeded the minFlushDuration, we'll force a flush, regardless how many rows each table has
