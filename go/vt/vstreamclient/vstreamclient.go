@@ -51,9 +51,9 @@ type VStreamClient struct {
 	// parameter only has a granularity of seconds.
 	heartbeatSeconds int
 
-	// lastEventProcessedAtUnixNano is the time after the last event was processed, including time for the user
-	// provided flush function to complete, which is used in the heartbeat monitor to let us know if we've been
-	// disconnected from the stream.
+	// lastEventProcessedAtUnixNano is the time after the last event batch was processed, including time for the
+	// user provided flush function to complete. A zero value means Run has not successfully processed any events yet,
+	// so heartbeat liveness checks should not trigger startup cancellation.
 	lastEventProcessedAtUnixNano atomic.Int64
 	isProcessingEvents           atomic.Bool
 
