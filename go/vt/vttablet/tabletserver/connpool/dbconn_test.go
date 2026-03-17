@@ -708,13 +708,6 @@ func executeWithTimeout(
 	require.Error(t, err)
 	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 	require.Nil(t, result)
-
-	// The kill query is fired asynchronously via context.AfterFunc, so it
-	// may arrive at the fake database after execute returns. Wait for it.
-	require.Eventually(t, func() bool {
-		return timestampKill.Load() > 0
-	}, 5*time.Second, 10*time.Millisecond)
-
 	timeQuery := time.UnixMicro(timestampQuery.Load())
 	timeKill := time.UnixMicro(timestampKill.Load())
 	// In this unit test, the execution of `select 1` is blocked for 1000ms.

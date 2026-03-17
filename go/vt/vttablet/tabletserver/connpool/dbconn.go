@@ -176,11 +176,19 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// instead of spawning a goroutine for every query execution. The
 	// callback only runs if the context is cancelled, avoiding goroutine
 	// and channel overhead on the happy path.
+	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
 		dbc.terminate(ctx, insideTxn, now)
 	})
 	result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
-	stop()
+	if !stop() {
+		// The context was cancelled and terminate has started. Wait for
+		// it to finish so that the kill statement completes and the dba
+		// pool connection is released before we return.
+		<-done
+		return nil, dbc.Err()
+	}
 	if dbcErr := dbc.Err(); dbcErr != nil {
 		return nil, dbcErr
 	}
@@ -298,11 +306,16 @@ func (dbc *Conn) streamOnce(
 	now := time.Now()
 	defer dbc.stats.MySQLTimings.Record("ExecStream", now)
 
+	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
 		dbc.terminate(ctx, insideTxn, now)
 	})
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
-	stop()
+	if !stop() {
+		<-done
+		return dbc.Err()
+	}
 	if dbcErr := dbc.Err(); dbcErr != nil {
 		return dbcErr
 	}
