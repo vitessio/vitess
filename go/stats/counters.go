@@ -164,7 +164,7 @@ var separatorByte = []byte{0xff}
 
 // counterEntry stores a single label combination's counter.
 type counterEntry struct {
-	names []string     // safe label values, for collision disambiguation
+	names []string     // raw label values (combined labels stored as StatsAllStr)
 	key   string       // dot-joined key, computed once, used for Counts() export
 	value atomic.Int64 // the actual counter
 }
@@ -199,9 +199,8 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 	return t
 }
 
-// hashLabels computes an xxhash of the label values, applying safeLabel
-// normalization and combined-label substitution to match safeJoinLabels
-// semantics. The xxhash.Digest is stack-allocated (zero allocation).
+// hashLabels computes an xxhash of the raw label values with combined-label
+// substitution. The xxhash.Digest is stack-allocated (zero allocation).
 func (mc *CountersWithMultiLabels) hashLabels(names []string) uint64 {
 	var d xxhash.Digest
 	for i, name := range names {
@@ -211,19 +210,20 @@ func (mc *CountersWithMultiLabels) hashLabels(names []string) uint64 {
 		if mc.combinedLabels[i] {
 			_, _ = d.WriteString(StatsAllStr)
 		} else {
-			_, _ = d.WriteString(safeLabel(name))
+			_, _ = d.WriteString(name)
 		}
 	}
 	return d.Sum64()
 }
 
-// namesMatch compares stored safe names against incoming raw names.
+// namesMatch compares stored raw names against incoming raw names.
+// Combined labels are skipped since all values map to the same entry.
 func (mc *CountersWithMultiLabels) namesMatch(stored, incoming []string) bool {
 	for i := range stored {
 		if mc.combinedLabels[i] {
 			continue
 		}
-		if stored[i] != safeLabel(incoming[i]) {
+		if stored[i] != incoming[i] {
 			return false
 		}
 	}
@@ -258,17 +258,16 @@ func (mc *CountersWithMultiLabels) getOrCreateEntry(names []string) *counterEntr
 		}
 	}
 
-	safeNames := make([]string, len(names))
-	for i, name := range names {
+	storedNames := make([]string, len(names))
+	copy(storedNames, names)
+	for i := range storedNames {
 		if mc.combinedLabels[i] {
-			safeNames[i] = StatsAllStr
-		} else {
-			safeNames[i] = safeLabel(name)
+			storedNames[i] = StatsAllStr
 		}
 	}
 	entry := &counterEntry{
-		names: safeNames,
-		key:   strings.Join(safeNames, "."),
+		names: storedNames,
+		key:   safeJoinLabels(names, mc.combinedLabels),
 	}
 	mc.entries[h] = append(mc.entries[h], entry)
 	return entry
@@ -319,7 +318,7 @@ func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
 	counts := make(map[string]int64, len(mc.entries))
 	for _, chain := range mc.entries {
 		for _, e := range chain {
-			counts[e.key] = e.value.Load()
+			counts[e.key] += e.value.Load()
 		}
 	}
 	return counts
