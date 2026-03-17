@@ -166,7 +166,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 		return te.newDefaultClient(t, streamName, []vstreamclient.TableConfig{{
 			Keyspace:        "customer",
 			Table:           "customer",
-			Query:           "select * from customer where id between 1700 and 1799",
+			Query:           "select * from customer where id between 1760 and 1799",
 			MaxRowsPerFlush: 1,
 			DataType:        &Customer{},
 			FlushFn:         flushFn,
@@ -177,7 +177,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 	// post-copy checkpoint write, not from an interrupted bootstrap copy.
 	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
 
-	want := &Customer{ID: 1701, Email: "checkpoint-replay@domain.com"}
+	want := &Customer{ID: 1761, Email: "checkpoint-replay@domain.com"}
 	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
 	var firstRun []*Customer

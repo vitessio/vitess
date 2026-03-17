@@ -108,12 +108,14 @@ func TestHandleEvents_FinalCopyCompletedPersistsCheckpointAndCopyCompletedTogeth
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
 	}
 	v := &VStreamClient{
-		name:               "stream",
-		session:            session,
-		vgtidStateKeyspace: "ks",
-		vgtidStateTable:    "state",
-		latestVgtid:        vgtid,
-		tables:             map[string]*TableConfig{},
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+		},
+		session:     session,
+		latestVgtid: vgtid,
+		tables:      map[string]*TableConfig{},
 	}
 
 	err := v.handleEvents(context.Background(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COPY_COMPLETED}})
