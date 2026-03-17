@@ -189,6 +189,8 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 		<-done
 		return nil, dbc.Err()
 	}
+	// Check for errors set by an explicit Kill call from another
+	// goroutine (not triggered by context cancellation).
 	if dbcErr := dbc.Err(); dbcErr != nil {
 		return nil, dbcErr
 	}
@@ -316,6 +318,8 @@ func (dbc *Conn) streamOnce(
 		<-done
 		return dbc.Err()
 	}
+	// Check for errors set by an explicit Kill call from another
+	// goroutine (not triggered by context cancellation).
 	if dbcErr := dbc.Err(); dbcErr != nil {
 		return dbcErr
 	}
@@ -462,13 +466,20 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 	defer killConn.Recycle()
 
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
+	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
 		killConn.Close()
 		dbc.stats.InternalErrors.Add("HungConnection", 1)
 		log.Warn(fmt.Sprintf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
 	})
 	_, err = killConn.Conn.ExecuteFetch(sql, -1, false)
 	if !stop() {
+		// The context was cancelled and the callback has started. Wait
+		// for it to finish before returning so that the deferred Recycle
+		// does not return the connection to the pool while Close is
+		// still running.
+		<-done
 		return context.Cause(ctx)
 	}
 	if err != nil {
@@ -498,13 +509,20 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 	defer killConn.Recycle()
 
 	sql := fmt.Sprintf("kill query %d", dbc.conn.ID())
+	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
 		killConn.Close()
 		dbc.stats.InternalErrors.Add("HungQuery", 1)
 		log.Warn(fmt.Sprintf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
 	})
 	_, err = killConn.Conn.ExecuteFetch(sql, -1, false)
 	if !stop() {
+		// The context was cancelled and the callback has started. Wait
+		// for it to finish before returning so that the deferred Recycle
+		// does not return the connection to the pool while Close is
+		// still running.
+		<-done
 		return context.Cause(ctx)
 	}
 	if err != nil {
