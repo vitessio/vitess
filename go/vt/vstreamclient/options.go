@@ -40,7 +40,7 @@ func WithMinFlushDuration(d time.Duration) Option {
 			return fmt.Errorf("vstreamclient: minimum flush duration must be positive, got %s", d.String())
 		}
 
-		v.minFlushDuration = d
+		v.cfg.minFlushDuration = d
 		return nil
 	}
 }
@@ -55,7 +55,7 @@ func WithHeartbeatSeconds(seconds int) Option {
 			return fmt.Errorf("vstreamclient: heartbeat seconds must be %d or less, got %d", uint64(math.MaxUint32), seconds)
 		}
 
-		v.heartbeatSeconds = seconds
+		v.cfg.heartbeatSeconds = seconds
 		return nil
 	}
 }
@@ -68,7 +68,7 @@ func WithTabletType(tabletType topodatapb.TabletType) Option {
 			return errors.New("vstreamclient: tablet type cannot be UNKNOWN")
 		}
 
-		v.tabletType = tabletType
+		v.cfg.tabletType = tabletType
 		return nil
 	}
 }
@@ -84,8 +84,8 @@ func WithGracefulShutdownChan(ch <-chan struct{}, wait time.Duration) Option {
 			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
 		}
 
-		v.gracefulShutdownChan = ch
-		v.gracefulShutdownWaitDur = wait
+		v.cfg.gracefulShutdownChan = ch
+		v.cfg.gracefulShutdownWaitDur = wait
 		return nil
 	}
 }
@@ -101,8 +101,8 @@ func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Optio
 			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
 		}
 
-		v.gracefulShutdownSignals = append([]os.Signal(nil), signals...)
-		v.gracefulShutdownWaitDur = wait
+		v.cfg.gracefulShutdownSignals = append([]os.Signal(nil), signals...)
+		v.cfg.gracefulShutdownWaitDur = wait
 		return nil
 	}
 }
@@ -119,8 +119,8 @@ func WithStateTable(keyspace, table string) Option {
 			return fmt.Errorf("vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
 		}
 
-		v.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
-		v.vgtidStateTable = sqlescape.EscapeID(table)
+		v.cfg.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
+		v.cfg.vgtidStateTable = sqlescape.EscapeID(table)
 		return nil
 	}
 }
@@ -143,7 +143,7 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 		if flags.HeartbeatInterval == 0 {
 			return errors.New("vstreamclient: HeartbeatInterval must be positive")
 		}
-		v.flags = flags
+		v.cfg.flags = flags
 		return nil
 	}
 }
@@ -161,16 +161,16 @@ func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 			return errors.New("vstreamclient: event func cannot be nil")
 		}
 
-		if v.eventFuncs == nil {
-			v.eventFuncs = make(map[binlogdatapb.VEventType]EventFunc)
+		if v.cfg.eventFuncs == nil {
+			v.cfg.eventFuncs = make(map[binlogdatapb.VEventType]EventFunc)
 		}
 
 		for _, eventType := range eventTypes {
-			if _, ok := v.eventFuncs[eventType]; ok {
+			if _, ok := v.cfg.eventFuncs[eventType]; ok {
 				return fmt.Errorf("vstreamclient: event type %s already has a function", eventType.String())
 			}
 
-			v.eventFuncs[eventType] = fn
+			v.cfg.eventFuncs[eventType] = fn
 		}
 
 		return nil
