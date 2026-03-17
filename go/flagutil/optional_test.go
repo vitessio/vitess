@@ -94,10 +94,12 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 	require.False(t, iface.IsSet())
 
 	// Old type names are still valid (backward compat via type alias).
-	var f64 *OptionalFloat64 = NewOptionalFloat64(1.0)
+	var f64 *OptionalFloat64
+	f64 = NewOptionalFloat64(1.0)
 	require.NotNil(t, f64)
 
-	var str *OptionalString = NewOptionalString("world")
+	var str *OptionalString
+	str = NewOptionalString("world")
 	require.NotNil(t, str)
 }
 
