@@ -401,7 +401,7 @@ func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
 
 	shouldFlush, reason = v.shouldFlush(true, true)
 	assert.True(t, shouldFlush)
-	assert.Equal(t, FlushReasonForced, reason)
+	assert.Equal(t, FlushReasonCopyCompleted, reason)
 }
 
 func TestShouldFlush_ReturnsReason(t *testing.T) {

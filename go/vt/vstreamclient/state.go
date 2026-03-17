@@ -198,16 +198,17 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 	return &latestVGtid, tables, copyCompleted, nil
 }
 
-func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid) error {
+func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid, setCopyCompleted bool) error {
 	latestVgtid, err := protojson.Marshal(vgtid)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to marshal latest_vgtid: %w", err)
 	}
 
-	query := fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid where name = :name`,
-		keyspaceName, tableName,
-	)
-	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
+	query := fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid where name = :name`, keyspaceName, tableName)
+	if setCopyCompleted {
+		query = fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid, copy_completed = true where name = :name`, keyspaceName, tableName)
+	}
+	result, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtid},
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
 	}, false)
@@ -215,18 +216,8 @@ func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, n
 		return fmt.Errorf("vstreamclient: failed to update latest_vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
 
-	return nil
-}
-
-func setCopyCompleted(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string) error {
-	query := fmt.Sprintf(`update %s.%s set copy_completed = true where name = :name`,
-		keyspaceName, tableName,
-	)
-	_, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
-		"name": {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	}, false)
-	if err != nil {
-		return fmt.Errorf("vstreamclient: failed to set copy_completed for %s.%s: %w", keyspaceName, tableName, err)
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("vstreamclient: unexpected number of rows affected when setting latest_vgtid for %s.%s: %d", keyspaceName, tableName, result.RowsAffected)
 	}
 
 	return nil
