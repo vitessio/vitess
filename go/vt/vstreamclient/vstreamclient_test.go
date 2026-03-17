@@ -168,7 +168,7 @@ func TestWithTabletType_Validation(t *testing.T) {
 
 	err = WithTabletType(topodatapb.TabletType_RDONLY)(v)
 	assert.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_RDONLY, v.tabletType)
+	assert.Equal(t, topodatapb.TabletType_RDONLY, v.cfg.tabletType)
 }
 
 func TestWithFlags_RejectsNil(t *testing.T) {
@@ -192,8 +192,8 @@ func TestWithGracefulShutdownChan_Validation(t *testing.T) {
 	ch := make(chan struct{})
 	err = WithGracefulShutdownChan(ch, time.Second)(v)
 	assert.NoError(t, err)
-	assert.Equal(t, (<-chan struct{})(ch), v.gracefulShutdownChan)
-	assert.Equal(t, time.Second, v.gracefulShutdownWaitDur)
+	assert.Equal(t, (<-chan struct{})(ch), v.cfg.gracefulShutdownChan)
+	assert.Equal(t, time.Second, v.cfg.gracefulShutdownWaitDur)
 }
 
 func TestWithGracefulShutdownSignals_Validation(t *testing.T) {
@@ -209,8 +209,8 @@ func TestWithGracefulShutdownSignals_Validation(t *testing.T) {
 
 	err = WithGracefulShutdownSignals(time.Second, os.Interrupt)(v)
 	assert.NoError(t, err)
-	assert.Equal(t, []os.Signal{os.Interrupt}, v.gracefulShutdownSignals)
-	assert.Equal(t, time.Second, v.gracefulShutdownWaitDur)
+	assert.Equal(t, []os.Signal{os.Interrupt}, v.cfg.gracefulShutdownSignals)
+	assert.Equal(t, time.Second, v.cfg.gracefulShutdownWaitDur)
 }
 
 func TestWithEventFunc_Validation(t *testing.T) {
@@ -342,10 +342,12 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	defer conn.Close()
 
 	v := &VStreamClient{
-		conn:   conn,
+		cfg: clientConfig{
+			conn:   conn,
+			flags:  DefaultFlags(),
+			filter: &binlogdatapb.Filter{},
+		},
 		tables: map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
-		flags:  DefaultFlags(),
-		filter: &binlogdatapb.Filter{},
 	}
 
 	err = v.Run(context.Background())
@@ -383,8 +385,8 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 
 func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
 	v := &VStreamClient{
-		minFlushDuration: time.Hour,
-		stats:            VStreamStats{LastFlushedAt: time.Now()},
+		cfg:   clientConfig{minFlushDuration: time.Hour},
+		stats: VStreamStats{LastFlushedAt: time.Now()},
 		tables: map[string]*TableConfig{
 			qualifiedTableName("ks", "t"): {
 				Keyspace:        "ks",
@@ -407,8 +409,8 @@ func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
 func TestShouldFlush_ReturnsReason(t *testing.T) {
 	t.Run("min flush duration", func(t *testing.T) {
 		v := &VStreamClient{
-			minFlushDuration: time.Second,
-			stats:            VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+			cfg:   clientConfig{minFlushDuration: time.Second},
+			stats: VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
 		}
 
 		shouldFlush, reason := v.shouldFlush(true, false)
@@ -418,8 +420,8 @@ func TestShouldFlush_ReturnsReason(t *testing.T) {
 
 	t.Run("rowless checkpoint still uses last flush time", func(t *testing.T) {
 		v := &VStreamClient{
-			minFlushDuration: time.Second,
-			stats:            VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+			cfg:   clientConfig{minFlushDuration: time.Second},
+			stats: VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
 		}
 
 		shouldFlush, reason := v.shouldFlush(false, false)
@@ -429,8 +431,8 @@ func TestShouldFlush_ReturnsReason(t *testing.T) {
 
 	t.Run("max rows per flush", func(t *testing.T) {
 		v := &VStreamClient{
-			minFlushDuration: time.Hour,
-			stats:            VStreamStats{LastFlushedAt: time.Now()},
+			cfg:   clientConfig{minFlushDuration: time.Hour},
+			stats: VStreamStats{LastFlushedAt: time.Now()},
 			tables: map[string]*TableConfig{
 				qualifiedTableName("ks", "t"): {
 					Keyspace:        "ks",
@@ -448,8 +450,8 @@ func TestShouldFlush_ReturnsReason(t *testing.T) {
 
 	t.Run("graceful shutdown", func(t *testing.T) {
 		v := &VStreamClient{
-			minFlushDuration: time.Hour,
-			stats:            VStreamStats{LastFlushedAt: time.Now()},
+			cfg:   clientConfig{minFlushDuration: time.Hour},
+			stats: VStreamStats{LastFlushedAt: time.Now()},
 		}
 		setLifecycleState(v, false, false, true, nil)
 
@@ -506,8 +508,10 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 	defer cancel()
 
 	v := &VStreamClient{
-		flags:                   DefaultFlags(),
-		gracefulShutdownWaitDur: 0,
+		cfg: clientConfig{
+			flags:                   DefaultFlags(),
+			gracefulShutdownWaitDur: 0,
+		},
 	}
 	setLifecycleState(v, true, true, false, cancel)
 
@@ -546,8 +550,10 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 	defer cancel()
 
 	v := &VStreamClient{
-		flags:                   DefaultFlags(),
-		gracefulShutdownWaitDur: 0,
+		cfg: clientConfig{
+			flags:                   DefaultFlags(),
+			gracefulShutdownWaitDur: 0,
+		},
 	}
 	setLifecycleState(v, true, true, false, cancel)
 	v.lastEventProcessedAtUnixNano.Store(time.Now().Add(-3 * time.Second).UnixNano())

@@ -108,7 +108,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 
 	// initialize the streamer
 	var err error
-	v.reader, err = v.conn.VStream(ctx, v.tabletType, v.latestVgtid, v.filter, v.flags)
+	v.reader, err = v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
@@ -212,7 +212,7 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		}
 
 		// call the user-defined event function if it exists
-		fn, ok := v.eventFuncs[ev.Type]
+		fn, ok := v.cfg.eventFuncs[ev.Type]
 		if ok {
 			err = fn(ctx, ev)
 			if err != nil {
@@ -328,23 +328,23 @@ func isFinalCopyCompletedEvent(ev *binlogdatapb.VEvent) bool {
 // is canceled or times out.
 // ********************************************************************************************************
 func (v *VStreamClient) listenForGracefulShutdown(ctx context.Context) {
-	if v.gracefulShutdownChan == nil && len(v.gracefulShutdownSignals) == 0 {
+	if v.cfg.gracefulShutdownChan == nil && len(v.cfg.gracefulShutdownSignals) == 0 {
 		return
 	}
 
 	var signalChan chan os.Signal
-	if len(v.gracefulShutdownSignals) > 0 {
+	if len(v.cfg.gracefulShutdownSignals) > 0 {
 		signalChan = make(chan os.Signal, 1)
-		signal.Notify(signalChan, v.gracefulShutdownSignals...)
+		signal.Notify(signalChan, v.cfg.gracefulShutdownSignals...)
 		defer signal.Stop(signalChan)
 	}
 
 	select {
-	case <-v.gracefulShutdownChan:
-		v.GracefulShutdown(v.gracefulShutdownWaitDur)
+	case <-v.cfg.gracefulShutdownChan:
+		v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
 
 	case <-signalChan:
-		v.GracefulShutdown(v.gracefulShutdownWaitDur)
+		v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
 
 	case <-ctx.Done():
 	}
@@ -361,7 +361,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 	const startupTimeout = 5 * time.Minute
 	const timeoutMultiplier = 2
 
-	heartbeatDur := time.Duration(v.flags.HeartbeatInterval) * time.Second
+	heartbeatDur := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second
 	heartbeat := time.NewTicker(heartbeatDur)
 	defer heartbeat.Stop()
 
@@ -396,7 +396,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 			// if we haven't received an event in twice the heartbeat duration, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
 			if tm.Sub(time.Unix(0, lastEventProcessedAtUnixNano)) > heartbeatDur*timeoutMultiplier {
-				v.GracefulShutdown(v.gracefulShutdownWaitDur)
+				v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
 				return
 			}
 
@@ -483,7 +483,7 @@ func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 	}
 
 	// always store the latest vgtid, even if there are no rows to store
-	err := updateLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid, isCopyCompleted)
+	err := updateLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.latestVgtid, isCopyCompleted)
 	if err != nil {
 		return err
 	}
@@ -515,7 +515,7 @@ func (v *VStreamClient) shouldFlush(hasBufferedRows, isCopyCompleted bool) (bool
 	}
 
 	// if we have exceeded the minFlushDuration, we'll force a flush, regardless how many rows each table has
-	if time.Since(v.stats.LastFlushedAt) > v.minFlushDuration {
+	if time.Since(v.stats.LastFlushedAt) > v.cfg.minFlushDuration {
 		return true, FlushReasonMinDuration
 	}
 

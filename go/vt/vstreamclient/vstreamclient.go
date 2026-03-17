@@ -20,21 +20,13 @@ import (
 
 // VStreamClient is the primary struct
 type VStreamClient struct {
-	name string
-	conn *vtgateconn.VTGateConn
+	cfg clientConfig
 
 	// this session is used to obtain the shards for the keyspace, and to manage the state table
 	session *vtgateconn.VTGateSession
 
 	// the reader is the vstream reader, which is used to read the binlog events
-	reader     vtgateconn.VStreamReader
-	filter     *binlogdatapb.Filter
-	flags      *vtgatepb.VStreamFlags
-	tabletType topodatapb.TabletType
-
-	// vgtidStateKeyspace and vgtidStateTable are the keyspace and table where the last VGtid is stored
-	vgtidStateKeyspace string
-	vgtidStateTable    string
+	reader vtgateconn.VStreamReader
 
 	// may not be necessary...
 	shardsByKeyspace map[string][]string
@@ -42,14 +34,6 @@ type VStreamClient struct {
 	// keep per table state and config, which is used to generate the vgtid filter.
 	// this is a map of keyspace.table to TableConfig, since that's how the binlog table is stored
 	tables map[string]*TableConfig
-
-	// to avoid flushing too often, we will only flush if it has been at least minFlushDuration since the last flush.
-	// we're relying on heartbeat events to handle max duration between flushes, in case there are no other events.
-	minFlushDuration time.Duration
-
-	// this is the duration between heartbeat events. This is not a duration because the server side
-	// parameter only has a granularity of seconds.
-	heartbeatSeconds int
 
 	// lastEventProcessedAtUnixNano is the time after the last event batch was processed, including time for the
 	// user provided flush function to complete. A zero value means Run has not successfully processed any events yet,
@@ -63,15 +47,36 @@ type VStreamClient struct {
 
 	stats VStreamStats
 
-	// these are the optional functions that are called for each event type
-	eventFuncs map[binlogdatapb.VEventType]EventFunc
-
 	lifecycle lifecycleState
+}
 
-	// these fields configure how graceful shutdown is requested from outside the run loop.
+type clientConfig struct {
+	name string
+	conn *vtgateconn.VTGateConn
+
+	filter     *binlogdatapb.Filter
+	flags      *vtgatepb.VStreamFlags
+	tabletType topodatapb.TabletType
+
+	// vgtidStateKeyspace and vgtidStateTable are the keyspace and table where the last VGtid is stored
+	vgtidStateKeyspace string
+	vgtidStateTable    string
+
+	// to avoid flushing too often, we will only flush if it has been at least minFlushDuration since the last flush.
+	// we're relying on heartbeat events to handle max duration between flushes, in case there are no other events.
+	minFlushDuration time.Duration
+
+	// this is the duration between heartbeat events. This is not a duration because the server side
+	// parameter only has a granularity of seconds.
+	heartbeatSeconds int
+
+	// these fields configure how graceful shutdown is configured
 	gracefulShutdownChan    <-chan struct{}
 	gracefulShutdownSignals []os.Signal
 	gracefulShutdownWaitDur time.Duration
+
+	// eventFuncs is a map of event type to the user provided function that should be called for that event type.
+	eventFuncs map[binlogdatapb.VEventType]EventFunc
 }
 
 type lifecycleState struct {
@@ -120,13 +125,15 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	// initialize the VStreamClient, with options and settings to be set later
 	v := &VStreamClient{
-		name:                    name,
-		conn:                    conn,
-		session:                 conn.Session("", nil),
-		tables:                  make(map[string]*TableConfig),
-		minFlushDuration:        DefaultMinFlushDuration,
-		tabletType:              topodatapb.TabletType_REPLICA,
-		gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
+		cfg: clientConfig{
+			name:                    name,
+			conn:                    conn,
+			minFlushDuration:        DefaultMinFlushDuration,
+			tabletType:              topodatapb.TabletType_REPLICA,
+			gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
+		},
+		session: conn.Session("", nil),
+		tables:  make(map[string]*TableConfig),
 	}
 
 	var err error
@@ -168,34 +175,34 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		})
 	}
 
-	v.filter = &binlogdatapb.Filter{
+	v.cfg.filter = &binlogdatapb.Filter{
 		Rules: rules,
 	}
 
-	if v.flags == nil {
-		v.flags = DefaultFlags()
+	if v.cfg.flags == nil {
+		v.cfg.flags = DefaultFlags()
 	}
 
-	if v.flags.HeartbeatInterval == 0 {
+	if v.cfg.flags.HeartbeatInterval == 0 {
 		return nil, errors.New("vstreamclient: HeartbeatInterval must be positive")
 	}
-	if v.heartbeatSeconds > 0 {
-		v.flags.HeartbeatInterval = uint32(v.heartbeatSeconds)
+	if v.cfg.heartbeatSeconds > 0 {
+		v.cfg.flags.HeartbeatInterval = uint32(v.cfg.heartbeatSeconds)
 	}
 
 	// handle state lookup
-	if v.vgtidStateKeyspace == "" || v.vgtidStateTable == "" {
+	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
 		return nil, errors.New("vstreamclient: state table not configured (use WithStateTable)")
 	}
 
 	explicitStartingVGtid := v.latestVgtid
 
-	err = initStateTable(ctx, v.session, v.vgtidStateKeyspace, v.vgtidStateTable)
+	err = initStateTable(ctx, v.session, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
 
-	storedVGtid, storedTableConfig, copyCompleted, err := getLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable)
+	storedVGtid, storedTableConfig, copyCompleted, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -206,14 +213,14 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	switch {
 	case useExplicitStartingVGtid:
 		// if the caller explicitly provided a starting point, prefer it over persisted state.
-		err = initStartingVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid, v.tables)
+		err = initStartingVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.latestVgtid, v.tables)
 		if err != nil {
 			return nil, err
 		}
 
 	case v.latestVgtid == nil:
 		// we need to bootstrap the stream, which means we need to create a new vgtid and store the table config
-		v.latestVgtid, err = initVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.tables, v.shardsByKeyspace)
+		v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.tables, v.shardsByKeyspace)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +235,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 		// since we have a vgtid, but the copy never completed, restart the copy from the beginning
 		if !copyCompleted {
-			v.latestVgtid, err = initVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.tables, v.shardsByKeyspace)
+			v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.tables, v.shardsByKeyspace)
 			if err != nil {
 				return nil, err
 			}
