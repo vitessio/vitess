@@ -511,6 +511,10 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
 
 	if vp.vr.vre == nil {
 		vp.vr.vre = &Engine{}
@@ -909,7 +913,7 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 	assert.True(t, got.forceGlobal)
 }
 
-func TestScheduleItems_NonRowEventSetsRowOnlyFalse(t *testing.T) {
+func TestScheduleItems_FIELDEventDoesNotForceGlobal(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
@@ -926,7 +930,9 @@ func TestScheduleItems_NonRowEventSetsRowOnlyFalse(t *testing.T) {
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 	}
-	// FIELD event goes through the default branch (not ROW, not COMMIT, etc.)
+	// FIELD events are metadata (table definitions). They should NOT force
+	// global serialization — they are harmless for conflict detection and
+	// just need to be applied before the ROW events that follow.
 	fieldEvent := &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_FIELD,
 		Timestamp: 100,
@@ -941,8 +947,9 @@ func TestScheduleItems_NonRowEventSetsRowOnlyFalse(t *testing.T) {
 
 	got, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
-	// FIELD event is not a ROW, so rowOnly should be false → forceGlobal
-	assert.True(t, got.forceGlobal)
+	// FIELD events have an explicit handler that does NOT set curRowOnly=false,
+	// so the transaction is scheduled normally with an empty writeset (noConflict).
+	assert.False(t, got.forceGlobal)
 }
 
 func TestScheduleItems_TimestampTracking(t *testing.T) {
@@ -1872,7 +1879,7 @@ func TestWorkerLoop_CommitOnlyBypassesApply(t *testing.T) {
 	// Run workerLoop in background
 	doneCh := make(chan error, 1)
 	go func() {
-		doneCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+		doneCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
 	}()
 
 	// Should forward to commitCh
@@ -1917,7 +1924,7 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
 	}()
 
 	select {
@@ -1964,7 +1971,7 @@ func TestWorkerLoop_ErrorRollsBack(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
 	}()
 
 	select {

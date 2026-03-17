@@ -82,15 +82,15 @@ var (
 	}
 )
 
-// acquireApplyTxn gets an applyTxn from the pool, reusing the buffered
-// done channel from a previous cycle to avoid a heap allocation per txn.
+// acquireApplyTxn gets an applyTxn from the pool with a fresh done channel.
+// A fresh channel is allocated each time (not reused from the pool) because
+// the worker captures a reference to the done channel via pendingDone before
+// the txn is returned to the pool. If the channel were reused, the worker's
+// pendingDone and the new txn's done would alias the same channel, and the
+// drain here would steal the signal intended for the worker.
 func acquireApplyTxn() *applyTxn {
 	txn := applyTxnPool.Get().(*applyTxn)
-	// Reuse the buffered done channel from a previous pool cycle to avoid
-	// a make(chan struct{}) heap allocation per transaction.
-	if txn.done == nil {
-		txn.done = make(chan struct{}, 1)
-	}
+	txn.done = make(chan struct{}, 1)
 	return txn
 }
 
@@ -107,18 +107,9 @@ func releaseApplyTxn(txn *applyTxn) {
 		*p = applyTxnPayload{}
 		applyTxnPayloadPool.Put(p)
 	}
-	// Preserve the buffered done channel across pool cycles to avoid
-	// re-allocating it on every acquireApplyTxn call. Drain any pending
-	// signal so the channel is ready for reuse.
-	doneCh := txn.done
-	if doneCh != nil {
-		select {
-		case <-doneCh:
-		default:
-		}
-	}
+	// Zero out the txn completely (including done channel). acquireApplyTxn
+	// always creates a fresh done channel, so there's nothing to preserve.
 	*txn = applyTxn{}
-	txn.done = doneCh
 	applyTxnPool.Put(txn)
 }
 
@@ -196,9 +187,10 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 
 	var wg sync.WaitGroup
 	for i := range workerCount {
+		workerIdx := i
 		worker := workers[i]
 		wg.Go(func() {
-			err := vp.workerLoop(ctx, scheduler, commitCh, worker)
+			err := vp.workerLoop(ctx, scheduler, commitCh, worker, workerIdx)
 			if err != nil && err != io.EOF {
 				workerErr <- err
 				cancel()
@@ -274,7 +266,33 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 // throttle-lag estimation. Runs on the main goroutine of applyEventsParallel.
 func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler *applyScheduler) error {
 	defer vp.vr.dbClient.Rollback()
-	state := &parallelScheduleState{}
+	workerCount := vp.vr.workflowConfig.ParallelReplicationWorkers
+	// Compute the max number of source transactions to batch into one
+	// mega-transaction. With parallel workers, we need enough separate
+	// mega-transactions per relay fetch to keep all workers busy.
+	//
+	// The relay log size limit (default 250KB) often limits each fetch to
+	// far fewer transactions than maxItems (5000). With 1-2KB rows, a
+	// typical fetch may contain only ~150-250 source transactions. To
+	// ensure all workers get work, we limit each mega-transaction to a
+	// small multiple of the worker count. This produces enough independent
+	// mega-transactions for the scheduler to keep all workers busy.
+	maxBatched := 0 // 0 means unlimited (serial behavior)
+	if workerCount > 1 {
+		// Batch multiple source transactions into each mega-transaction.
+		// This amortizes per-commit overhead (position update, MySQL COMMIT,
+		// done-signal, scheduler dispatch) across multiple source txns.
+		// With workerCount*4, a single relay fetch produces enough
+		// mega-transactions to keep all workers busy while still reducing
+		// commit overhead by Nx. The writeset for the mega-txn is the
+		// union of all contained source txns, so conflict detection
+		// remains correct — if any source txn in mega-A conflicts with
+		// any source txn in mega-B, they serialize.
+		maxBatched = workerCount * 4
+	}
+	state := &parallelScheduleState{
+		maxBatchedCommits: maxBatched,
+	}
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -371,6 +389,18 @@ type parallelScheduleState struct {
 	// when tablePlansVersion changes (new FIELD events arrive).
 	fieldIdxCache        map[string]map[string]int
 	fieldIdxCacheVersion int64
+	// batchedCommitCount tracks how many source transactions have been
+	// merged into the current mega-transaction via commit batching. When
+	// this exceeds maxBatchedCommits, the mega-transaction is flushed even
+	// if more consecutive commits follow. This ensures the parallel applier
+	// produces enough mega-transactions per relay fetch to keep all workers
+	// busy, rather than merging everything into one huge transaction that
+	// only a single worker can process.
+	batchedCommitCount int
+	// maxBatchedCommits is the maximum number of source transactions to
+	// merge into one mega-transaction. Set once based on the relay log
+	// max items and worker count.
+	maxBatchedCommits int
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -441,6 +471,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		state.curCommitParent = 0
 		state.curSequence = 0
 		state.curHasCommitMeta = false
+		state.batchedCommitCount = 0
 		state.lastFlushTime = time.Now()
 		return nil
 	}
@@ -542,6 +573,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// scheduler detect truly independent transactions and run
 				// them in parallel.
 				hasFKRefs := len(vp.fkRefs) > 0
+				// With parallel workers, limit the mega-transaction size
+				// to ensure enough transactions for all workers. Without
+				// this limit, all consecutive commits in a relay fetch
+				// merge into one mega-transaction, leaving all but one
+				// worker idle.
+				if state.maxBatchedCommits > 0 {
+					state.batchedCommitCount++
+					if state.batchedCommitCount >= state.maxBatchedCommits {
+						state.curMustSave = true
+					}
+				}
 				if !state.curMustSave && !hasFKRefs && hasAnotherCommit(items, i, j+1) {
 					// Advance lastCommittedSequence for this merged-away
 					// transaction so that future hasCommitMeta transactions
@@ -568,6 +610,16 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// do NOT add BEGIN to curEvents so that empty transactions
 				// (GTID→BEGIN→COMMIT) have curEvents=0 and take the fast path
 				// (unsavedEvent) instead of being enqueued through the scheduler.
+			case binlogdatapb.VEventType_FIELD:
+				// FIELD events carry table metadata (column definitions) and
+				// must be applied before the ROW events that follow them, but
+				// they are pure metadata — they don't modify user data and
+				// don't need to force serialization. Accumulate them like ROW
+				// events so they stay in the same applyTxn as the subsequent
+				// ROW events. Unlike the default case, we do NOT set
+				// curRowOnly=false because the ROW events determine the
+				// writeset; FIELD events are harmless for conflict detection.
+				state.curEvents = append(state.curEvents, event)
 			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 				if err := flush(false); err != nil {
 					return err
@@ -736,14 +788,38 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 // workerLoop runs on each of the N worker goroutines. It blocks on
 // scheduler.nextReady() until a transaction is dispatched, applies the row
 // events using the worker's private MySQL connection, then sends the txn
-// to commitCh and waits on txn.done for the commitLoop to finish committing.
-func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
+// to commitCh. Each worker has double-buffered connections: after sending
+// a transaction, the worker rotates to its spare connection and immediately
+// starts the next transaction, overlapping apply with the commitLoop's commit.
+func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker, workerIdx int) error {
 	// Shallow-copy vplayer once per worker lifetime instead of per
 	// transaction. This eliminates a ~200-300 byte struct copy on every
 	// txn in the hot path. The FK check state is reset once here since
 	// each worker has its own MySQL connection.
 	vp2 := *vp
 	vp2.foreignKeyChecksStateInitialized = false
+
+	// pendingDone holds the done channel of the most recently sent worker
+	// transaction that the commitLoop may still be committing. We capture
+	// only the channel (not the *applyTxn) because the commitLoop returns
+	// the applyTxn to the pool after signaling done — if the scheduleLoop
+	// reacquires it, it drains the channel, which would cause waitPending
+	// to block forever if we were still dereferencing through the txn.
+	var pendingDone chan struct{}
+
+	waitPending := func() error {
+		if pendingDone == nil {
+			return nil
+		}
+		select {
+		case <-pendingDone:
+			pendingDone = nil
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -754,6 +830,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		payload := txn.payload
 		if payload.commitOnly {
+			// Must wait for any pending worker commit to complete before
+			// forwarding commitOnly txns, since they run on the main
+			// connection and strict ordering must be maintained.
+			if err := waitPending(); err != nil {
+				return err
+			}
 			select {
 			case commitCh <- txn:
 			case <-ctx.Done():
@@ -761,30 +843,65 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			continue
 		}
+
+		// Apply events on the current active connection. This runs
+		// concurrently with the commitLoop committing the previous
+		// transaction on the other connection (double-buffering).
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
 				worker.rollback()
 				return err
 			}
 		}
-		payload.query = worker.query
+		// In batch mode, flush all buffered SQL statements to MySQL in
+		// one multi-statement call. This is the key parallelism point:
+		// all workers execute their batches concurrently here, while the
+		// commitLoop only needs to do a cheap COMMIT + position update.
+		if err := worker.flushWorkerBatch(); err != nil {
+			worker.rollback()
+			return err
+		}
+
+		// Wait for the previous transaction's commit to complete. Because
+		// we waited AFTER applying the current transaction, the apply and
+		// commit phases overlapped — this is the key pipelining benefit.
+		// If the commit finished during our apply phase, this returns
+		// immediately. We must wait here because rotate() switches to the
+		// connection that the commitLoop was using for the previous txn.
+		if err := waitPending(); err != nil {
+			return err
+		}
+
+		// Capture the current connection for the payload before rotating.
+		// The commitLoop will use these to commit this transaction while
+		// the worker moves on to the next transaction on the spare connection.
+		activeClient := worker.client
+		if worker.batchMode {
+			payload.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return activeClient.Execute(sql)
+			}
+		} else {
+			payload.query = worker.query
+		}
 		payload.commit = worker.commit
 		payload.client = worker.client
+
 		select {
 		case commitCh <- txn:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		// Wait for the commitLoop to finish committing this txn before
-		// reusing the worker's DB connection. commitOnly txns are handled
-		// directly by commitLoop and don't need this handshake.
-		if !payload.commitOnly {
-			select {
-			case <-txn.done:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
+
+		// Capture the done channel BEFORE rotating. The commitLoop may
+		// return the txn to the pool after signaling done, and
+		// acquireApplyTxn drains the channel on reuse. By holding our
+		// own reference, we are immune to that race.
+		pendingDone = txn.done
+
+		// Rotate to the spare connection for the next transaction.
+		// The commitLoop will commit the current txn on the old connection
+		// and signal txn.done when it's safe to reuse.
+		worker.rotate()
 	}
 }
 
