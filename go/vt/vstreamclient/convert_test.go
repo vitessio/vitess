@@ -624,6 +624,59 @@ func TestHandleRowEvent_ScannerFailureDoesNotBufferRow(t *testing.T) {
 	assert.Len(t, table.currentBatch, 0)
 }
 
+func TestHandleRowEvent_PartialRowImageFailsForDefaultDecoder(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "email", Type: querypb.Type_VARCHAR}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		After:       sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(7)}),
+		DataColumns: &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x01}},
+	}}}
+
+	stats := &VStreamStats{}
+	err = table.handleRowEvent(ev, stats)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "partial row images are unsupported")
+	assert.Len(t, table.currentBatch, 0)
+}
+
+func TestHandleRowEvent_PartialJSONFailsForDefaultDecoder(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "payload", Type: querypb.Type_JSON},
+		{Name: "opt_payload", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		After: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.TestValue(sqltypes.Expression, "JSON_SET(payload, '$.name', 'beta')"),
+			sqltypes.NULL,
+		}),
+		DataColumns:       &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x03}},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x02}},
+	}}}
+
+	stats := &VStreamStats{}
+	err = table.handleRowEvent(ev, stats)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "partial JSON updates are unsupported")
+	assert.Len(t, table.currentBatch, 0)
+}
+
 func TestWithFlags_RejectsZeroHeartbeatInterval(t *testing.T) {
 	v := &VStreamClient{}
 	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 0})(v)
