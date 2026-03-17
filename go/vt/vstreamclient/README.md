@@ -364,6 +364,8 @@ Additional mapping behavior:
 - `vstream:"-"` ignores a field
 - pointer fields are supported for nullable columns
 - `vstream:"field_name,json"` enables JSON decoding into that field
+- default struct decoding requires full row images and non-partial JSON values
+- if Vitess sets `RowChange.DataColumns` or `RowChange.JsonPartialValues`, `Run()` fails fast unless your `DataType` implements `VStreamScanner`
 
 Example:
 
@@ -474,6 +476,7 @@ This approach is useful when:
 - column names need custom mapping logic
 - values need validation or conversion into enums or domain types
 - JSON/blob columns need bespoke decoding
+- partial row images or partial JSON updates need bitmap-aware handling
 - delete events need special handling beyond the default struct mapping
 
 ## Common Usage Patterns
@@ -755,6 +758,15 @@ For row events coming from MySQL binlog replication, `binlog_row_image` affects 
 If your downstream system expects each flushed row to be a complete current record, `FULL` is the safest default.
 If you optimize for lower memory or network usage with `NOBLOB` or `MINIMAL`, make sure your `FlushFn` treats missing
 fields as "not provided by the binlog image" rather than "the value should be cleared."
+
+For the default reflection-based decoder, `vstreamclient` now fails fast when Vitess explicitly marks a row as partial:
+
+- `RowChange.DataColumns != nil`
+- `RowChange.JsonPartialValues != nil`
+
+That behavior is intentional. Without bitmap-aware decoding, omitted columns can be misread as real `NULL` or empty
+values. If you need to consume partial row images or partial JSON updates, implement `VStreamScanner` and handle the
+bitmaps directly from `rowChange`.
 
 ### `ReuseBatchSlice` changes ownership expectations
 

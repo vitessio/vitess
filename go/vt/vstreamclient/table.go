@@ -345,6 +345,24 @@ func parseTagName(tag string) string {
 	return strings.TrimSpace(name)
 }
 
+func (table *TableConfig) validateRowChangeForDefaultDecoding(rc *binlogdatapb.RowChange) error {
+	if table.implementsScanner || rc == nil || rc.After == nil {
+		return nil
+	}
+
+	qualifiedName := qualifiedTableName(table.Keyspace, table.Table)
+
+	if rc.JsonPartialValues != nil {
+		return fmt.Errorf("vstreamclient: partial JSON updates are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
+	}
+
+	if rc.DataColumns != nil {
+		return fmt.Errorf("vstreamclient: partial row images are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
+	}
+
+	return nil
+}
+
 func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats *VStreamStats) error {
 	shard, ok := table.shards[ev.Shard]
 	if !ok {
@@ -354,6 +372,10 @@ func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats
 	table.currentBatch = slices.Grow(table.currentBatch, len(ev.RowChanges))
 
 	for _, rc := range ev.RowChanges {
+		if err := table.validateRowChangeForDefaultDecoding(rc); err != nil {
+			return err
+		}
+
 		var row []sqltypes.Value
 
 		switch {
