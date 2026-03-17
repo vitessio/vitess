@@ -48,9 +48,10 @@ type applyTxnPayload struct {
 	// For row transactions these are ROW/FIELD events; for commitOnly
 	// transactions this is typically a single DDL, OTHER, or COMMIT event.
 	events []*binlogdatapb.VEvent
-	// rowOnly is true when the transaction contains only ROW events (no DDL,
-	// FIELD, OTHER, or JOURNAL). Row-only transactions can have writesets
-	// computed for parallel conflict detection.
+	// rowOnly is true when the transaction contains only ROW and FIELD events
+	// (no DDL, OTHER, or JOURNAL). Row-only transactions can have writesets
+	// computed for parallel conflict detection. FIELD events are pure metadata
+	// and do not affect conflict detection.
 	rowOnly bool
 	// commitOnly is true for transactions that are applied by the commitLoop
 	// on the main connection rather than by a worker (DDL, OTHER, JOURNAL,

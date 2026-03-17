@@ -153,6 +153,10 @@ func TestNewApplyWorker(t *testing.T) {
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.sql_mode", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.foreign_key_checks", &sqltypes.Result{})
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
 
 	vr := &vreplicator{
 		id:             1,
