@@ -1139,6 +1139,7 @@ func (e *Executor) fetchOrCreatePlan(
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
+	emptyBindVars := len(bindVars) == 0
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1179,7 +1180,11 @@ func (e *Executor) fetchOrCreatePlan(
 	e.applyQueryHints(vcursor, plan)
 
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	if emptyBindVars {
+		logStats.BindVariables = bindVars
+	} else {
+		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	}
 
 	return plan, vcursor, stmt, nil
 }
