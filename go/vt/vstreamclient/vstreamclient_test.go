@@ -442,7 +442,7 @@ func TestShouldFlush_ReturnsReason(t *testing.T) {
 	})
 }
 
-func TestMonitorHeartbeat_ShutsDownWhenNoInitialEventArrives(t *testing.T) {
+func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -459,6 +459,18 @@ func TestMonitorHeartbeat_ShutsDownWhenNoInitialEventArrives(t *testing.T) {
 		v.monitorHeartbeat(ctx)
 	}()
 
+	assert.Never(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 2500*time.Millisecond, 100*time.Millisecond)
+	assert.NoError(t, ctx.Err())
+	assert.False(t, v.isClosing.Load())
+
+	cancel()
 	assert.Eventually(t, func() bool {
 		select {
 		case <-done:
@@ -466,7 +478,37 @@ func TestMonitorHeartbeat_ShutsDownWhenNoInitialEventArrives(t *testing.T) {
 		default:
 			return false
 		}
-	}, 4*time.Second, 100*time.Millisecond)
+	}, time.Second, 50*time.Millisecond)
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.False(t, v.isClosing.Load())
+}
+
+func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	v := &VStreamClient{
+		flags:                     DefaultFlags(),
+		gracefulShutdownFlushChan: make(chan struct{}),
+		gracefulShutdownWaitDur:   0,
+		cancelRunCtxFn:            cancel,
+	}
+	v.lastEventProcessedAtUnixNano.Store(time.Now().Add(-3 * time.Second).UnixNano())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.monitorHeartbeat(ctx)
+	}()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 100*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
 	assert.True(t, v.isClosing.Load())
 }

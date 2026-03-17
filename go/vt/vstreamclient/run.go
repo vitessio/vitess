@@ -352,23 +352,38 @@ func (v *VStreamClient) listenForGracefulShutdown(ctx context.Context) {
 // ********************************************************************************************************
 // Heartbeat Monitoring
 //
-// the heartbeat ticker will be used to ensure that we haven't been disconnected from the stream. This starts
-// a goroutine that will cancel the context if we haven't received an event in twice the heartbeat duration.
+// the heartbeat ticker is used to ensure that we haven't been disconnected from the stream after the stream has
+// started delivering events. Before the first event arrives, heartbeat liveness checks stay disabled so a slow but
+// healthy startup does not self-cancel.
 // ********************************************************************************************************
 func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
-	// Start heartbeat liveness tracking when Run begins so startup stalls are treated the same
-	// as post-start disconnects.
-	v.lastEventProcessedAtUnixNano.Store(time.Now().UnixNano())
-
+	const startupTimeout = 5 * time.Minute
 	const timeoutMultiplier = 2
 
 	heartbeatDur := time.Duration(v.flags.HeartbeatInterval) * time.Second
 	heartbeat := time.NewTicker(heartbeatDur)
 	defer heartbeat.Stop()
 
+	startupTimer := time.NewTimer(startupTimeout)
+	startupTimerChan := startupTimer.C
+
 	for {
 		select {
 		case tm := <-heartbeat.C:
+			// if we haven't processed any events yet, we should skip the heartbeat check, since it's likely that
+			// we're still starting up and haven't had a chance to receive the first event yet. This is especially
+			// important if the startup is slow, since we don't want to accidentally shut down during startup.
+			lastEventProcessedAtUnixNano := v.lastEventProcessedAtUnixNano.Load()
+			if lastEventProcessedAtUnixNano == 0 {
+				continue
+			}
+
+			// once we receive the first event, we can stop the startup timer and disable the select case
+			if startupTimerChan != nil {
+				startupTimer.Stop()
+				startupTimerChan = nil
+			}
+
 			// if we're currently processing events, we should skip the heartbeat check, since it's likely that we're
 			// just busy and haven't had a chance to receive the latest event yet. This is especially important for
 			// long-running flushes since they can take longer than the heartbeat duration, and we don't want to
@@ -379,10 +394,17 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 
 			// if we haven't received an event in twice the heartbeat duration, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
-			if tm.Sub(time.Unix(0, v.lastEventProcessedAtUnixNano.Load())) > heartbeatDur*timeoutMultiplier {
+			if tm.Sub(time.Unix(0, lastEventProcessedAtUnixNano)) > heartbeatDur*timeoutMultiplier {
 				v.GracefulShutdown(v.gracefulShutdownWaitDur)
 				return
 			}
+
+		case <-startupTimerChan:
+			// this is a sanity check to shutdown the client if we never receive a single event
+			if v.lastEventProcessedAtUnixNano.Load() == 0 {
+				panic("vstreamclient: vstream never received an event")
+			}
+			startupTimerChan = nil
 
 		case <-ctx.Done():
 			return
