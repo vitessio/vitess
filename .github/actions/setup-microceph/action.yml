@@ -16,7 +16,7 @@ inputs:
     default: "vitess-test"
   osdsize:
     description: "Size of each loopback OSD disk"
-    default: "4G"
+    default: "2G"
 
 runs:
   using: "composite"
@@ -73,10 +73,20 @@ runs:
       run: |
         set -euo pipefail
         sudo microceph cluster bootstrap
-        sleep 5
+        sleep 30
 
         sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
-        sudo microceph disk add loop,${{ inputs.osdsize }},3
+
+        for i in 1 2 3; do
+          echo "Adding OSD $i/3..."
+          if ! sudo microceph disk add loop,${{ inputs.osdsize }},1; then
+            echo "::error::Failed to add OSD $i"
+            sudo journalctl -xeu snap.microceph.osd.service --no-pager -n 100 || true
+            sudo microceph.ceph status || true
+            exit 1
+          fi
+          sleep 5
+        done
 
         for i in $(seq 1 10); do
           if sudo microceph.ceph status | grep -q HEALTH_OK; then
