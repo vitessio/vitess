@@ -62,12 +62,17 @@ The backport branch may be based on a stale version of the release branch. **Alw
 - Read `go.mod` on the backport branch to determine the required Go version (e.g., `go 1.24.13` means minor version `1.24`).
 - Check local Go version with `go version`.
 - If the minor version doesn't match, try these in order:
-  1. **govm** (preferred): Check if `govm` is installed (`which govm`). If so, use it to switch:
+  1. **govm**: Check if `govm` is installed (`which govm`). If so, use it to switch:
      ```
      govm use <version>
      ```
      For example, if `go.mod` requires `go 1.24.13`, run `govm use 1.24.13`.
-  2. **Homebrew** (fallback): Check if Homebrew has the right version:
+  2. **gvm**: Check if `gvm` is installed (`which gvm`). If so, use it to switch:
+     ```
+     gvm use go<version>
+     ```
+     For example, if `go.mod` requires `go 1.24.13`, run `gvm use go1.24.13`.
+  3. **Homebrew** (fallback): Check if Homebrew has the right version:
      ```
      ls /opt/homebrew/opt/go@<minor>/bin/go
      ```
@@ -75,7 +80,7 @@ The backport branch may be based on a stale version of the release branch. **Alw
      ```
      export PATH="/opt/homebrew/opt/go@<minor>/bin:$PATH"
      ```
-  3. If neither is available, warn the user and continue with the available Go version.
+  4. If none are available, warn the user and continue with the available Go version.
 
 ## Step 5: Resolve conflicts
 
@@ -154,7 +159,10 @@ The backport branch may be based on a stale version of the release branch. **Alw
   ```
   git commit --signoff -m "resolve conflicts for backport of #<upstream-number>"
   ```
-- Push the branch (force push is expected after rebase): `git push --force-with-lease`
+- **Ask the user** before pushing. Force push is expected after rebase, so prompt with something like: "Ready to force-push the resolved branch. Shall I proceed?" Only push after the user confirms:
+  ```
+  git push --force-with-lease
+  ```
 - Add a PR comment summarizing the conflict resolution. Include which files had conflicts, how they were resolved, and any notable decisions (e.g., keeping functions from prior backports, adapting code to the release branch context):
   ```
   gh pr comment <number> --repo vitessio/vitess --body "<summary>"
