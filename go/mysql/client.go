@@ -600,9 +600,8 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length += lenEncIntSize(uint64(attrLength)) + attrLength
 	}
 
-	// zstd_compression_level: we add a 1-byte field right after the connection attributes
-	// when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set. Layout docs:
-	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
+	// zstd_compression_level: we add a 1-byte field right after the connection attributes when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set.
+	// Layout docs: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
 	useZstd := params.EnableZstdCompression &&
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
