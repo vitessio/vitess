@@ -1304,6 +1304,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
+	span.Annotate("expect_no_primary", req.ExpectNoPrimary)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -1324,6 +1325,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			ExpectNoPrimary:           req.ExpectNoPrimary,
 		},
 	)
 
@@ -3302,6 +3304,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		span.Annotate("expected_primary_alias", topoproto.TabletAliasString(req.ExpectedPrimary))
 	}
 
+	span.Annotate("expect_no_primary", req.ExpectNoPrimary)
+
 	if req.NewPrimary != nil {
 		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
@@ -3325,6 +3329,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 			WaitReplicasTimeout:     waitReplicasTimeout,
 			TolerableReplLag:        tolerableReplLag,
 			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
+			ExpectNoPrimary:         req.ExpectNoPrimary,
 		},
 	)
 

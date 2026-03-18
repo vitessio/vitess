@@ -62,6 +62,7 @@ type EmergencyReparentOptions struct {
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
+	ExpectNoPrimary           bool
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -168,10 +169,23 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	ev.ShardInfo = *shardInfo
 
+	if opts.ExpectNoPrimary && opts.ExpectedPrimaryAlias != nil {
+		return vterrors.Errorf(
+			vtrpc.Code_FAILED_PRECONDITION,
+			"both expect_no_primary and expected_primary were set; these are mutually exclusive",
+		)
+	}
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
 			topoproto.TabletAliasString(shardInfo.PrimaryAlias),
 			topoproto.TabletAliasString(opts.ExpectedPrimaryAlias),
+		)
+	}
+	if opts.ExpectNoPrimary && shardInfo.PrimaryAlias != nil {
+		return vterrors.Errorf(
+			vtrpc.Code_FAILED_PRECONDITION,
+			"expected no primary for shard %v/%v, but found primary %v",
+			keyspace, shard, topoproto.TabletAliasString(shardInfo.PrimaryAlias),
 		)
 	}
 

@@ -1495,6 +1495,7 @@ func (m *EmergencyReparentShardRequest) CloneVT() *EmergencyReparentShardRequest
 	r.PreventCrossCellPromotion = m.PreventCrossCellPromotion
 	r.WaitForAllTablets = m.WaitForAllTablets
 	r.ExpectedPrimary = m.ExpectedPrimary.CloneVT()
+	r.ExpectNoPrimary = m.ExpectNoPrimary
 	if rhs := m.IgnoreReplicas; rhs != nil {
 		tmpContainer := make([]*topodata.TabletAlias, len(rhs))
 		for k, v := range rhs {
@@ -3775,6 +3776,7 @@ func (m *PlannedReparentShardRequest) CloneVT() *PlannedReparentShardRequest {
 	r.TolerableReplicationLag = m.TolerableReplicationLag.CloneVT()
 	r.AllowCrossCellPromotion = m.AllowCrossCellPromotion
 	r.ExpectedPrimary = m.ExpectedPrimary.CloneVT()
+	r.ExpectNoPrimary = m.ExpectNoPrimary
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -10513,6 +10515,16 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ExpectNoPrimary {
+		i--
+		if m.ExpectNoPrimary {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
 	if m.ExpectedPrimary != nil {
 		size, err := m.ExpectedPrimary.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -16482,6 +16494,16 @@ func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ExpectNoPrimary {
+		i--
+		if m.ExpectNoPrimary {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
 	}
 	if m.ExpectedPrimary != nil {
 		size, err := m.ExpectedPrimary.MarshalToSizedBufferVT(dAtA[:i])
@@ -24314,6 +24336,9 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 		l = m.ExpectedPrimary.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.ExpectNoPrimary {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -26516,6 +26541,9 @@ func (m *PlannedReparentShardRequest) SizeVT() (n int) {
 	if m.ExpectedPrimary != nil {
 		l = m.ExpectedPrimary.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.ExpectNoPrimary {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -40856,6 +40884,26 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpectNoPrimary", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ExpectNoPrimary = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -54837,6 +54885,26 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpectNoPrimary", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ExpectNoPrimary = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -4340,6 +4340,7 @@ type EmergencyReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
+	ExpectNoPrimary bool                  `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -4428,6 +4429,13 @@ func (x *EmergencyReparentShardRequest) GetExpectedPrimary() *topodata.TabletAli
 		return x.ExpectedPrimary
 	}
 	return nil
+}
+
+func (x *EmergencyReparentShardRequest) GetExpectNoPrimary() bool {
+	if x != nil {
+		return x.ExpectNoPrimary
+	}
+	return false
 }
 
 type EmergencyReparentShardResponse struct {
@@ -10440,6 +10448,7 @@ type PlannedReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
+	ExpectNoPrimary bool                  `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -10528,6 +10537,13 @@ func (x *PlannedReparentShardRequest) GetExpectedPrimary() *topodata.TabletAlias
 		return x.ExpectedPrimary
 	}
 	return nil
+}
+
+func (x *PlannedReparentShardRequest) GetExpectNoPrimary() bool {
+	if x != nil {
+		return x.ExpectNoPrimary
+	}
+	return false
 }
 
 type PlannedReparentShardResponse struct {
@@ -17827,7 +17843,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\xc3\x03\n" +
+	"\x15DeleteTabletsResponse\"\xef\x03\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17837,7 +17853,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x15wait_replicas_timeout\x18\x05 \x01(\v2\x10.vttime.DurationR\x13waitReplicasTimeout\x12?\n" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
-	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\"\xbc\x01\n" +
+	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12*\n" +
+	"\x11expect_no_primary\x18\t \x01(\bR\x0fexpectNoPrimary\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
@@ -18240,7 +18257,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x0fdry_run_results\x18\x02 \x03(\tR\rdryRunResults\"M\n" +
 	"\x11PingTabletRequest\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\x14\n" +
-	"\x12PingTabletResponse\"\xd6\x03\n" +
+	"\x12PingTabletResponse\"\x82\x04\n" +
 	"\x1bPlannedReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -18250,7 +18267,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x15wait_replicas_timeout\x18\x05 \x01(\v2\x10.vttime.DurationR\x13waitReplicasTimeout\x12L\n" +
 	"\x19tolerable_replication_lag\x18\x06 \x01(\v2\x10.vttime.DurationR\x17tolerableReplicationLag\x12;\n" +
 	"\x1aallow_cross_cell_promotion\x18\a \x01(\bR\x17allowCrossCellPromotion\x12@\n" +
-	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\"\xba\x01\n" +
+	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12*\n" +
+	"\x11expect_no_primary\x18\t \x01(\bR\x0fexpectNoPrimary\"\xba\x01\n" +
 	"\x1cPlannedReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +

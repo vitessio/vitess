@@ -96,6 +96,7 @@ var emergencyReparentShardOptions = struct {
 	IgnoreReplicaAliasStrList []string
 	PreventCrossCellPromotion bool
 	WaitForAllTablets         bool
+	ExpectNoPrimary           bool
 }{}
 
 func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
@@ -144,6 +145,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
 		PreventCrossCellPromotion: emergencyReparentShardOptions.PreventCrossCellPromotion,
 		WaitForAllTablets:         emergencyReparentShardOptions.WaitForAllTablets,
+		ExpectNoPrimary:           emergencyReparentShardOptions.ExpectNoPrimary,
 	})
 	if err != nil {
 		return err
@@ -199,6 +201,7 @@ var plannedReparentShardOptions = struct {
 	WaitReplicasTimeout     time.Duration
 	TolerableReplicationLag time.Duration
 	AllowCrossCellPromotion bool
+	ExpectNoPrimary         bool
 }{}
 
 func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
@@ -245,6 +248,7 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 		WaitReplicasTimeout:     protoutil.DurationToProto(plannedReparentShardOptions.WaitReplicasTimeout),
 		TolerableReplicationLag: protoutil.DurationToProto(plannedReparentShardOptions.TolerableReplicationLag),
 		AllowCrossCellPromotion: plannedReparentShardOptions.AllowCrossCellPromotion,
+		ExpectNoPrimary:         plannedReparentShardOptions.ExpectNoPrimary,
 	})
 	if err != nil {
 		return err
@@ -309,6 +313,7 @@ func init() {
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.ExpectNoPrimary, "expect-no-primary", false, "If set, the reparent will fail if the shard already has a primary.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
 	Root.AddCommand(EmergencyReparentShard)
 
@@ -322,6 +327,7 @@ func init() {
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.AvoidPrimaryAliasStr, "avoid-primary", "", "Alias of a tablet that should not be the primary; i.e. \"reparent to any other tablet if this one is the primary\".")
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	PlannedReparentShard.Flags().BoolVar(&plannedReparentShardOptions.AllowCrossCellPromotion, "allow-cross-cell-promotion", false, "Allow cross cell promotion")
+	PlannedReparentShard.Flags().BoolVar(&plannedReparentShardOptions.ExpectNoPrimary, "expect-no-primary", false, "If set, the reparent will fail if the shard already has a primary.")
 	Root.AddCommand(PlannedReparentShard)
 
 	Root.AddCommand(ReparentTablet)

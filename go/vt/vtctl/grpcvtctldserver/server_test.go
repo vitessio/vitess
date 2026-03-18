@@ -4828,6 +4828,64 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 			shouldErr: true,
 		},
+		{
+			name: "expect no primary but primary present",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace:        "testkeyspace",
+				Shard:           "-",
+				ExpectNoPrimary: true,
+			},
+			shouldErr:           true,
+			expectEventsToOccur: true,
+		},
+		{
+			name: "expect no primary and no primary recorded",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace:        "testkeyspace",
+				Shard:           "-",
+				ExpectNoPrimary: true,
+			},
+			shouldErr:           true,
+			expectEventsToOccur: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -9010,6 +9068,85 @@ func TestPlannedReparentShard(t *testing.T) {
 			},
 			expectEventsToOccur: true,
 			expectedErr:         "global status vars failed",
+		},
+		{
+			name: "expect no primary but primary present",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "primary-demotion position",
+						},
+						Error: nil,
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace:        "testkeyspace",
+				Shard:           "-",
+				ExpectNoPrimary: true,
+			},
+			expectedErr: "expected no primary for shard testkeyspace/-, but found primary zone1-0000000100",
+		},
+		{
+			name: "expect no primary and no primary recorded",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace:        "testkeyspace",
+				Shard:           "-",
+				ExpectNoPrimary: true,
+			},
+			expectedErr:         "assert.AnError general error for testing",
+			expectEventsToOccur: true,
 		},
 	}
 

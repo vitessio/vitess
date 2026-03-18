@@ -756,6 +756,12 @@ message EmergencyReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
+  // ExpectNoPrimary, if true, requires that the shard currently has no
+  // primary recorded in topology (Shard.PrimaryAlias is unset) for the
+  // reparent operation to succeed. If a primary is present, the RPC
+  // fails with FAILED_PRECONDITION.
+  bool expect_no_primary = 9;
+
 }
 
 message EmergencyReparentShardResponse {
@@ -1521,6 +1527,11 @@ message PlannedReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
+  // ExpectNoPrimary, if true, requires that the shard currently has no
+  // primary recorded in topology (Shard.PrimaryAlias is unset) for the
+  // reparent operation to succeed. If a primary is present, the RPC
+  // fails with FAILED_PRECONDITION.
+  bool expect_no_primary = 9;
 }
 
 message PlannedReparentShardResponse {

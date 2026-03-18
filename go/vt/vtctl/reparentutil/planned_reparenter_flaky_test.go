@@ -3347,6 +3347,128 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
 			expectedEvent:    nil,
 		},
+		{
+			name: "expect no primary and expected primary are mutually exclusive",
+			tmc:  &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				ExpectNoPrimary: true,
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "both expect_no_primary and expected_primary were set; these are mutually exclusive",
+			expectedEvent:    nil,
+		},
+		{
+			name: "expect no primary but primary present",
+			tmc:  &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				ExpectNoPrimary: true,
+			},
+			shouldErr:        true,
+			errShouldContain: "expected no primary for shard testkeyspace/-, but found primary zone1-0000000100",
+			expectedEvent:    nil,
+		},
+		{
+			name: "expect no primary and no primary recorded",
+			tmc:  &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias:     nil,
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				ExpectNoPrimary: true,
+			},
+			shouldErr:     true,
+			expectedEvent: nil,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
