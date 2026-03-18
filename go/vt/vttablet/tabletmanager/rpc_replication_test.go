@@ -383,6 +383,11 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 			shouldRestart: false,
 		},
 		{
+			name:          "mysqlctl wrapped master info error",
+			inputErr:      errors.New("ExecuteFetch(START REPLICA) failed: Could not initialize master info structure; more error messages can be found in the MySQL error log (errno 1201) (sqlstate HY000)"),
+			shouldRestart: true,
+		},
+		{
 			name:          "unrelated error",
 			inputErr:      errors.New("unexpected replication failure"),
 			shouldRestart: false,
