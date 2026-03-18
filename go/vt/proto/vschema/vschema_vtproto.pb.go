@@ -7,11 +7,13 @@ package vschema
 import (
 	binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	io "io"
-	math "math"
+
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -1905,6 +1907,7 @@ func (m *RoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *RoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2020,6 +2023,7 @@ func (m *RoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2444,6 +2448,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *MultiTenantSpec) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2546,6 +2551,7 @@ func (m *MultiTenantSpec) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *Vindex) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2788,6 +2794,7 @@ func (m *Vindex) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *Table) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3059,6 +3066,7 @@ func (m *Table) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *ColumnVindex) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3206,6 +3214,7 @@ func (m *ColumnVindex) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *AutoIncrement) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3321,6 +3330,7 @@ func (m *AutoIncrement) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *Column) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3598,6 +3608,7 @@ func (m *Column) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *SrvVSchema) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3922,6 +3933,7 @@ func (m *SrvVSchema) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *ShardRoutingRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4007,6 +4019,7 @@ func (m *ShardRoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *ShardRoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4154,6 +4167,7 @@ func (m *ShardRoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *KeyspaceRoutingRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4239,6 +4253,7 @@ func (m *KeyspaceRoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *KeyspaceRoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4354,6 +4369,7 @@ func (m *KeyspaceRoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *MirrorRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4439,6 +4455,7 @@ func (m *MirrorRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+
 func (m *MirrorRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0

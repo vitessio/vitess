@@ -81,9 +81,9 @@ var (
 	maxPayloadSize  int
 	warnPayloadSize int
 
-	noScatter              bool
-	denyCrossKeyspaceJoins bool
-	enableShardRouting     bool
+	noScatter            bool
+	noCrossKeyspaceJoins bool
+	enableShardRouting   bool
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -183,7 +183,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
-	utils.SetFlagBoolVar(fs, &denyCrossKeyspaceJoins, "deny-cross-keyspace-joins", denyCrossKeyspaceJoins, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins")
+	utils.SetFlagBoolVar(fs, &noCrossKeyspaceJoins, "no-cross-keyspace-joins", noCrossKeyspaceJoins, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
@@ -388,7 +388,7 @@ func Init(
 		Normalize:               normalizeQueries,
 		StreamSize:              streamBufferSize,
 		AllowScatter:            !noScatter,
-		AllowCrossKeyspaceJoins: !denyCrossKeyspaceJoins,
+		AllowCrossKeyspaceJoins: !noCrossKeyspaceJoins,
 		WarmingReadsPercent:     warmingReadsPercent,
 		QueryLogToFile:          queryLogToFile,
 	}

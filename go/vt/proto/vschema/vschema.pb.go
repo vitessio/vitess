@@ -24,11 +24,13 @@
 package vschema
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -1257,32 +1259,35 @@ func file_vschema_proto_rawDescGZIP() []byte {
 	return file_vschema_proto_rawDescData
 }
 
-var file_vschema_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_vschema_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
-var file_vschema_proto_goTypes = []any{
-	(Keyspace_ForeignKeyMode)(0), // 0: vschema.Keyspace.ForeignKeyMode
-	(*RoutingRules)(nil),         // 1: vschema.RoutingRules
-	(*RoutingRule)(nil),          // 2: vschema.RoutingRule
-	(*Keyspace)(nil),             // 3: vschema.Keyspace
-	(*MultiTenantSpec)(nil),      // 4: vschema.MultiTenantSpec
-	(*Vindex)(nil),               // 5: vschema.Vindex
-	(*Table)(nil),                // 6: vschema.Table
-	(*ColumnVindex)(nil),         // 7: vschema.ColumnVindex
-	(*AutoIncrement)(nil),        // 8: vschema.AutoIncrement
-	(*Column)(nil),               // 9: vschema.Column
-	(*SrvVSchema)(nil),           // 10: vschema.SrvVSchema
-	(*ShardRoutingRules)(nil),    // 11: vschema.ShardRoutingRules
-	(*ShardRoutingRule)(nil),     // 12: vschema.ShardRoutingRule
-	(*KeyspaceRoutingRules)(nil), // 13: vschema.KeyspaceRoutingRules
-	(*KeyspaceRoutingRule)(nil),  // 14: vschema.KeyspaceRoutingRule
-	(*MirrorRules)(nil),          // 15: vschema.MirrorRules
-	(*MirrorRule)(nil),           // 16: vschema.MirrorRule
-	nil,                          // 17: vschema.Keyspace.VindexesEntry
-	nil,                          // 18: vschema.Keyspace.TablesEntry
-	nil,                          // 19: vschema.Vindex.ParamsEntry
-	nil,                          // 20: vschema.SrvVSchema.KeyspacesEntry
-	(query.Type)(0),              // 21: query.Type
-}
+var (
+	file_vschema_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+	file_vschema_proto_msgTypes  = make([]protoimpl.MessageInfo, 20)
+	file_vschema_proto_goTypes   = []any{
+		(Keyspace_ForeignKeyMode)(0), // 0: vschema.Keyspace.ForeignKeyMode
+		(*RoutingRules)(nil),         // 1: vschema.RoutingRules
+		(*RoutingRule)(nil),          // 2: vschema.RoutingRule
+		(*Keyspace)(nil),             // 3: vschema.Keyspace
+		(*MultiTenantSpec)(nil),      // 4: vschema.MultiTenantSpec
+		(*Vindex)(nil),               // 5: vschema.Vindex
+		(*Table)(nil),                // 6: vschema.Table
+		(*ColumnVindex)(nil),         // 7: vschema.ColumnVindex
+		(*AutoIncrement)(nil),        // 8: vschema.AutoIncrement
+		(*Column)(nil),               // 9: vschema.Column
+		(*SrvVSchema)(nil),           // 10: vschema.SrvVSchema
+		(*ShardRoutingRules)(nil),    // 11: vschema.ShardRoutingRules
+		(*ShardRoutingRule)(nil),     // 12: vschema.ShardRoutingRule
+		(*KeyspaceRoutingRules)(nil), // 13: vschema.KeyspaceRoutingRules
+		(*KeyspaceRoutingRule)(nil),  // 14: vschema.KeyspaceRoutingRule
+		(*MirrorRules)(nil),          // 15: vschema.MirrorRules
+		(*MirrorRule)(nil),           // 16: vschema.MirrorRule
+		nil,                          // 17: vschema.Keyspace.VindexesEntry
+		nil,                          // 18: vschema.Keyspace.TablesEntry
+		nil,                          // 19: vschema.Vindex.ParamsEntry
+		nil,                          // 20: vschema.SrvVSchema.KeyspacesEntry
+		(query.Type)(0),              // 21: query.Type
+	}
+)
+
 var file_vschema_proto_depIdxs = []int32{
 	2,  // 0: vschema.RoutingRules.rules:type_name -> vschema.RoutingRule
 	17, // 1: vschema.Keyspace.vindexes:type_name -> vschema.Keyspace.VindexesEntry
