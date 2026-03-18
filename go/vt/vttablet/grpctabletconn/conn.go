@@ -49,7 +49,7 @@ var (
 	crl  string
 	name string
 
-	connectionsPerTablet = 1
+	connectionsPerTablet = 10
 )
 
 func registerFlags(fs *pflag.FlagSet) {
