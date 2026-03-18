@@ -14,6 +14,7 @@ linters:
     - modernize
     - nolintlint
     - nosprintfhostport
+    - prealloc
     - perfsprint
     - sqlclosecheck
     - staticcheck
@@ -124,6 +125,16 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # prealloc is being enabled incrementally, package-by-package.
+      # These exclusions will be removed as packages are fixed.
+      # Unfortunately golangci-lint's regex is quite limited, so
+      # we must construct this big regex match for now.
+      - linters:
+          - prealloc
+        path: ^go/(cmd|flags|mysql|sqltypes|stats|test|tools|trace)/
+      - linters:
+          - prealloc
+        path: ^go/vt/(binlog|callerid|callinfo|concurrency|dbconfigs|dbconnpool|discovery|dtids|env|events|external|graph|grpcclient|grpccommon|grpcoptionaltls|hook|key|log|logutil|logz|mysqlctl|proto|schema|schemadiff|schemamanager|servenv|sidecardb|sqlparser|srvtopo|sysvars|tableacl|throttler|tlstest|topo|topotools|utils|vitessdriver|vtaclcheck|vtadmin|vtcombo|vtctl|vtctld|vtenv|vtexplain|vtgate|vtgr|vttablet|vttest|wrangler|zkctl)/
       - linters:
           - errcheck
         path: ^go/vt/proto/
