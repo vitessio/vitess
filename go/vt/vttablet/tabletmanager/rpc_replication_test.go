@@ -388,6 +388,11 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 			shouldRestart: true,
 		},
 		{
+			name:          "native mysql master info error",
+			inputErr:      errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			shouldRestart: true,
+		},
+		{
 			name:          "unrelated error",
 			inputErr:      errors.New("unexpected replication failure"),
 			shouldRestart: false,
