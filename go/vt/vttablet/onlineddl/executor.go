@@ -1224,21 +1224,38 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	saveQuery := fmt.Sprintf("set @%s=@@session.%s", variable, variable)
-	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read %s: %v", variable, err)
+	saveQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @%s=@@session.%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
 	}
-	setQuery := fmt.Sprintf("set @@session.%s=%d", variable, int64(timeout.Seconds()))
+	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
+		return deferFunc, vterrors.Wrapf(err, "could not read %s", variable)
+	}
+	setQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=%%a", variable),
+		sqltypes.Int64BindVariable(int64(timeout.Seconds())),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
+	restoreQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=@%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	deferFunc = func() {
-		conn.Exec(ctx, fmt.Sprintf("set @@session.%s=@%s", variable, variable), 0, false)
+		conn.Exec(ctx, restoreQuery, 0, false)
 	}
 	return deferFunc, nil
 }
 
-// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function.
 func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
 	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
 }
