@@ -51274,8 +51274,8 @@ export namespace vschema {
         /** Keyspace multi_tenant_spec */
         multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
 
-        /** Keyspace deny_cross_keyspace_joins */
-        deny_cross_keyspace_joins?: (boolean|null);
+        /** Keyspace no_cross_keyspace_joins */
+        no_cross_keyspace_joins?: (boolean|null);
     }
 
     /** Represents a Keyspace. */
@@ -51305,8 +51305,8 @@ export namespace vschema {
         /** Keyspace multi_tenant_spec. */
         public multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
 
-        /** Keyspace deny_cross_keyspace_joins. */
-        public deny_cross_keyspace_joins: boolean;
+        /** Keyspace no_cross_keyspace_joins. */
+        public no_cross_keyspace_joins: boolean;
 
         /**
          * Creates a new Keyspace instance using the specified properties.

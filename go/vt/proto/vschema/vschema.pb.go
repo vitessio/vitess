@@ -24,13 +24,11 @@
 package vschema
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -207,12 +205,12 @@ type Keyspace struct {
 	ForeignKeyMode Keyspace_ForeignKeyMode `protobuf:"varint,5,opt,name=foreign_key_mode,json=foreignKeyMode,proto3,enum=vschema.Keyspace_ForeignKeyMode" json:"foreign_key_mode,omitempty"`
 	// multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
 	MultiTenantSpec *MultiTenantSpec `protobuf:"bytes,6,opt,name=multi_tenant_spec,json=multiTenantSpec,proto3" json:"multi_tenant_spec,omitempty"`
-	// If deny_cross_keyspace_joins is true, the planner will reject queries that require
+	// If no_cross_keyspace_joins is true, the planner will reject queries that require
 	// joining tables across different keyspaces. Can be overridden per-query with the
 	// /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ comment directive.
-	DenyCrossKeyspaceJoins bool `protobuf:"varint,7,opt,name=deny_cross_keyspace_joins,json=denyCrossKeyspaceJoins,proto3" json:"deny_cross_keyspace_joins,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	NoCrossKeyspaceJoins bool `protobuf:"varint,7,opt,name=no_cross_keyspace_joins,json=noCrossKeyspaceJoins,proto3" json:"no_cross_keyspace_joins,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Keyspace) Reset() {
@@ -287,9 +285,9 @@ func (x *Keyspace) GetMultiTenantSpec() *MultiTenantSpec {
 	return nil
 }
 
-func (x *Keyspace) GetDenyCrossKeyspaceJoins() bool {
+func (x *Keyspace) GetNoCrossKeyspaceJoins() bool {
 	if x != nil {
-		return x.DenyCrossKeyspaceJoins
+		return x.NoCrossKeyspaceJoins
 	}
 	return false
 }
@@ -1159,15 +1157,15 @@ const file_vschema_proto_rawDesc = "" +
 	"\vRoutingRule\x12\x1d\n" +
 	"\n" +
 	"from_table\x18\x01 \x01(\tR\tfromTable\x12\x1b\n" +
-	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\x85\x05\n" +
+	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\x81\x05\n" +
 	"\bKeyspace\x12\x18\n" +
 	"\asharded\x18\x01 \x01(\bR\asharded\x12;\n" +
 	"\bvindexes\x18\x02 \x03(\v2\x1f.vschema.Keyspace.VindexesEntryR\bvindexes\x125\n" +
 	"\x06tables\x18\x03 \x03(\v2\x1d.vschema.Keyspace.TablesEntryR\x06tables\x128\n" +
 	"\x18require_explicit_routing\x18\x04 \x01(\bR\x16requireExplicitRouting\x12J\n" +
 	"\x10foreign_key_mode\x18\x05 \x01(\x0e2 .vschema.Keyspace.ForeignKeyModeR\x0eforeignKeyMode\x12D\n" +
-	"\x11multi_tenant_spec\x18\x06 \x01(\v2\x18.vschema.MultiTenantSpecR\x0fmultiTenantSpec\x129\n" +
-	"\x19deny_cross_keyspace_joins\x18\a \x01(\bR\x16denyCrossKeyspaceJoins\x1aL\n" +
+	"\x11multi_tenant_spec\x18\x06 \x01(\v2\x18.vschema.MultiTenantSpecR\x0fmultiTenantSpec\x125\n" +
+	"\x17no_cross_keyspace_joins\x18\a \x01(\bR\x14noCrossKeyspaceJoins\x1aL\n" +
 	"\rVindexesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
 	"\x05value\x18\x02 \x01(\v2\x0f.vschema.VindexR\x05value:\x028\x01\x1aI\n" +
@@ -1259,35 +1257,32 @@ func file_vschema_proto_rawDescGZIP() []byte {
 	return file_vschema_proto_rawDescData
 }
 
-var (
-	file_vschema_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-	file_vschema_proto_msgTypes  = make([]protoimpl.MessageInfo, 20)
-	file_vschema_proto_goTypes   = []any{
-		(Keyspace_ForeignKeyMode)(0), // 0: vschema.Keyspace.ForeignKeyMode
-		(*RoutingRules)(nil),         // 1: vschema.RoutingRules
-		(*RoutingRule)(nil),          // 2: vschema.RoutingRule
-		(*Keyspace)(nil),             // 3: vschema.Keyspace
-		(*MultiTenantSpec)(nil),      // 4: vschema.MultiTenantSpec
-		(*Vindex)(nil),               // 5: vschema.Vindex
-		(*Table)(nil),                // 6: vschema.Table
-		(*ColumnVindex)(nil),         // 7: vschema.ColumnVindex
-		(*AutoIncrement)(nil),        // 8: vschema.AutoIncrement
-		(*Column)(nil),               // 9: vschema.Column
-		(*SrvVSchema)(nil),           // 10: vschema.SrvVSchema
-		(*ShardRoutingRules)(nil),    // 11: vschema.ShardRoutingRules
-		(*ShardRoutingRule)(nil),     // 12: vschema.ShardRoutingRule
-		(*KeyspaceRoutingRules)(nil), // 13: vschema.KeyspaceRoutingRules
-		(*KeyspaceRoutingRule)(nil),  // 14: vschema.KeyspaceRoutingRule
-		(*MirrorRules)(nil),          // 15: vschema.MirrorRules
-		(*MirrorRule)(nil),           // 16: vschema.MirrorRule
-		nil,                          // 17: vschema.Keyspace.VindexesEntry
-		nil,                          // 18: vschema.Keyspace.TablesEntry
-		nil,                          // 19: vschema.Vindex.ParamsEntry
-		nil,                          // 20: vschema.SrvVSchema.KeyspacesEntry
-		(query.Type)(0),              // 21: query.Type
-	}
-)
-
+var file_vschema_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_vschema_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_vschema_proto_goTypes = []any{
+	(Keyspace_ForeignKeyMode)(0), // 0: vschema.Keyspace.ForeignKeyMode
+	(*RoutingRules)(nil),         // 1: vschema.RoutingRules
+	(*RoutingRule)(nil),          // 2: vschema.RoutingRule
+	(*Keyspace)(nil),             // 3: vschema.Keyspace
+	(*MultiTenantSpec)(nil),      // 4: vschema.MultiTenantSpec
+	(*Vindex)(nil),               // 5: vschema.Vindex
+	(*Table)(nil),                // 6: vschema.Table
+	(*ColumnVindex)(nil),         // 7: vschema.ColumnVindex
+	(*AutoIncrement)(nil),        // 8: vschema.AutoIncrement
+	(*Column)(nil),               // 9: vschema.Column
+	(*SrvVSchema)(nil),           // 10: vschema.SrvVSchema
+	(*ShardRoutingRules)(nil),    // 11: vschema.ShardRoutingRules
+	(*ShardRoutingRule)(nil),     // 12: vschema.ShardRoutingRule
+	(*KeyspaceRoutingRules)(nil), // 13: vschema.KeyspaceRoutingRules
+	(*KeyspaceRoutingRule)(nil),  // 14: vschema.KeyspaceRoutingRule
+	(*MirrorRules)(nil),          // 15: vschema.MirrorRules
+	(*MirrorRule)(nil),           // 16: vschema.MirrorRule
+	nil,                          // 17: vschema.Keyspace.VindexesEntry
+	nil,                          // 18: vschema.Keyspace.TablesEntry
+	nil,                          // 19: vschema.Vindex.ParamsEntry
+	nil,                          // 20: vschema.SrvVSchema.KeyspacesEntry
+	(query.Type)(0),              // 21: query.Type
+}
 var file_vschema_proto_depIdxs = []int32{
 	2,  // 0: vschema.RoutingRules.rules:type_name -> vschema.RoutingRule
 	17, // 1: vschema.Keyspace.vindexes:type_name -> vschema.Keyspace.VindexesEntry

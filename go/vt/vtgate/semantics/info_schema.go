@@ -1659,7 +1659,7 @@ func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keysp
 	return i.inner.ForeignKeyMode(keyspace)
 }
 
-func (i *infoSchemaWithColumns) DenyCrossKeyspaceJoins(keyspace string) (bool, error) {
+func (i *infoSchemaWithColumns) NoCrossKeyspaceJoins(keyspace string) (bool, error) {
 	return false, nil
 }
 

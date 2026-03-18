@@ -46,7 +46,7 @@ const (
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no_scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
 	// DirectiveAllowCrossKeyspaceJoins lets cross-keyspace join plans pass through even when they are
-	// turned off by the `--deny-cross-keyspace-joins` vtgate flag or the `deny_cross_keyspace_joins`
+	// turned off by the `--no-cross-keyspace-joins` vtgate flag or the `no_cross_keyspace_joins`
 	// vschema keyspace setting.
 	DirectiveAllowCrossKeyspaceJoins = "ALLOW_CROSS_KEYSPACE_JOINS"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible

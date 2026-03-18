@@ -169,9 +169,9 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 	return defaultFkMode, nil
 }
 
-func (vw *VSchemaWrapper) DenyCrossKeyspaceJoins(keyspace string) (bool, error) {
+func (vw *VSchemaWrapper) NoCrossKeyspaceJoins(keyspace string) (bool, error) {
 	if vw.V.Keyspaces[keyspace] != nil {
-		return vw.V.Keyspaces[keyspace].DenyCrossKeyspaceJoins, nil
+		return vw.V.Keyspaces[keyspace].NoCrossKeyspaceJoins, nil
 	}
 	return false, nil
 }

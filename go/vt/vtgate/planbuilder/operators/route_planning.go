@@ -349,7 +349,7 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 	}
 
 	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
-		denied, err := ctx.VSchema.DenyCrossKeyspaceJoins(ks.Name)
+		denied, err := ctx.VSchema.NoCrossKeyspaceJoins(ks.Name)
 		if err != nil {
 			panic(err)
 		}

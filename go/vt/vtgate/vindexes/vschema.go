@@ -283,28 +283,28 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Keyspace               *Keyspace
-	ForeignKeyMode         vschemapb.Keyspace_ForeignKeyMode
-	DenyCrossKeyspaceJoins bool
-	Tables                 map[string]*BaseTable
-	Vindexes               map[string]Vindex
-	Views                  map[string]*View
-	Error                  error
-	MultiTenantSpec        *vschemapb.MultiTenantSpec
+	Keyspace             *Keyspace
+	ForeignKeyMode       vschemapb.Keyspace_ForeignKeyMode
+	NoCrossKeyspaceJoins bool
+	Tables               map[string]*BaseTable
+	Vindexes             map[string]Vindex
+	Views                map[string]*View
+	Error                error
+	MultiTenantSpec      *vschemapb.MultiTenantSpec
 
 	// These are the UDFs that exist in the schema and are aggregations
 	AggregateUDFs []string
 }
 
 type ksJSON struct {
-	Sharded                bool                       `json:"sharded,omitempty"`
-	ForeignKeyMode         string                     `json:"foreignKeyMode,omitempty"`
-	DenyCrossKeyspaceJoins bool                       `json:"denyCrossKeyspaceJoins,omitempty"`
-	Tables                 map[string]*BaseTable      `json:"tables,omitempty"`
-	Vindexes               map[string]Vindex          `json:"vindexes,omitempty"`
-	Views                  map[string]string          `json:"views,omitempty"`
-	Error                  string                     `json:"error,omitempty"`
-	MultiTenantSpec        *vschemapb.MultiTenantSpec `json:"multi_tenant_spec,omitempty"`
+	Sharded              bool                       `json:"sharded,omitempty"`
+	ForeignKeyMode       string                     `json:"foreignKeyMode,omitempty"`
+	NoCrossKeyspaceJoins bool                       `json:"noCrossKeyspaceJoins,omitempty"`
+	Tables               map[string]*BaseTable      `json:"tables,omitempty"`
+	Vindexes             map[string]Vindex          `json:"vindexes,omitempty"`
+	Views                map[string]string          `json:"views,omitempty"`
+	Error                string                     `json:"error,omitempty"`
+	MultiTenantSpec      *vschemapb.MultiTenantSpec `json:"multi_tenant_spec,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -333,12 +333,12 @@ func (ks *KeyspaceSchema) findTable(
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 	ksJ := ksJSON{
-		Sharded:                ks.Keyspace.Sharded,
-		Tables:                 ks.Tables,
-		ForeignKeyMode:         ks.ForeignKeyMode.String(),
-		DenyCrossKeyspaceJoins: ks.DenyCrossKeyspaceJoins,
-		Vindexes:               ks.Vindexes,
-		MultiTenantSpec:        ks.MultiTenantSpec,
+		Sharded:              ks.Keyspace.Sharded,
+		Tables:               ks.Tables,
+		ForeignKeyMode:       ks.ForeignKeyMode.String(),
+		NoCrossKeyspaceJoins: ks.NoCrossKeyspaceJoins,
+		Vindexes:             ks.Vindexes,
+		MultiTenantSpec:      ks.MultiTenantSpec,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
@@ -429,11 +429,11 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode:         replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
-			DenyCrossKeyspaceJoins: ks.DenyCrossKeyspaceJoins,
-			Tables:                 make(map[string]*BaseTable),
-			Vindexes:               make(map[string]Vindex),
-			MultiTenantSpec:        ks.MultiTenantSpec,
+			ForeignKeyMode:       replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
+			NoCrossKeyspaceJoins: ks.NoCrossKeyspaceJoins,
+			Tables:               make(map[string]*BaseTable),
+			Vindexes:             make(map[string]Vindex),
+			MultiTenantSpec:      ks.MultiTenantSpec,
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema, parser)

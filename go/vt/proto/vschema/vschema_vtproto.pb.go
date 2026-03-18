@@ -7,13 +7,11 @@ package vschema
 import (
 	binary "encoding/binary"
 	fmt "fmt"
-	io "io"
-	math "math"
-
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
+	io "io"
+	math "math"
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -78,7 +76,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.RequireExplicitRouting = m.RequireExplicitRouting
 	r.ForeignKeyMode = m.ForeignKeyMode
 	r.MultiTenantSpec = m.MultiTenantSpec.CloneVT()
-	r.DenyCrossKeyspaceJoins = m.DenyCrossKeyspaceJoins
+	r.NoCrossKeyspaceJoins = m.NoCrossKeyspaceJoins
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make(map[string]*Vindex, len(rhs))
 		for k, v := range rhs {
@@ -531,9 +529,9 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DenyCrossKeyspaceJoins {
+	if m.NoCrossKeyspaceJoins {
 		i--
-		if m.DenyCrossKeyspaceJoins {
+		if m.NoCrossKeyspaceJoins {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1498,7 +1496,7 @@ func (m *Keyspace) SizeVT() (n int) {
 		l = m.MultiTenantSpec.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.DenyCrossKeyspaceJoins {
+	if m.NoCrossKeyspaceJoins {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -1907,7 +1905,6 @@ func (m *RoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *RoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2023,7 +2020,6 @@ func (m *RoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2408,7 +2404,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DenyCrossKeyspaceJoins", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field NoCrossKeyspaceJoins", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -2425,7 +2421,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.DenyCrossKeyspaceJoins = bool(v != 0)
+			m.NoCrossKeyspaceJoins = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -2448,7 +2444,6 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *MultiTenantSpec) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2551,7 +2546,6 @@ func (m *MultiTenantSpec) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *Vindex) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2794,7 +2788,6 @@ func (m *Vindex) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *Table) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3066,7 +3059,6 @@ func (m *Table) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *ColumnVindex) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3214,7 +3206,6 @@ func (m *ColumnVindex) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *AutoIncrement) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3330,7 +3321,6 @@ func (m *AutoIncrement) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *Column) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3608,7 +3598,6 @@ func (m *Column) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *SrvVSchema) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3933,7 +3922,6 @@ func (m *SrvVSchema) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *ShardRoutingRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4019,7 +4007,6 @@ func (m *ShardRoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *ShardRoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4167,7 +4154,6 @@ func (m *ShardRoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *KeyspaceRoutingRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4253,7 +4239,6 @@ func (m *KeyspaceRoutingRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *KeyspaceRoutingRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4369,7 +4354,6 @@ func (m *KeyspaceRoutingRule) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *MirrorRules) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -4455,7 +4439,6 @@ func (m *MirrorRules) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-
 func (m *MirrorRule) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0

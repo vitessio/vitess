@@ -1566,10 +1566,10 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent:    e.config.WarmingReadsPercent,
-		WarmingReadsTimeout:    warmingReadsQueryTimeout,
-		WarmingReadsChannel:    e.warmingReadsChannel,
-		DenyCrossKeyspaceJoins: !e.config.AllowCrossKeyspaceJoins,
+		NoCrossKeyspaceJoins: !e.config.AllowCrossKeyspaceJoins,
+		WarmingReadsPercent:  e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:  warmingReadsQueryTimeout,
+		WarmingReadsChannel:  e.warmingReadsChannel,
 	}
 }
 
