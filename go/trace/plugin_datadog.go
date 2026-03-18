@@ -53,7 +53,7 @@ func init() {
 // Deprecated: use --tracer opentelemetry instead. The opentracing-datadog backend
 // will be removed in a future release.
 func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
-	log.Warn("tracer \"opentracing-datadog\" is deprecated; migrate to \"opentelemetry\" (OTLP). See release notes for details.")
+	log.Warn("tracer \"opentracing-datadog\" is deprecated; migrate to \"opentelemetry\" (OTLP). See https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.0/summary.md#tracing-opentracing-deprecation")
 	host, port := dataDogHost.Get(), dataDogPort.Get()
 	if host == "" || port == "" {
 		return nil, nil, errors.New("need host and port to datadog agent to use datadog tracing")

@@ -84,7 +84,7 @@ func init() {
 // Deprecated: use --tracer opentelemetry instead. The opentracing-jaeger backend
 // will be removed in a future release.
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
-	log.Warn("tracer \"opentracing-jaeger\" is deprecated; migrate to \"opentelemetry\" (OTLP). See release notes for details.")
+	log.Warn("tracer \"opentracing-jaeger\" is deprecated; migrate to \"opentelemetry\" (OTLP). See https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.0/summary.md#tracing-opentracing-deprecation")
 	cfg, err := config.FromEnv()
 	if err != nil {
 		return nil, nil, err
