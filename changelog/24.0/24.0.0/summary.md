@@ -181,6 +181,8 @@ When enabled, the planner will reject queries that require joining tables from d
 /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ SELECT * FROM ks1.t1 JOIN ks2.t2 ON t1.id = t2.id;
 ```
 
+The VTGate flag disables cross-keyspace joins globally, regardless of per-keyspace VSchema settings.
+
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
