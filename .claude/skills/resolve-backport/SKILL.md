@@ -10,8 +10,8 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
 ## Step 1: Parse input and validate
 
 - Accept a PR URL or number. The repo is `vitessio/vitess`.
-- Fetch PR metadata: `gh pr view <number> --repo vitessio/vitess --json number,title,body,labels,headRefName,isDraft,assignees`
-- Validate the PR has a `Backport` label. If not, skip to the **No conflicts** flow below (it may be a regular PR the user wants to approve/merge).
+- Fetch PR metadata: `gh pr view <number> --repo vitessio/vitess --json number,title,body,labels,headRefName,baseRefName,isDraft,assignees`
+- Validate the PR has a `Backport` label. If not, **stop and ask the user** what they'd like to do — this skill is designed for backport PRs and should not auto-merge non-backport PRs.
 - Check assignees:
   - If the PR is unassigned, continue.
   - If the PR is assigned to the current user (`gh api user --jq .login`), continue.
@@ -21,12 +21,19 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
   gh pr view <number> --repo vitessio/vitess --json mergeable --jq .mergeable
   ```
   If the result is `CONFLICTING`, or if the PR has a `Merge Conflict` label, treat it as conflicting.
-- If the PR has conflicts, extract the upstream PR number from the PR body using regex: `#(\d+)` and continue to Step 2.
+- If the PR has no assignees, assign it to yourself early to signal you're working on it:
+  ```
+  gh pr edit <number> --repo vitessio/vitess --add-assignee "@me"
+  ```
+- If the PR has conflicts, extract the upstream PR number. Vitess backport PRs use specific patterns:
+  - Body contains: `Backport of #<number>` or `backport of #<number>`
+  - Title suffix: `(#<number>)`
+  Parse from these patterns specifically — do not use a broad `#(\d+)` regex, as the body may reference unrelated issues. If the upstream PR number cannot be found unambiguously, **ask the user** to provide it.
+  Continue to Step 2.
 - If the PR has no conflicts, skip to the **No conflicts** flow below.
 
 ### No conflicts flow
-1. If the PR has no assignees, assign to yourself: `gh pr edit <number> --repo vitessio/vitess --add-assignee "@me"`
-2. Poll all CI checks every 60 seconds until all checks complete. For any failed check, follow the **Handling CI failures** process below.
+1. Poll all CI checks every 60 seconds until all checks complete. For any failed check, follow the **Handling CI failures** process below.
 3. Once all CI passes:
    a. If the PR is a draft, mark as ready: `gh pr ready <number> --repo vitessio/vitess`
    b. Enable auto-merge: `gh pr merge <number> --repo vitessio/vitess --squash --auto`
@@ -42,17 +49,27 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
   ```
   gh pr view <upstream-number> --repo vitessio/vitess --json files
   ```
-- Check out the backport branch in a **worktree** using `gh pr checkout <number> --repo vitessio/vitess`.
+- Check out the backport branch in a worktree to isolate the work from the main checkout:
+  ```
+  git fetch origin <headRefName>
+  git worktree add /tmp/backport-<number> origin/<headRefName>
+  cd /tmp/backport-<number>
+  ```
 
 ## Step 3: Rebase onto latest base branch
 
 The backport branch may be based on a stale version of the release branch. **Always rebase before resolving conflicts** to avoid creating a resolution that conflicts with the current base.
 
-- Determine the base branch from the PR metadata (e.g., `release-22.0`).
+- Determine the base branch from the PR metadata `baseRefName` (e.g., `release-22.0`).
+- Detect the remote pointing to `vitessio/vitess`. Do not assume it is named `upstream`:
+  ```
+  git remote -v | grep 'vitessio/vitess.*fetch'
+  ```
+  Use the matching remote name (commonly `upstream` or `origin`) for all subsequent fetch/rebase commands. If no remote points to `vitessio/vitess`, **ask the user** which remote to use.
 - Fetch and rebase:
   ```
-  git fetch upstream <base-branch>
-  git rebase upstream/<base-branch>
+  git fetch <remote> <base-branch>
+  git rebase <remote>/<base-branch>
   ```
 - If the rebase itself has conflicts, resolve them as part of Step 5 below (they will be the same conflicts you'd resolve anyway, but now against the correct base).
 - If the rebase has no conflicts, continue to the next step.
@@ -146,10 +163,6 @@ The backport branch may be based on a stale version of the release branch. **Alw
 
 ## Step 10: Ship
 
-- If the PR has no assignees, assign it to yourself first (before any destructive changes):
-  ```
-  gh pr edit <number> --repo vitessio/vitess --add-assignee "@me"
-  ```
 - Remove conflict labels **before pushing** (so the push doesn't trigger CI with Skip CI still set):
   ```
   gh pr edit <number> --repo vitessio/vitess --remove-label "Skip CI" --remove-label "Merge Conflict"
