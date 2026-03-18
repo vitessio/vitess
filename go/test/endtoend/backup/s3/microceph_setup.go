@@ -34,7 +34,7 @@ type MicroCephConfig struct {
 }
 
 // SkipIfMicroCephUnavailable returns MicroCeph config when AWS_ENDPOINT is set (e.g. by the setup-microceph action).
-// Does not install, bootstrap, or destroy; only reads env. Skips the test when MicroCeph is not configured.
+// Does not install, bootstrap, or destroy (only reads env). Skips the test when MicroCeph is not configured.
 func SkipIfMicroCephUnavailable(t *testing.T) *MicroCephConfig {
 	t.Helper()
 	endpoint := os.Getenv("AWS_ENDPOINT")
