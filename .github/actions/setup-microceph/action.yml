@@ -68,6 +68,14 @@ runs:
         sudo snap connect microceph:block-devices
         sudo snap restart microceph.daemon
 
+    - name: Configure OSD file descriptor limit
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo mkdir -p /etc/systemd/system/snap.microceph.osd.service.d
+        echo -e "[Service]\nLimitNOFILE=65536" | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
+        sudo systemctl daemon-reload
+
     - name: Bootstrap cluster and configure OSD
       shell: bash
       run: |
