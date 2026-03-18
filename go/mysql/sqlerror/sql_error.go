@@ -162,9 +162,9 @@ var (
 	nativeErrExtract = regexp.MustCompile(`ERROR ([0-9]*) \(([0-9a-zA-Z]{5})\):`)
 )
 
-// NewSQLErrorFromError returns a SQLError from the provided error.
+// NewSQLErrorFromError returns a *SQLError from the provided error.
 //
-//   - If err already is a SQLError, it returns err unchanged.
+//   - If err already is a *SQLError, it returns err unchanged.
 //   - If err is a Vitess error with a mapped MySQL code, it returns the converted SQLError.
 //   - If err contains a Vitess-wrapped `(errno <num>) (sqlstate <state>)` suffix, it extracts that code and state.
 //   - If err contains a native MySQL `ERROR <num> (<state>): <message>` string, it extracts that code and state.
