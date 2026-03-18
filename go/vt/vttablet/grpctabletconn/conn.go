@@ -113,7 +113,7 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
 		c:      c,
 	}
 
-	result.streamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, func() (queryservicepb.Query_StreamExecuteRawClient, context.CancelFunc, error) {
+	result.streamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, 0, func() (queryservicepb.Query_StreamExecuteRawClient, context.CancelFunc, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stream, err := c.StreamExecuteRaw(ctx)
 		if err != nil {
@@ -123,7 +123,7 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
 		return stream, cancel, nil
 	})
 
-	result.beginStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, func() (queryservicepb.Query_BeginStreamExecuteRawClient, context.CancelFunc, error) {
+	result.beginStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, 0, func() (queryservicepb.Query_BeginStreamExecuteRawClient, context.CancelFunc, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stream, err := c.BeginStreamExecuteRaw(ctx)
 		if err != nil {
@@ -133,7 +133,7 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
 		return stream, cancel, nil
 	})
 
-	result.reserveStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, func() (queryservicepb.Query_ReserveStreamExecuteRawClient, context.CancelFunc, error) {
+	result.reserveStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, 0, func() (queryservicepb.Query_ReserveStreamExecuteRawClient, context.CancelFunc, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stream, err := c.ReserveStreamExecuteRaw(ctx)
 		if err != nil {
@@ -143,7 +143,7 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
 		return stream, cancel, nil
 	})
 
-	result.reserveBeginStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, func() (queryservicepb.Query_ReserveBeginStreamExecuteRawClient, context.CancelFunc, error) {
+	result.reserveBeginStreamExecuteRawPool = newStreamPool(defaultMaxIdleStreams, 0, func() (queryservicepb.Query_ReserveBeginStreamExecuteRawClient, context.CancelFunc, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		stream, err := c.ReserveBeginStreamExecuteRaw(ctx)
 		if err != nil {
@@ -236,20 +236,10 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire protocol bytes.
 func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) error {
-	s, err := conn.streamExecuteRawPool.get()
+	s, err := conn.streamExecuteRawPool.get(ctx)
 	if err != nil {
 		return tabletconn.ErrorFromGRPC(err)
 	}
-
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			conn.streamExecuteRawPool.discard(s)
-		case <-done:
-		}
-	}()
 
 	req := &querypb.StreamExecuteRawRequest{
 		Target:            target,
@@ -294,20 +284,10 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 }
 
 func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.TransactionState, err error) {
-	s, err := conn.beginStreamExecuteRawPool.get()
+	s, err := conn.beginStreamExecuteRawPool.get(ctx)
 	if err != nil {
 		return state, tabletconn.ErrorFromGRPC(err)
 	}
-
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			conn.beginStreamExecuteRawPool.discard(s)
-		case <-done:
-		}
-	}()
 
 	req := &querypb.BeginStreamExecuteRawRequest{
 		Target:            target,
@@ -355,20 +335,10 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 }
 
 func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedState, err error) {
-	s, err := conn.reserveStreamExecuteRawPool.get()
+	s, err := conn.reserveStreamExecuteRawPool.get(ctx)
 	if err != nil {
 		return state, tabletconn.ErrorFromGRPC(err)
 	}
-
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			conn.reserveStreamExecuteRawPool.discard(s)
-		case <-done:
-		}
-	}()
 
 	req := &querypb.ReserveStreamExecuteRawRequest{
 		Target:            target,
@@ -415,20 +385,10 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 }
 
 func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedTransactionState, err error) {
-	s, err := conn.reserveBeginStreamExecuteRawPool.get()
+	s, err := conn.reserveBeginStreamExecuteRawPool.get(ctx)
 	if err != nil {
 		return state, tabletconn.ErrorFromGRPC(err)
 	}
-
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			conn.reserveBeginStreamExecuteRawPool.discard(s)
-		case <-done:
-		}
-	}()
 
 	req := &querypb.ReserveBeginStreamExecuteRawRequest{
 		Target:            target,
