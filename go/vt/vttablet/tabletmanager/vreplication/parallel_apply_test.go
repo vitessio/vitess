@@ -1879,7 +1879,7 @@ func TestWorkerLoop_CommitOnlyBypassesApply(t *testing.T) {
 	// Run workerLoop in background
 	doneCh := make(chan error, 1)
 	go func() {
-		doneCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
+		doneCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
 	}()
 
 	// Should forward to commitCh
@@ -1924,7 +1924,7 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
 	}()
 
 	select {
@@ -1971,7 +1971,7 @@ func TestWorkerLoop_ErrorRollsBack(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker, 0)
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
 	}()
 
 	select {

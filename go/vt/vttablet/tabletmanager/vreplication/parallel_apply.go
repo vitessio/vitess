@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -182,16 +183,25 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		// Non-fatal: if we can't read FK info, parallel apply still works
 		// but may hit FK violations (which will cause a retry with
 		// forceGlobal serialization).
+		log.Error(fmt.Sprintf("Parallel apply: failed to query FK refs for db %q: %v", vp.vr.dbClient.DBName(), err))
 		fkRefs = nil
+	}
+	if len(fkRefs) > 0 {
+		for table, refs := range fkRefs {
+			for _, ref := range refs {
+				log.Info(fmt.Sprintf("Parallel apply: FK ref: child=%s parent=%s cols=%v", table, ref.ParentTable, ref.ChildColumnNames))
+			}
+		}
+	} else {
+		log.Info(fmt.Sprintf("Parallel apply: no FK refs found for db %q", vp.vr.dbClient.DBName()))
 	}
 	vp.fkRefs = fkRefs
 
 	var wg sync.WaitGroup
 	for i := range workerCount {
-		workerIdx := i
 		worker := workers[i]
 		wg.Go(func() {
-			err := vp.workerLoop(ctx, scheduler, commitCh, worker, workerIdx)
+			err := vp.workerLoop(ctx, scheduler, commitCh, worker)
 			if err != nil && err != io.EOF {
 				workerErr <- err
 				cancel()
@@ -451,8 +461,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			}
 			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, state.curEvents, state.fieldIdxCache)
 			if err != nil {
-				// Table plan may not be populated yet (FIELD event not yet applied).
-				// Treat as forceGlobal to serialize safely.
 				txn.forceGlobal = true
 			} else {
 				txn.writeset = writeset
@@ -792,7 +800,7 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 // to commitCh. Each worker has double-buffered connections: after sending
 // a transaction, the worker rotates to its spare connection and immediately
 // starts the next transaction, overlapping apply with the commitLoop's commit.
-func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker, workerIdx int) error {
+func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
 	// Shallow-copy vplayer once per worker lifetime instead of per
 	// transaction. This eliminates a ~200-300 byte struct copy on every
 	// txn in the hot path. The FK check state is reset once here since
@@ -903,6 +911,11 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// The commitLoop will commit the current txn on the old connection
 		// and signal txn.done when it's safe to reuse.
 		worker.rotate()
+		// Reset FK check state cache since the new connection may have
+		// different session state. Each worker connection starts with
+		// foreign_key_checks=0 (from clearFKCheck), but the cache may
+		// say it's already set to true from the previous connection.
+		vp2.foreignKeyChecksStateInitialized = false
 	}
 }
 
