@@ -1250,7 +1250,9 @@ func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error 
 }
 
 // recoverableReplicationInitializationErrorCodes is the set of replication initialization error
-// codes that can be recovered from by restarting replication.
+// codes that can be recovered from by restarting replication. MySQL reused 1871/1872 across
+// versions, so these numeric errnos intentionally cover both the older master/relay-log names and
+// the newer connection/applier metadata names.
 var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
 	sqlerror.ERMasterInfo:                              {},
 	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
