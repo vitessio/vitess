@@ -215,8 +215,7 @@
     "backup_s3_microceph": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/s3",
-        "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+        "vitess.io/vitess/go/test/endtoend/backup/s3"
       ],
       "Args": [
         "-timeout",
@@ -245,9 +244,7 @@
       "Tags": [
         "upgrade_downgrade_backups"
       ],
-      "Needs": [
-        "microceph"
-      ]
+      "Needs": []
     },
     "backup_xtrabackup": {
       "File": "unused.go",

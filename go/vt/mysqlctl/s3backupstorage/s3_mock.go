@@ -52,24 +52,6 @@ func InitFlag(cfg FakeConfig) {
 	forcePath = cfg.ForcePath
 }
 
-// RealConfig has the same shape as FakeConfig; use for tests that talk to a real S3-compatible backend (e.g. MicroCeph).
-type RealConfig struct {
-	Region    string
-	Endpoint  string
-	Bucket    string
-	ForcePath bool
-}
-
-// InitFlagForTest sets package globals from RealConfig so in-process tests can use real S3 (not fake). Test use only.
-func InitFlagForTest(cfg RealConfig) {
-	InitFlag(FakeConfig{
-		Region:    cfg.Region,
-		Endpoint:  cfg.Endpoint,
-		Bucket:    cfg.Bucket,
-		ForcePath: cfg.ForcePath,
-	})
-}
-
 func NewFakeS3BackupHandle(ctx context.Context, dir, name string, logger logutil.Logger, stats backupstats.Stats) (*FakeS3BackupHandle, error) {
 	s := newS3BackupStorage()
 	bs := s.WithParams(backupstorage.Params{

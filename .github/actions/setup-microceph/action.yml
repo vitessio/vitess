@@ -7,10 +7,10 @@ inputs:
     default: "squid/stable"
   accesskey:
     description: "S3 access key for the test user"
-    default: "ACCESS_KEY"
+    default: "vitess"
   secretkey:
     description: "S3 secret key for the test user"
-    default: "SECRET_KEY"
+    default: "vitess-secret-key"
   bucket:
     description: "S3 bucket name"
     default: "vitess-test"
@@ -54,13 +54,22 @@ runs:
           sudo snap install microceph --channel=${{ inputs.channel }}
         fi
 
+    - name: Connect snap interfaces
+      shell: bash
+      run: |
+        sudo snap connect microceph:hardware-observe
+        sudo snap connect microceph:block-devices
+        sudo snap restart microceph.daemon
+
     - name: Bootstrap cluster and create S3 resources
       shell: bash
       run: |
         set -euo pipefail
         sudo microceph cluster bootstrap
+        sleep 30
         sudo microceph disk add loop,${{ inputs.osdsize }},1
         sudo microceph enable rgw
+        sleep 15
 
         for i in $(seq 1 30); do
           if sudo ss -ltnp | grep -q radosgw; then break; fi

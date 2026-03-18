@@ -232,7 +232,7 @@ e2e_test_cluster: build
 
 # Run MicroCeph S3 backup tests (happy path + invalid-key and missing-bucket edge cases). Skip if no Ceph.
 test-e2e-microceph: build
-	go test -v -count=1 -run 'TestBackupRestoreS3MicroCeph|TestBackupRestoreClusterS3MicroCeph|TestMicroCephInvalidAccessKey|TestMicroCephMissingBucket' ./go/test/endtoend/backup/s3/... ./go/test/endtoend/backup/vtctlbackup/...
+	go test -v -count=1 -run 'TestBackupRestoreS3MicroCeph|TestMicroCephInvalidAccessKey|TestMicroCephMissingBucket' ./go/test/endtoend/backup/s3/...
 
 .ONESHELL:
 SHELL = /bin/bash

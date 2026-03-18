@@ -18,7 +18,6 @@ package s3
 
 import (
 	"context"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -43,20 +42,13 @@ func TestBackupRestoreS3MicroCeph(t *testing.T) {
 		return
 	}
 
-	os.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	os.Setenv("AWS_BUCKET", cfg.Bucket)
-	os.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	os.Setenv("AWS_REGION", cfg.Region)
-	t.Cleanup(func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		os.Unsetenv("AWS_BUCKET")
-		os.Unsetenv("AWS_ENDPOINT")
-		os.Unsetenv("AWS_REGION")
-	})
+	t.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
+	t.Setenv("AWS_BUCKET", cfg.Bucket)
+	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
+	t.Setenv("AWS_REGION", cfg.Region)
 
-	s3backupstorage.InitFlagForTest(s3backupstorage.RealConfig{
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    cfg.Region,
 		Endpoint:  cfg.Endpoint,
 		Bucket:    cfg.Bucket,
@@ -179,21 +171,13 @@ func TestMicroCephInvalidAccessKey(t *testing.T) {
 		return
 	}
 
-	// Use a bogus key so the first S3 call should fail with forbidden/403.
-	os.Setenv("AWS_ACCESS_KEY_ID", "wrong-access-key")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	os.Setenv("AWS_BUCKET", cfg.Bucket)
-	os.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	os.Setenv("AWS_REGION", cfg.Region)
-	t.Cleanup(func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		os.Unsetenv("AWS_BUCKET")
-		os.Unsetenv("AWS_ENDPOINT")
-		os.Unsetenv("AWS_REGION")
-	})
+	t.Setenv("AWS_ACCESS_KEY_ID", "wrong-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
+	t.Setenv("AWS_BUCKET", cfg.Bucket)
+	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
+	t.Setenv("AWS_REGION", cfg.Region)
 
-	s3backupstorage.InitFlagForTest(s3backupstorage.RealConfig{
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    cfg.Region,
 		Endpoint:  cfg.Endpoint,
 		Bucket:    cfg.Bucket,
@@ -213,7 +197,6 @@ func TestMicroCephInvalidAccessKey(t *testing.T) {
 	ctx := context.Background()
 	_, err = storage.ListBackups(ctx, "ks/s0")
 	require.Error(t, err)
-	// We should see something that looks like an auth failure, not a generic 500.
 	errStr := strings.ToLower(err.Error())
 	require.True(t, strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "403") || strings.Contains(errStr, "access denied"),
 		"expected auth-related error, got: %v", err)
@@ -227,21 +210,13 @@ func TestMicroCephMissingBucket(t *testing.T) {
 		return
 	}
 
-	os.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	// Point at a bucket that we never created so we get a proper 404-style error.
-	os.Setenv("AWS_BUCKET", "nonexistent-bucket-12345")
-	os.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	os.Setenv("AWS_REGION", cfg.Region)
-	t.Cleanup(func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		os.Unsetenv("AWS_BUCKET")
-		os.Unsetenv("AWS_ENDPOINT")
-		os.Unsetenv("AWS_REGION")
-	})
+	t.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
+	t.Setenv("AWS_BUCKET", "nonexistent-bucket-12345")
+	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
+	t.Setenv("AWS_REGION", cfg.Region)
 
-	s3backupstorage.InitFlagForTest(s3backupstorage.RealConfig{
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    cfg.Region,
 		Endpoint:  cfg.Endpoint,
 		Bucket:    "nonexistent-bucket-12345",

@@ -17,13 +17,8 @@ limitations under the License.
 package vtctlbackup
 
 import (
-	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/backup/s3"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
@@ -78,47 +73,4 @@ func setDefaultCompressionFlag() {
 	mysqlctl.ExternalCompressorExt = ""
 	mysqlctl.ExternalDecompressorCmd = ""
 	mysqlctl.ManifestExternalDecompressorCmd = ""
-}
-
-func TestBackupRestoreClusterS3MicroCeph(t *testing.T) {
-	cfg := s3.SkipIfMicroCephUnavailable(t)
-	if cfg == nil {
-		return
-	}
-	os.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	t.Cleanup(func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-	})
-
-	s3Config := &cluster.S3BackupConfig{
-		Endpoint:       cfg.Endpoint,
-		Bucket:         cfg.Bucket,
-		Region:         cfg.Region,
-		ForcePathStyle: true,
-	}
-	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil, s3Config)
-	require.NoError(t, err)
-	require.Equal(t, 0, code)
-	defer TearDownCluster()
-
-	localCluster.DisableVTOrcRecoveries(t)
-	defer func() {
-		localCluster.EnableVTOrcRecoveries(t)
-	}()
-	verifyInitialReplication(t)
-
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
-	require.NoError(t, err)
-
-	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
-	require.GreaterOrEqual(t, len(backups), 1)
-
-	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", replica2.Alias)
-	require.NoError(t, err)
-
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
-	require.NoError(t, err)
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
 }

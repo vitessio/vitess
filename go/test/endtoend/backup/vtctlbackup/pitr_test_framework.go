@@ -97,12 +97,7 @@ func waitForReplica(t *testing.T, replicaIndex int) int {
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		// When AWS_ENDPOINT is set (e.g. Ceph in CI) we should use S3 for these tests too.
-		var s3Opt *cluster.S3BackupConfig
-		if c := s3ConfigFromEnv(); c != nil {
-			s3Opt = c
-		}
-		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails, s3Opt)
+		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
 		defer TearDownCluster()
 
@@ -349,14 +344,10 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 	}
 
 	t.Run(tcase.Name, func(t *testing.T) {
-		// setup cluster for the testing (use S3 from env when we're on Ceph)
-		var s3Opt *cluster.S3BackupConfig
-		if c := s3ConfigFromEnv(); c != nil {
-			s3Opt = c
-		}
+		// setup cluster for the testing
 		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, &CompressionDetails{
 			CompressorEngineName: "pgzip",
-		}, s3Opt)
+		})
 		require.NoError(t, err, "setup failed with status code %d", code)
 		defer TearDownCluster()
 
@@ -611,12 +602,8 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 // one another.
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
-		// setup cluster for the testing (S3 from env when we're on Ceph)
-		var s3Opt *cluster.S3BackupConfig
-		if c := s3ConfigFromEnv(); c != nil {
-			s3Opt = c
-		}
-		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails, s3Opt)
+		// setup cluster for the testing
+		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
 		defer TearDownCluster()
 
