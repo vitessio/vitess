@@ -15,7 +15,7 @@ inputs:
     description: "S3 bucket name"
     default: "vitess-test"
   osdsize:
-    description: "Size of the loopback OSD disk"
+    description: "Size of each loopback OSD disk"
     default: "4G"
 
 runs:
@@ -37,6 +37,12 @@ runs:
         cd microceph-snap-cache
         snap download microceph --channel=${{ inputs.channel }}
 
+    - name: Install s3cmd for S3 protocol validation
+      shell: bash
+      run: |
+        sudo apt-get -qq -y update
+        sudo apt-get -qq -y install s3cmd
+
     - name: Fix libeatmydata preload for snap confinement
       shell: bash
       run: |
@@ -49,6 +55,7 @@ runs:
       run: |
         set -euo pipefail
         if ls microceph-snap-cache/microceph_*.snap 1> /dev/null 2>&1; then
+          sudo snap ack microceph-snap-cache/microceph_*.assert
           sudo snap install microceph-snap-cache/microceph_*.snap --dangerous
         else
           sudo snap install microceph --channel=${{ inputs.channel }}
@@ -61,34 +68,87 @@ runs:
         sudo snap connect microceph:block-devices
         sudo snap restart microceph.daemon
 
-    - name: Bootstrap cluster and create S3 resources
+    - name: Bootstrap cluster and configure OSD
       shell: bash
       run: |
         set -euo pipefail
         sudo microceph cluster bootstrap
-        sleep 30
-        sudo microceph disk add loop,${{ inputs.osdsize }},1
+        sleep 5
+
+        sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
+        sudo microceph disk add loop,${{ inputs.osdsize }},3
+
+        for i in $(seq 1 10); do
+          if sudo microceph.ceph status | grep -q HEALTH_OK; then
+            echo "Cluster healthy."
+            break
+          fi
+          echo "Waiting for HEALTH_OK (attempt $i/10)..."
+          sudo microceph.ceph status
+          if [ "$i" -eq 10 ]; then
+            echo "::error::Cluster did not reach HEALTH_OK"
+            sudo microceph.ceph health detail
+            exit 1
+          fi
+          sleep 10
+        done
+
+    - name: Enable RGW and create S3 resources
+      shell: bash
+      run: |
+        set -euo pipefail
         sudo microceph enable rgw
         sleep 15
 
         for i in $(seq 1 30); do
           if sudo ss -ltnp | grep -q radosgw; then break; fi
-          sleep 2
-        done
-        RGW_PORT=$(sudo ss -ltnp | grep radosgw | awk '{print $4}' | sed 's/.*://')
-        if [ -z "$RGW_PORT" ]; then echo "RGW not listening"; exit 1; fi
-        for i in $(seq 1 30); do
-          if curl -sf "http://localhost:$RGW_PORT" > /dev/null; then break; fi
+          echo "Waiting for RGW to start listening ($i/30)..."
           sleep 2
         done
 
-        sudo radosgw-admin user create --uid=vitess --display-name=Vitess
-        sudo radosgw-admin key create --uid=vitess --key-type=s3 \
+        RGW_PORT=$(sudo ss -ltnp \
+          | awk '/radosgw/{ match($4, /:([0-9]+)$/, a); if (a[1]) print a[1] }' \
+          | head -1)
+
+        if [ -z "$RGW_PORT" ]; then
+          echo "::error::RGW not listening after 60s"
+          sudo microceph.ceph status || true
+          sudo snap logs microceph.rgw --last=50 || true
+          exit 1
+        fi
+        echo "RGW listening on port $RGW_PORT"
+
+        sudo microceph.radosgw-admin user create \
+          --uid=${{ inputs.accesskey }} --display-name="Vitess Test User"
+        sudo microceph.radosgw-admin key create \
+          --uid=${{ inputs.accesskey }} --key-type=s3 \
           --access-key=${{ inputs.accesskey }} --secret-key=${{ inputs.secretkey }}
-        sudo radosgw-admin bucket create --bucket=${{ inputs.bucket }} --uid=vitess
 
-        echo "AWS_ACCESS_KEY_ID=${{ inputs.accesskey }}" >> $GITHUB_ENV
-        echo "AWS_SECRET_ACCESS_KEY=${{ inputs.secretkey }}" >> $GITHUB_ENV
-        echo "AWS_ENDPOINT=http://localhost:$RGW_PORT" >> $GITHUB_ENV
-        echo "AWS_BUCKET=${{ inputs.bucket }}" >> $GITHUB_ENV
-        echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
+        s3cmd --host "localhost:${RGW_PORT}" \
+          --host-bucket="localhost:${RGW_PORT}/%(bucket)" \
+          --access_key=${{ inputs.accesskey }} \
+          --secret_key=${{ inputs.secretkey }} \
+          --no-ssl \
+          mb "s3://${{ inputs.bucket }}"
+
+        for i in $(seq 1 5); do
+          if sudo microceph.ceph status | grep -q HEALTH_OK; then
+            echo "Post-RGW cluster healthy."
+            break
+          fi
+          echo "Waiting for HEALTH_OK after RGW ($i/5)..."
+          if [ "$i" -eq 5 ]; then
+            echo "::error::Cluster unhealthy after RGW setup"
+            sudo microceph.ceph status
+            exit 1
+          fi
+          sleep 30
+        done
+
+        {
+          echo "AWS_ACCESS_KEY_ID=${{ inputs.accesskey }}"
+          echo "AWS_SECRET_ACCESS_KEY=${{ inputs.secretkey }}"
+          echo "AWS_ENDPOINT=http://localhost:${RGW_PORT}"
+          echo "AWS_BUCKET=${{ inputs.bucket }}"
+          echo "AWS_REGION=us-east-1"
+        } >> "$GITHUB_ENV"
