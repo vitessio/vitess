@@ -22,21 +22,22 @@ import (
 	"io"
 	"net"
 	"os"
-	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // This test makes sure the go rpc service works
@@ -185,9 +186,7 @@ var _ queryservicepb.QueryClient = (*mockQueryClient)(nil)
 func TestGoRoutineLeakPrevention(t *testing.T) {
 	mqc := &mockQueryClient{}
 	qc := &gRPCQueryClient{
-		mu: sync.RWMutex{},
-		cc: &grpc.ClientConn{},
-		c:  mqc,
+		conns: []connEntry{{cc: &grpc.ClientConn{}, c: mqc}},
 	}
 	_ = qc.StreamExecute(context.Background(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
 		return nil
@@ -233,4 +232,78 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
+}
+
+// countingQueryClient counts how many times Execute is called.
+type countingQueryClient struct {
+	executeCount int
+	queryservicepb.QueryClient
+}
+
+func (c *countingQueryClient) Execute(ctx context.Context, in *querypb.ExecuteRequest, opts ...grpc.CallOption) (*querypb.ExecuteResponse, error) {
+	c.executeCount++
+	return &querypb.ExecuteResponse{}, nil
+}
+
+var _ queryservicepb.QueryClient = (*countingQueryClient)(nil)
+
+func TestRoundRobinDistribution(t *testing.T) {
+	const numConns = 3
+	const numCalls = 9
+
+	mocks := make([]*countingQueryClient, numConns)
+	entries := make([]connEntry, numConns)
+	for i := range numConns {
+		mocks[i] = &countingQueryClient{}
+		entries[i] = connEntry{cc: &grpc.ClientConn{}, c: mocks[i]}
+	}
+
+	qc := &gRPCQueryClient{conns: entries}
+
+	for range numCalls {
+		_, err := qc.Execute(context.Background(), nil, nil, "", nil, 0, 0, nil)
+		require.NoError(t, err)
+	}
+
+	for i, m := range mocks {
+		assert.Equal(t, numCalls/numConns, m.executeCount, "connection %d should receive equal share of calls", i)
+	}
+}
+
+func TestPickOnClosedClient(t *testing.T) {
+	qc := &gRPCQueryClient{conns: nil}
+
+	_, err := qc.Execute(context.Background(), nil, nil, "", nil, 0, 0, nil)
+	assert.ErrorIs(t, err, tabletconn.ConnClosed)
+}
+
+func TestGRPCTabletConnMultipleConnections(t *testing.T) {
+	old := connectionsPerTablet
+	connectionsPerTablet = 3
+	t.Cleanup(func() { connectionsPerTablet = old })
+
+	service := tabletconntest.CreateFakeServer(t)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	host := listener.Addr().(*net.TCPAddr).IP.String()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	server := grpc.NewServer()
+	grpcqueryservice.Register(server, service)
+	go server.Serve(listener)
+	defer server.Stop()
+
+	ctx := t.Context()
+
+	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
+		Keyspace: tabletconntest.TestTarget.Keyspace,
+		Shard:    tabletconntest.TestTarget.Shard,
+		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
+		Hostname: host,
+		PortMap: map[string]int32{
+			"grpc": int32(port),
+		},
+	}, service, nil)
 }
