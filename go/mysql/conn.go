@@ -133,6 +133,13 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 		z.pos += n
 		return n, nil
 	}
+
+	// Grab a local reference so a concurrent Close() can't nil it out from under us.
+	zst := z.c.zstd
+	if zst == nil {
+		return 0, net.ErrClosed
+	}
+
 	if _, err := io.ReadFull(z.r, z.hdr[:]); err != nil {
 		return 0, err
 	}
@@ -140,8 +147,11 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed packet header")
 	}
-	if compressedLen == 0 && uncompressedLen != 0 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed lengths, compressed=0 uncompressed=%v", uncompressedLen)
+	if compressedLen == 0 {
+		if uncompressedLen != 0 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed lengths, compressed=0 uncompressed=%v", uncompressedLen)
+		}
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "received empty compressed frame")
 	}
 	// Sanity check: the 3-byte length fields can't exceed MaxPacketSize, so anything
 	// bigger than that is bogus input and we should bail out immediately.
@@ -151,20 +161,18 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 	if uncompressedLen > MaxPacketSize {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncompressed frame length %v exceeds protocol maximum %v", uncompressedLen, MaxPacketSize)
 	}
-	if seq != z.c.zstd.readSequence {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", z.c.zstd.readSequence, seq)
+	if seq != zst.readSequence {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid compressed sequence, expected %v got %v", zst.readSequence, seq)
 	}
-	z.c.zstd.readSequence++
+	zst.readSequence++
 
 	// Reuse our scratch buffer so we're not allocating on every frame.
 	if uint32(cap(z.readScratch)) < compressedLen {
 		z.readScratch = make([]byte, compressedLen)
 	}
 	payload := z.readScratch[:compressedLen]
-	if compressedLen > 0 {
-		if _, err := io.ReadFull(z.r, payload); err != nil {
-			return 0, vterrors.Wrapf(err, "read compressed payload failed")
-		}
+	if _, err := io.ReadFull(z.r, payload); err != nil {
+		return 0, vterrors.Wrapf(err, "read compressed payload failed")
 	}
 	if uncompressedLen == 0 {
 		// uncompressedLen == 0 means this is a passthrough frame (stored raw on the wire).
@@ -175,7 +183,7 @@ func (z *zstdReadWrapper) Read(p []byte) (int, error) {
 		z.buf = z.buf[:len(payload)]
 		copy(z.buf, payload)
 	} else {
-		decoded, err := z.c.zstd.decoder.DecodeAll(payload, z.buf[:0])
+		decoded, err := zst.decoder.DecodeAll(payload, z.buf[:0])
 		if err != nil {
 			return 0, vterrors.Wrapf(err, "zstd decompress failed")
 		}
@@ -917,13 +925,19 @@ func (c *Conn) writePacketCompressed(data []byte) error {
 // (happens when a logical packet is exactly MaxPacketSize and the 4-byte header pushes it
 // over) we split it into MaxPacketSize-sized frames so the 3-byte length fields stay valid.
 func (c *Conn) writeCompressedFrames(w io.Writer, hdr []byte, chunk []byte) error {
+	// Grab a local reference so a concurrent Close() can't nil it out from under us.
+	zst := c.zstd
+	if zst == nil {
+		return net.ErrClosed
+	}
+
 	for offset := 0; offset < len(chunk); {
 		frameSize := min(len(chunk)-offset, MaxPacketSize)
 		frame := chunk[offset : offset+frameSize]
 
-		c.zstd.writeScratch = c.zstd.encoder.EncodeAll(frame, c.zstd.writeScratch[:0])
+		zst.writeScratch = zst.encoder.EncodeAll(frame, zst.writeScratch[:0])
 
-		compressedLen := uint32(len(c.zstd.writeScratch))
+		compressedLen := uint32(len(zst.writeScratch))
 		uncompressedLen := uint32(len(frame))
 
 		var framePayload []byte
@@ -932,15 +946,15 @@ func (c *Conn) writeCompressedFrames(w io.Writer, hdr []byte, chunk []byte) erro
 			compressedLen = uncompressedLen
 			uncompressedLen = 0
 		} else {
-			framePayload = c.zstd.writeScratch
+			framePayload = zst.writeScratch
 		}
 
 		if compressedLen > MaxPacketSize {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "frame payload length exceeds 3-byte max")
 		}
 
-		writeCompressedPacketHeader(hdr, compressedLen, uncompressedLen, c.zstd.writeSequence)
-		c.zstd.writeSequence++
+		writeCompressedPacketHeader(hdr, compressedLen, uncompressedLen, zst.writeSequence)
+		zst.writeSequence++
 
 		if _, err := w.Write(hdr[:compressedPacketHeaderSize]); err != nil {
 			return vterrors.Wrapf(err, "Write(compressed header) failed")
@@ -1074,10 +1088,12 @@ func (c *Conn) closeZstdCompression() {
 
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
+// We close the socket first so any in-flight compressed I/O gets a network error
+// and stops dereferencing c.zstd before we nil it out.
 func (c *Conn) Close() {
 	if c.closed.CompareAndSwap(false, true) {
-		c.closeZstdCompression()
 		c.conn.Close()
+		c.closeZstdCompression()
 	}
 }
 

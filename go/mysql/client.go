@@ -322,8 +322,10 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		return err
 	}
 
+	// The server only advertises CLIENT_ZSTD_COMPRESSION_ALGORITHM (bit 26) so we check
+	// just that bit. We still send both CLIENT_COMPRESS + bit 26 in the response because
+	// the protocol requires both bits for the compressed framing to kick in.
 	useZstd := params.EnableZstdCompression &&
-		(capabilities&CapabilityClientCompress != 0) &&
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
 		level := clampZstdLevel(params.ZstdCompressionLevel)
@@ -602,7 +604,6 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// when CLIENT_ZSTD_COMPRESSION_ALGORITHM is set. Layout docs:
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html
 	useZstd := params.EnableZstdCompression &&
-		(capabilities&CapabilityClientCompress != 0) &&
 		(capabilities&CapabilityClientZstdCompressionAlgorithm != 0)
 	if useZstd {
 		capabilityFlags |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm

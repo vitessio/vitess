@@ -1756,9 +1756,8 @@ func TestHandshakeCapabilitiesZstdEnabled(t *testing.T) {
 	caps, err := parseHandshakeCapabilitiesFromPayload(greeting)
 	require.NoError(t, err)
 
-	assert.NotZero(t, caps&CapabilityClientCompress, "greeting must contain CLIENT_COMPRESS (bit 5, 0x00000020)")
+	assert.Zero(t, caps&CapabilityClientCompress, "greeting must NOT contain CLIENT_COMPRESS to avoid legacy compression negotiation")
 	assert.NotZero(t, caps&CapabilityClientZstdCompressionAlgorithm, "greeting must contain CLIENT_ZSTD_COMPRESSION_ALGORITHM (bit 26, 0x04000000)")
-	assert.Equal(t, handshakeZstdMask, caps&handshakeZstdMask, "bitwise AND with both flags must equal both flags")
 }
 
 func TestHandshakeCapabilitiesZstdDisabled(t *testing.T) {
@@ -1828,7 +1827,7 @@ func TestHandshakeCapabilitiesTlsZstd(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotZero(t, caps&CapabilityClientSSL, "server with TLS must advertise CLIENT_SSL in greeting")
-	assert.NotZero(t, caps&CapabilityClientCompress, "server with zstd enabled must advertise CLIENT_COMPRESS in greeting")
+	assert.Zero(t, caps&CapabilityClientCompress, "greeting must NOT contain CLIENT_COMPRESS to avoid legacy compression negotiation")
 	assert.NotZero(t, caps&CapabilityClientZstdCompressionAlgorithm, "server with zstd enabled must advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM in greeting")
 }
 
@@ -1869,9 +1868,9 @@ func TestHandshakeCapabilitiesBitExact(t *testing.T) {
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientDeprecateEOF |
 		CapabilityClientConnAttr |
-		CapabilityClientCompress |
 		CapabilityClientZstdCompressionAlgorithm)
-	assert.Equal(t, expectedBase, caps&expectedBase, "capability mask must match MySQL 8.4 base + zstd when enableZstdCompression=true")
+	assert.Equal(t, expectedBase, caps&expectedBase, "capability mask must match base + zstd when enableZstdCompression=true")
+	assert.Zero(t, caps&CapabilityClientCompress, "greeting must NOT advertise CLIENT_COMPRESS")
 }
 
 func TestHandshakeCapabilitiesInvalidFlag(t *testing.T) {

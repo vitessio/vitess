@@ -634,9 +634,10 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 	if enableTLS {
 		capabilities |= CapabilityClientSSL
 	}
-	// When EnableZstdCompression is off (the default) we don't advertise any compression bits at all, so existing clients keep working exactly as before.
+	// We only advertise CLIENT_ZSTD_COMPRESSION_ALGORITHM (not CLIENT_COMPRESS) so legacy clients that only understand deflate don't try to negotiate compression we can't handle.
+	// Zstd-capable clients see bit 26 and know to send both CLIENT_COMPRESS + bit 26 back.
 	if c.listener.EnableZstdCompression {
-		capabilities |= CapabilityClientCompress | CapabilityClientZstdCompressionAlgorithm
+		capabilities |= CapabilityClientZstdCompressionAlgorithm
 	}
 
 	// Grab the default auth method. This can only be either
