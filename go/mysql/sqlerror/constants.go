@@ -129,9 +129,9 @@ const (
 	ERSourceHasPurgedRequiredGtids  = ErrorCode(1789)
 	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
-	// MySQL reused 1871/1872 in 8.0.33+: older versions reported master/relay-log
-	// repository init failures under these numbers, while newer versions report
-	// connection/applier metadata init failures.
+	// MySQL used 1871/1872 for master-info and relay-log-info initialization
+	// errors through 8.0.32, and reassigned those numbers in 8.0.33 to
+	// connection-metadata and applier-metadata initialization errors.
 	ERReplicaConnectionMetadataInitRepository = ErrorCode(1871)
 	ERReplicaApplierMetadataInitRepository    = ErrorCode(1872)
 	ERInnodbReadOnly                          = ErrorCode(1874)
