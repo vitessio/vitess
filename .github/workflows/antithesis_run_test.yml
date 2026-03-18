@@ -49,7 +49,7 @@ jobs:
       statuses: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Antithesis Tests
         uses: antithesishq/antithesis-trigger-action@v0.10
