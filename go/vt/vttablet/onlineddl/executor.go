@@ -894,7 +894,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// Always attempt UNLOCK TABLES first, as it releases locks immediately on this
 		// connection. Then kill the connection as a fallback to guarantee any held locks
 		// are released, even if UNLOCK TABLES were to fail.
-		lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := lockConn.Conn.Exec(unlockCtx, sqlUnlockTables, 1, false); err != nil {
+			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
 			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
