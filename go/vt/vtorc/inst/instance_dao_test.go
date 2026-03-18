@@ -532,7 +532,7 @@ func TestReadOutdatedInstances(t *testing.T) {
 		{
 			name:              "No problems",
 			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
-			instancesRequired: nil,
+			instancesRequired: []string{},
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
