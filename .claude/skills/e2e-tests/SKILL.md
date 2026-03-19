@@ -88,7 +88,7 @@ Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctl
 
 1. Run `./501_teardown.sh` from the `examples/local` directory
 2. Kill any orphaned Vitess processes that the teardown script missed (processes we started directly or indirectly)
-3. Ask the user before clearing `$VTDATAROOT/vtroot_*`
+3. Clear test data with `$VTDATAROOT/vtroot_*`
 
 ## Debugging failures
 

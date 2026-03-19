@@ -158,7 +158,7 @@ return user.NeedsMigration() && migrate(user) || user
 - **Interface naming** - Single-method interfaces end in `-er` (Reader, Writer, Handler)
 - **Context first** - Always pass `context.Context` as the first parameter
 - **Channels for coordination** - Use channels to coordinate goroutines, not shared memory
-- **No naked returns** - Always explicitly return values; do not use naked `return` statements
+- **No naked returns in non-trivial functions** - For functions with named return values, avoid bare `return` and explicitly return all result values (very small helpers are the only exception). This does not prohibit plain `return` in `func f() { ... }` when used for early-exit/guard clauses.
 - **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
 - **Use `vterrors`** - Prefer `vterrors` over `fmt.Errorf` or `errors` package, with an appropriate `vtrpcpb.Code` (e.g., `vtrpcpb.Code_FAILED_PRECONDITION` for unexpected input values, `vtrpcpb.Code_INTERNAL` for internal operation failures)
 - **Copyright header** - New Go files must include the project copyright header with the current year
