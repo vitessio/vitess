@@ -33,7 +33,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	return conn, func() { conn.Close() }
 }
 
-// TestNoCrossKeyspaceJoinsVSchemaSettting tests that the no_cross_keyspace_joins
+// TestNoCrossKeyspaceJoinsVSchemaSetting tests that the no_cross_keyspace_joins
 // vschema keyspace setting denies cross-keyspace joins.
 func TestNoCrossKeyspaceJoinsVSchemaSetting(t *testing.T) {
 	conn, closer := start(t)
