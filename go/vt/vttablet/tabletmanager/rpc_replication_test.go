@@ -56,7 +56,7 @@ func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeM
 	}
 }
 
-func recoverableReplicationInitErrorForTests() error {
+func recoverableReplicationInitError() error {
 	return sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
 }
 
@@ -436,7 +436,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 // TestStartReplicationRecoversFromRecoverableReplicationInitError verifies StartReplication self-heals recoverable init failures.
 func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA",
 		"RESET REPLICA",
@@ -452,7 +452,7 @@ func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.
 // TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.
 func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA",
 		"STOP REPLICA",
@@ -470,7 +470,7 @@ func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError
 func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.Replicating = true
-	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA",
 		"STOP REPLICA",
@@ -507,7 +507,7 @@ func TestInitReplicaRecoversFromRecoverableReplicationInitializationError(t *tes
 
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
-	fakeMysqlDaemon.SetReplicationSourceError = recoverableReplicationInitErrorForTests()
+	fakeMysqlDaemon.SetReplicationSourceError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET BINARY LOGS AND GTIDS",
 		"FAKE SET GLOBAL gtid_purged",

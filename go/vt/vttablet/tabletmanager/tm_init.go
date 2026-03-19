@@ -1136,7 +1136,9 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
-		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+		if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+			return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+		}
 	}
 
 	return primaryStatus.Position, nil
