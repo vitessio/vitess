@@ -67,7 +67,7 @@ func TestConnectionBilateralCleanup(t *testing.T) {
 // Step 5: Refactor for clarity
 ```
 
-To make sure tests are easy to read, we use testify assertions. Make sure to use assert.Eventually instead of using manual thread.sleep and timeouts.
+To make sure tests are easy to read, we use `github.com/stretchr/testify/assert` and `github.com/stretchr/testify/require` for assertions. Use `assert.Eventually` instead of manual `thread.sleep` and timeouts. Use `t.Cleanup()` for test cleanup and `t.Context()` for the test's parent context.
 
 ## :rotating_light: Error Handling Excellence
 
@@ -158,6 +158,30 @@ return user.NeedsMigration() && migrate(user) || user
 - **Interface naming** - Single-method interfaces end in `-er` (Reader, Writer, Handler)
 - **Context first** - Always pass `context.Context` as the first parameter
 - **Channels for coordination** - Use channels to coordinate goroutines, not shared memory
+- **No naked returns** - Always explicitly return values; do not use naked `return` statements
+- **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
+- **Use `vterrors`** - Prefer `vterrors` over `fmt.Errorf` or `errors` package, with an appropriate `vtrpcpb.Code` (e.g., `vtrpcpb.Code_FAILED_PRECONDITION` for unexpected input values, `vtrpcpb.Code_INTERNAL` for internal operation failures)
+- **Copyright header** - New Go files must include the project copyright header with the current year
+- **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
+- **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
+
+## Vitess-Specific Conventions
+
+### Protobufs
+- **Never** directly edit files under `go/vt/proto/` - they are generated from `proto/*.proto` protobuf definitions
+- After modifying `proto/*.proto` files, run `make proto` to regenerate
+- Avoid storing times or time durations as integers; use `vttime.Time` instead
+
+### Command-Line Flags
+- New flags must **not** use underscores (use hyphens instead)
+- When flags are added or modified, update the corresponding `go/flags/endtoend/` files - column/whitespace alignment matters
+
+### TabletAlias Formatting
+- Format `*topodatapb.TabletAlias` using `topoproto.TabletAliasString(alias)` in logs and error messages so that tablet aliases are human-readable
+
+### EmergencyReparentShard (ERS)
+- ERS must prioritize **certainty** that we picked the most-advanced candidate
+- Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
 
 ## :mag: Dubugging & Troubleshooting
 
