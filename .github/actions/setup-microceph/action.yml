@@ -4,7 +4,7 @@ description: 'Set up a single-node MicroCeph cluster with RGW (S3 API) for use i
 inputs:
   channel:
     description: 'MicroCeph snap channel'
-    default: 'squid/stable'
+    default: 'quincy/stable'
   accesskey:
     description: 'S3 access key for the test user'
     default: 'vitess'

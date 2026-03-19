@@ -182,7 +182,25 @@ jobs:
 
       - name: Install MicroCeph
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
-        uses: ./.github/actions/setup-microceph
+        id: setup-microceph
+        uses: canonical/microceph-action@v0.2
+        with:
+          channel: 'latest/edge'
+          accesskey: 'vitess'
+          secretkey: 'vitess-secret-key'
+          bucket: 'vitess-test'
+          osdsize: '4G'
+
+      - name: Export MicroCeph S3 env
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
+        run: |
+          CFG="${GITHUB_WORKSPACE}/microceph.source"
+          grep -E '^S3_ACCESS_KEY=' "$CFG" | sed 's/^S3_ACCESS_KEY=/AWS_ACCESS_KEY_ID=/' >> "$GITHUB_ENV"
+          grep -E '^S3_SECRET_KEY=' "$CFG" | sed 's/^S3_SECRET_KEY=/AWS_SECRET_ACCESS_KEY=/' >> "$GITHUB_ENV"
+          grep -E '^S3_SERVER_URL=' "$CFG" | sed 's/^S3_SERVER_URL=/AWS_ENDPOINT=/' >> "$GITHUB_ENV"
+          grep -E '^S3_BUCKET=' "$CFG" | sed 's/^S3_BUCKET=/AWS_BUCKET=/' >> "$GITHUB_ENV"
+          grep -E '^S3_REGION=' "$CFG" | sed 's/^S3_REGION=/AWS_REGION=/' >> "$GITHUB_ENV"
+          grep -E '^S3_CA_BUNDLE_PATH=' "$CFG" | sed 's/^S3_CA_BUNDLE_PATH=/AWS_CA_BUNDLE=/' >> "$GITHUB_ENV" || true
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')

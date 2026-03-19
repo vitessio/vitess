@@ -9,7 +9,7 @@ usage() {
   exit 1
 }
 
-CHANNEL=squid/stable
+CHANNEL=quincy/stable
 ACCESS_KEY=vitess
 SECRET_KEY=vitess-secret-key
 BUCKET_NAME=vitess-test
@@ -63,10 +63,11 @@ sudo snap restart microceph.daemon
 
 # OSD processes hit "ulimit: open files: cannot modify limit" on GitHub runners.
 # Set LimitNOFILE so the daemon inherits a high fd limit.
+# quincy/stable may not have the strict ulimit check that squid has.
 sudo mkdir -p /etc/systemd/system/snap.microceph.osd.service.d
 sudo mkdir -p /etc/systemd/system.conf.d
-printf '[Service]\nLimitNOFILE=65536\n' | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
-printf '[Manager]\nDefaultLimitNOFILE=65536\n' | sudo tee /etc/systemd/system.conf.d/limit-nofile.conf
+printf '[Service]\nLimitNOFILE=1048576\n' | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
+printf '[Manager]\nDefaultLimitNOFILE=1048576\n' | sudo tee /etc/systemd/system.conf.d/limit-nofile.conf
 sudo systemctl daemon-reload
 
 sudo microceph cluster bootstrap
@@ -79,6 +80,13 @@ sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
 sudo microceph.ceph config set global osd_pool_default_size 1
 sudo microceph.ceph config set global mon_allow_pool_size_one true
 sudo microceph disk add loop,"${DISK_SIZE}",1
+
+# If OSD failed to start (ulimit), show diagnostics before exiting
+if ! sudo microceph.ceph status | grep -q "osd: [1-9]"; then
+  echo "::error::OSD did not start after disk add"
+  sudo journalctl -u snap.microceph.osd.service --no-pager -n 50 || true
+  sudo microceph.ceph status || true
+fi
 
 check_ceph_ok_or_exit
 
