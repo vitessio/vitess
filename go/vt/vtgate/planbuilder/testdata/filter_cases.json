@@ -4371,14 +4371,14 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(1) AS sum(a.id)",
+            "Aggregates": "sum(1) AS `sum(a.id)`",
             "GroupBy": "0 COLLATE latin1_swedish_ci",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":2 as textcol1",
-                  "sum(a.id) * count(*) as sum(a.id)"
+                  "sum(a.id) * count(*) as `sum(a.id)`"
                 ],
                 "Inputs": [
                   {
@@ -4517,13 +4517,13 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":2 as collections_status"
             ],
             "Inputs": [
