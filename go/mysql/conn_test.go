@@ -172,6 +172,40 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 	}
 }
 
+func TestEndWriterBufferingNoWritesNoPanic(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Start buffering but don't write anything, so flushTimer is never created.
+	// endWriterBuffering must not panic on nil flushTimer.
+	cConn.startWriterBuffering()
+	assert.NotPanics(t, func() {
+		err := cConn.endWriterBuffering()
+		assert.NoError(t, err)
+	})
+}
+
+func TestFlushWriteBufferNoWritesNoPanic(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Start buffering but don't write anything, so flushTimer is never created.
+	// FlushWriteBuffer must not panic on nil flushTimer.
+	cConn.startWriterBuffering()
+	assert.NotPanics(t, func() {
+		err := cConn.FlushWriteBuffer()
+		assert.NoError(t, err)
+	})
+}
+
 func TestRawConnection(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {

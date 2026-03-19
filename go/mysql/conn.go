@@ -353,7 +353,9 @@ func (c *Conn) endWriterBuffering() error {
 		c.bufferedWriter = nil
 	}()
 
-	c.flushTimer.Stop()
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
 	return c.bufferedWriter.Flush()
 }
 
@@ -367,7 +369,9 @@ func (c *Conn) FlushWriteBuffer() error {
 		return nil
 	}
 
-	c.flushTimer.Stop()
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
 	return c.bufferedWriter.Flush()
 }
 
