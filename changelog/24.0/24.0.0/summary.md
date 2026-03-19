@@ -27,7 +27,6 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
-        - [Warming reads return empty query results](#vttablet-warming-reads-no-result)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -215,12 +214,6 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
-
-#### <a id="vttablet-warming-reads-no-result"/>Warming reads return empty query results</a>
-
-Warming reads now return empty query results from VTTablet to VTGate. Previously, warming reads executed the full query on a replica and returned the complete result set over gRPC, only for VTGate to immediately discard it. Since the purpose of warming reads is to warm the replica's InnoDB buffer pool — not to retrieve data — the full result was unnecessary overhead.
-
-VTGate now sets a new `no_result` flag in `ExecuteOptions` for warming read queries. When VTTablet sees this flag, it executes the query as normal but returns an empty result, avoiding the cost of serializing and transmitting rows back to VTGate.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
