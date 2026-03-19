@@ -296,6 +296,38 @@ func TestStreamBinlogPackets_ContextCancelledBetweenEvents(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
+func TestStreamBinlogPackets_HeaderAtBufferBoundary(t *testing.T) {
+	tsv := &TabletServer{}
+	reader := newMockPacketReader()
+	send, responses := collectSender()
+
+	const bufSize = 256 * 1024 // must match streamBinlogPackets' buffer size
+
+	// Craft a payload that leaves exactly PacketHeaderSize bytes at the end
+	// of the buffer. When the next header is read, bufOffset will equal
+	// len(buf), and readPayload will compute chunkSize=0.
+	payloadSize := bufSize - 2*mysql.PacketHeaderSize // 262136
+	bigPayload := make([]byte, payloadSize)
+	bigPayload[0] = 0x00 // OK status byte
+
+	eofPayload := []byte{mysql.EOFPacket, 0x00, 0x00, 0x00, 0x00}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+	}()
+
+	reader.WritePacket(bigPayload)
+	reader.WritePacket(eofPayload)
+
+	err := <-done
+	require.NoError(t, err)
+
+	raw := concatRaw(*responses)
+	expected := append(makePacket(1, bigPayload), makePacket(2, eofPayload)...)
+	assert.Equal(t, expected, raw)
+}
+
 func TestStreamBinlogPackets_MaxPacketSizeMessage(t *testing.T) {
 	tsv := &TabletServer{}
 	reader := newMockPacketReader()

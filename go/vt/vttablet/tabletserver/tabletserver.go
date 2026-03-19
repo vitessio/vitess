@@ -1513,6 +1513,11 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 		var firstByte byte
 		remaining := packetLength
 		for remaining > 0 {
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
 			chunkSize := min(remaining, len(buf)-bufOffset)
 			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
 				return 0, vterrors.Wrapf(err, "failed to read binlog packet body")
