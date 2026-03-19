@@ -43315,6 +43315,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout */
         transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result */
+        no_result?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -43373,6 +43376,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout. */
         public transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result. */
+        public no_result: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";

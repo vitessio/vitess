@@ -977,7 +977,12 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+			if options.GetNoResult() {
+				result.Fields = nil
+				result.Rows = nil
+			} else {
+				result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+			}
 
 			// Change database name in mysql output to the keyspace name
 			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
