@@ -97,11 +97,12 @@ func ProcessUser(id string) *User {
 ```
 
 ### Error Handling Principles
-1. **Wrap errors with context** - Use `vterrors.Wrapf(err, "context")`
-2. **Validate early** - Check inputs before doing work
-3. **Fail fast** - Don't continue with invalid state
-4. **Log appropriately** - Errors at boundaries, debug info internally
-5. **Return structured errors** - Use error types for different handling
+1. **Use `vterrors`** - Prefer `vterrors` over `fmt.Errorf` or `errors` package, with an appropriate `vtrpcpb.Code` (e.g., `vtrpcpb.Code_FAILED_PRECONDITION` for unexpected input values, `vtrpcpb.Code_INTERNAL` for internal operation failures)
+2. **Wrap errors with context** - Use `vterrors.Wrapf(err, "context")`
+3. **Validate early** - Check inputs before doing work
+4. **Fail fast** - Don't continue with invalid state
+5. **Log appropriately** - Errors at boundaries, debug info internally
+6. **Return structured errors** - Use error types for different handling
 
 ### Testing Error Paths
 ```go
@@ -160,7 +161,6 @@ return user.NeedsMigration() && migrate(user) || user
 - **Channels for coordination** - Use channels to coordinate goroutines, not shared memory
 - **No naked returns in non-trivial functions** - For functions with named return values, avoid bare `return` and explicitly return all result values (very small helpers are the only exception). This does not prohibit plain `return` in `func f() { ... }` when used for early-exit/guard clauses.
 - **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
-- **Use `vterrors`** - Prefer `vterrors` over `fmt.Errorf` or `errors` package, with an appropriate `vtrpcpb.Code` (e.g., `vtrpcpb.Code_FAILED_PRECONDITION` for unexpected input values, `vtrpcpb.Code_INTERNAL` for internal operation failures)
 - **Copyright header** - New Go files must include the project copyright header with the current year
 - **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
 - **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
