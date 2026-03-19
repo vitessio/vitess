@@ -758,12 +758,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 		// Get exit status.
 		if err := xbstreamCmd.Wait(); err != nil {
-			compEngine := bm.CompressionEngine
-			if compEngine == "" {
-				compEngine = "default(pgzip)"
-			}
-			return vterrors.Wrapf(err, "xbstream failed (compression=%v, engine=%s, stripes=%d, streamMode=%s); verify xtrabackup/xbstream versions and --xbstream-restore-flags match backup",
-				compressed, compEngine, len(srcFiles), streamMode)
+			return vterrors.Wrap(err, "xbstream failed")
 		}
 	default:
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup-stream-mode, supported modes are tar and xbstream", streamMode)

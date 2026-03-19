@@ -39,7 +39,6 @@ type VtctldProcess struct {
 	ServiceMap                  string
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
-	S3BackupConfig              *S3BackupConfig
 	LogDir                      string
 	ErrorLog                    string
 	Port                        int
@@ -59,32 +58,21 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	}
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
-	args := []string{
-		vtutils.GetFlagVariantForTestsByVersion("--topo-implementation", vtctldVer), vtctld.TopoImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--topo-global-server-address", vtctldVer), vtctld.TopoGlobalAddress,
-		vtutils.GetFlagVariantForTestsByVersion("--topo-global-root", vtctldVer), vtctld.TopoGlobalRoot,
+	vtctld.proc = exec.Command(
+		vtctld.Binary,
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--topo_implementation", vtctld.TopoImplementation,
+		"--topo_global_server_address", vtctld.TopoGlobalAddress,
+		"--topo_global_root", vtctld.TopoGlobalRoot,
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
-		vtutils.GetFlagVariantForTestsByVersion("--backup-storage-implementation", vtctldVer), vtctld.BackupStorageImplementation,
+		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
+		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
 		"--port", strconv.Itoa(vtctld.Port),
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-	}
-	if vtctld.S3BackupConfig != nil {
-		args = append(args,
-			"--s3-backup-aws-endpoint", vtctld.S3BackupConfig.Endpoint,
-			"--s3-backup-storage-bucket", vtctld.S3BackupConfig.Bucket,
-			"--s3-backup-aws-region", vtctld.S3BackupConfig.Region,
-			"--s3-backup-force-path-style", strconv.FormatBool(vtctld.S3BackupConfig.ForcePathStyle),
-		)
-		if vtctld.S3BackupConfig.Root != "" {
-			args = append(args, "--s3-backup-storage-root", vtctld.S3BackupConfig.Root)
-		}
-	} else {
-		args = append(args, vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot)
-	}
-	vtctld.proc = exec.Command(vtctld.Binary, args...)
+	)
 
 	if vtctldVer >= 24 {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")

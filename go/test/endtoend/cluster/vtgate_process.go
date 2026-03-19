@@ -34,7 +34,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -150,15 +149,11 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
-	vtgateVer, verErr := GetMajorVersion(vtgate.Binary)
-	if verErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; using default flags: %s", vtgate.Binary, verErr))
-		vtgateVer = 22
-	}
 	args := []string{
-		vtutils.GetFlagVariantForTestsByVersion("--topo-implementation", vtgateVer), vtgate.TopoImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--topo-global-server-address", vtgateVer), vtgate.TopoGlobalAddress,
-		vtutils.GetFlagVariantForTestsByVersion("--topo-global-root", vtgateVer), vtgate.TopoGlobalRoot,
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--topo_implementation", vtgate.TopoImplementation,
+		"--topo_global_server_address", vtgate.TopoGlobalAddress,
+		"--topo_global_root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", strconv.Itoa(vtgate.Port),
@@ -174,7 +169,10 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--grpc_bind_address", "127.0.0.1",
 	}
 
-	if vtgateVer >= 24 {
+	vtgateVer, err := GetMajorVersion(vtgate.Binary)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", vtgate.Binary, err))
+	} else if vtgateVer >= 24 {
 		args = append(args, "--log-format", "text")
 	}
 

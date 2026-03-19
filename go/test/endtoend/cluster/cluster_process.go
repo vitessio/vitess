@@ -86,19 +86,6 @@ var (
 	}
 )
 
-// S3BackupConfig holds S3-compatible backup storage settings for cluster processes.
-// When set on LocalProcessCluster, vtctld/vttablet/vtbackup use S3 flags instead of file storage.
-// Credentials are taken from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in the process environment.
-
-// Note: backup_s3_microceph shard tests use s3backupstorage.InitFlag and in-process backupstorage, they do not spawn vtbackup/vttablet processes. S3BackupConfig is for tests that run full cluster processes against S3 (e.g. future E2E with vtbackup subprocess). See s3_wiring_test.go for propagation validation.
-type S3BackupConfig struct {
-	Endpoint       string
-	Bucket         string
-	Region         string
-	ForcePathStyle bool
-	Root           string
-}
-
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -143,9 +130,6 @@ type LocalProcessCluster struct {
 	VtGatePlannerVersion plancontext.PlannerVersion
 
 	VtctldExtraArgs []string
-
-	// S3BackupConfig when non-nil causes backup storage to use S3 (e.g. MicroCeph) instead of file.
-	S3BackupConfig *S3BackupConfig
 
 	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
@@ -282,10 +266,6 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
-	if cluster.S3BackupConfig != nil {
-		cluster.VtctldProcess.BackupStorageImplementation = "s3"
-		cluster.VtctldProcess.S3BackupConfig = cluster.S3BackupConfig
-	}
 	log.Info(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
@@ -1219,10 +1199,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		cluster.TopoPort,
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
-	if cluster.S3BackupConfig != nil {
-		cluster.VtbackupProcess.BackupStorageImplementation = "s3"
-		cluster.VtbackupProcess.S3BackupConfig = cluster.S3BackupConfig
-	}
 	return cluster.VtbackupProcess.Setup()
 }
 
@@ -1389,32 +1365,21 @@ func (cluster *LocalProcessCluster) NewVTAdminProcess() {
 }
 
 // VtprocessInstanceFromVttablet creates a new vttablet object
-func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string, cell string, hostname string) *VttabletProcess {
-	if cell == "" {
-		cell = cluster.Cell
-	}
-	if hostname == "" {
-		hostname = cluster.Hostname
-	}
-	p := VttabletProcessInstance(
+func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+	return VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
-		cell,
+		cluster.Cell,
 		shardName,
 		ksName,
 		cluster.VtctldProcess.Port,
 		tablet.Type,
 		cluster.TopoProcess.Port,
-		hostname,
+		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
 		cluster.DefaultCharset)
-	if cluster.S3BackupConfig != nil {
-		p.BackupStorageImplementation = "s3"
-		p.S3BackupConfig = cluster.S3BackupConfig
-	}
-	return p
 }
 
 // StartVttablet starts a new tablet
@@ -1428,7 +1393,20 @@ func (cluster *LocalProcessCluster) StartVttablet(
 	hostname string,
 	shardName string,
 ) error {
-	tablet.VttabletProcess = cluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName, cell, hostname)
+	tablet.VttabletProcess = VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cell,
+		shardName,
+		keyspaceName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.DefaultCharset)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus

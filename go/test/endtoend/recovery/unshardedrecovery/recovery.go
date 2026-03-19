@@ -121,7 +121,7 @@ func TestMainImpl(m *testing.M) {
 				tabletType = "primary"
 			}
 			tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName, localCluster.Cell, localCluster.Hostname)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			if recovery.UseXb {

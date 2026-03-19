@@ -71,8 +71,6 @@ func TestMain(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
-		localCluster.S3BackupConfig = cluster.S3BackupConfigFromEnv()
-
 		// Setup EXTRA_MY_CNF for clone plugin
 		if err := setupExtraMyCnf(); err != nil {
 			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
@@ -137,7 +135,7 @@ func TestMain(m *testing.M) {
 		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName, localCluster.Cell, localCluster.Hostname)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
 			tablet.VttabletProcess.SupportsBackup = true
