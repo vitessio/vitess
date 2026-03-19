@@ -159,6 +159,19 @@ func TestWithHeartbeatSeconds_RejectsOverflow(t *testing.T) {
 	assert.ErrorContains(t, err, "or less")
 }
 
+func TestWithTimeLocation_Validation(t *testing.T) {
+	v := &VStreamClient{}
+
+	err := WithTimeLocation(nil)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "time location")
+
+	loc := time.FixedZone("UTC-5", -5*60*60)
+	err = WithTimeLocation(loc)(v)
+	assert.NoError(t, err)
+	assert.Same(t, loc, v.cfg.timeLocation)
+}
+
 func TestWithTabletType_Validation(t *testing.T) {
 	v := &VStreamClient{}
 
