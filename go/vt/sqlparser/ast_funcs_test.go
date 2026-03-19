@@ -331,6 +331,12 @@ func TestAliasedExprColumnName(t *testing.T) {
 		{"SELECT 0x1A FROM t", "0x1A"},
 		// Hex string literal
 		{"SELECT X'1A' FROM t", "X'1A'"},
+		// Trailing comment should not be included in implicit alias
+		{"SELECT COUNT(*) /* a comment */ FROM t", "COUNT(*)"},
+		{"SELECT a + b /* trailing */ FROM t", "a + b"},
+		// Comments inside expressions are preserved (matches MySQL)
+		{"SELECT a + /* middle */ b FROM t", "a + /* middle */ b"},
+		{"SELECT COUNT(/* inner */ *) FROM t", "COUNT(/* inner */ *)"},
 	}
 
 	for _, tt := range tests {

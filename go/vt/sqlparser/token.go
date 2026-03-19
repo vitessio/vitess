@@ -83,7 +83,6 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		if tkn.AllowComments {
 			break
 		}
-		tkn.prevEnd = tkn.Pos
 		typ, val = tkn.Scan()
 	}
 	if typ == 0 || typ == ';' || typ == LEX_ERROR {
