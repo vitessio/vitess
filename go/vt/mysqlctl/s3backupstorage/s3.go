@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -396,6 +397,18 @@ func newS3BackupStorage() *S3BackupStorage {
 	// This initialises a new transport based off http.DefaultTransport the first time and returns the same
 	// transport on subsequent calls so connections can be reused as part of the same transport.
 	tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+	if caPath := os.Getenv("AWS_CA_BUNDLE"); caPath != "" {
+		pem, err := os.ReadFile(caPath)
+		if err == nil {
+			pool, err := x509.SystemCertPool()
+			if err != nil {
+				pool = x509.NewCertPool()
+			}
+			if pool.AppendCertsFromPEM(pem) {
+				tlsClientConf.RootCAs = pool
+			}
+		}
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsClientConf
 
@@ -558,6 +571,14 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 	defer bs.mu.Unlock()
 	if bs._client == nil {
 		logLevel := getLogLevel()
+
+		origCA := os.Getenv("AWS_CA_BUNDLE")
+		os.Unsetenv("AWS_CA_BUNDLE")
+		defer func() {
+			if origCA != "" {
+				os.Setenv("AWS_CA_BUNDLE", origCA)
+			}
+		}()
 
 		httpClient := &http.Client{Transport: bs.transport}
 
