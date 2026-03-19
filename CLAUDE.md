@@ -170,7 +170,7 @@ return user.NeedsMigration() && migrate(user) || user
 ### Protobufs
 - **Never** directly edit files under `go/vt/proto/` - they are generated from `proto/*.proto` protobuf definitions
 - After modifying `proto/*.proto` files, run `make proto` to regenerate
-- Avoid storing times or time durations as integers; use `vttime.Time` instead
+- Avoid storing timestamps or time durations as integers; use `vttime.Time` for timestamps and `vttime.Duration` (or `google.protobuf.Duration`, as appropriate) for durations instead
 
 ### Command-Line Flags
 - New flags must **not** use underscores (use hyphens instead)
