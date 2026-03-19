@@ -2518,6 +2518,10 @@ func (ae *AliasedExpr) ColumnName() string {
 		}
 	}
 
+	if ae.InputExpression != "" {
+		return ae.InputExpression
+	}
+
 	return String(ae.Expr)
 }
 

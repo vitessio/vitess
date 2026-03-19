@@ -629,7 +629,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> partition_comment partition_data_directory partition_index_directory
 %type <intPtr> length_opt
-%type <integer> func_datetime_precision
+%type <integer> func_datetime_precision mark_start mark_end
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -5556,17 +5556,17 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| expression as_ci_opt
+| mark_start expression mark_end as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    $$ = &AliasedExpr{Expr: $2, As: $4, InputExpression: yylex.(*Tokenizer).GetInputExpression($1, $3)}
   }
-| table_id '.' '*'
+| mark_start table_id '.' '*' mark_end
   {
-    $$ = &StarExpr{TableName: TableName{Name: $1}}
+    $$ = &StarExpr{TableName: TableName{Name: $2}}
   }
-| table_id '.' reserved_table_id '.' '*'
+| mark_start table_id '.' reserved_table_id '.' '*' mark_end
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{Qualifier: $2, Name: $4}}
   }
 
 as_ci_opt:
@@ -5587,6 +5587,16 @@ col_alias:
 | STRING
   {
     $$ = NewIdentifierCI(string($1))
+  }
+
+mark_start:
+  {
+    $$ = yylex.(*Tokenizer).currStart
+  }
+
+mark_end:
+  {
+    $$ = yylex.(*Tokenizer).prevEnd
   }
 
 from_opt:

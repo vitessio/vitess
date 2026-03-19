@@ -254,3 +254,88 @@ func TestKeyspaceToNonQualifiedTable(t *testing.T) {
 	AddKeyspace(stmt, "ks2")
 	require.Equal(t, "select col, col + (select 1 from ks2.t4) from ks.t join ks2.t2 join (select 1 from ks2.t3) as x where t.id = t2.id and x.id = t.id", String(stmt))
 }
+
+func TestAliasedExprColumnName(t *testing.T) {
+	parser, err := New(Options{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		query    string
+		expected string
+	}{
+		// Function with preserved case
+		{"SELECT CoUnT(*) FROM t", "CoUnT(*)"},
+		// Internal whitespace preserved verbatim
+		{"SELECT COUNT(   * ) FROM t", "COUNT(   * )"},
+		// Simple integer literal
+		{"SELECT 1 FROM t", "1"},
+		// String literal returns unquoted value
+		{"SELECT 'foo' FROM t", "foo"},
+		// String expression preserves quotes
+		{"SELECT 'foo' + 'bar' FROM t", "'foo' + 'bar'"},
+		// Simple column name
+		{"SELECT a FROM t", "a"},
+		// Qualified column name returns just column
+		{"SELECT t.a FROM t", "a"},
+		// Function call preserved
+		{"SELECT UPPER(name) FROM t", "UPPER(name)"},
+		// Explicit alias wins
+		{"SELECT 1 AS one FROM t", "one"},
+		// Binary expression
+		{"SELECT a + b FROM t", "a + b"},
+		// Extra internal whitespace preserved
+		{"SELECT  a   +   b  FROM t", "a   +   b"},
+		// Nested function calls
+		{"SELECT CONCAT(UPPER(a), LOWER(b)) FROM t", "CONCAT(UPPER(a), LOWER(b))"},
+		// Extra spaces in function args
+		{"SELECT CONCAT(  a  ,  b  ) FROM t", "CONCAT(  a  ,  b  )"},
+		// Subquery with backtick-quoted alias containing whitespace
+		{"SELECT (SELECT 'asdf' as `   foo   ` FROM dual) FROM dual", "(SELECT 'asdf' as `   foo   ` FROM dual)"},
+		// Unary minus
+		{"SELECT -a FROM t", "-a"},
+		// NOT expression
+		{"SELECT NOT a FROM t", "NOT a"},
+		// IS NULL
+		{"SELECT a IS NULL FROM t", "a IS NULL"},
+		// BETWEEN
+		{"SELECT a BETWEEN 1 AND 10 FROM t", "a BETWEEN 1 AND 10"},
+		// CASE expression
+		{"SELECT CASE a WHEN 1 THEN 'one' ELSE 'other' END FROM t", "CASE a WHEN 1 THEN 'one' ELSE 'other' END"},
+		// Parenthesized column — ColName takes priority
+		{"SELECT (a) FROM t", "a"},
+		// Double-parenthesized expression
+		{"SELECT ((a + b)) FROM t", "((a + b))"},
+		// IN expression
+		{"SELECT a IN (1, 2, 3) FROM t", "a IN (1, 2, 3)"},
+		// EXISTS
+		{"SELECT EXISTS (SELECT 1) FROM t", "EXISTS (SELECT 1)"},
+		// CAST
+		{"SELECT CAST(a AS CHAR) FROM t", "CAST(a AS CHAR)"},
+		// Tab-separated tokens preserved verbatim
+		{"SELECT a\t+\tb FROM t", "a\t+\tb"},
+		// Newline in expression preserved verbatim
+		{"SELECT a +\n  b FROM t", "a +\n  b"},
+		// Tabs around expression are trimmed by lexer
+		{"SELECT\t\t1\t\tFROM t", "1"},
+		// String literal with internal whitespace — unquoted
+		{"SELECT 'hello  world' FROM t", "hello  world"},
+		// Double-quoted string literal with internal whitespace — unquoted
+		{`SELECT "hello  world" FROM t`, "hello  world"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			stmt, err := parser.Parse(tt.query)
+			require.NoError(t, err)
+
+			sel, ok := stmt.(*Select)
+			require.True(t, ok)
+			require.NotEmpty(t, sel.SelectExprs.Exprs)
+
+			ae, ok := sel.SelectExprs.Exprs[0].(*AliasedExpr)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.expected, ae.ColumnName())
+		})
+	}
+}

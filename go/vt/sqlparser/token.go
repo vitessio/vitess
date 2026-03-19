@@ -45,9 +45,11 @@ type Tokenizer struct {
 	multi          bool
 	specialComment *Tokenizer
 
-	Pos    int
-	buf    string
-	parser *Parser
+	Pos       int
+	buf       string
+	parser    *Parser
+	currStart int // start position of current token (set in Scan after skipBlank)
+	prevEnd   int // end position of previous token (set in Lex before Scan)
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -75,11 +77,13 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		}
 	}
 
+	tkn.prevEnd = tkn.Pos
 	typ, val := tkn.Scan()
 	for typ == COMMENT {
 		if tkn.AllowComments {
 			break
 		}
+		tkn.prevEnd = tkn.Pos
 		typ, val = tkn.Scan()
 	}
 	if typ == 0 || typ == ';' || typ == LEX_ERROR {
@@ -109,6 +113,15 @@ func (p PositionedErr) Error() string {
 	return fmt.Sprintf("%s at position %v", p.Err, p.Pos)
 }
 
+// GetInputExpression extracts the original input text between start and end positions.
+// The lexer's skipBlank ensures start/end already exclude leading/trailing whitespace.
+func (tkn *Tokenizer) GetInputExpression(start, end int) string {
+	if start < 0 || end < 0 || start >= end || end > len(tkn.buf) {
+		return ""
+	}
+	return tkn.buf[start:end]
+}
+
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
@@ -134,6 +147,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 	}
 
 	tkn.skipBlank()
+	tkn.currStart = tkn.Pos
 	switch ch := tkn.cur(); {
 	case ch == '@':
 		tokenID := AT_ID
