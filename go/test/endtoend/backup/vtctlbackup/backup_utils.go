@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/backup/testhelper"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
@@ -57,6 +58,7 @@ const (
 	BuiltinBackup
 	Mysqlctld
 	MySQLShell
+	S3
 	timeout                = time.Duration(60 * time.Second)
 	topoConsistencyTimeout = 20 * time.Second
 )
@@ -78,6 +80,7 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = getDefaultCommonArgs()
+	s3Config         testhelper.S3Config
 
 	vtInsertTest = `
 		create table vt_insert_test (
@@ -102,6 +105,10 @@ type CompressionDetails struct {
 func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
 	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
+
+	if setupType == S3 {
+		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--backup-storage-implementation", "s3")
+	}
 
 	// Start topo server
 	err := localCluster.StartTopo()
@@ -172,6 +179,8 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 			"--mysql-shell-speedup-restore=true",
 		}
 		commonTabletArg = append(commonTabletArg, mysqlShellArgs...)
+	case S3:
+		commonTabletArg = append(commonTabletArg, testhelper.S3TabletArgs(s3Config)...)
 	}
 
 	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
@@ -1397,7 +1406,7 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	switch currentSetupType {
 	// Currently only the builtin backup engine instruments bytes-processed counts.
-	case BuiltinBackup:
+	case BuiltinBackup, S3:
 		require.Contains(t, vars, "BackupBytes")
 		bb := vars["BackupBytes"].(map[string]any)
 		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
@@ -1414,7 +1423,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 
 	switch currentSetupType {
 	// Currently only the builtin backup engine instruments bytes-processed counts.
-	case BuiltinBackup:
+	case BuiltinBackup, S3:
 		require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1428,7 +1437,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 
 	switch currentSetupType {
 	// Currently only the builtin backup engine emits timings.
-	case BuiltinBackup:
+	case BuiltinBackup, S3:
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1470,6 +1479,13 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
 		require.Contains(t, bb, "BackupStorage.File.File:Read")
+	case S3:
+		require.Contains(t, vars, "RestoreBytes")
+		bb := vars["RestoreBytes"].(map[string]any)
+		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
+		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
+		require.Contains(t, bb, "BackupStorage.S3.S3:Read")
 	}
 
 	require.Contains(t, vars, "RestoreCount")
@@ -1478,7 +1494,7 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 
 	switch currentSetupType {
 	// Currently only the builtin backup engine emits operation counts.
-	case BuiltinBackup:
+	case BuiltinBackup, S3:
 		require.Contains(t, bc, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1492,7 +1508,7 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 
 	switch currentSetupType {
 	// Currently only the builtin backup engine emits timings.
-	case BuiltinBackup:
+	case BuiltinBackup, S3:
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1503,7 +1519,12 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 
-	require.Contains(t, bd, "BackupStorage.File.File:Read")
+	switch backupstorage.BackupStorageImplementation {
+	case "file":
+		require.Contains(t, bd, "BackupStorage.File.File:Read")
+	case "s3":
+		require.Contains(t, bd, "BackupStorage.S3.S3:Read")
+	}
 }
 
 func getDefaultCommonArgs() []string {

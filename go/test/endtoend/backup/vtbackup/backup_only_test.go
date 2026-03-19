@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
+	"vitess.io/vitess/go/test/endtoend/backup/testhelper"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -265,7 +266,14 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 	}
 
 	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
-	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	if s3ConfigForVtbackup != nil {
+		err = localCluster.StartVtbackupWithBackupStorage(
+			"s3",
+			testhelper.S3StorageExtraArgs(*s3ConfigForVtbackup),
+			newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	} else {
+		err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -343,8 +351,8 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
-	// Start tablets
-	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
+	// Start tablets with full ExtraArgs (includes backup storage config for S3)
+	tablet.VttabletProcess.ExtraArgs = commonTabletArg
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true

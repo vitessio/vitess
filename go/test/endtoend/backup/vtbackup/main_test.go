@@ -24,6 +24,7 @@ import (
 	"path"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/backup/testhelper"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -31,6 +32,7 @@ import (
 )
 
 var (
+	s3ConfigForVtbackup *testhelper.S3Config
 	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet

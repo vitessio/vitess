@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
+
+	"vitess.io/vitess/go/test/endtoend/backup/testhelper"
 )
 
 // TestBuiltinBackup - main tests backup using vtctl commands
@@ -65,6 +67,15 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 	}
 
 	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+// TestBackupS3 runs backup tests against an S3-compatible backend (e.g. MicroCeph).
+// Skips if AWS_* env vars are not set.
+func TestBackupS3(t *testing.T) {
+	defer setDefaultCommonArgs()
+	s3Config = testhelper.RequireS3Config(t)
+	testhelper.SetS3Env(t, s3Config)
+	TestBackup(t, S3, "xbstream", 0, nil, nil)
 }
 
 func setDefaultCompressionFlag() {

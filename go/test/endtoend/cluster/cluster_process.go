@@ -1186,8 +1186,22 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
 	keyspace string, shard string, cell string, extraArgs ...string,
 ) error {
+	return cluster.StartVtbackupWithBackupStorage("file", nil, newInitDBFile, initialBackup, keyspace, shard, cell, extraArgs...)
+}
+
+// StartVtbackupWithBackupStorage starts a vtbackup with the given backup storage
+// configuration. Use this when testing S3 or other non-file backends. Pass
+// backupStorageImplementation (e.g. "s3") and backupStorageExtraArgs (S3 flags,
+// etc.). When both are nil/empty, behaves like StartVtbackup with file storage.
+func (cluster *LocalProcessCluster) StartVtbackupWithBackupStorage(
+	backupStorageImplementation string,
+	backupStorageExtraArgs []string,
+	newInitDBFile string, initialBackup bool,
+	keyspace string, shard string, cell string,
+	extraArgs ...string,
+) error {
 	log.Info("Starting vtbackup")
-	cluster.VtbackupProcess = *VtbackupProcessInstance(
+	proc := VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
 		cluster.GetAndReservePort(),
 		newInitDBFile,
@@ -1198,7 +1212,17 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		cluster.TmpDirectory,
 		cluster.TopoPort,
 		initialBackup)
-	cluster.VtbackupProcess.ExtraArgs = extraArgs
+	if backupStorageImplementation != "" {
+		proc.BackupStorageImplementation = backupStorageImplementation
+	}
+	allExtra := backupStorageExtraArgs
+	if len(allExtra) == 0 {
+		allExtra = extraArgs
+	} else {
+		allExtra = append(append([]string{}, backupStorageExtraArgs...), extraArgs...)
+	}
+	proc.ExtraArgs = allExtra
+	cluster.VtbackupProcess = *proc
 	return cluster.VtbackupProcess.Setup()
 }
 

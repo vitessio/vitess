@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Install MicroCeph
+      id: microceph
       uses: canonical/microceph-action@v0.2
       with:
         channel: 'latest/edge'
@@ -15,8 +16,8 @@ runs:
     - name: Export MicroCeph S3 env
       shell: bash
       run: |
-        CFG="${GITHUB_WORKSPACE}/microceph.source"
-        if [[ ! -f "$CFG" ]]; then
+        CFG="${{ steps.microceph.outputs.s3config }}"
+        if [[ -z "$CFG" || ! -f "$CFG" ]]; then
           echo "::error::microceph.source not found at $CFG (MicroCeph action may have failed)"
           exit 1
         fi

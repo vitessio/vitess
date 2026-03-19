@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/test/endtoend/backup/testhelper"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -85,9 +85,12 @@ func getRandomListenPorts() (int, int) {
 
 func TestMain(m *testing.M) {
 	f := func() int {
+		if testhelper.S3ConfigAvailable() {
+			return m.Run()
+		}
 		minioPath, err := exec.LookPath("minio")
 		if err != nil {
-			log.Fatalf("minio binary not found: %v", err)
+			log.Fatalf("minio binary not found and AWS_* env vars not set: %v", err)
 		}
 
 		dataDir, err := os.MkdirTemp("", "")
@@ -160,33 +163,6 @@ func waitForMinio(client *minio.Client) {
 	log.Fatal("MinIO server did not become ready in time")
 }
 
-func checkEnvForS3(t *testing.T) {
-	// We never want to skip the tests if we are running on CI.
-	// We will always run these tests on CI with the TestMain and Minio.
-	// There should not be a need to skip the tests due to missing ENV vars.
-	if os.Getenv("GITHUB_ACTIONS") != "" {
-		return
-	}
-
-	envRequired := []string{
-		"AWS_ACCESS_KEY_ID",
-		"AWS_SECRET_ACCESS_KEY",
-		"AWS_BUCKET",
-		"AWS_ENDPOINT",
-		"AWS_REGION",
-	}
-
-	var missing []string
-	for _, s := range envRequired {
-		if os.Getenv(s) == "" {
-			missing = append(missing, s)
-		}
-	}
-	if len(missing) > 0 {
-		t.Skipf("missing AWS secrets to run this test: please set: %s", strings.Join(missing, ", "))
-	}
-}
-
 type backupTestConfig struct {
 	concurrency       int
 	addFileReturnFn   func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, filesize int64, firstAdd bool) (io.WriteCloser, error)
@@ -196,7 +172,7 @@ type backupTestConfig struct {
 }
 
 func runBackupTest(t *testing.T, cfg backupTestConfig) {
-	checkEnvForS3(t)
+	testhelper.RequireS3Config(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    os.Getenv("AWS_REGION"),
 		Endpoint:  os.Getenv("AWS_ENDPOINT"),
@@ -325,7 +301,7 @@ type restoreTestConfig struct {
 }
 
 func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
-	checkEnvForS3(t)
+	testhelper.RequireS3Config(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    os.Getenv("AWS_REGION"),
 		Endpoint:  os.Getenv("AWS_ENDPOINT"),

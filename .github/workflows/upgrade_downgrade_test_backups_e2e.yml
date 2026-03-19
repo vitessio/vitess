@@ -66,10 +66,15 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e.yml'
+            - '.github/actions/setup-microceph/action.yml'
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/tune-os
+
+    - name: Install MicroCeph
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-microceph
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
