@@ -298,11 +298,11 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 	return v
 }
 
-func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) (engine.VCursor, context.Context) {
+func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) (engine.VCursor, context.Context, context.CancelFunc) {
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
+	timedCtx, cancel := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout)
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &VCursorImpl{
@@ -328,7 +328,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) (engine.VCurs
 
 	v.marginComments.Trailing += "/* warming read */"
 
-	return v, clonedCtx
+	return v, clonedCtx, cancel
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {

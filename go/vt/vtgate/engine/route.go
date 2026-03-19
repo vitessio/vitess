@@ -525,13 +525,14 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		}
 	}
 
-	replicaVCursor, warmingCtx := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
 	// if there's no more room in the channel, drop the warming read
 	case warmingReadsChannel <- true:
-		go func(replicaVCursor VCursor) {
+		go func() {
+			replicaVCursor, warmingCtx, cancel := vcursor.CloneForReplicaWarming(ctx)
+			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
 			}()
@@ -546,7 +547,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 			} else {
 				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
 			}
-		}(replicaVCursor)
+		}()
 	default:
 		log.Warn("Failed to execute warming replica read as pool is full")
 	}

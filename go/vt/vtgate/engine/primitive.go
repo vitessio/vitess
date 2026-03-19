@@ -129,8 +129,10 @@ type (
 		// GetWarmingReadsChannel returns the channel for executing warming reads against replicas
 		GetWarmingReadsChannel() chan bool
 
-		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
-		CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context)
+		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas.
+		// It returns the cloned VCursor, a timeout-bounded context for the warming query,
+		// and a cancel function that must be called when the warming query completes.
+		CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context, context.CancelFunc)
 
 		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
