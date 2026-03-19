@@ -84,6 +84,12 @@ Do this before re-running tests that failed, especially if the previous run did 
 
 Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctld, MySQL, vttablets, vtgate) before tests run, and tears it down after. Individual `Test*` functions run queries or operations against the live cluster.
 
+## Teardown
+
+1. Run `./501_teardown.sh` from the `examples/local` directory
+2. Kill any orphaned Vitess processes that the teardown script missed (processes we started directly or indirectly)
+3. Ask the user before clearing `$VTDATAROOT/vtroot_*`
+
 ## Debugging failures
 
 1. Clear VTDATAROOT: `rm -rf $VTDATAROOT/vtroot_*`
