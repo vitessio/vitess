@@ -4,54 +4,31 @@ description: 'Set up a single-node MicroCeph cluster with RGW (S3 API) for use i
 inputs:
   channel:
     description: 'MicroCeph snap channel'
-    required: false
     default: 'squid/stable'
   accesskey:
     description: 'S3 access key for the test user'
-    required: true
+    default: 'vitess'
   secretkey:
     description: 'S3 secret key for the test user'
-    required: true
+    default: 'vitess-secret-key'
   bucket:
-    description: 'S3 bucket name to create'
-    required: true
+    description: 'S3 bucket name'
+    default: 'vitess-test'
   osdsize:
-    description: 'Size of each loopback OSD disk (e.g. 4G)'
-    required: false
+    description: 'Size of each loopback OSD disk'
     default: '4G'
-  osdcount:
-    description: 'Number of loopback OSD disks to create (minimum 1)'
-    required: false
-    default: '3'
-  devname:
-    description: 'Base block device name prefix for loopback OSDs'
-    required: false
-    default: '/dev/sdi'
-  health_attempts:
-    description: 'Max poll attempts when waiting for cluster HEALTH_OK'
-    required: false
-    default: '20'
-  health_interval:
-    description: 'Seconds between HEALTH_OK poll attempts'
-    required: false
-    default: '15'
 
 outputs:
-  endpoint:
-    description: 'S3 endpoint URL (http://localhost:<port>)'
-    value: ${{ steps.rgw-setup.outputs.endpoint }}
-  port:
-    description: 'Port RGW is listening on'
-    value: ${{ steps.rgw-setup.outputs.port }}
-  region:
-    description: 'S3 region (always us-east-1 for RGW)'
-    value: ${{ steps.rgw-setup.outputs.region }}
+  s3config:
+    description: |
+      Path to a sourceable config file. Source it to get:
+        AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+        AWS_ENDPOINT, AWS_BUCKET, AWS_REGION
+    value: ${{ steps.microceph-output.outputs.s3-config-file }}
 
 runs:
   using: 'composite'
   steps:
-
-    # ── 1. Snap cache ─────────────────────────────────────────────────────────
     - name: Cache MicroCeph snap
       id: cache-microceph
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
@@ -59,246 +36,25 @@ runs:
         path: microceph-snap-cache
         key: microceph-${{ inputs.channel }}-${{ runner.os }}-v2
 
-    - name: Download MicroCeph snap (on cache miss)
+    - name: Get MicroCeph snap (on cache miss)
       if: steps.cache-microceph.outputs.cache-hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
         mkdir -p microceph-snap-cache
         cd microceph-snap-cache
-        snap download microceph --channel="${{ inputs.channel }}"
-        # Verify both files landed before we cache them
-        ls microceph_*.snap microceph_*.assert
+        snap download microceph --channel=${{ inputs.channel }}
 
-    # ── 2. Dependencies + snap install ───────────────────────────────────────
-    - name: Install dependencies and MicroCeph snap
+    - name: Bootstrap MicroCeph S3
+      id: microceph-config
       shell: bash
-      run: |
-        set -euo pipefail
+      run: ${{ github.action_path }}/microceph.sh \
+        -c ${{ inputs.channel }} \
+        -a ${{ inputs.accesskey }} \
+        -s ${{ inputs.secretkey }} \
+        -b ${{ inputs.bucket }} \
+        -z ${{ inputs.osdsize }}
 
-        sudo apt-get -qq -y update
-        sudo apt-get -qq -y install s3cmd
-
-        # Clear libeatmydata LD_PRELOAD — breaks snap confinement on GitHub runners
-        sudo truncate -s 0 /etc/ld.so.preload
-        sudo systemctl restart snapd
-        sudo snap wait system seed.loaded
-
-        if ls microceph-snap-cache/microceph_*.snap 1>/dev/null 2>&1; then
-          echo "Installing MicroCeph from snap cache..."
-          sudo snap ack microceph-snap-cache/microceph_*.assert
-          sudo snap install microceph-snap-cache/microceph_*.snap --dangerous
-        else
-          echo "Installing MicroCeph from snap store (channel: ${{ inputs.channel }})..."
-          sudo snap install microceph --channel="${{ inputs.channel }}"
-        fi
-
-    # ── 3. Snap interface wiring + OSD file-descriptor limits ────────────────
-    - name: Configure snap interfaces and system limits
+    - id: microceph-output
       shell: bash
-      run: |
-        set -euo pipefail
-
-        sudo snap connect microceph:hardware-observe
-        sudo snap connect microceph:block-devices
-        sudo snap restart microceph.daemon
-
-        # OSD processes open many file descriptors under concurrent test load;
-        # raise limits so the daemon never hits the default ceiling
-        sudo mkdir -p \
-          /etc/systemd/system/snap.microceph.osd.service.d \
-          /etc/systemd/system.conf.d
-
-        printf '[Service]\nLimitNOFILE=65536\n' \
-          | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
-
-        printf '[Manager]\nDefaultLimitNOFILE=65536\n' \
-          | sudo tee /etc/systemd/system.conf.d/limit-nofile.conf
-
-        sudo systemctl daemon-reload
-
-    # ── 4. Cluster bootstrap + OSD provisioning ───────────────────────────────
-    - name: Bootstrap cluster and provision OSDs
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        sudo microceph cluster bootstrap
-
-        # Allow the monitor to elect a leader before touching config
-        sleep 30
-
-        # Suppress HEALTH_WARN on a single-node (no replication) cluster.
-        # Set just above mon_data_avail_crit so HEALTH_OK is reachable.
-        sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
-
-        OSDCOUNT="${{ inputs.osdcount }}"
-        DEVNAME="${{ inputs.devname }}"
-        DISK_SIZE="${{ inputs.osdsize }}"
-
-        if ! [[ "${OSDCOUNT}" =~ ^[1-9][0-9]*$ ]]; then
-          echo "::error::osdcount must be a positive integer, got: ${OSDCOUNT}"
-          exit 1
-        fi
-
-        # Add OSDs via real loopback block devices.
-        # The `disk add loop,SIZE,N` shortcut is version-sensitive and fails
-        # silently on some microceph releases. The manual losetup + mknod
-        # pattern is stable across all versions (matches canonical reference).
-        for i in $(seq 1 "${OSDCOUNT}"); do
-          loop_file="$(sudo mktemp -p /mnt XXXX.img)"
-          sudo truncate -s "${DISK_SIZE}" "${loop_file}"
-          loop_dev="$(sudo losetup --show -f "${loop_file}")"
-          minor="${loop_dev##/dev/loop}"
-          dev="${DEVNAME}${i}"
-          sudo mknod -m 0660 "${dev}" b 7 "${minor}"
-          sudo microceph disk add --wipe "${dev}"
-          echo "OSD ${i}/${OSDCOUNT}: ${dev} → ${loop_dev} (${DISK_SIZE})"
-        done
-
-        # Gate on HEALTH_OK before enabling RGW.
-        # A cluster that has not finished PG peering will silently drop writes.
-        ATTEMPTS="${{ inputs.health_attempts }}"
-        INTERVAL="${{ inputs.health_interval }}"
-        echo "Waiting for HEALTH_OK after OSD provisioning..."
-        for i in $(seq 1 "${ATTEMPTS}"); do
-          if sudo microceph.ceph status | grep -q HEALTH_OK; then
-            echo "Cluster healthy (attempt ${i}/${ATTEMPTS})."
-            break
-          fi
-          sudo microceph.ceph status
-          if [ "${i}" -eq "${ATTEMPTS}" ]; then
-            echo "::error::Cluster did not reach HEALTH_OK after OSD provisioning"
-            sudo microceph.ceph health detail
-            exit 1
-          fi
-          echo "Waiting for HEALTH_OK (${i}/${ATTEMPTS})..."
-          sleep "${INTERVAL}"
-        done
-
-    # ── 5. RGW enable + S3 resource provisioning ─────────────────────────────
-    - name: Enable RGW and configure S3 resources
-      id: rgw-setup
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        ACCESS_KEY="${{ inputs.accesskey }}"
-        SECRET_KEY="${{ inputs.secretkey }}"
-        BUCKET="${{ inputs.bucket }}"
-        ATTEMPTS="${{ inputs.health_attempts }}"
-        INTERVAL="${{ inputs.health_interval }}"
-
-        sudo microceph enable rgw
-
-        # Give RGW time to initialise before polling the socket
-        sleep 15
-
-        # Wait for radosgw to bind. Regex handles all address formats:
-        #   IPv4:  0.0.0.0:7480
-        #   IPv6:  [::]:7480
-        #   wild:  *:7480
-        echo "Waiting for RGW socket..."
-        for i in $(seq 1 30); do
-          if sudo ss -ltnp | grep -q radosgw; then
-            break
-          fi
-          if [ "${i}" -eq 30 ]; then
-            echo "::error::RGW did not bind a port within 60s"
-            sudo microceph.ceph status || true
-            sudo snap logs microceph.rgw --last=50 || true
-            exit 1
-          fi
-          echo "Waiting for RGW socket (${i}/30)..."
-          sleep 2
-        done
-
-        RGW_PORT=$(sudo ss -ltnp \
-          | awk '/radosgw/{ match($4, /:([0-9]+)$/, a); if (a[1]) print a[1] }' \
-          | head -1)
-
-        if [ -z "${RGW_PORT}" ]; then
-          echo "::error::Could not parse RGW port from ss output"
-          sudo ss -ltnp | grep radosgw || true
-          exit 1
-        fi
-        echo "RGW bound on port ${RGW_PORT}"
-
-        # Wait for HTTP to be served before issuing radosgw-admin commands
-        echo "Waiting for RGW HTTP..."
-        for i in $(seq 1 20); do
-          if curl -sf --max-time 5 "http://localhost:${RGW_PORT}" >/dev/null 2>&1; then
-            echo "RGW HTTP ready."
-            break
-          fi
-          if [ "${i}" -eq 20 ]; then
-            echo "::error::RGW HTTP not ready after 60s"
-            sudo snap logs microceph.rgw --last=50 || true
-            exit 1
-          fi
-          echo "Waiting for RGW HTTP (${i}/20)..."
-          sleep 3
-        done
-
-        # Use ACCESS_KEY as uid so the uid and S3 credential are always
-        # consistent, regardless of what values the caller passes in
-        sudo microceph.radosgw-admin user create \
-          --uid="${ACCESS_KEY}" \
-          --display-name="CI Test User (${ACCESS_KEY})"
-
-        sudo microceph.radosgw-admin key create \
-          --uid="${ACCESS_KEY}" \
-          --key-type=s3 \
-          --access-key="${ACCESS_KEY}" \
-          --secret-key="${SECRET_KEY}"
-
-        # Create bucket via s3cmd — validates the S3 protocol layer,
-        # not just that the TCP port is open
-        s3cmd \
-          --host="localhost:${RGW_PORT}" \
-          --host-bucket="localhost:${RGW_PORT}/%(bucket)" \
-          --access_key="${ACCESS_KEY}" \
-          --secret_key="${SECRET_KEY}" \
-          --no-ssl \
-          mb "s3://${BUCKET}"
-
-        echo "Bucket '${BUCKET}' created at http://localhost:${RGW_PORT}"
-
-        # Second health gate — RGW startup can cause transient HEALTH_WARN;
-        # wait for the cluster to settle before returning control
-        echo "Waiting for post-RGW HEALTH_OK..."
-        for i in $(seq 1 "${ATTEMPTS}"); do
-          if sudo microceph.ceph status | grep -q HEALTH_OK; then
-            echo "Post-RGW cluster healthy (attempt ${i}/${ATTEMPTS})."
-            break
-          fi
-          sudo microceph.ceph status
-          if [ "${i}" -eq "${ATTEMPTS}" ]; then
-            echo "::error::Cluster did not reach HEALTH_OK after RGW setup"
-            sudo microceph.ceph health detail
-            exit 1
-          fi
-          echo "Waiting for post-RGW HEALTH_OK (${i}/${ATTEMPTS})..."
-          sleep "${INTERVAL}"
-        done
-
-        # ── Step outputs (consumable by downstream steps via needs.*.outputs) ──
-        ENDPOINT="http://localhost:${RGW_PORT}"
-        REGION="us-east-1"
-
-        {
-          echo "endpoint=${ENDPOINT}"
-          echo "port=${RGW_PORT}"
-          echo "region=${REGION}"
-        } >> "$GITHUB_OUTPUT"
-
-        # ── GITHUB_ENV injection (consumable directly in subsequent steps) ────
-        {
-          echo "AWS_ACCESS_KEY_ID=${ACCESS_KEY}"
-          echo "AWS_SECRET_ACCESS_KEY=${SECRET_KEY}"
-          echo "AWS_ENDPOINT=${ENDPOINT}"
-          echo "AWS_BUCKET=${BUCKET}"
-          echo "AWS_REGION=${REGION}"
-        } >> "$GITHUB_ENV"
-
-        echo "::notice::MicroCeph S3 ready — ${ENDPOINT} | bucket: ${BUCKET}"
+      run: echo "s3-config-file=$(pwd)/microceph.source" >> "$GITHUB_OUTPUT"
