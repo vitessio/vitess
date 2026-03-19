@@ -1,34 +1,34 @@
-name: "Setup MicroCeph"
-description: "Install and bootstrap single-node MicroCeph with RGW (S3 API) for backup E2E tests."
+name: 'Setup MicroCeph'
+description: 'Set up MicroCeph with RGW (S3 API) for use in GitHub Actions workflows'
 
 inputs:
   channel:
-    description: "MicroCeph snap channel"
-    default: "squid/stable"
+    description: 'MicroCeph snap channel'
+    default: 'squid/stable'
   accesskey:
-    description: "S3 access key for the test user"
-    default: "vitess"
+    description: 'S3 access key for the test user'
+    default: 'vitess'
   secretkey:
-    description: "S3 secret key for the test user"
-    default: "vitess-secret-key"
+    description: 'S3 secret key for the test user'
+    default: 'vitess-secret-key'
   bucket:
-    description: "S3 bucket name"
-    default: "vitess-test"
+    description: 'S3 bucket name'
+    default: 'vitess-test'
   osdsize:
-    description: "Size of each loopback OSD disk"
-    default: "2G"
+    description: 'Size of each loopback OSD disk'
+    default: '4G'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Cache MicroCeph snap
       id: cache-microceph
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: microceph-snap-cache
         key: microceph-${{ inputs.channel }}-${{ runner.os }}-v2
 
-    - name: Download MicroCeph snap (on cache miss)
+    - name: Get MicroCeph snap (on cache miss)
       if: steps.cache-microceph.outputs.cache-hit != 'true'
       shell: bash
       run: |
@@ -37,46 +37,35 @@ runs:
         cd microceph-snap-cache
         snap download microceph --channel=${{ inputs.channel }}
 
-    - name: Install s3cmd for S3 protocol validation
+    - name: Install MicroCeph package
       shell: bash
       run: |
+        set -euo pipefail
         sudo apt-get -qq -y update
         sudo apt-get -qq -y install s3cmd
 
-    - name: Fix libeatmydata preload for snap confinement
-      shell: bash
-      run: |
         sudo truncate -s 0 /etc/ld.so.preload
         sudo systemctl restart snapd
         sudo snap wait system seed.loaded
 
-    - name: Install MicroCeph
-      shell: bash
-      run: |
-        set -euo pipefail
-        if ls microceph-snap-cache/microceph_*.snap 1> /dev/null 2>&1; then
+        if ls microceph-snap-cache/microceph_*.snap 1>/dev/null 2>&1; then
           sudo snap ack microceph-snap-cache/microceph_*.assert
           sudo snap install microceph-snap-cache/microceph_*.snap --dangerous
         else
           sudo snap install microceph --channel=${{ inputs.channel }}
         fi
 
-    - name: Connect snap interfaces
-      shell: bash
-      run: |
         sudo snap connect microceph:hardware-observe
         sudo snap connect microceph:block-devices
         sudo snap restart microceph.daemon
 
-    - name: Configure OSD file descriptor limit
-      shell: bash
-      run: |
-        set -euo pipefail
         sudo mkdir -p /etc/systemd/system/snap.microceph.osd.service.d
-        echo -e "[Service]\nLimitNOFILE=65536" | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
+        sudo mkdir -p /etc/systemd/system.conf.d
+        printf '[Service]\nLimitNOFILE=65536\n' | sudo tee /etc/systemd/system/snap.microceph.osd.service.d/override.conf
+        printf '[Manager]\nDefaultLimitNOFILE=65536\n' | sudo tee /etc/systemd/system.conf.d/limit-nofile.conf
         sudo systemctl daemon-reload
 
-    - name: Bootstrap cluster and configure OSD
+    - name: Bootstrap MicroCeph cluster
       shell: bash
       run: |
         set -euo pipefail
@@ -84,17 +73,8 @@ runs:
         sleep 30
 
         sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
-
-        for i in 1 2 3; do
-          echo "Adding OSD $i/3..."
-          if ! sudo microceph disk add loop,${{ inputs.osdsize }},1; then
-            echo "::error::Failed to add OSD $i"
-            sudo journalctl -xeu snap.microceph.osd.service --no-pager -n 100 || true
-            sudo microceph.ceph status || true
-            exit 1
-          fi
-          sleep 5
-        done
+        sudo microceph disk add loop,${{ inputs.osdsize }},1
+        sudo microceph pool set-rf "*" 1
 
         for i in $(seq 1 10); do
           if sudo microceph.ceph status | grep -q HEALTH_OK; then
@@ -111,7 +91,7 @@ runs:
           sleep 10
         done
 
-    - name: Enable RGW and create S3 resources
+    - name: Enable RGW and configure S3
       shell: bash
       run: |
         set -euo pipefail
