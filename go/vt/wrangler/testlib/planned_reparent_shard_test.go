@@ -740,7 +740,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 			// Create a primary, a couple good replicas
 			primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 			goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-			reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+			reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 			// old primary
 			primary.FakeMysqlDaemon.ReadOnly = false

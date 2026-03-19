@@ -421,7 +421,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 				},
 			}
 
-			err := tm.handleRecoverableReplicationInitError(context.Background(), tc.inputErr)
+			err := tm.handleRecoverableReplicationInitError(t.Context(), tc.inputErr)
 			if tc.shouldRestart {
 				require.NoError(t, err)
 			} else {
@@ -444,7 +444,7 @@ func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.
 	}
 
 	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
-	err := tm.StartReplication(context.Background(), false)
+	err := tm.StartReplication(t.Context(), false)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
@@ -461,7 +461,7 @@ func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError
 	}
 
 	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
-	err := tm.RestartReplication(context.Background(), false)
+	err := tm.RestartReplication(t.Context(), false)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
@@ -479,14 +479,14 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 	}
 
 	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
-	err := tm.fixSemiSyncAndReplication(context.Background(), topodatapb.TabletType_REPLICA, SemiSyncActionUnset)
+	err := tm.fixSemiSyncAndReplication(t.Context(), topodatapb.TabletType_REPLICA, SemiSyncActionUnset)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
 
 // TestInitReplicaRecoversFromRecoverableReplicationInitializationError verifies InitReplica self-heals recoverable init failures from SetReplicationSource(startReplicationAfter=true).
 func TestInitReplicaRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 
 	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
