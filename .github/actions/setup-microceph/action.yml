@@ -17,7 +17,10 @@ runs:
       shell: bash
       run: |
         CFG="${{ steps.microceph.outputs.s3config }}"
-        if [[ -z "$CFG" || ! -f "$CFG" ]]; then
+        if [[ -z "$CFG" ]]; then
+          CFG="${GITHUB_WORKSPACE}/microceph.source"
+        fi
+        if [[ ! -f "$CFG" ]]; then
           echo "::error::microceph.source not found at $CFG (MicroCeph action may have failed)"
           exit 1
         fi
