@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,6 +55,30 @@ func newStateTestSession(t *testing.T, responses ...stateExecuteResponse) (*vtga
 	return conn.Session("", nil), impl
 }
 
+func newStateTestConn(t *testing.T, responses ...stateExecuteResponse) (*vtgateconn.VTGateConn, *stateTestVTGateImpl) {
+	t.Helper()
+
+	impl := &stateTestVTGateImpl{responses: responses}
+	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return impl, nil
+	}, "")
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	return conn, impl
+}
+
+func stateRowResult(latestVGtid, tableConfig, copyCompleted sqltypes.Value) *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "latest_vgtid", Type: querypb.Type_JSON},
+			{Name: "table_config", Type: querypb.Type_JSON},
+			{Name: "copy_completed", Type: querypb.Type_VARCHAR},
+		},
+		Rows: [][]sqltypes.Value{{latestVGtid, tableConfig, copyCompleted}},
+	}
+}
+
 func TestNewVGtid_DeduplicatesKeyspaces(t *testing.T) {
 	tables := map[string]*TableConfig{
 		"t1": {Keyspace: "ks1", Table: "table_a"},
@@ -91,6 +116,67 @@ func TestNewVGtid_MissingKeyspaceErrors(t *testing.T) {
 	assert.ErrorContains(t, err, "keyspace missing not found")
 }
 
+func TestGetLatestVGtid_MalformedStoredJSONErrors(t *testing.T) {
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: stateRowResult(
+		sqltypes.NewVarBinary("not-json"),
+		sqltypes.NewVarBinary(`{"t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(1),
+	)})
+
+	_, _, _, err := getLatestVGtid(context.Background(), session, "stream", "ks", "state")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to unmarshal latest_vgtid")
+}
+
+func TestGetLatestVGtid_MalformedCopyCompletedErrors(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: stateRowResult(
+		sqltypes.NewVarBinary(string(vgtidJSON)),
+		sqltypes.NewVarBinary(`{"t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewVarBinary("not-a-bool"),
+	)})
+
+	_, _, _, err = getLatestVGtid(context.Background(), session, "stream", "ks", "state")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to convert copy_completed to bool")
+}
+
+func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, _ := newStateTestConn(t,
+		stateExecuteResponse{result: &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+		}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t where id < 10"}}`),
+			sqltypes.NewInt64(1),
+		)},
+	)
+
+	_, err = New(context.Background(), "stream", conn, []TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t where id >= 10",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}}, WithStateTable("ks", "state"))
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "provided tables do not match stored tables")
+	assert.ErrorContains(t, err, "query changed")
+}
+
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
@@ -122,6 +208,38 @@ func TestHandleEvents_FinalCopyCompletedPersistsCheckpointAndCopyCompletedTogeth
 	require.NoError(t, err)
 	require.Len(t, impl.queries, 1)
 	assert.True(t, strings.Contains(impl.queries[0], "latest_vgtid = :latest_vgtid") && strings.Contains(impl.queries[0], "copy_completed = true"))
+	assert.Same(t, vgtid, v.lastFlushedVgtid)
+	expectedVGtidJSON, err := protojson.Marshal(vgtid)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[0]["latest_vgtid"].Value))
+}
+
+func TestHandleEvents_HeartbeatCheckpointsLatestVGtidWithoutRows(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		tables:  map[string]*TableConfig{},
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	err := v.handleEvents(context.Background(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	require.Len(t, impl.queries, 1)
+	assert.Contains(t, impl.queries[0], "update ks.state set latest_vgtid = :latest_vgtid")
 	assert.Same(t, vgtid, v.lastFlushedVgtid)
 	expectedVGtidJSON, err := protojson.Marshal(vgtid)
 	require.NoError(t, err)
