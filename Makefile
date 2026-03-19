@@ -230,7 +230,9 @@ e2e_test_race: build
 e2e_test_cluster: build
 	tools/e2e_test_cluster.sh
 
-# Run MicroCeph S3 backup tests (happy path + invalid-key and missing-bucket edge cases). Skip if no Ceph.
+# Run MicroCeph S3 backup tests (happy path + invalid-key and missing-bucket edge cases).
+# Requires MicroCeph running locally with AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT, AWS_BUCKET, AWS_REGION set.
+# Tests skip when AWS_ENDPOINT is unset. In CI, use the backup_s3_microceph shard.
 test-e2e-microceph: build
 	go test -v -count=1 -run 'TestBackupRestoreS3MicroCeph|TestMicroCephInvalidAccessKey|TestMicroCephMissingBucket' ./go/test/endtoend/backup/s3/...
 

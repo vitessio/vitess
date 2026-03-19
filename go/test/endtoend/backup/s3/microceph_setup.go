@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
 )
 
 // MicroCephConfig holds endpoint and credentials for a MicroCeph RGW (S3) instance.
@@ -33,7 +36,7 @@ type MicroCephConfig struct {
 	Region    string
 }
 
-// SkipIfMicroCephUnavailable returns MicroCeph config when AWS_ENDPOINT is set (e.g. by the setup-microceph action).
+// SkipIfMicroCephUnavailable returns MicroCeph config when AWS_ENDPOINT is set (e.g. by the Export MicroCeph S3 env step in CI).
 // Does not install, bootstrap, or destroy (only reads env). Skips the test when MicroCeph is not configured.
 func SkipIfMicroCephUnavailable(t *testing.T) *MicroCephConfig {
 	t.Helper()
@@ -57,4 +60,42 @@ func SkipIfMicroCephUnavailable(t *testing.T) *MicroCephConfig {
 		Bucket:    bucket,
 		Region:    region,
 	}
+}
+
+// setupMicroCephForTest configures env vars and backup storage for MicroCeph tests.
+// overrides can override specific AWS_* env vars (e.g. AWS_ACCESS_KEY_ID for auth-failure tests).
+func setupMicroCephForTest(t *testing.T, cfg *MicroCephConfig, overrides map[string]string) {
+	t.Helper()
+	effective := func(key, def string) string {
+		if overrides != nil {
+			if v, ok := overrides[key]; ok {
+				return v
+			}
+		}
+		return def
+	}
+	accessKey := effective("AWS_ACCESS_KEY_ID", cfg.AccessKey)
+	secretKey := effective("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
+	bucket := effective("AWS_BUCKET", cfg.Bucket)
+	endpoint := effective("AWS_ENDPOINT", cfg.Endpoint)
+	region := effective("AWS_REGION", cfg.Region)
+
+	t.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
+	t.Setenv("AWS_BUCKET", bucket)
+	t.Setenv("AWS_ENDPOINT", endpoint)
+	t.Setenv("AWS_REGION", region)
+
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    region,
+		Endpoint:  endpoint,
+		Bucket:    bucket,
+		ForcePath: true,
+	})
+
+	prevImpl := backupstorage.BackupStorageImplementation
+	backupstorage.BackupStorageImplementation = "s3"
+	t.Cleanup(func() {
+		backupstorage.BackupStorageImplementation = prevImpl
+	})
 }

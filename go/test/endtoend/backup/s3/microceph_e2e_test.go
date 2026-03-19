@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/blackbox"
-	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
 )
 
 func TestBackupRestoreS3MicroCeph(t *testing.T) {
@@ -41,25 +40,7 @@ func TestBackupRestoreS3MicroCeph(t *testing.T) {
 	if cfg == nil {
 		return
 	}
-
-	t.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
-	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	t.Setenv("AWS_BUCKET", cfg.Bucket)
-	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	t.Setenv("AWS_REGION", cfg.Region)
-
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    cfg.Region,
-		Endpoint:  cfg.Endpoint,
-		Bucket:    cfg.Bucket,
-		ForcePath: true,
-	})
-
-	prevImpl := backupstorage.BackupStorageImplementation
-	backupstorage.BackupStorageImplementation = "s3"
-	t.Cleanup(func() {
-		backupstorage.BackupStorageImplementation = prevImpl
-	})
+	setupMicroCephForTest(t, cfg, nil)
 
 	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
@@ -170,25 +151,7 @@ func TestMicroCephInvalidAccessKey(t *testing.T) {
 	if cfg == nil {
 		return
 	}
-
-	t.Setenv("AWS_ACCESS_KEY_ID", "wrong-access-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	t.Setenv("AWS_BUCKET", cfg.Bucket)
-	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	t.Setenv("AWS_REGION", cfg.Region)
-
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    cfg.Region,
-		Endpoint:  cfg.Endpoint,
-		Bucket:    cfg.Bucket,
-		ForcePath: true,
-	})
-
-	prevImpl := backupstorage.BackupStorageImplementation
-	backupstorage.BackupStorageImplementation = "s3"
-	t.Cleanup(func() {
-		backupstorage.BackupStorageImplementation = prevImpl
-	})
+	setupMicroCephForTest(t, cfg, map[string]string{"AWS_ACCESS_KEY_ID": "wrong-access-key"})
 
 	storage, err := backupstorage.GetBackupStorage()
 	require.NoError(t, err)
@@ -209,25 +172,7 @@ func TestMicroCephMissingBucket(t *testing.T) {
 	if cfg == nil {
 		return
 	}
-
-	t.Setenv("AWS_ACCESS_KEY_ID", cfg.AccessKey)
-	t.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
-	t.Setenv("AWS_BUCKET", "nonexistent-bucket-12345")
-	t.Setenv("AWS_ENDPOINT", cfg.Endpoint)
-	t.Setenv("AWS_REGION", cfg.Region)
-
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    cfg.Region,
-		Endpoint:  cfg.Endpoint,
-		Bucket:    "nonexistent-bucket-12345",
-		ForcePath: true,
-	})
-
-	prevImpl := backupstorage.BackupStorageImplementation
-	backupstorage.BackupStorageImplementation = "s3"
-	t.Cleanup(func() {
-		backupstorage.BackupStorageImplementation = prevImpl
-	})
+	setupMicroCephForTest(t, cfg, map[string]string{"AWS_BUCKET": "nonexistent-bucket-12345"})
 
 	storage, err := backupstorage.GetBackupStorage()
 	require.NoError(t, err)

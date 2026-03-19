@@ -391,20 +391,26 @@ type S3BackupStorage struct {
 	s3SSE     S3ServerSideEncryption
 	params    backupstorage.Params
 	transport *http.Transport
+	caLoadErr error // non-nil when AWS_CA_BUNDLE was set but loading failed
 }
 
 func newS3BackupStorage() *S3BackupStorage {
 	// This initialises a new transport based off http.DefaultTransport the first time and returns the same
 	// transport on subsequent calls so connections can be reused as part of the same transport.
 	tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+	var caLoadErr error
 	if caPath := os.Getenv("AWS_CA_BUNDLE"); caPath != "" {
 		pem, err := os.ReadFile(caPath)
-		if err == nil {
+		if err != nil {
+			caLoadErr = fmt.Errorf("failed to read AWS_CA_BUNDLE file %s: %w", caPath, err)
+		} else {
 			pool, err := x509.SystemCertPool()
 			if err != nil {
 				pool = x509.NewCertPool()
 			}
-			if pool.AppendCertsFromPEM(pem) {
+			if !pool.AppendCertsFromPEM(pem) {
+				caLoadErr = fmt.Errorf("failed to append certificates from AWS_CA_BUNDLE %s", caPath)
+			} else {
 				tlsClientConf.RootCAs = pool
 			}
 		}
@@ -412,7 +418,11 @@ func newS3BackupStorage() *S3BackupStorage {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsClientConf
 
-	return &S3BackupStorage{params: backupstorage.NoParams(), transport: transport}
+	return &S3BackupStorage{
+		params:    backupstorage.NoParams(),
+		transport: transport,
+		caLoadErr: caLoadErr,
+	}
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -552,7 +562,7 @@ func (bs *S3BackupStorage) Close() error {
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	return &S3BackupStorage{params: params, transport: bs.transport}
+	return &S3BackupStorage{params: params, transport: bs.transport, caLoadErr: bs.caLoadErr}
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
@@ -567,11 +577,18 @@ func getLogLevel() aws.ClientLogMode {
 }
 
 func (bs *S3BackupStorage) client() (*s3.Client, error) {
+	if bs.caLoadErr != nil {
+		return nil, bs.caLoadErr
+	}
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
+		// Unset AWS_CA_BUNDLE before LoadDefaultConfig so the SDK does not try to add
+		// RootCAs to our custom http.Client (which would fail with "has no WithTransportOptions").
+		// We already loaded the CA in newS3BackupStorage() into our transport. Risk of races
+		// is low: backup tests run sequentially and this block is short-lived.
 		origCA := os.Getenv("AWS_CA_BUNDLE")
 		os.Unsetenv("AWS_CA_BUNDLE")
 		defer func() {

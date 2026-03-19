@@ -89,6 +89,8 @@ var (
 // S3BackupConfig holds S3-compatible backup storage settings for cluster processes.
 // When set on LocalProcessCluster, vtctld/vttablet/vtbackup use S3 flags instead of file storage.
 // Credentials are taken from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in the process environment.
+
+// Note: backup_s3_microceph shard tests use s3backupstorage.InitFlag and in-process backupstorage, they do not spawn vtbackup/vttablet processes. S3BackupConfig is for tests that run full cluster processes against S3 (e.g. future E2E with vtbackup subprocess). See s3_wiring_test.go for propagation validation.
 type S3BackupConfig struct {
 	Endpoint       string
 	Bucket         string
