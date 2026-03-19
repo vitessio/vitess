@@ -2,6 +2,8 @@ package vstreamclient
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -75,6 +77,39 @@ type testSmallFloatRow struct {
 	Value float32 `vstream:"value"`
 }
 
+type testBytesAndRawJSONRow struct {
+	Payload    []byte           `vstream:"payload"`
+	RawPayload json.RawMessage  `vstream:"raw_payload,json"`
+	OptRaw     *json.RawMessage `vstream:"opt_raw,json"`
+}
+
+type TestEmbeddedFieldsExported struct {
+	ID int64 `vstream:"id"`
+}
+
+type testNestedFields struct {
+	Name string `vstream:"name"`
+}
+
+type testNestedMappedRow struct {
+	TestEmbeddedFieldsExported
+	Meta testNestedFields
+}
+
+type testTextWrapper string
+
+type testWrapperRow struct {
+	Name   sql.NullString  `vstream:"name"`
+	Count  sql.NullInt64   `vstream:"count"`
+	SeenAt sql.NullTime    `vstream:"seen_at"`
+	Level  testTextWrapper `vstream:"level"`
+}
+
+func (w *testTextWrapper) UnmarshalText(text []byte) error {
+	*w = testTextWrapper("wrapped:" + string(text))
+	return nil
+}
+
 func (r *testScannerRow) VStreamScan(_ []*querypb.Field, row []sqltypes.Value, _ *binlogdatapb.RowEvent, _ *binlogdatapb.RowChange) error {
 	v, err := row[0].ToInt64()
 	if err != nil {
@@ -121,6 +156,38 @@ func TestCopyRowToStruct_TimeAndPointers(t *testing.T) {
 	assert.Nil(t, out.Opt)
 	if assert.NotNil(t, out.OptT) {
 		assert.False(t, out.OptT.IsZero())
+	}
+}
+
+func TestHandleRowEvent_TimeUsesConfiguredLocation(t *testing.T) {
+	loc := time.FixedZone("UTC-5", -5*60*60)
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "ts", Type: querypb.Type_TIMESTAMP},
+	}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRow{}, timeLocation: loc}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		After: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.NewTimestamp("2026-02-10 11:12:13"),
+		}),
+	}}}
+
+	err = table.handleRowEvent(ev, &VStreamStats{})
+	assert.NoError(t, err)
+	if assert.Len(t, table.currentBatch, 1) {
+		out, ok := table.currentBatch[0].Data.(*testRow)
+		if assert.True(t, ok) {
+			assert.Equal(t, time.Date(2026, 2, 10, 11, 12, 13, 0, loc), out.TS)
+			assert.Equal(t, loc, out.TS.Location())
+		}
 	}
 }
 
@@ -224,6 +291,103 @@ func TestCopyRowToStruct_JSONFieldNullIntoNonPointerErrors(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "error unmarshalling JSON for field payload")
 	assert.ErrorContains(t, err, "NULL into non-pointer field")
+}
+
+func TestCopyRowToStruct_ByteAndRawJSONFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "payload", Type: querypb.Type_VARBINARY},
+		{Name: "raw_payload", Type: querypb.Type_JSON},
+		{Name: "opt_raw", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{DataType: &testBytesAndRawJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	rawPayload, err := sqltypes.NewJSON(`{"name":"alpha","count":2}`)
+	assert.NoError(t, err)
+	row := []sqltypes.Value{
+		sqltypes.NewVarBinary("payload-bytes"),
+		rawPayload,
+		sqltypes.NULL,
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.NoError(t, err)
+
+	out := v.Interface().(*testBytesAndRawJSONRow)
+	assert.Equal(t, []byte("payload-bytes"), out.Payload)
+	assert.JSONEq(t, `{"name":"alpha","count":2}`, string(out.RawPayload))
+	assert.Nil(t, out.OptRaw)
+}
+
+func TestCopyRowToStruct_NestedAndEmbeddedFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "name", Type: querypb.Type_VARCHAR},
+	}
+
+	table := &TableConfig{DataType: &testNestedMappedRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	assert.Contains(t, fieldMap, "id")
+	assert.Contains(t, fieldMap, "name")
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(7),
+		sqltypes.NewVarChar("alpha"),
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.NoError(t, err)
+
+	out := v.Interface().(*testNestedMappedRow)
+	assert.Equal(t, int64(7), out.ID)
+	assert.Equal(t, "alpha", out.Meta.Name)
+}
+
+func TestCopyRowToStruct_ScannerAndTextUnmarshalerFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "name", Type: querypb.Type_VARCHAR},
+		{Name: "count", Type: querypb.Type_INT64},
+		{Name: "seen_at", Type: querypb.Type_TIMESTAMP},
+		{Name: "level", Type: querypb.Type_VARCHAR},
+	}
+
+	table := &TableConfig{DataType: &testWrapperRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NewVarChar("alpha"),
+		sqltypes.NewInt64(42),
+		sqltypes.NewTimestamp("2026-02-10 11:12:13"),
+		sqltypes.NewVarChar("gold"),
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.NoError(t, err)
+
+	out := v.Interface().(*testWrapperRow)
+	assert.True(t, out.Name.Valid)
+	assert.Equal(t, "alpha", out.Name.String)
+	assert.True(t, out.Count.Valid)
+	assert.Equal(t, int64(42), out.Count.Int64)
+	assert.True(t, out.SeenAt.Valid)
+	assert.Equal(t, time.Date(2026, 2, 10, 11, 12, 13, 0, time.UTC), out.SeenAt.Time)
+	assert.Equal(t, testTextWrapper("wrapped:gold"), out.Level)
 }
 
 func TestCopyRowToStruct_UnsupportedStructFieldErrors(t *testing.T) {

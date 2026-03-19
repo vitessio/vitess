@@ -55,6 +55,7 @@ type TableConfig struct {
 	DataType          any
 	underlyingType    reflect.Type
 	implementsScanner bool
+	timeLocation      *time.Location
 
 	// this stores the current batch of rows for this table, which caches the results until the next flush.
 	currentBatch []Row
@@ -310,8 +311,27 @@ func (table *TableConfig) handleFieldEvent(ev *binlogdatapb.FieldEvent) error {
 
 func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]fieldMapping, error) {
 	fieldMap := make(map[string]fieldMapping, len(fields))
+	table.reflectMapStructFields(table.underlyingType, nil, fields, fieldMap)
 
-	for structField := range table.underlyingType.Fields() {
+	if table.ErrorOnUnknownFields {
+		for _, f := range fields {
+			if _, ok := fieldMap[f.Name]; !ok {
+				return nil, fmt.Errorf("vstreamclient: field %s not found in provided data type", f.Name)
+			}
+		}
+	}
+
+	// sanity check that we found at least one field
+	if len(fieldMap) == 0 {
+		return nil, fmt.Errorf("vstreamclient: no matching fields found for table %s", table.Table)
+	}
+
+	return fieldMap, nil
+}
+
+func (table *TableConfig) reflectMapStructFields(structType reflect.Type, indexPrefix []int, fields []*querypb.Field, fieldMap map[string]fieldMapping) {
+	for i := range structType.NumField() {
+		structField := structType.Field(i)
 		if !structField.IsExported() {
 			continue
 		}
@@ -327,6 +347,13 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 		if mappedFieldName == "" {
 			mappedFieldName = parseTagName(structField.Tag.Get("json"))
 		}
+
+		fullIndex := append(append([]int(nil), indexPrefix...), structField.Index...)
+		if table.shouldRecurseStructField(structField, mappedFieldName, jsonDecode, fields) {
+			table.reflectMapStructFields(structField.Type, fullIndex, fields, fieldMap)
+			continue
+		}
+
 		if mappedFieldName == "" {
 			mappedFieldName = structField.Name
 		}
@@ -344,7 +371,7 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 
 			fieldMap[mappedFieldName] = fieldMapping{
 				rowIndex:    j,
-				structIndex: structField.Index,
+				structIndex: fullIndex,
 				structType:  fieldType,
 				kind:        fieldType.Kind(),
 				isPointer:   isPointer,
@@ -352,21 +379,21 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 			}
 		}
 	}
+}
 
-	if table.ErrorOnUnknownFields {
-		for _, f := range fields {
-			if _, ok := fieldMap[f.Name]; !ok {
-				return nil, fmt.Errorf("vstreamclient: field %s not found in provided data type", f.Name)
-			}
+func (table *TableConfig) shouldRecurseStructField(structField reflect.StructField, mappedFieldName string, jsonDecode bool, fields []*querypb.Field) bool {
+	if mappedFieldName != "" || jsonDecode {
+		return false
+	}
+	if structField.Type.Kind() != reflect.Struct || structField.Type == reflect.TypeFor[time.Time]() {
+		return false
+	}
+	for _, field := range fields {
+		if field.Name == structField.Name {
+			return false
 		}
 	}
-
-	// sanity check that we found at least one field
-	if len(fieldMap) == 0 {
-		return nil, fmt.Errorf("vstreamclient: no matching fields found for table %s", table.Table)
-	}
-
-	return fieldMap, nil
+	return true
 }
 
 func parseVStreamTag(tag string) (name string, jsonDecode bool) {
@@ -460,7 +487,7 @@ func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats
 					return fmt.Errorf("vstreamclient: client scan failed: %w", err)
 				}
 			} else {
-				err := copyRowToStruct(shard, row, v)
+				err := copyRowToStructInLocation(shard, row, v, table.timeLocation)
 				if err != nil {
 					return err
 				}

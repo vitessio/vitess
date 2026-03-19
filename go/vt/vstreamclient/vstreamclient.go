@@ -69,6 +69,7 @@ type clientConfig struct {
 	// this is the duration between heartbeat events. This is not a duration because the server side
 	// parameter only has a granularity of seconds.
 	heartbeatSeconds int
+	timeLocation     *time.Location
 
 	// these fields configure how graceful shutdown is configured
 	gracefulShutdownChan    <-chan struct{}
@@ -129,6 +130,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 			name:                    name,
 			conn:                    conn,
 			minFlushDuration:        DefaultMinFlushDuration,
+			timeLocation:            time.UTC,
 			tabletType:              topodatapb.TabletType_REPLICA,
 			gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
 		},
@@ -156,6 +158,10 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		if err = opt(v); err != nil {
 			return nil, err
 		}
+	}
+
+	for _, table := range v.tables {
+		table.timeLocation = v.cfg.timeLocation
 	}
 
 	// validate required options and set defaults where possible
