@@ -171,11 +171,11 @@ func TestVStreamClientBareTableNamesWithCustomFlags(t *testing.T) {
 }
 
 // TestVStreamClientBareTableNamesAmbiguousAcrossKeyspaces verifies ambiguous bare
-// table names fail fast across keyspaces, which prevents silent misrouting.
+// table names are rejected during construction, which prevents silent misrouting.
 func TestVStreamClientBareTableNamesAmbiguousAcrossKeyspaces(t *testing.T) {
 	te := newTestEnv(t)
 
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{
+	_, err := vstreamclient.New(te.ctx, t.Name(), te.conn, []vstreamclient.TableConfig{
 		{
 			Keyspace:        "customer",
 			Table:           "customer",
@@ -193,14 +193,12 @@ func TestVStreamClientBareTableNamesAmbiguousAcrossKeyspaces(t *testing.T) {
 			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
 		},
 	},
+		vstreamclient.WithMinFlushDuration(500*time.Millisecond),
+		vstreamclient.WithHeartbeatSeconds(1),
+		vstreamclient.WithStateTable("commerce", "vstreams"),
 		vstreamclient.WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
 	)
-
-	te.exec(t, "insert into customer.customer(id, email) values (2301, 'ambiguous@domain.com')", nil)
-
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelRun()
-	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "ambiguous table name: customer")
+	assert.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
+	assert.ErrorContains(t, err, "customer")
 }

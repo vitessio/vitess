@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -195,6 +196,9 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	if v.cfg.heartbeatSeconds > 0 {
 		v.cfg.flags.HeartbeatInterval = uint32(v.cfg.heartbeatSeconds)
 	}
+	if err = validateTableNameMode(v.tables, v.cfg.flags); err != nil {
+		return nil, err
+	}
 
 	// handle state lookup
 	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
@@ -372,4 +376,32 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	}
 
 	return shardsByKeyspace, nil
+}
+
+func validateTableNameMode(tables map[string]*TableConfig, flags *vtgatepb.VStreamFlags) error {
+	if flags == nil || !flags.ExcludeKeyspaceFromTableName {
+		return nil
+	}
+
+	keyspacesByTable := make(map[string][]string)
+	for _, table := range tables {
+		keyspacesByTable[table.Table] = append(keyspacesByTable[table.Table], table.Keyspace)
+	}
+
+	var ambiguous []string
+	for tableName, keyspaces := range keyspacesByTable {
+		if len(keyspaces) < 2 {
+			continue
+		}
+
+		slices.Sort(keyspaces)
+		ambiguous = append(ambiguous, fmt.Sprintf("%s (%s)", tableName, strings.Join(keyspaces, ", ")))
+	}
+
+	if len(ambiguous) == 0 {
+		return nil
+	}
+
+	slices.Sort(ambiguous)
+	return fmt.Errorf("vstreamclient: ExcludeKeyspaceFromTableName cannot be used with same-named tables across keyspaces: %s", strings.Join(ambiguous, "; "))
 }
