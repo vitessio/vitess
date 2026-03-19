@@ -76,8 +76,9 @@ sudo microceph.ceph config set "mon.$(hostname)" mon_data_avail_warn 6
 
 # Single OSD avoids ulimit failure when adding 2nd/3rd OSD (snapctl restart fails).
 # Pool replication 1 is required for HEALTH_OK with one OSD.
+sudo microceph.ceph config set global osd_pool_default_size 1
+sudo microceph.ceph config set global mon_allow_pool_size_one true
 sudo microceph disk add loop,"${DISK_SIZE}",1
-sudo microceph pool set-rf "*" 1
 
 check_ceph_ok_or_exit
 
