@@ -58,10 +58,7 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) (VCur
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
-	warmingCtx := ctx
-	if vc.warmingReadsTimeout > 0 {
-		warmingCtx, _ = context.WithTimeout(context.Background(), vc.warmingReadsTimeout) //nolint
-	}
+	warmingCtx, _ := context.WithTimeout(context.Background(), vc.warmingReadsTimeout) //nolint
 	return clone, warmingCtx
 }
 
