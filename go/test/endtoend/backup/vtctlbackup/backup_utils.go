@@ -103,6 +103,13 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
 
+	localCluster.S3BackupConfig = cluster.S3BackupConfigFromEnv()
+	if localCluster.S3BackupConfig != nil {
+		backupstorage.BackupStorageImplementation = "s3"
+	} else {
+		backupstorage.BackupStorageImplementation = "file"
+	}
+
 	// Start topo server
 	err := localCluster.StartTopo()
 	if err != nil {
@@ -186,7 +193,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 	createTablet := func(tabletType string) error {
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
-		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName, localCluster.Cell, localCluster.Hostname)
 		tablet.VttabletProcess.DbPassword = dbPassword
 		tablet.VttabletProcess.SupportsBackup = true
 
@@ -1403,8 +1410,11 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-		if backupstorage.BackupStorageImplementation == "file" {
+		switch backupstorage.BackupStorageImplementation {
+		case "file":
 			require.Contains(t, bb, "BackupStorage.File.File:Write")
+		case "s3":
+			require.Contains(t, bb, "BackupStorage.S3.AWS:Request:Send")
 		}
 	}
 
@@ -1439,8 +1449,11 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 
-	if backupstorage.BackupStorageImplementation == "file" {
+	switch backupstorage.BackupStorageImplementation {
+	case "file":
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
+	case "s3":
+		require.Contains(t, bd, "BackupStorage.S3.AWS:Request:Send")
 	}
 }
 
@@ -1469,7 +1482,12 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-		require.Contains(t, bb, "BackupStorage.File.File:Read")
+		switch backupstorage.BackupStorageImplementation {
+		case "file":
+			require.Contains(t, bb, "BackupStorage.File.File:Read")
+		case "s3":
+			require.Contains(t, bb, "BackupStorage.S3.AWS:Request:Send")
+		}
 	}
 
 	require.Contains(t, vars, "RestoreCount")
@@ -1503,7 +1521,12 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 
-	require.Contains(t, bd, "BackupStorage.File.File:Read")
+	switch backupstorage.BackupStorageImplementation {
+	case "file":
+		require.Contains(t, bd, "BackupStorage.File.File:Read")
+	case "s3":
+		require.Contains(t, bd, "BackupStorage.S3.AWS:Request:Send")
+	}
 }
 
 func getDefaultCommonArgs() []string {

@@ -60,6 +60,8 @@ func TestMain(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
+		localCluster.S3BackupConfig = cluster.S3BackupConfigFromEnv()
+
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -112,7 +114,7 @@ func TestMain(m *testing.M) {
 		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName, localCluster.Cell, localCluster.Hostname)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true

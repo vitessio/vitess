@@ -60,12 +60,12 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	args := []string{
-		"--topo_implementation", vtctld.TopoImplementation,
-		"--topo_global_server_address", vtctld.TopoGlobalAddress,
-		"--topo_global_root", vtctld.TopoGlobalRoot,
+		vtutils.GetFlagVariantForTestsByVersion("--topo-implementation", vtctldVer), vtctld.TopoImplementation,
+		vtutils.GetFlagVariantForTestsByVersion("--topo-global-server-address", vtctldVer), vtctld.TopoGlobalAddress,
+		vtutils.GetFlagVariantForTestsByVersion("--topo-global-root", vtctldVer), vtctld.TopoGlobalRoot,
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
-		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
+		vtutils.GetFlagVariantForTestsByVersion("--backup-storage-implementation", vtctldVer), vtctld.BackupStorageImplementation,
 		"--port", strconv.Itoa(vtctld.Port),
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",

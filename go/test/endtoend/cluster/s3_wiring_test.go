@@ -45,29 +45,19 @@ func TestS3BackupConfigPropagation(t *testing.T) {
 			GrpcPort:  15101,
 			Type:      "replica",
 		}
-		p := cluster.VtprocessInstanceFromVttablet(tablet, "0", "ks")
+		p := cluster.VtprocessInstanceFromVttablet(tablet, "0", "ks", cluster.Cell, cluster.Hostname)
 		require.NotNil(t, p)
 		assert.Equal(t, "s3", p.BackupStorageImplementation)
 		assert.Equal(t, s3Cfg, p.S3BackupConfig)
 	})
 
 	t.Run("vtbackup", func(t *testing.T) {
-		vbp := *VtbackupProcessInstance(
-			cluster.GetAndReserveTabletUID(),
-			cluster.GetAndReservePort(),
-			"init_db.sql",
-			"ks", "0", "zone1",
-			cluster.Hostname,
-			cluster.TmpDirectory,
-			cluster.TopoPort,
-			true,
-		)
-		if cluster.S3BackupConfig != nil {
-			vbp.BackupStorageImplementation = "s3"
-			vbp.S3BackupConfig = cluster.S3BackupConfig
-		}
-		assert.Equal(t, "s3", vbp.BackupStorageImplementation)
-		assert.Equal(t, s3Cfg, vbp.S3BackupConfig)
+		cluster.TmpDirectory = t.TempDir()
+		cluster.TopoPort = 9999
+		err := cluster.StartVtbackup("/nonexistent/init_db.sql", true, "ks", "0", "zone1")
+		assert.Error(t, err)
+		assert.Equal(t, "s3", cluster.VtbackupProcess.BackupStorageImplementation, "StartVtbackup must propagate S3 config")
+		assert.Equal(t, s3Cfg, cluster.VtbackupProcess.S3BackupConfig)
 	})
 
 	t.Run("no_s3_uses_file", func(t *testing.T) {
@@ -78,7 +68,7 @@ func TestS3BackupConfigPropagation(t *testing.T) {
 			GrpcPort:  15201,
 			Type:      "replica",
 		}
-		p := cluster2.VtprocessInstanceFromVttablet(tablet, "0", "ks")
+		p := cluster2.VtprocessInstanceFromVttablet(tablet, "0", "ks", cluster2.Cell, cluster2.Hostname)
 		require.NotNil(t, p)
 		assert.Equal(t, "file", p.BackupStorageImplementation)
 		assert.Nil(t, p.S3BackupConfig)

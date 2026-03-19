@@ -1389,18 +1389,24 @@ func (cluster *LocalProcessCluster) NewVTAdminProcess() {
 }
 
 // VtprocessInstanceFromVttablet creates a new vttablet object
-func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string, cell string, hostname string) *VttabletProcess {
+	if cell == "" {
+		cell = cluster.Cell
+	}
+	if hostname == "" {
+		hostname = cluster.Hostname
+	}
 	p := VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
-		cluster.Cell,
+		cell,
 		shardName,
 		ksName,
 		cluster.VtctldProcess.Port,
 		tablet.Type,
 		cluster.TopoProcess.Port,
-		cluster.Hostname,
+		hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
 		cluster.DefaultCharset)
@@ -1422,7 +1428,7 @@ func (cluster *LocalProcessCluster) StartVttablet(
 	hostname string,
 	shardName string,
 ) error {
-	tablet.VttabletProcess = cluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName)
+	tablet.VttabletProcess = cluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName, cell, hostname)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus

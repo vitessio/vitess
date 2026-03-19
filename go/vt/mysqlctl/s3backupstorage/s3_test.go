@@ -902,6 +902,33 @@ func TestAWSCABundleLoadsAndClientSkipsSDKConflict(t *testing.T) {
 	require.NotContains(t, err.Error(), "unable to add custom RootCAs", "client() must unset AWS_CA_BUNDLE before LoadDefaultConfig to avoid SDK conflict")
 }
 
+func TestAWS_CA_BUNDLE_InvalidPath(t *testing.T) {
+	orig := os.Getenv("AWS_CA_BUNDLE")
+	os.Setenv("AWS_CA_BUNDLE", "/nonexistent/ca-bundle.pem")
+	defer func() {
+		if orig != "" {
+			os.Setenv("AWS_CA_BUNDLE", orig)
+		} else {
+			os.Unsetenv("AWS_CA_BUNDLE")
+		}
+	}()
+
+	InitFlag(FakeConfig{
+		Region:    "us-east-1",
+		Endpoint:  "http://localhost:1",
+		Bucket:    "test-bucket",
+		ForcePath: true,
+	})
+
+	s := newS3BackupStorage()
+	require.NotNil(t, s.caLoadErr, "caLoadErr must be set when AWS_CA_BUNDLE points to non-existent file")
+	require.ErrorContains(t, s.caLoadErr, "failed to read AWS_CA_BUNDLE")
+
+	_, err := s.client()
+	require.Error(t, err)
+	require.Same(t, s.caLoadErr, err)
+}
+
 func TestNewS3Transport(t *testing.T) {
 	s3 := newS3BackupStorage()
 

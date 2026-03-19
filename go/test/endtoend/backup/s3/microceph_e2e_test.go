@@ -142,6 +142,10 @@ func TestBackupRestoreS3MicroCeph(t *testing.T) {
 	ss := blackbox.GetStats(fakeStats)
 	require.Greater(t, ss.DestinationCloseStats, 0)
 	require.Greater(t, ss.SourceReadStats, 0)
+
+	t.Cleanup(func() {
+		_ = bs.RemoveBackup(ctx, backupDir, backupName)
+	})
 }
 
 // TestMicroCephInvalidAccessKey checks that we get an auth error when the access key is wrong (e.g. prod misconfig).

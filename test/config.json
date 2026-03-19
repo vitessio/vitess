@@ -114,6 +114,23 @@
       "RetryMax": 1,
       "Tags": []
     },
+    "backup_clone_ceph": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/clone"
+      ],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "backup_microceph",
+      "Tags": [],
+      "Needs": [
+        "microceph"
+      ]
+    },
     "backup_pitr": {
       "File": "unused.go",
       "Packages": [
