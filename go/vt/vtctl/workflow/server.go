@@ -3122,6 +3122,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// sure the lock is not lost.
 	postJournalTimeout := waitTimeout
 	ksLockTTL := waitTimeout*3 + postJournalTimeout
+	startPostJournalCtx := func(ctx context.Context) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.WithoutCancel(ctx), postJournalTimeout)
+	}
 
 	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
@@ -3309,11 +3312,20 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
 			}
 		}
+
+		// This is the point of no return. Once a journal is created,
+		// traffic can be redirected to target shards.
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
+		postJournalCtx, postJournalCancel := startPostJournalCtx(ctx)
+		defer postJournalCancel()
+		ctx = postJournalCtx
 	} else {
 		if cancel {
 			return handleError("invalid cancel", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "traffic switching has reached the point of no return, cannot cancel"))
 		}
-		postJournalCtx, postJournalCancel := context.WithTimeout(context.WithoutCancel(ctx), postJournalTimeout)
+		postJournalCtx, postJournalCancel := startPostJournalCtx(ctx)
 		defer postJournalCancel()
 		ctx = postJournalCtx
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
@@ -3321,17 +3333,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		if err := ts.gatherPositions(ctx); err != nil {
 			return handleError("failed to gather replication positions", err)
 		}
-	}
-
-	// This is the point of no return. Once a journal is created,
-	// traffic can be redirected to target shards.
-	if err := confirmKeyspaceLocksHeld(); err != nil {
-		return handleError("locks were lost", err)
-	}
-	if !journalsExist {
-		postJournalCtx, postJournalCancel := context.WithTimeout(context.WithoutCancel(ctx), postJournalTimeout)
-		defer postJournalCancel()
-		ctx = postJournalCtx
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 	}
 	ts.logger.Infof("Creating journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
