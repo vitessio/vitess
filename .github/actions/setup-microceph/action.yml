@@ -16,6 +16,7 @@ runs:
     - name: Export MicroCeph S3 env
       shell: bash
       run: |
+        echo "AWS_CA_BUNDLE=" >> "$GITHUB_ENV"
         CFG="${{ steps.microceph.outputs.s3config }}"
         if [[ -z "$CFG" ]]; then
           CFG="${GITHUB_WORKSPACE}/microceph.source"
@@ -29,4 +30,3 @@ runs:
         grep -E '^S3_SERVER_URL=' "$CFG" | sed 's/^S3_SERVER_URL=/AWS_ENDPOINT=/' >> "$GITHUB_ENV"
         grep -E '^S3_BUCKET=' "$CFG" | sed 's/^S3_BUCKET=/AWS_BUCKET=/' >> "$GITHUB_ENV"
         grep -E '^S3_REGION=' "$CFG" | sed 's/^S3_REGION=/AWS_REGION=/' >> "$GITHUB_ENV"
-        grep -E '^S3_CA_BUNDLE_PATH=' "$CFG" | sed 's/^S3_CA_BUNDLE_PATH=/AWS_CA_BUNDLE=/' >> "$GITHUB_ENV" || true
