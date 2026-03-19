@@ -175,6 +175,7 @@ return user.NeedsMigration() && migrate(user) || user
 - **Never** directly edit files under `go/vt/proto/` - they are generated from `proto/*.proto` protobuf definitions
 - After modifying `proto/*.proto` files, run `make proto` to regenerate
 - Avoid storing timestamps or time durations as integers; use `vttime.Time` for timestamps and `vttime.Duration` (or `google.protobuf.Duration`, as appropriate) for durations instead
+- Avoid storing tablet aliases as a string: use `topodata.TabletAlias`
 
 #### SQL Parser
 - **Never** directly edit these generated files in `go/vt/sqlparser/`: `sql.go`, `ast_clone.go`, `ast_copy_on_rewrite.go`, `ast_equals.go`, `ast_format_fast.go`, `ast_path.go`, `ast_rewrite.go`, `ast_visit.go`, `cached_size.go`
