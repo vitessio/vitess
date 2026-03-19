@@ -165,7 +165,7 @@ return user.NeedsMigration() && migrate(user) || user
 - **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
 - **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
 
-## Vitess-Specific Conventions
+## :building_construction: Vitess-Specific Conventions
 
 ### Protobufs
 - **Never** directly edit files under `go/vt/proto/` - they are generated from `proto/*.proto` protobuf definitions
