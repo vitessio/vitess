@@ -321,6 +321,8 @@ func TestAliasedExprColumnName(t *testing.T) {
 		{"SELECT 'hello  world' FROM t", "hello  world"},
 		// Double-quoted string literal with internal whitespace — unquoted
 		{`SELECT "hello  world" FROM t`, "hello  world"},
+		// MEMBER OF expression
+		{"SELECT 1 MEMBER OF('[1,2,3]') FROM t", "1 MEMBER OF('[1,2,3]')"},
 	}
 
 	for _, tt := range tests {

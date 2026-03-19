@@ -282,6 +282,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // When we see '(', we can either reduce ignore_or_replace_opt to empty or shift '(' to parse table_spec.
 // We want shifting to take precedence, so we add lower precedence to the reduce rule.
 %nonassoc EMPTY_IGNORE_OR_REPLACE
+// EXPRESSION_PREC_START is used to resolve shift-reduce conflicts caused by the empty mark_start and mark_end rules
+// in select_expression. These rules capture input positions for implicit column aliases.
+// On '*' lookahead, the parser can shift '*' (for SELECT *) or reduce the empty mark_start — shifting is correct.
+// On 'MEMBER' lookahead, the parser can shift MEMBER (to continue expression MEMBER OF ...) or reduce mark_end — shifting is correct.
+// Giving mark_start/mark_end lower precedence than '*' and MEMBER resolves both conflicts.
+%nonassoc EXPRESSION_PREC_START
 
 %token LEX_ERROR
 %left <str> UNION
@@ -5590,11 +5596,13 @@ col_alias:
   }
 
 mark_start:
+  %prec EXPRESSION_PREC_START
   {
     $$ = yylex.(*Tokenizer).currStart
   }
 
 mark_end:
+  %prec EXPRESSION_PREC_START
   {
     $$ = yylex.(*Tokenizer).prevEnd
   }
