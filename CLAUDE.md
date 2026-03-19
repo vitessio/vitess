@@ -67,7 +67,7 @@ func TestConnectionBilateralCleanup(t *testing.T) {
 // Step 5: Refactor for clarity
 ```
 
-To make sure tests are easy to read, we use `github.com/stretchr/testify/assert` and `github.com/stretchr/testify/require` for assertions. Use `assert.Eventually` instead of manual `thread.sleep` and timeouts. Use `t.Cleanup()` for test cleanup and `t.Context()` for the test's parent context.
+To make sure tests are easy to read, we use `github.com/stretchr/testify/assert` and `github.com/stretchr/testify/require` for assertions. Use `assert.Eventually` instead of manual `time.Sleep()` and timeouts. Use `t.Cleanup()` for test cleanup and `t.Context()` for the test's parent context.
 
 ## :rotating_light: Error Handling Excellence
 
@@ -75,17 +75,17 @@ Error handling is not an afterthought - it's core to reliable software.
 
 ### Go Error Patterns
 ```go
-// YES - Clear error context
+// YES - Clear error context with vterrors
 func ProcessUser(id string) (*User, error) {
     if id == "" {
-        return nil, fmt.Errorf("user ID cannot be empty")
+        return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "user ID cannot be empty")
     }
-    
+
     user, err := db.GetUser(id)
     if err != nil {
-        return nil, fmt.Errorf("failed to get user %s: %w", id, err)
+        return nil, vterrors.Wrapf(err, "failed to get user %s", id)
     }
-    
+
     return user, nil
 }
 
@@ -97,7 +97,7 @@ func ProcessUser(id string) *User {
 ```
 
 ### Error Handling Principles
-1. **Wrap errors with context** - Use `fmt.Errorf("context: %w", err)`
+1. **Wrap errors with context** - Use `vterrors.Wrapf(err, "context")`
 2. **Validate early** - Check inputs before doing work
 3. **Fail fast** - Don't continue with invalid state
 4. **Log appropriately** - Errors at boundaries, debug info internally
