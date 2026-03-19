@@ -85,6 +85,11 @@ func getRandomListenPorts() (int, int) {
 
 func TestMain(m *testing.M) {
 	f := func() int {
+		// When AWS_ENDPOINT is set (e.g. MicroCeph in CI), skip Minio setup.
+		if os.Getenv("AWS_ENDPOINT") != "" {
+			return m.Run()
+		}
+
 		minioPath, err := exec.LookPath("minio")
 		if err != nil {
 			log.Fatalf("minio binary not found: %v", err)
