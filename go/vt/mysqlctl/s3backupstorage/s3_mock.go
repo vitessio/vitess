@@ -39,10 +39,11 @@ type FakeS3BackupHandle struct {
 }
 
 type FakeConfig struct {
-	Region    string
-	Endpoint  string
-	Bucket    string
-	ForcePath bool
+	Region            string
+	Endpoint          string
+	Bucket            string
+	ForcePath         bool
+	TLSSkipVerifyCert bool
 }
 
 func InitFlag(cfg FakeConfig) {
@@ -50,6 +51,7 @@ func InitFlag(cfg FakeConfig) {
 	endpoint = cfg.Endpoint
 	bucket = cfg.Bucket
 	forcePath = cfg.ForcePath
+	tlsSkipVerifyCert = cfg.TLSSkipVerifyCert
 }
 
 func NewFakeS3BackupHandle(ctx context.Context, dir, name string, logger logutil.Logger, stats backupstats.Stats) (*FakeS3BackupHandle, error) {

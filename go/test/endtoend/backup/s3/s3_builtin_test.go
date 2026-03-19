@@ -174,10 +174,11 @@ type backupTestConfig struct {
 func runBackupTest(t *testing.T, cfg backupTestConfig) {
 	testhelper.RequireS3Config(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    os.Getenv("AWS_REGION"),
-		Endpoint:  os.Getenv("AWS_ENDPOINT"),
-		Bucket:    os.Getenv("AWS_BUCKET"),
-		ForcePath: true,
+		Region:            os.Getenv("AWS_REGION"),
+		Endpoint:          os.Getenv("AWS_ENDPOINT"),
+		Bucket:            os.Getenv("AWS_BUCKET"),
+		ForcePath:         true,
+		TLSSkipVerifyCert: true,
 	})
 
 	ctx := context.Background()
@@ -303,10 +304,11 @@ type restoreTestConfig struct {
 func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	testhelper.RequireS3Config(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    os.Getenv("AWS_REGION"),
-		Endpoint:  os.Getenv("AWS_ENDPOINT"),
-		Bucket:    os.Getenv("AWS_BUCKET"),
-		ForcePath: true,
+		Region:            os.Getenv("AWS_REGION"),
+		Endpoint:          os.Getenv("AWS_ENDPOINT"),
+		Bucket:            os.Getenv("AWS_BUCKET"),
+		ForcePath:         true,
+		TLSSkipVerifyCert: true,
 	})
 
 	ctx := context.Background()
