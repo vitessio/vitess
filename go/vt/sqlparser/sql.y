@@ -5566,15 +5566,9 @@ select_expression:
   {
     ae := &AliasedExpr{Expr: $2, As: $4}
     if !$4.NotEmpty() {
-      switch e := $2.(type) {
-      case *ColName:
-        // ColName already has a well-defined ColumnName() via node.Name.String()
-      case *Literal:
-        if e.Type == StrVal {
-          // StrVal literals already return the unquoted value via ColumnName()
-          break
-        }
-        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression($1, $3)
+      switch $2.(type) {
+      case *ColName, *Literal:
+        // ColName and Literal already have deterministic ColumnName() output
       default:
         ae.InputExpression = yylex.(*Tokenizer).GetInputExpression($1, $3)
       }
