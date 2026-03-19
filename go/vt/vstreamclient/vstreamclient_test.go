@@ -463,6 +463,55 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 	}
 }
 
+func TestFlush_ConsumerMutationDoesNotAffectInternalCheckpoint(t *testing.T) {
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 10,
+		currentBatch:    []Row{{Data: "row"}},
+	}
+
+	var seenFlushVGtid *binlogdatapb.VGtid
+	table.FlushFn = func(_ context.Context, _ []Row, meta FlushMeta) error {
+		seenFlushVGtid = meta.LatestVGtid
+		meta.LatestVGtid.ShardGtids[0].Gtid = "mutated"
+		meta.LatestVGtid.ShardGtids = append(meta.LatestVGtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: "ks", Shard: "1", Gtid: "mutated"})
+		return nil
+	}
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Hour,
+		},
+		session:     session,
+		latestVgtid: vgtid,
+		tables: map[string]*TableConfig{
+			qualifiedTableName("ks", "t"): table,
+		},
+	}
+
+	err := v.flush(context.Background(), true)
+	assert.NoError(t, err)
+	assert.NotNil(t, seenFlushVGtid)
+	assert.NotSame(t, v.latestVgtid, seenFlushVGtid)
+	if assert.Len(t, seenFlushVGtid.ShardGtids, 2) {
+		assert.Equal(t, "mutated", seenFlushVGtid.ShardGtids[0].Gtid)
+	}
+	if assert.Len(t, v.latestVgtid.ShardGtids, 1) {
+		assert.Equal(t, "MySQL56/1", v.latestVgtid.ShardGtids[0].Gtid)
+	}
+	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
+}
+
 func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
 	v := &VStreamClient{
 		cfg:   clientConfig{minFlushDuration: time.Hour},

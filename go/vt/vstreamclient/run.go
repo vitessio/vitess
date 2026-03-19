@@ -463,7 +463,7 @@ func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 				TableStats:   table.stats,
 				VStreamStats: v.stats,
 
-				LatestVGtid: v.latestVgtid,
+				LatestVGtid: cloneVGtid(v.latestVgtid),
 				FlushReason: flushReason,
 			})
 			if err != nil {
@@ -497,6 +497,14 @@ func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 	v.signalGracefulShutdownFlushed()
 
 	return nil
+}
+
+func cloneVGtid(vgtid *binlogdatapb.VGtid) *binlogdatapb.VGtid {
+	if vgtid == nil {
+		return nil
+	}
+
+	return proto.Clone(vgtid).(*binlogdatapb.VGtid)
 }
 
 func (v *VStreamClient) hasBufferedRows() bool {
