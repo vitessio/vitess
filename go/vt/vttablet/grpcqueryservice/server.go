@@ -18,6 +18,7 @@ package grpcqueryservice
 
 import (
 	"context"
+	"io"
 
 	"google.golang.org/grpc"
 
@@ -31,6 +32,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
+
+const rawStreamBufSize = 256 * 1024
 
 // query is the gRPC query service implementation.
 // It implements the queryservice.QueryServer interface.
@@ -298,6 +301,43 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 	return vterrors.ToGRPC(err)
 }
 
+// StreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	buf := make([]byte, rawStreamBufSize)
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		resp := querypb.StreamExecuteRawResponseFromVTPool()
+		queryErr := q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
+			resp.Raw = raw
+			return stream.Send(resp)
+		})
+		resp.ReturnToVTPool()
+
+		// Always send terminal message with done=true (errors are in-band)
+		if err := stream.Send(&querypb.StreamExecuteRawResponse{
+			Done:  true,
+			Error: vterrors.ToVTRPC(queryErr),
+		}); err != nil {
+			return err
+		}
+	}
+}
+
 // MessageStream is part of the queryservice.QueryServer interface
 func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream queryservicepb.Query_MessageStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)
@@ -492,6 +532,123 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		SessionStateChanges: state.SessionStateChanges,
 	})
 	return vterrors.ToGRPC(err)
+}
+
+// BeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	buf := make([]byte, rawStreamBufSize)
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+		state, queryErr := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte) error {
+			resp.Raw = raw
+			return stream.Send(resp)
+		})
+		resp.ReturnToVTPool()
+
+		if err := stream.Send(&querypb.BeginStreamExecuteRawResponse{
+			Done:                true,
+			Error:               vterrors.ToVTRPC(queryErr),
+			TransactionId:       state.TransactionID,
+			TabletAlias:         state.TabletAlias,
+			SessionStateChanges: state.SessionStateChanges,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
+// ReserveStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	buf := make([]byte, rawStreamBufSize)
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+		state, queryErr := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte) error {
+			resp.Raw = raw
+			return stream.Send(resp)
+		})
+		resp.ReturnToVTPool()
+
+		if err := stream.Send(&querypb.ReserveStreamExecuteRawResponse{
+			Done:        true,
+			Error:       vterrors.ToVTRPC(queryErr),
+			ReservedId:  state.ReservedID,
+			TabletAlias: state.TabletAlias,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
+// ReserveBeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_ReserveBeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	buf := make([]byte, rawStreamBufSize)
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+		state, queryErr := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte) error {
+			resp.Raw = raw
+			return stream.Send(resp)
+		})
+		resp.ReturnToVTPool()
+
+		if err := stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
+			Done:                true,
+			Error:               vterrors.ToVTRPC(queryErr),
+			ReservedId:          state.ReservedID,
+			TransactionId:       state.TransactionID,
+			TabletAlias:         state.TabletAlias,
+			SessionStateChanges: state.SessionStateChanges,
+		}); err != nil {
+			return err
+		}
+	}
 }
 
 // Release implements the QueryServer interface

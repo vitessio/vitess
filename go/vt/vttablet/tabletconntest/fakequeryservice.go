@@ -517,6 +517,23 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, session queryservi
 	return nil
 }
 
+// StreamExecuteRaw is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
+	return errors.New("StreamExecuteRaw not implemented in FakeQueryService")
+}
+
+func (f *FakeQueryService) BeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.TransactionState, error) {
+	return queryservice.TransactionState{}, errors.New("BeginStreamExecuteRaw not implemented in FakeQueryService")
+}
+
+func (f *FakeQueryService) ReserveStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedState, error) {
+	return queryservice.ReservedState{}, errors.New("ReserveStreamExecuteRaw not implemented in FakeQueryService")
+}
+
+func (f *FakeQueryService) ReserveBeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedTransactionState, error) {
+	return queryservice.ReservedTransactionState{}, errors.New("ReserveBeginStreamExecuteRaw not implemented in FakeQueryService")
+}
+
 // ExecuteBatchQueries are test queries for batch.
 var ExecuteBatchQueries = []*querypb.BoundQuery{
 	{

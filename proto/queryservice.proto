@@ -117,4 +117,20 @@ service Query {
 
   // GetSchema returns the schema information.
   rpc GetSchema(query.GetSchemaRequest) returns (stream query.GetSchemaResponse) {};
+
+  // StreamExecuteRaw executes a streaming query and returns raw MySQL wire
+  // protocol bytes instead of parsed result objects.
+  rpc StreamExecuteRaw(stream query.StreamExecuteRawRequest) returns (stream query.StreamExecuteRawResponse) {};
+
+  // BeginStreamExecuteRaw starts a transaction and executes a streaming query,
+  // returning raw MySQL wire protocol bytes.
+  rpc BeginStreamExecuteRaw(stream query.BeginStreamExecuteRawRequest) returns (stream query.BeginStreamExecuteRawResponse) {};
+
+  // ReserveStreamExecuteRaw executes a streaming query on a reserved connection,
+  // returning raw MySQL wire protocol bytes.
+  rpc ReserveStreamExecuteRaw(stream query.ReserveStreamExecuteRawRequest) returns (stream query.ReserveStreamExecuteRawResponse) {};
+
+  // ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
+  // on a reserved connection, returning raw MySQL wire protocol bytes.
+  rpc ReserveBeginStreamExecuteRaw(stream query.ReserveBeginStreamExecuteRawRequest) returns (stream query.ReserveBeginStreamExecuteRawResponse) {};
 }

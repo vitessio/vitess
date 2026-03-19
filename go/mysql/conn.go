@@ -51,6 +51,9 @@ const (
 	// packetHeaderSize is the 4 bytes of header per MySQL packet
 	// sent over
 	packetHeaderSize = 4
+
+	// PacketHeaderSize is the exported version of packetHeaderSize.
+	PacketHeaderSize = packetHeaderSize
 )
 
 // Constants for how ephemeral buffers were used for reading / writing.
@@ -413,6 +416,51 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	c.sequence++
 
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
+}
+
+// ReadHeaderInto reads a 4-byte MySQL packet header into buf (which must be
+// at least PacketHeaderSize bytes). It validates the sequence number and
+// returns the payload length.
+func (c *Conn) ReadHeaderInto(buf []byte) (int, error) {
+	r := c.getReader()
+
+	if _, err := io.ReadFull(r, buf[:packetHeaderSize]); err != nil {
+		if err == io.EOF {
+			return 0, err
+		}
+		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
+			return 0, io.EOF
+		}
+		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
+	}
+
+	sequence := buf[3]
+	if sequence != c.sequence {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+
+	c.sequence++
+
+	return int(uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16), nil
+}
+
+// ReadDataInto reads exactly len(buf) bytes of packet payload.
+func (c *Conn) ReadDataInto(buf []byte) error {
+	r := c.getReader()
+	_, err := io.ReadFull(r, buf)
+	if err != nil {
+		return vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", len(buf))
+	}
+	return nil
+}
+
+// Buffered returns the number of bytes available in the buffered reader
+// without blocking. Returns 0 if there is no buffered reader.
+func (c *Conn) Buffered() int {
+	if c.bufferedReader != nil {
+		return c.bufferedReader.Buffered()
+	}
+	return 0
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do

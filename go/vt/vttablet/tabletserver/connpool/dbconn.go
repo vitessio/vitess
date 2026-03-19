@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -352,6 +353,38 @@ func (dbc *Conn) StreamOnce(
 		streamBufferSize,
 		true, // Once means we are in a txn
 	)
+}
+
+// StreamRaw sends a COM_QUERY and calls fn with the underlying mysql.Conn
+// for raw packet reading. Context cancellation terminates the connection.
+func (dbc *Conn) StreamRaw(ctx context.Context, query string, fn func(conn *mysql.Conn) error) error {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
+
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("ExecStream", now)
+
+	if err := dbc.conn.WriteComQuery(query); err != nil {
+		return err
+	}
+
+	ch := make(chan error, 1)
+	go func() {
+		ch <- fn(dbc.conn.Conn)
+		close(ch)
+	}()
+
+	select {
+	case <-ctx.Done():
+		dbc.terminate(ctx, false, now)
+		<-ch
+		return dbc.Err()
+	case err := <-ch:
+		if dbcErr := dbc.Err(); dbcErr != nil {
+			return dbcErr
+		}
+		return err
+	}
 }
 
 var (
