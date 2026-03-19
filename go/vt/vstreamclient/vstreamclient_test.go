@@ -69,6 +69,44 @@ type testVStreamReader struct {
 	index   int
 }
 
+type newTestVTGateImpl struct {
+	testVTGateImpl
+}
+
+func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
+	switch {
+	case query == "SHOW VITESS_SHARDS":
+		return session, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("shard", "varchar"),
+			"customer/0",
+			"accounting/0",
+			"commerce/0",
+		), nil
+
+	case strings.HasPrefix(query, "create table if not exists "):
+		return session, &sqltypes.Result{RowsAffected: 1}, nil
+
+	case strings.HasPrefix(query, "select latest_vgtid, table_config, copy_completed from "):
+		return session, &sqltypes.Result{}, nil
+
+	case strings.HasPrefix(query, "insert into "):
+		return session, &sqltypes.Result{RowsAffected: 1}, nil
+	}
+
+	return nil, nil, fmt.Errorf("unexpected Execute call: %s", query)
+}
+
+func newConstructorTestConn(t *testing.T) *vtgateconn.VTGateConn {
+	t.Helper()
+
+	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return &newTestVTGateImpl{}, nil
+	}, "")
+	assert.NoError(t, err)
+	t.Cleanup(conn.Close)
+	return conn
+}
+
 func setLifecycleState(v *VStreamClient, runUsed, runActive, shutdownRequested bool, cancelRunCtxFn context.CancelFunc) {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
@@ -130,6 +168,35 @@ func TestNew_ValidatesName(t *testing.T) {
 	_, err = New(context.Background(), strings.Repeat("a", 65), nil, nil)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "name must be 64 characters or less")
+}
+
+func TestNew_RejectsAmbiguousBareTableNamesAcrossKeyspaces(t *testing.T) {
+	conn := newConstructorTestConn(t)
+
+	_, err := New(context.Background(), "test-stream", conn, []TableConfig{
+		{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1 and 10",
+			MaxRowsPerFlush: 1,
+			DataType:        &testRowSmall{},
+			FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+		},
+		{
+			Keyspace:        "accounting",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1 and 10",
+			MaxRowsPerFlush: 1,
+			DataType:        &testRowSmall{},
+			FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+		},
+	},
+		WithStateTable("commerce", "vstreams"),
+		WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
+	)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
+	assert.ErrorContains(t, err, "customer")
 }
 
 func TestWithMinFlushDuration_RejectsNonPositive(t *testing.T) {
