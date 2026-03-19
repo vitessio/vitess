@@ -167,10 +167,18 @@ return user.NeedsMigration() && migrate(user) || user
 
 ## :building_construction: Vitess-Specific Conventions
 
-### Protobufs
+### Generated Code
+- **Never** directly edit files with a `Code generated ... DO NOT EDIT` header - these are generated and will be overwritten
+- Run `make codegen` to regenerate after modifying source definitions
+
+#### Protobufs
 - **Never** directly edit files under `go/vt/proto/` - they are generated from `proto/*.proto` protobuf definitions
 - After modifying `proto/*.proto` files, run `make proto` to regenerate
 - Avoid storing timestamps or time durations as integers; use `vttime.Time` for timestamps and `vttime.Duration` (or `google.protobuf.Duration`, as appropriate) for durations instead
+
+#### SQL Parser
+- **Never** directly edit these generated files in `go/vt/sqlparser/`: `sql.go`, `ast_clone.go`, `ast_copy_on_rewrite.go`, `ast_equals.go`, `ast_format_fast.go`, `ast_path.go`, `ast_rewrite.go`, `ast_visit.go`, `cached_size.go`
+- After modifying source files (e.g., `sql.y`, AST definitions), run `make codegen` to regenerate
 
 ### Command-Line Flags
 - New flags must **not** use underscores (use hyphens instead)
