@@ -323,6 +323,14 @@ func TestAliasedExprColumnName(t *testing.T) {
 		{`SELECT "hello  world" FROM t`, "hello  world"},
 		// MEMBER OF expression
 		{"SELECT 1 MEMBER OF('[1,2,3]') FROM t", "1 MEMBER OF('[1,2,3]')"},
+		// Decimal literal
+		{"SELECT 3.14 FROM t", "3.14"},
+		// Float literal
+		{"SELECT 1.5e2 FROM t", "1.5e2"},
+		// Hex number literal
+		{"SELECT 0x1A FROM t", "0x1A"},
+		// Hex string literal
+		{"SELECT X'1A' FROM t", "X'1A'"},
 	}
 
 	for _, tt := range tests {
