@@ -525,7 +525,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		}
 	}
 
-	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
+	replicaVCursor, warmingCtx := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
@@ -535,12 +535,12 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 			defer func() {
 				<-warmingReadsChannel
 			}()
-			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 			if err != nil {
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {

@@ -37,6 +37,7 @@ type warmingReadsVCursor struct {
 	*loggingVCursor
 	warmingReadsPercent     int
 	warmingReadsChannel     chan bool
+	warmingReadsTimeout     time.Duration
 	warmingReadsExecuteFunc func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 }
 
@@ -48,15 +49,20 @@ func (vc *warmingReadsVCursor) GetWarmingReadsChannel() chan bool {
 	return vc.warmingReadsChannel
 }
 
-func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context) {
 	clone := &warmingReadsVCursor{
 		loggingVCursor:          vc.loggingVCursor,
 		warmingReadsPercent:     vc.warmingReadsPercent,
 		warmingReadsChannel:     vc.warmingReadsChannel,
+		warmingReadsTimeout:     vc.warmingReadsTimeout,
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
-	return clone
+	warmingCtx := ctx
+	if vc.warmingReadsTimeout > 0 {
+		warmingCtx, _ = context.WithTimeout(context.Background(), vc.warmingReadsTimeout) //nolint
+	}
+	return clone, warmingCtx
 }
 
 func TestWarmingReadsSkipsForUpdate(t *testing.T) {
@@ -129,6 +135,7 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 
 			var warmingReadExecuted atomic.Bool
 			var capturedQuery string
+			var capturedCtx atomic.Pointer[context.Context]
 			vc := &warmingReadsVCursor{
 				loggingVCursor: &loggingVCursor{
 					shards:  []string{"-20", "20-"},
@@ -136,11 +143,13 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				},
 				warmingReadsPercent: 100,
 				warmingReadsChannel: make(chan bool, 1),
+				warmingReadsTimeout: 5 * time.Second,
 			}
 			vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 				if len(queries) > 0 {
 					capturedQuery = queries[0].Sql
 				}
+				capturedCtx.Store(&ctx)
 				warmingReadExecuted.Store(true)
 			}
 
@@ -152,6 +161,10 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 			}, time.Second, 10*time.Millisecond, "warming read should be executed")
 
 			require.Equal(t, tc.expectedWarmingQuery, capturedQuery, "warming read query should match expected")
+
+			ctx := *capturedCtx.Load()
+			_, hasDeadline := ctx.Deadline()
+			require.True(t, hasDeadline, "warming read context should have a deadline from the timeout")
 		})
 	}
 }

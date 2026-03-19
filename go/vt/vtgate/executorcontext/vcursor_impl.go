@@ -298,7 +298,7 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 	return v
 }
 
-func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
+func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) (engine.VCursor, context.Context) {
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
@@ -328,7 +328,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 
 	v.marginComments.Trailing += "/* warming read */"
 
-	return v
+	return v, clonedCtx
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {

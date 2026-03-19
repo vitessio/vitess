@@ -130,7 +130,7 @@ type (
 		GetWarmingReadsChannel() chan bool
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
-		CloneForReplicaWarming(ctx context.Context) VCursor
+		CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context)
 
 		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
