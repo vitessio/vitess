@@ -871,7 +871,7 @@ func TestAWSCABundleLoadsAndClientSkipsSDKConflict(t *testing.T) {
 	tmp, err := os.CreateTemp("", "aws-ca-bundle-*.pem")
 	require.NoError(t, err)
 	defer os.Remove(tmp.Name())
-	_, err = tmp.Write([]byte(minimalValidPEM))
+	_, err = tmp.WriteString(minimalValidPEM)
 	require.NoError(t, err)
 	require.NoError(t, tmp.Close())
 
