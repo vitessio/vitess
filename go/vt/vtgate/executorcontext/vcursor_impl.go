@@ -1435,17 +1435,17 @@ func (vc *VCursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Forei
 	return ks.ForeignKeyMode, nil
 }
 
-// NoCrossKeyspaceJoins returns true if cross-keyspace joins are denied for the given keyspace,
-// either by the vtgate flag or the keyspace-level vschema setting.
-func (vc *VCursorImpl) NoCrossKeyspaceJoins(keyspace string) (bool, error) {
+// AllowCrossKeyspaceJoins returns true if cross-keyspace joins are allowed for the given keyspace.
+// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+func (vc *VCursorImpl) AllowCrossKeyspaceJoins(keyspace string) (bool, error) {
 	if vc.config.NoCrossKeyspaceJoins {
-		return true, nil
+		return false, nil
 	}
 	ks := vc.vschema.Keyspaces[keyspace]
 	if ks == nil {
 		return false, vterrors.VT14004(keyspace)
 	}
-	return ks.NoCrossKeyspaceJoins, nil
+	return !ks.NoCrossKeyspaceJoins, nil
 }
 
 func (vc *VCursorImpl) KeyspaceError(keyspace string) error {

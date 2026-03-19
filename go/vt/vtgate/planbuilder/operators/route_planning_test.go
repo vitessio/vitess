@@ -32,11 +32,11 @@ type mockVSchema struct {
 	noCrossKeyspaceJoins map[string]bool
 }
 
-func (m *mockVSchema) NoCrossKeyspaceJoins(keyspace string) (bool, error) {
+func (m *mockVSchema) AllowCrossKeyspaceJoins(keyspace string) (bool, error) {
 	if m.noCrossKeyspaceJoins == nil {
-		return false, nil
+		return true, nil
 	}
-	return m.noCrossKeyspaceJoins[keyspace], nil
+	return !m.noCrossKeyspaceJoins[keyspace], nil
 }
 
 func TestCheckCrossKeyspaceJoin(t *testing.T) {

@@ -349,11 +349,11 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 	}
 
 	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
-		denied, err := ctx.VSchema.NoCrossKeyspaceJoins(ks.Name)
+		allowed, err := ctx.VSchema.AllowCrossKeyspaceJoins(ks.Name)
 		if err != nil {
 			panic(err)
 		}
-		if denied {
+		if !allowed {
 			panic(vterrors.VT12001(
 				fmt.Sprintf("cross-keyspace join between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ to override)", lhsKs.Name, rhsKs.Name),
 			))

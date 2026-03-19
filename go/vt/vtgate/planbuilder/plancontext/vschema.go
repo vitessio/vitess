@@ -63,9 +63,9 @@ type VSchema interface {
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 
-	// NoCrossKeyspaceJoins returns true if cross-keyspace joins are denied for the given keyspace,
-	// either by the vtgate flag or the keyspace-level vschema setting.
-	NoCrossKeyspaceJoins(keyspace string) (bool, error)
+	// AllowCrossKeyspaceJoins returns true if cross-keyspace joins are allowed for the given keyspace.
+	// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+	AllowCrossKeyspaceJoins(keyspace string) (bool, error)
 
 	// KeyspaceError returns any error in the keyspace vschema.
 	KeyspaceError(keyspace string) error
