@@ -1,6 +1,9 @@
 package vstreamclient
 
 import (
+	"database/sql"
+	"database/sql/driver"
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -16,9 +19,24 @@ type VStreamScanner interface {
 	VStreamScan(fields []*querypb.Field, row []sqltypes.Value, rowEvent *binlogdatapb.RowEvent, rowChange *binlogdatapb.RowChange) error
 }
 
-// copyRowToStruct builds a struct from a row event
-// TODO: this is very rudimentary mapping that only works for top-level fields
+var (
+	timeType              = reflect.TypeFor[time.Time]()
+	sqlScannerType        = reflect.TypeFor[sql.Scanner]()
+	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
+	byteSliceElemKind     = reflect.Uint8
+	defaultDecodeLocation = time.UTC
+)
+
+// copyRowToStruct builds a struct from a row event.
 func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value) error {
+	return copyRowToStructInLocation(shard, row, vPtr, defaultDecodeLocation)
+}
+
+func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value, loc *time.Location) error {
+	if loc == nil {
+		loc = defaultDecodeLocation
+	}
+
 	for fieldName, m := range shard.fieldMap {
 		structField := reflect.Indirect(vPtr).FieldByIndex(m.structIndex)
 
@@ -44,10 +62,22 @@ func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value
 			if err != nil {
 				return fmt.Errorf("vstreamclient: error converting row value to bytes for field %s: %w", fieldName, err)
 			}
+			if isByteSliceType(structField.Type()) {
+				setByteSliceValue(structField, rowVal)
+				continue
+			}
 
 			if err = json.Unmarshal(rowVal, structField.Addr().Interface()); err != nil {
 				return fmt.Errorf("vstreamclient: error unmarshalling JSON for field %s: %w", fieldName, err)
 			}
+			continue
+		}
+
+		handled, err := tryScanSpecialField(structField, row[m.rowIndex], loc)
+		if err != nil {
+			return fmt.Errorf("vstreamclient: error converting row value for field %s: %w", fieldName, err)
+		}
+		if handled {
 			continue
 		}
 
@@ -110,11 +140,11 @@ func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value
 
 		case reflect.Struct:
 			switch m.structType {
-			case reflect.TypeFor[time.Time]():
+			case timeType:
 				if row[m.rowIndex].IsNull() {
 					return fmt.Errorf("vstreamclient: error converting row value to time.Time for field %s: NULL into non-pointer field", fieldName)
 				}
-				rowVal, err := row[m.rowIndex].ToTime(time.UTC) // TODO: make timezone configurable
+				rowVal, err := row[m.rowIndex].ToTime(loc)
 				if err != nil {
 					return fmt.Errorf("vstreamclient: error converting row value to time.Time for field %s: %w", fieldName, err)
 				}
@@ -124,8 +154,20 @@ func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value
 				return fmt.Errorf("vstreamclient: unsupported struct field type for field %s: %s", fieldName, m.structType.String())
 			}
 
+		case reflect.Slice:
+			if !isByteSliceType(m.structType) {
+				return fmt.Errorf("vstreamclient: unsupported field type: %s", m.kind.String())
+			}
+			if row[m.rowIndex].IsNull() {
+				return fmt.Errorf("vstreamclient: error converting row value to bytes for field %s: NULL into non-pointer field", fieldName)
+			}
+			rowVal, err := row[m.rowIndex].ToBytes()
+			if err != nil {
+				return fmt.Errorf("vstreamclient: error converting row value to bytes for field %s: %w", fieldName, err)
+			}
+			setByteSliceValue(structField, rowVal)
+
 		case reflect.Pointer,
-			reflect.Slice,
 			reflect.Array,
 			reflect.Invalid,
 			reflect.Uintptr,
@@ -141,4 +183,81 @@ func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value
 	}
 
 	return nil
+}
+
+func tryScanSpecialField(structField reflect.Value, rowValue sqltypes.Value, loc *time.Location) (bool, error) {
+	if structField.Type() == timeType {
+		return false, nil
+	}
+
+	if structField.CanAddr() {
+		if structField.Addr().Type().Implements(sqlScannerType) {
+			scanner := structField.Addr().Interface().(sql.Scanner)
+			driverValue, err := sqlValueToDriverValue(rowValue, loc)
+			if err != nil {
+				return true, err
+			}
+			return true, scanner.Scan(driverValue)
+		}
+
+		if structField.Addr().Type().Implements(textUnmarshalerType) {
+			if rowValue.IsNull() {
+				return false, nil
+			}
+			rowBytes, err := rowValue.ToBytes()
+			if err != nil {
+				return true, err
+			}
+			unmarshaler := structField.Addr().Interface().(encoding.TextUnmarshaler)
+			return true, unmarshaler.UnmarshalText(rowBytes)
+		}
+	}
+
+	return false, nil
+}
+
+func sqlValueToDriverValue(rowValue sqltypes.Value, loc *time.Location) (driver.Value, error) {
+	if rowValue.IsNull() {
+		return nil, nil
+	}
+
+	if loc == nil {
+		loc = defaultDecodeLocation
+	}
+
+	switch rowValue.Type() {
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
+		return rowValue.ToInt64()
+
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32:
+		rowVal, err := rowValue.ToUint64()
+		if err != nil {
+			return nil, err
+		}
+		return int64(rowVal), nil
+
+	case sqltypes.Float32, sqltypes.Float64:
+		return rowValue.ToFloat64()
+
+	case sqltypes.Decimal:
+		return rowValue.ToString(), nil
+
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
+		return rowValue.ToTime(loc)
+	}
+
+	if rowVal, err := rowValue.ToBool(); err == nil {
+		return rowVal, nil
+	}
+
+	return rowValue.ToBytes()
+}
+
+func isByteSliceType(t reflect.Type) bool {
+	return t.Kind() == reflect.Slice && t.Elem().Kind() == byteSliceElemKind
+}
+
+func setByteSliceValue(structField reflect.Value, rowVal []byte) {
+	cloned := append([]byte(nil), rowVal...)
+	structField.Set(reflect.ValueOf(cloned).Convert(structField.Type()))
 }

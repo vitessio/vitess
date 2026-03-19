@@ -60,6 +60,17 @@ func WithHeartbeatSeconds(seconds int) Option {
 	}
 }
 
+func WithTimeLocation(loc *time.Location) Option {
+	return func(v *VStreamClient) error {
+		if loc == nil {
+			return errors.New("vstreamclient: time location cannot be nil")
+		}
+
+		v.cfg.timeLocation = loc
+		return nil
+	}
+}
+
 // WithTabletType overrides the tablet type used when opening the VStream.
 // The default is REPLICA.
 func WithTabletType(tabletType topodatapb.TabletType) Option {
