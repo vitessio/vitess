@@ -5564,7 +5564,11 @@ select_expression:
   }
 | mark_start expression mark_end as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $2, As: $4, InputExpression: yylex.(*Tokenizer).GetInputExpression($1, $3)}
+    ae := &AliasedExpr{Expr: $2, As: $4}
+    if !$4.NotEmpty() {
+      ae.InputExpression = yylex.(*Tokenizer).GetInputExpression($1, $3)
+    }
+    $$ = ae
   }
 | mark_start table_id '.' '*' mark_end
   {
