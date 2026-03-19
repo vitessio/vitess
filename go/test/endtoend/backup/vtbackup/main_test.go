@@ -33,26 +33,19 @@ import (
 
 var (
 	s3ConfigForVtbackup *testhelper.S3Config
-	primary          *cluster.Vttablet
-	replica1         *cluster.Vttablet
-	replica2         *cluster.Vttablet
-	localCluster     *cluster.LocalProcessCluster
-	newInitDBFile    string
-	cell             = cluster.DefaultCell
-	hostname         = "localhost"
-	keyspaceName     = "ks"
-	shardName        = "0"
-	dbPassword       = "VtDbaPass"
-	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile string
-	commonTabletArg  = []string{
-		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
-	}
+	primary             *cluster.Vttablet
+	replica1            *cluster.Vttablet
+	replica2            *cluster.Vttablet
+	localCluster        *cluster.LocalProcessCluster
+	newInitDBFile       string
+	cell                = cluster.DefaultCell
+	hostname            = "localhost"
+	keyspaceName        = "ks"
+	shardName           = "0"
+	dbPassword          = "VtDbaPass"
+	shardKsName         = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile    string
+	commonTabletArg     []string
 )
 
 func TestMain(m *testing.M) {
@@ -61,6 +54,16 @@ func TestMain(m *testing.M) {
 	exitCode, err := func() (int, error) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
+
+		ver := localCluster.VtTabletMajorVersion
+		commonTabletArg = []string{
+			vtutils.GetFlagVariantForTestsByVersion("--vreplication-retry-delay", ver), "1s",
+			vtutils.GetFlagVariantForTestsByVersion("--degraded-threshold", ver), "5s",
+			vtutils.GetFlagVariantForTestsByVersion("--lock-tables-timeout", ver), "5s",
+			vtutils.GetFlagVariantForTestsByVersion("--watch-replication-stream", ver),
+			vtutils.GetFlagVariantForTestsByVersion("--enable-replication-reporter", ver),
+			vtutils.GetFlagVariantForTestsByVersion("--serving-state-grace-period", ver), "1s",
+		}
 
 		// Start topo server
 		err := localCluster.StartTopo()
@@ -90,7 +93,10 @@ func TestMain(m *testing.M) {
 		// Then we use a db-credentials-file with the passwords.
 		// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		initDb, err := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		if err != nil {
+			return 1, err
+		}
 		sql := string(initDb)
 		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
 		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")

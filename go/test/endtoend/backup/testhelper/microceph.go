@@ -89,8 +89,8 @@ func S3StorageExtraArgs(cfg S3Config) []string {
 		"--s3-backup-aws-endpoint", cfg.Endpoint,
 		"--s3-backup-storage-bucket", cfg.Bucket,
 		"--s3-backup-aws-region", cfg.Region,
-		"--s3-backup-force-path-style", "true",
-		"--s3-backup-tls-skip-verify-cert", "true",
+		"--s3-backup-force-path-style=true",
+		"--s3-backup-tls-skip-verify-cert=true",
 	}
 }
 

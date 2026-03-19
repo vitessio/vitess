@@ -134,9 +134,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", "cpu,waitSig,path=vttablet_pprof_"+vttablet.Name)
 	}
 
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.SupportsBackup {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
+		vttablet.proc.Args = append(vttablet.proc.Args, vtutils.GetFlagVariantForTestsByVersion("--restore-from-backup", vttabletVer))
 	}
 	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {

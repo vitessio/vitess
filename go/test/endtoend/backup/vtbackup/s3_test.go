@@ -87,13 +87,14 @@ func TestVtbackupS3(t *testing.T) {
 
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	s3TabletArgs := testhelper.S3TabletArgs(cfg)
+	ver := s3Cluster.VtTabletMajorVersion
 	baseTabletArgs := []string{
-		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+		vtutils.GetFlagVariantForTestsByVersion("--vreplication-retry-delay", ver), "1s",
+		vtutils.GetFlagVariantForTestsByVersion("--degraded-threshold", ver), "5s",
+		vtutils.GetFlagVariantForTestsByVersion("--lock-tables-timeout", ver), "5s",
+		vtutils.GetFlagVariantForTestsByVersion("--watch-replication-stream", ver),
+		vtutils.GetFlagVariantForTestsByVersion("--enable-replication-reporter", ver),
+		vtutils.GetFlagVariantForTestsByVersion("--serving-state-grace-period", ver), "1s",
 	}
 	commonTabletArg = append(append(baseTabletArgs, "--db-credentials-file", dbCredentialFile), s3TabletArgs...)
 
