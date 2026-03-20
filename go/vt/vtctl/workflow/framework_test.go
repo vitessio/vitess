@@ -72,9 +72,11 @@ type testKeyspace struct {
 }
 
 type queryResult struct {
-	query  string
-	result *querypb.QueryResult
-	err    error
+	query            string
+	result           *querypb.QueryResult
+	err              error
+	beforeReturnHook func(context.Context, *topodatapb.Tablet, string)
+	returnContextErr bool
 }
 
 func TestMain(m *testing.M) {
@@ -493,7 +495,16 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	if !matched {
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
+	if qrs[0].beforeReturnHook != nil {
+		qrs[0].beforeReturnHook(ctx, tablet, query)
+	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
+	if qrs[0].returnContextErr && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if strings.Contains(query, "set message = 'FROZEN'") {
+		tmc.frozen.Store(true)
+	}
 	return qrs[0].result, qrs[0].err
 }
 
