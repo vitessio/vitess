@@ -551,6 +551,9 @@ func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, session queryser
 
 // MessageStream is part of the QueryService interface.
 func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := sbc.getError(); err != nil {
 		return err
 	}

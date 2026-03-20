@@ -666,7 +666,9 @@ func TestScatterConnMessageStreamContextCanceled(t *testing.T) {
 	err := sc.MessageStream(ctx, rss, "msg_table", func(_ *sqltypes.Result) error {
 		return nil
 	})
-	require.ErrorIs(t, err, context.Canceled)
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	require.ErrorIs(t, vterrors.Cause(err), context.Canceled)
 }
 
 // TestActionInfoWithTabletAlias tests the actionInfo function with tablet-specific routing.
