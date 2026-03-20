@@ -18,7 +18,6 @@ package vtbackup
 
 import (
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
@@ -55,6 +54,8 @@ func TestVtbackupS3(t *testing.T) {
 		commonTabletArg = origCommonTabletArg
 		s3ConfigForVtbackup = nil
 	}()
+
+	origCluster.Teardown()
 
 	s3Cluster := cluster.NewCluster(cell, hostname)
 	defer s3Cluster.Teardown()
@@ -103,7 +104,6 @@ func TestVtbackupS3(t *testing.T) {
 	s3Replica2 := s3Cluster.NewVttabletInstance("replica", 0, "")
 	shard.Vttablets = []*cluster.Vttablet{s3Primary, s3Replica1, s3Replica2}
 
-	var mysqlProcs []*exec.Cmd
 	for _, tablet := range shard.Vttablets {
 		tablet.VttabletProcess = s3Cluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 		tablet.VttabletProcess.DbPassword = dbPassword
@@ -117,9 +117,6 @@ func TestVtbackupS3(t *testing.T) {
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		require.NoError(t, err)
-		mysqlProcs = append(mysqlProcs, proc)
-	}
-	for _, proc := range mysqlProcs {
 		require.NoError(t, proc.Wait())
 	}
 
@@ -136,6 +133,9 @@ func TestVtbackupS3(t *testing.T) {
 
 	primary.VttabletProcess.ServingStatus = "NOT_SERVING"
 	replica1.VttabletProcess.ServingStatus = "NOT_SERVING"
+
+	// Disable VTOrc recoveries so it does not race with InitShardPrimary.
+	localCluster.DisableVTOrcRecoveries(t)
 
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
