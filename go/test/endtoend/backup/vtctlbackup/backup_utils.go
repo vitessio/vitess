@@ -105,6 +105,7 @@ type CompressionDetails struct {
 func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
 	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
+	commonTabletArg = getDefaultCommonArgsWithVersion(localCluster.VtTabletMajorVersion)
 
 	if setupType == S3 {
 		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--backup-storage-implementation", "s3")
@@ -185,7 +186,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
 
-	var mysqlProcs []*exec.Cmd
 	tabletTypes := map[int]string{
 		0: "primary",
 		1: "replica",
@@ -237,7 +237,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		if err != nil {
 			return err
 		}
-		mysqlProcs = append(mysqlProcs, proc)
+		if err := proc.Wait(); err != nil {
+			return err
+		}
 
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		return nil
@@ -245,11 +247,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	for i := range 4 {
 		tabletType := tabletTypes[i]
 		if err := createTablet(tabletType); err != nil {
-			return 1, err
-		}
-	}
-	for _, proc := range mysqlProcs {
-		if err := proc.Wait(); err != nil {
 			return 1, err
 		}
 	}
@@ -1527,15 +1524,19 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	}
 }
 
-func getDefaultCommonArgs() []string {
+func getDefaultCommonArgsWithVersion(ver int) []string {
 	return []string{
-		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+		vtutils.GetFlagVariantForTestsByVersion("--vreplication-retry-delay", ver), "1s",
+		vtutils.GetFlagVariantForTestsByVersion("--degraded-threshold", ver), "5s",
+		vtutils.GetFlagVariantForTestsByVersion("--lock-tables-timeout", ver), "5s",
+		vtutils.GetFlagVariantForTestsByVersion("--watch-replication-stream", ver),
+		vtutils.GetFlagVariantForTestsByVersion("--enable-replication-reporter", ver),
+		vtutils.GetFlagVariantForTestsByVersion("--serving-state-grace-period", ver), "1s",
 	}
+}
+
+func getDefaultCommonArgs() []string {
+	return getDefaultCommonArgsWithVersion(0)
 }
 
 func setDefaultCommonArgs() { commonTabletArg = getDefaultCommonArgs() }

@@ -72,6 +72,7 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 // TestBackupS3 runs backup tests against an S3-compatible backend (e.g. MicroCeph).
 // Skips if AWS_* env vars are not set.
 func TestBackupS3(t *testing.T) {
+	setDefaultCommonArgs()
 	defer setDefaultCommonArgs()
 	s3Config = testhelper.RequireS3Config(t)
 	testhelper.SetS3Env(t, s3Config)
