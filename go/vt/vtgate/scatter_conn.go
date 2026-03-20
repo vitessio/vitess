@@ -564,29 +564,27 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 				lastErrors.Reset(rs.Target)
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
-			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
-			// from primary to replica. For any of these conditions, we have to retry.
 			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 				cancel()
 				return err
 			}
 
-			// There was no error. We have to see if we need to retry.
-			// If context was canceled, likely due to client disconnect,
-			// return normally without retrying.
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
+
+			if vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
+				return nil
+			}
+
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
 			if time.Since(firstErrorTimeStamp) >= messageStreamGracePeriod {
-				// Cancel all streams and return an error.
 				cancel()
 				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, messageStreamGracePeriod)
 			}
 
-			// It's not been too long since our last good send. Wait and retry.
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
