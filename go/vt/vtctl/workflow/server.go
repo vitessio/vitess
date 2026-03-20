@@ -2805,9 +2805,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if err != nil {
 			return nil, err
 		}
-		if err := validateMoveTablesSourceKeyspace(ts); err != nil {
-			return nil, err
-		}
 		direction = DirectionForward
 	}
 
@@ -3120,7 +3117,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// existing streams, waiting for replication to catch up, initializing the
 	// target sequences, and completing the detached post-journal tail -- to be
 	// sure the lock is not lost.
-	postJournalTimeout := waitTimeout
+	postJournalTimeout := max(waitTimeout, 30*time.Second)
 	ksLockTTL := waitTimeout*3 + postJournalTimeout
 	startPostJournalCtx := func(ctx context.Context) (context.Context, context.CancelFunc) {
 		return context.WithTimeout(context.WithoutCancel(ctx), postJournalTimeout)
