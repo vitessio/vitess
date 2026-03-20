@@ -1611,6 +1611,164 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	}
 }
 
+func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+
+	journalQR := &queryResult{
+		query:  "/select val from _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	}
+	lockTableQR := &queryResult{
+		query:  fmt.Sprintf("LOCK TABLES `%s` READ", tableName),
+		result: &querypb.QueryResult{},
+	}
+	cutoverQR := &queryResult{
+		query:  "/update _vt.vreplication set state='Stopped', message='stopped for cutover' where id=.*",
+		result: &querypb.QueryResult{},
+	}
+	deleteReverseWFQR := &queryResult{
+		query:  fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'", sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+		result: &querypb.QueryResult{},
+	}
+	createReverseWFQR := &queryResult{
+		query:  "/insert into _vt.vreplication.*_reverse.*",
+		result: &querypb.QueryResult{},
+	}
+	createJournalQR := &queryResult{
+		query:  "/insert into _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	}
+	freezeWFQR := &queryResult{
+		query: fmt.Sprintf("update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'", targetKeyspaceName, workflowName),
+		beforeReturnHook: func(context.Context, *topodatapb.Tablet, string) {
+			cancel()
+		},
+		returnContextErr: true,
+	}
+
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, cutoverQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, lockTableQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, lockTableQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, deleteReverseWFQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, createReverseWFQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, createJournalQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, freezeWFQR)
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	_, _, err = env.ws.switchWrites(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace: targetKeyspaceName,
+		Workflow: workflowName,
+	}, ts, time.Second, false)
+	require.NoError(t, err)
+
+	rules, err := topotools.GetRoutingRules(context.Background(), env.ts)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[tableName])
+	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[sourceKeyspaceName+"."+tableName])
+
+	sourceShard, err := env.ts.GetShard(context.Background(), sourceKeyspaceName, "0")
+	require.NoError(t, err)
+	require.Len(t, sourceShard.TabletControls, 1)
+	require.Equal(t, []string{tableName}, sourceShard.TabletControls[0].DeniedTables)
+
+	targetShard, err := env.ts.GetShard(context.Background(), targetKeyspaceName, "0")
+	require.NoError(t, err)
+	require.Empty(t, targetShard.TabletControls)
+
+	tsAfter, stateAfter, err := env.ws.getWorkflowState(context.Background(), targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
+	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
+}
+
+func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+
+	env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		},
+		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow:     workflowName,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: targetKeyspaceName,
+					Shard:    "0",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match: tableName,
+						}},
+					},
+				},
+			}},
+		},
+	})
+
+	_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Direction:   int32(DirectionForward),
+	})
+	require.EqualError(t, err, fmt.Sprintf("workflow %s.%s is invalid: MoveTables source keyspace matches target keyspace (%s)", targetKeyspaceName, workflowName, targetKeyspaceName))
+}
+
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
