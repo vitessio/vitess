@@ -81,6 +81,8 @@ def run_test():
         success, error, query_result = result
 
         sometimes(success, f"Get request successful", {"error":error})
+        log(f" Get request successful for {row_id}")
+
 
         if not success:
             log(f" Get request failed for {row_id}")
