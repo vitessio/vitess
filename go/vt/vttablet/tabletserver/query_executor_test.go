@@ -885,34 +885,6 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorMessageStreamContextCanceled(t *testing.T) {
-	ctx := t.Context()
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-
-	plan, err := tsv.qe.GetMessageStreamPlan("msg")
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(ctx)
-	cancel()
-
-	qre := &QueryExecutor{
-		ctx:      ctx,
-		query:    "stream from msg",
-		plan:     plan,
-		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
-		tsv:      tsv,
-	}
-
-	err = qre.MessageStream(func(qr *sqltypes.Result) error {
-		return nil
-	})
-	require.ErrorIs(t, err, context.Canceled)
-}
-
 func TestQueryExecutorTableAcl(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})

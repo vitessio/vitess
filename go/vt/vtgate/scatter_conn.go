@@ -579,7 +579,6 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 				return nil
 			default:
 			}
-
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
 			if time.Since(firstErrorTimeStamp) >= messageStreamGracePeriod {
 				// Cancel all streams and return an error.
