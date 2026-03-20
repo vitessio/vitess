@@ -59,11 +59,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
+	fmt.Printf("starting health check (vtgate=%s, cell=%s, timeout=%s)\n", *vtgateAddr, *cell, *timeout)
 	if err := checkEventually(ctx, *vtgateAddr, *cell, *pollInterval); err != nil {
 		assert.Unreachable("Vitess cluster health did not recover within timeout", map[string]any{"error": err.Error()})
 		fmt.Printf("health check failed: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("health check passed")
 }
 
 func checkEventually(ctx context.Context, vtgateAddr string, cell string, pollInterval time.Duration) error {
