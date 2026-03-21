@@ -367,6 +367,77 @@ func TestGossipServiceNilAgent(t *testing.T) {
 	assert.Empty(t, pushResp.Members)
 }
 
+func TestSingleObserverDownDoesNotPropagate(t *testing.T) {
+	// Regression test: if only one node marks the primary as Down
+	// (via local timeout), that verdict must NOT propagate to other
+	// nodes through gossip, because updateSuspicion does not bump
+	// LastUpdate — so the gossip merge rejects the stale timestamp.
+	transport := newLocalTransport()
+	clock := &testClock{now: time.Unix(0, 0)}
+
+	primary := newTestGossip("primary", []Member{{ID: "r1", Addr: "r1"}, {ID: "r2", Addr: "r2"}}, transport, clock, time.Second)
+	r1 := newTestGossip("r1", []Member{{ID: "primary", Addr: "primary"}, {ID: "r2", Addr: "r2"}}, transport, clock, 40*time.Millisecond)
+	r2 := newTestGossip("r2", []Member{{ID: "primary", Addr: "primary"}, {ID: "r1", Addr: "r1"}}, transport, clock, time.Second)
+
+	// All nodes alive and converged.
+	primary.UpdateLocal(HealthSnapshot{NodeID: "primary", Timestamp: clock.Now()})
+	r1.UpdateLocal(HealthSnapshot{NodeID: "r1", Timestamp: clock.Now()})
+	r2.UpdateLocal(HealthSnapshot{NodeID: "r2", Timestamp: clock.Now()})
+
+	primary.HandleJoin(&JoinRequest{Member: Member{ID: "r1", Addr: "r1"}})
+	primary.HandleJoin(&JoinRequest{Member: Member{ID: "r2", Addr: "r2"}})
+	r1.HandlePushPull(&Message{Members: []Member{{ID: "primary", Addr: "primary"}}, States: []StateDigest{{NodeID: "primary", Status: StatusAlive, LastUpdate: clock.Now()}}})
+	r2.HandlePushPull(&Message{Members: []Member{{ID: "primary", Addr: "primary"}}, States: []StateDigest{{NodeID: "primary", Status: StatusAlive, LastUpdate: clock.Now()}}})
+
+	// Simulate: r1 alone can't reach primary (partition), but primary is actually alive.
+	// Advance time past r1's MaxUpdateAge so r1 locally marks primary as Down.
+	transport.SetOffline("primary", true) // block r1 from reaching primary
+	clock.now = clock.now.Add(80 * time.Millisecond)
+	r1.updateSuspicion(clock.Now())
+	assert.Equal(t, StatusDown, r1.Snapshot()["primary"].Status, "r1 should locally see primary as Down")
+
+	// Now restore primary and have it gossip with r2 — primary is alive.
+	transport.SetOffline("primary", false)
+	primary.UpdateLocal(HealthSnapshot{NodeID: "primary", Timestamp: clock.Now()})
+	primary.gossipOnce(context.Background(), clock.Now())
+
+	// r1 gossips with r2. r1 sends primary=Down with the OLD timestamp.
+	// r2 should NOT adopt r1's Down because r2 already has primary=Alive
+	// with a NEWER timestamp from primary's direct gossip.
+	r1.gossipOnce(context.Background(), clock.Now())
+
+	// r2 must still see primary as Alive — single observer's Down must not spread.
+	assert.Equal(t, StatusAlive, r2.Snapshot()["primary"].Status, "r2 must not adopt r1's single-observer Down verdict")
+}
+
+func TestFutureTimestampClamped(t *testing.T) {
+	clock := &testClock{now: time.Unix(100, 0)}
+	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4, MaxUpdateAge: time.Second}, nil, clock)
+
+	// Apply a message with a far-future timestamp.
+	futureTime := clock.Now().Add(time.Hour)
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "node2"}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: futureTime}},
+	})
+
+	// The timestamp should be clamped to local time, not the future value.
+	state := g.Snapshot()["node2"]
+	assert.True(t, !state.LastUpdate.After(clock.Now()), "future timestamp should be clamped to local time")
+}
+
+func TestHandleJoinRejectsEmptyMember(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+
+	resp := g.HandleJoin(&JoinRequest{Member: Member{ID: "", Addr: ""}})
+	assert.Nil(t, resp, "HandleJoin should reject empty member ID")
+
+	// Verify no empty-string key was added to state.
+	_, exists := g.Snapshot()[""]
+	assert.False(t, exists, "empty node ID should not be in state map")
+}
+
 type failingDialer struct{}
 
 func (failingDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {

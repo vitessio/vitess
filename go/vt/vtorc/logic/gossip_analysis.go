@@ -147,8 +147,8 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		return nil
 	}
 
-	primaries, ersDisabled := gossipShardPrimaries(gossipAgent)
-	if len(primaries) == 0 {
+	primaries, ersDisabled, err := gossipShardPrimaries(gossipAgent)
+	if err != nil || len(primaries) == 0 {
 		return nil
 	}
 
@@ -189,7 +189,7 @@ type ersDisabledFlags struct {
 
 // gossipShardPrimaries returns a map of "keyspace/shard" -> primary tablet alias
 // and a map of ERS-disabled flags (both keyspace and shard level).
-func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[string]ersDisabledFlags) {
+func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[string]ersDisabledFlags, error) {
 	primaries := make(map[string]string)
 	disabled := make(map[string]ersDisabledFlags)
 	seen := make(map[string]bool)
@@ -197,7 +197,12 @@ func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[str
 	// Pre-load shard-level ERS-disabled state from VTOrc's DB.
 	// ReadKeyspaceShardStats returns per-shard data with both keyspace
 	// and shard disable flags already joined.
-	shardStats, _ := inst.ReadKeyspaceShardStats()
+	// If this fails, we return the error so the caller skips gossip
+	// analyses for this cycle rather than failing open.
+	shardStats, err := inst.ReadKeyspaceShardStats()
+	if err != nil {
+		return nil, nil, err
+	}
 	ersMap := make(map[string]bool, len(shardStats))
 	for _, s := range shardStats {
 		ersMap[s.Keyspace+"/"+s.Shard] = s.DisableEmergencyReparent
@@ -228,5 +233,5 @@ func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[str
 			disabled[key] = ersDisabledFlags{keyspace: true, shard: true}
 		}
 	}
-	return primaries, disabled
+	return primaries, disabled, nil
 }

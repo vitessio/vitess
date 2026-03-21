@@ -30,11 +30,13 @@ func newGossipAgent(cfg gossipConfig, tablet *topodatapb.Tablet) (*gossip.Gossip
 		return nil, false
 	}
 
-	nodeID := topoproto.TabletAliasString(tablet.Alias)
-	grpcAddr := tablet.Hostname
-	if port, ok := tablet.PortMap["grpc"]; ok {
-		grpcAddr = grpcAddr + ":" + strconv.Itoa(int(port))
+	port, ok := tablet.PortMap["grpc"]
+	if !ok || port == 0 {
+		return nil, false
 	}
+
+	nodeID := topoproto.TabletAliasString(tablet.Alias)
+	grpcAddr := tablet.Hostname + ":" + strconv.Itoa(int(port))
 
 	meta := map[string]string{
 		gossip.MetaKeyKeyspace:    tablet.Keyspace,

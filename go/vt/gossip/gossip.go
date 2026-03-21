@@ -257,7 +257,7 @@ func (g *Gossip) Members() []Member {
 }
 
 func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
-	if req == nil {
+	if req == nil || req.Member.ID == "" {
 		return nil
 	}
 
@@ -399,6 +399,11 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 	for _, digest := range msg.States {
 		if digest.NodeID == "" {
 			continue
+		}
+		// Clamp future timestamps to local time to prevent clock-skewed
+		// peers from pinning a node's freshness beyond actual observation.
+		if digest.LastUpdate.After(now) {
+			digest.LastUpdate = now
 		}
 		current := g.states[digest.NodeID]
 		if digest.LastUpdate.After(current.LastUpdate) || current.LastUpdate.IsZero() {
