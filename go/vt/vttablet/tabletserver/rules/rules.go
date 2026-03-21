@@ -1062,7 +1062,3 @@ func safeEncode(b *bytes.Buffer, prefix string, v any) {
 		_ = enc.Encode(err.Error())
 	}
 }
-
-type TableCond struct {
-	tableName string
-}

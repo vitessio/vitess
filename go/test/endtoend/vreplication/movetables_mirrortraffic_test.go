@@ -17,7 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -117,4 +120,76 @@ func TestMoveTablesMirrorTraffic(t *testing.T) {
 	t.Run(workflowFlavorNames[workflowFlavorVtctld], func(t *testing.T) {
 		testMoveTablesMirrorTraffic(t, workflowFlavorVtctld)
 	})
+}
+
+// TestMoveTablesMirrorTraffic_AllowReads verifies that when MirrorTraffic is enabled,
+// read-only queries (SELECT) can execute against denied tables on the target, while
+// write queries (INSERT, UPDATE, DELETE) are still blocked.
+func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	setSidecarDBName("_vt")
+	ogReplicas := defaultReplicas
+	ogRdOnly := defaultRdonly
+	defer func() {
+		defaultReplicas = ogReplicas
+		defaultRdonly = ogRdOnly
+	}()
+	defaultRdonly = 0
+	defaultReplicas = 0
+	vc = setupMinimalCluster(t)
+	defer vc.TearDown()
+
+	workflowName := "wf1"
+
+	_ = setupMinimalTargetKeyspace(t)
+
+	mtwf := &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: defaultTargetKs,
+		},
+		sourceKeyspace: defaultSourceKs,
+		tables:         "customer,loadtest",
+		mirrorFlags:    []string{"--percent", "100"},
+	}
+	mt := newMoveTables(vc, mtwf, workflowFlavorVtctld)
+
+	mt.Create()
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	// Before mirroring: verify tables are in the deny list on target
+	validateTableInDenyList(t, vc, fmt.Sprintf("%s:-80", defaultTargetKs), "customer", true)
+
+	// Enable MirrorTraffic - this should set allow_reads=true on denied tables
+	mt.MirrorTraffic()
+	confirmMirrorRulesExist(t)
+
+	// Use shard-targeted queries to bypass vtgate routing rules and test
+	// vttablet-level denied tables behavior directly.
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s:-80`", defaultTargetKs), 0, false)
+	require.NoError(t, err)
+
+	// Test 1: SELECT queries should succeed on denied tables when allow_reads=true
+	qr, err := vtgateConn.ExecuteFetch("SELECT count(*) FROM customer", 1, false)
+	require.NoError(t, err, "SELECT should succeed on denied table when allow_reads=true")
+	require.NotZero(t, len(qr.Rows))
+
+	// Test 2: INSERT should be blocked on denied tables
+	_, err = vtgateConn.ExecuteFetch("INSERT INTO customer(cid, name) VALUES (999, 'test')", 1, false)
+	require.Error(t, err, "INSERT should fail on denied table even with allow_reads=true")
+
+	// Test 3: UPDATE should be blocked on denied tables
+	_, err = vtgateConn.ExecuteFetch("UPDATE customer SET name = 'test' WHERE cid = 1", 1, false)
+	require.Error(t, err, "UPDATE should fail on denied table even with allow_reads=true")
+
+	// Test 4: DELETE should be blocked on denied tables
+	_, err = vtgateConn.ExecuteFetch("DELETE FROM customer WHERE cid = 999", 1, false)
+	require.Error(t, err, "DELETE should fail on denied table even with allow_reads=true")
+
+	// Clean up: switch traffic and verify mirror rules are removed
+	mt.SwitchReadsAndWrites()
+	confirmNoMirrorRules(t)
 }
