@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-import { Redirect, Route, Switch, useParams } from 'react-router';
-import { Link, useRouteMatch } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import style from './Shard.module.scss';
 import { NavCrumbs } from '../../layout/NavCrumbs';
@@ -40,7 +39,6 @@ interface RouteParams {
 
 export const Shard = () => {
     const params = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
 
     const shardName = `${params.keyspace}/${params.shard}`;
 
@@ -113,24 +111,20 @@ export const Shard = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Tablets" to={`${url}/tablets`} />
-                    <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
-                    <Tab text="Advanced" to={`${url}/advanced`} />
+                    <Tab text="Tablets" to="tablets" />
+                    <Tab text="JSON" to="json" />
+                    <Tab text="JSON Tree" to="json_tree" />
+                    <Tab text="Advanced" to="advanced" />
                 </TabContainer>
 
-                <Switch>
-                    <Route path={`${path}/tablets`}>
-                        <ShardTablets {...params} />
-                    </Route>
+                <Routes>
+                    <Route path="tablets" element={<ShardTablets {...params} />} />
 
-                    <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
-                    <Route path={`${path}/json_tree`}>{shard && <JSONViewTree data={shard} />}</Route>
-                    <Route path={`${path}/advanced`}>
-                        <Advanced />
-                    </Route>
-                    <Redirect from={path} to={`${path}/tablets`} />
-                </Switch>
+                    <Route path="json" element={shard ? <Code code={JSON.stringify(shard, null, 2)} /> : null} />
+                    <Route path="json_tree" element={shard ? <JSONViewTree data={shard} /> : null} />
+                    <Route path="advanced" element={<Advanced />} />
+                    <Route index element={<Navigate to="tablets" replace />} />
+                </Routes>
             </ContentContainer>
 
             {/* TODO skeleton placeholder */}

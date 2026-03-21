@@ -45,7 +45,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -508,6 +507,39 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 	require.NoError(t, err)
 	_, err = tsv.Commit(ctx, &target, state.TransactionID)
 	require.NoError(t, err)
+}
+
+func TestTabletServerExecuteNoResult(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Without NoResult, we get rows back.
+	result, err := tsv.Execute(ctx, nil, &target, executeSQL, nil, 0, 0, nil)
+	require.NoError(t, err)
+	assert.Len(t, result.Fields, 1)
+	assert.Len(t, result.Rows, 1)
+
+	// With NoResult, Fields and Rows should be empty.
+	options := &querypb.ExecuteOptions{NoResult: true}
+	result, err = tsv.Execute(ctx, nil, &target, executeSQL, nil, 0, 0, options)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.Empty(t, result.Rows)
 }
 
 func TestTabletServerCommiRollbacktFail(t *testing.T) {
