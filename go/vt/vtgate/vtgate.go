@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -57,6 +58,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
@@ -774,6 +776,67 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
+}
+
+// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	if !enableBinlogDump.Get() {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
+	}
+
+	im := callerid.ImmediateCallerIDFromContext(ctx)
+	if !binlogacl.Authorized(im) {
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError,
+			"User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
+	}
+
+	if req.Keyspace == "" || req.Shard == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog dump requires keyspace and shard")
+	}
+
+	tabletType := req.TabletType
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		tabletType = topodatapb.TabletType_PRIMARY
+	}
+
+	hasFilePosition := req.BinlogFilename != "" || req.BinlogPosition > 4
+	if hasFilePosition && req.TabletAlias == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog filename/position can only be used with tablet targeting (set tablet_alias); "+
+				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+	}
+
+	target := &querypb.Target{
+		Keyspace:   req.Keyspace,
+		Shard:      req.Shard,
+		TabletType: tabletType,
+	}
+
+	tabletRequest := &binlogdatapb.BinlogDumpGTIDRequest{
+		Target:         target,
+		BinlogFilename: req.BinlogFilename,
+		BinlogPosition: req.BinlogPosition,
+		GtidSet:        req.GtidSet,
+		Flags:          req.Flags,
+	}
+
+	callback := func(response *binlogdatapb.BinlogDumpResponse) error {
+		return send(&vtgatepb.BinlogDumpResponse{
+			Raw: response.Raw,
+		})
+	}
+
+	if req.TabletAlias != nil {
+		qs, err := vtg.gw.QueryServiceByAlias(ctx, req.TabletAlias, target)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get connection to tablet %s",
+				topoproto.TabletAliasString(req.TabletAlias))
+		}
+		return qs.BinlogDumpGTID(ctx, tabletRequest, callback)
+	}
+
+	return vtg.gw.BinlogDumpGTID(ctx, tabletRequest, callback)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

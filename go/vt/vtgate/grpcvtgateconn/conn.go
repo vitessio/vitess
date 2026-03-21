@@ -344,6 +344,27 @@ func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	}, nil
 }
 
+type binlogDumpGTIDAdapter struct {
+	stream vtgateservicepb.Vitess_BinlogDumpGTIDClient
+}
+
+func (a *binlogDumpGTIDAdapter) Recv() (*vtgatepb.BinlogDumpResponse, error) {
+	r, err := a.stream.Recv()
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return r, nil
+}
+
+func (conn *vtgateConn) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest) (vtgateconn.BinlogDumpGTIDReader, error) {
+	req.CallerId = callerid.EffectiveCallerIDFromContext(ctx)
+	stream, err := conn.c.BinlogDumpGTID(ctx, req)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return &binlogDumpGTIDAdapter{stream: stream}, nil
+}
+
 func (conn *vtgateConn) Close() {
 	conn.cc.Close()
 }

@@ -447,3 +447,43 @@ message CloseSessionResponse {
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
 }
+
+// BinlogDumpGTIDRequest is the payload for BinlogDumpGTID.
+message BinlogDumpGTIDRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // keyspace is the keyspace to stream binlog events from.
+  string keyspace = 2;
+  // shard is the specific shard within the keyspace.
+  string shard = 3;
+  // tablet_type is the type of tablet to stream from (default: PRIMARY).
+  topodata.TabletType tablet_type = 4;
+  // tablet_alias optionally targets a specific tablet by alias.
+  // When set, the stream is routed directly to this tablet.
+  // When unset, routing goes through health-check-based selection.
+  topodata.TabletAlias tablet_alias = 5;
+
+  // binlog_filename is the optional binlog filename to start from.
+  // Only valid when tablet_alias is set, since filenames differ across replicas.
+  string binlog_filename = 6;
+  // binlog_position is the position within the binlog file.
+  // Only valid when tablet_alias is set, since positions differ across replicas.
+  uint64 binlog_position = 7;
+  // gtid_set is the GTID set in string format (e.g., "uuid:1-5,uuid2:1-3").
+  string gtid_set = 8;
+
+  // flags is the raw 2-byte flags field passed through to MySQL.
+  // Known flags:
+  //   BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
+  //   USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
+  uint32 flags = 9;
+}
+
+// BinlogDumpResponse is streamed by BinlogDumpGTID.
+message BinlogDumpResponse {
+  // Raw MySQL response stream containing one or more full packets,
+  // including MySQL headers.
+  bytes raw = 1;
+}
