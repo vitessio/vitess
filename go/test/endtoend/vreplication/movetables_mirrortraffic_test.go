@@ -159,7 +159,7 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	// Before mirroring: verify tables are in the deny list on target
-	validateTableInDenyList(t, vc, fmt.Sprintf("%s:-80", defaultTargetKs), "customer", true)
+	validateTableInDenyList(t, vc, defaultTargetKs+":-80", "customer", true)
 
 	// Enable MirrorTraffic - this should set allow_reads=true on denied tables
 	mt.MirrorTraffic()

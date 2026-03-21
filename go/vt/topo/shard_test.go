@@ -173,6 +173,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 		cells      []string
 		remove     bool
 		tables     []string
+		allowReads bool
 
 		wantError         string
 		wantTabletControl *topodatapb.Shard_TabletControl
@@ -281,6 +282,52 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			remove:     true,
 			tables:     []string{"t1", "t2"},
 		},
+		{
+			name:       "add rdonly with allow reads on new record",
+			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"first"},
+			tables:     []string{"t1", "t2"},
+			allowReads: true,
+			wantTabletControl: &topodatapb.Shard_TabletControl{
+				TabletType:   topodatapb.TabletType_RDONLY,
+				Cells:        []string{"first"},
+				DeniedTables: []string{"t1", "t2"},
+				AllowReads:   true,
+			},
+		},
+		{
+			name:       "update existing rdonly to disable allow reads",
+			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"second"},
+			tables:     []string{"t1", "t2"},
+			allowReads: false,
+			wantTabletControl: &topodatapb.Shard_TabletControl{
+				TabletType:   topodatapb.TabletType_RDONLY,
+				Cells:        []string{"first", "second"},
+				DeniedTables: []string{"t1", "t2"},
+				AllowReads:   false,
+			},
+		},
+		{
+			name:       "update existing rdonly to enable allow reads",
+			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"third"},
+			tables:     []string{"t1", "t2"},
+			allowReads: true,
+			wantTabletControl: &topodatapb.Shard_TabletControl{
+				TabletType:   topodatapb.TabletType_RDONLY,
+				Cells:        []string{"first", "second", "third"},
+				DeniedTables: []string{"t1", "t2"},
+				AllowReads:   true,
+			},
+		},
+		{
+			name:       "remove rdonly entry to clean up",
+			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"first", "second", "third"},
+			remove:     true,
+			tables:     []string{"t1", "t2"},
+		},
 	}
 
 	for _, tcase := range testCases {
@@ -292,6 +339,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			if tcase.tables != nil || tcase.cells != nil {
 				err = si.UpdateDeniedTables(tcase.ctx, UpdateDeniedTablesOpts{
 					AllowCreate: true,
+					AllowReads:  tcase.allowReads,
 					Cells:       tcase.cells,
 					Remove:      tcase.remove,
 					Tables:      tcase.tables,

@@ -123,8 +123,10 @@ type UpdateDeniedTablesOpts struct {
 	// Cells specifies which cells to update. If nil, updates all cells.
 	Cells []string
 
-	// Remove specifies whether to remove the tables from the deny list.
-	// If false, tables are added to the deny list.
+	// Remove specifies whether to remove entries. For PRIMARY tablet types,
+	// this removes the specified tables from the deny list. For non-PRIMARY
+	// tablet types, this removes the specified cells from the tablet control
+	// record (the table list is not modified).
 	Remove bool
 
 	// Tables specifies the tables to add or remove from the deny list.
@@ -466,6 +468,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, opts UpdateDeniedTa
 	}
 
 	// We have an existing record, update the table lists.
+	tc.AllowReads = opts.AllowReads
 	if opts.Remove {
 		si.removeCellsFromTabletControl(tc, opts.TabletType, opts.Cells)
 	} else {
