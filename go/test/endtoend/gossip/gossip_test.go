@@ -101,8 +101,7 @@ func TestGossipEndToEnd(t *testing.T) {
 	g2 := newAgent("node2", []gossip.Member{{ID: "node1", Addr: "node1"}}, transport)
 	g3 := newAgent("node3", []gossip.Member{{ID: "node1", Addr: "node1"}}, transport)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	require.NoError(t, g1.Start(ctx))
 	require.NoError(t, g2.Start(ctx))

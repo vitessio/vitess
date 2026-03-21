@@ -114,8 +114,7 @@ func TestGossipConvergesWithSeeds(t *testing.T) {
 	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, clock, 100*time.Millisecond)
 	g2 := newTestGossip("node2", []Member{{ID: "node1", Addr: "node1"}}, transport, clock, 100*time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	require.NoError(t, g1.Start(ctx))
 	require.NoError(t, g2.Start(ctx))
@@ -140,8 +139,7 @@ func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
 	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, clock, 40*time.Millisecond)
 	g2 := newTestGossip("node2", []Member{{ID: "node1", Addr: "node1"}}, transport, clock, 40*time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	require.NoError(t, g1.Start(ctx))
 	require.NoError(t, g2.Start(ctx))
@@ -244,7 +242,7 @@ func TestGossipJoinUsesTransport(t *testing.T) {
 	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, clock, time.Second)
 	g2 := newTestGossip("node2", nil, transport, clock, time.Second)
 
-	resp, err := g1.Join(context.Background(), Member{ID: "node1", Addr: "node1"})
+	resp, err := g1.Join(t.Context(), Member{ID: "node1", Addr: "node1"})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -268,7 +266,7 @@ func TestGossipOnceMergesState(t *testing.T) {
 	g1.UpdateLocal(HealthSnapshot{NodeID: "node1", Timestamp: clock.Now()})
 	g2.UpdateLocal(HealthSnapshot{NodeID: "node2", Timestamp: clock.Now()})
 
-	g1.gossipOnce(context.Background(), clock.Now())
+	g1.gossipOnce(t.Context(), clock.Now())
 
 	state := g1.Snapshot()["node2"]
 	assert.Equal(t, StatusAlive, state.Status)
@@ -338,7 +336,7 @@ func TestPhiAccrualReturnsHighPhiForOldHeartbeat(t *testing.T) {
 func TestGRPCTransportNilDialer(t *testing.T) {
 	transport := NewGRPCTransport(nil).(*grpcTransport)
 
-	client, err := transport.dial(context.Background(), "addr")
+	client, err := transport.dial(t.Context(), "addr")
 	assert.NoError(t, err)
 	assert.Nil(t, client)
 }
@@ -346,11 +344,11 @@ func TestGRPCTransportNilDialer(t *testing.T) {
 func TestGRPCTransportErrorPropagation(t *testing.T) {
 	transport := NewGRPCTransport(failingDialer{})
 
-	resp, err := transport.PushPull(context.Background(), "addr", &Message{})
+	resp, err := transport.PushPull(t.Context(), "addr", &Message{})
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 
-	joinResp, err := transport.Join(context.Background(), "addr", &JoinRequest{})
+	joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, joinResp)
 }
@@ -358,11 +356,11 @@ func TestGRPCTransportErrorPropagation(t *testing.T) {
 func TestGossipServiceNilAgent(t *testing.T) {
 	service := &Service{}
 
-	joinResp, err := service.Join(context.Background(), &gossippb.GossipJoinRequest{})
+	joinResp, err := service.Join(t.Context(), &gossippb.GossipJoinRequest{})
 	require.NoError(t, err)
 	assert.Empty(t, joinResp.Members)
 
-	pushResp, err := service.PushPull(context.Background(), &gossippb.GossipMessage{})
+	pushResp, err := service.PushPull(t.Context(), &gossippb.GossipMessage{})
 	require.NoError(t, err)
 	assert.Empty(t, pushResp.Members)
 }
@@ -399,12 +397,12 @@ func TestSingleObserverDownDoesNotPropagate(t *testing.T) {
 	// Now restore primary and have it gossip with r2 — primary is alive.
 	transport.SetOffline("primary", false)
 	primary.UpdateLocal(HealthSnapshot{NodeID: "primary", Timestamp: clock.Now()})
-	primary.gossipOnce(context.Background(), clock.Now())
+	primary.gossipOnce(t.Context(), clock.Now())
 
 	// r1 gossips with r2. r1 sends primary=Down with the OLD timestamp.
 	// r2 should NOT adopt r1's Down because r2 already has primary=Alive
 	// with a NEWER timestamp from primary's direct gossip.
-	r1.gossipOnce(context.Background(), clock.Now())
+	r1.gossipOnce(t.Context(), clock.Now())
 
 	// r2 must still see primary as Alive — single observer's Down must not spread.
 	assert.Equal(t, StatusAlive, r2.Snapshot()["primary"].Status, "r2 must not adopt r1's single-observer Down verdict")

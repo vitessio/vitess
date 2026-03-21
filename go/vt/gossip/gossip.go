@@ -19,6 +19,7 @@ package gossip
 
 import (
 	"context"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"sync"
@@ -239,9 +240,7 @@ func (g *Gossip) Snapshot() map[NodeID]State {
 	defer g.mu.Unlock()
 
 	result := make(map[NodeID]State, len(g.states))
-	for id, state := range g.states {
-		result[id] = state
-	}
+	maps.Copy(result, g.states)
 	return result
 }
 

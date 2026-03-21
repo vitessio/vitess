@@ -166,6 +166,13 @@ Flags:
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
+      --gossip-enabled                                                   Enable gossip protocol participation
+      --gossip-listen-addr string                                        Address to bind gossip gRPC server (defaults to grpc bind addr)
+      --gossip-max-update-age duration                                   Max age before marking peer down (default 5s)
+      --gossip-phi-threshold float                                       Phi accrual threshold for suspecting peers (default 4)
+      --gossip-ping-interval duration                                    Gossip ping interval (default 1s)
+      --gossip-probe-timeout duration                                    Gossip probe timeout (default 500ms)
+      --gossip-seed-addrs strings                                        Comma-separated list of gossip seed addresses
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
