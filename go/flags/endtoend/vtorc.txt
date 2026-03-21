@@ -45,7 +45,6 @@ Flags:
       --gossip-phi-threshold float                                  Phi accrual threshold for suspecting peers (default 4)
       --gossip-ping-interval duration                               Gossip ping interval (default 1s)
       --gossip-probe-timeout duration                               Gossip probe timeout (default 500ms)
-      --gossip-seed-addrs strings                                   Comma-separated list of gossip seed addresses
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
