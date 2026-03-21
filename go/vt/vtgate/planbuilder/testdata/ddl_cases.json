@@ -52,7 +52,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+        "Query": "create procedure p1 (in a char(3), out b int) begin select c from x where d = e; end;"
       },
       "TablesUsed": [
         "main.p1"
@@ -92,7 +92,7 @@
           "Name": "main_2",
           "Sharded": false
         },
-        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+        "Query": "create procedure p1 (in a char(3), out b int) begin select c from x where d = e; end;"
       },
       "TablesUsed": [
         "main_2.p1"
@@ -132,7 +132,7 @@
           "Name": "main_2",
           "Sharded": false
         },
-        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+        "Query": "create procedure p1 (in a char(3), out b int) begin select c from x where d = e; end;"
       },
       "TablesUsed": [
         "main_2.p1"
@@ -152,7 +152,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "create procedure t1 (in x BIGINT) begin declare y DECIMAL(14,2); set y = 4.2; end;"
+        "Query": "create procedure t1 (in x bigint) begin declare y decimal(14,2); set y = 4.2; end;"
       },
       "TablesUsed": [
         "main.t1"
@@ -172,7 +172,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;"
+        "Query": "create procedure t1 (in x bigint) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;"
       },
       "TablesUsed": [
         "main.t1"

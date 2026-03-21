@@ -546,7 +546,6 @@ func (c *CreateTableEntity) normalize() *CreateTableEntity {
 
 func (c *CreateTableEntity) normalizeTableOptions() {
 	for _, opt := range c.TableSpec.Options {
-		opt.Name = strings.ToLower(opt.Name)
 		switch opt.Name {
 		case "charset":
 			opt.String = strings.ToLower(opt.String)
@@ -573,7 +572,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 // in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCharset() string {
 	for _, opt := range c.TableSpec.Options {
-		if strings.ToLower(opt.Name) == "charset" {
+		if opt.Name == "charset" {
 			opt.String = strings.ToLower(opt.String)
 			if charsetName, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				return charsetName
@@ -588,7 +587,7 @@ func (c *CreateTableEntity) GetCharset() string {
 // in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCollation() string {
 	for _, opt := range c.TableSpec.Options {
-		if strings.ToLower(opt.Name) == "collate" {
+		if opt.Name == "collate" {
 			opt.String = strings.ToLower(opt.String)
 			if collationName, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				return collationName
@@ -609,10 +608,10 @@ func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptio
 		collate: env.CollationEnv().LookupName(env.DefaultColl),
 	}
 	for _, option := range *tableOptions {
-		if strings.EqualFold(option.Name, "charset") {
+		if option.Name == "charset" {
 			cc.charset = option.String
 		}
-		if strings.EqualFold(option.Name, "collate") {
+		if option.Name == "collate" {
 			cc.collate = option.String
 		}
 	}
@@ -627,8 +626,6 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			col.Type.Options = &sqlparser.ColumnTypeOptions{}
 		}
 
-		// Map known lowercase fields to always be lowercase
-		col.Type.Type = strings.ToLower(col.Type.Type)
 		col.Type.Charset.Name = strings.ToLower(col.Type.Charset.Name)
 		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
 
@@ -810,7 +807,6 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 func (c *CreateTableEntity) normalizeIndexOptions() {
 	for _, idx := range c.TableSpec.Indexes {
 		for _, opt := range idx.Options {
-			opt.Name = strings.ToLower(opt.Name)
 			opt.String = strings.ToLower(opt.String)
 		}
 	}
@@ -906,12 +902,12 @@ func (c *CreateTableEntity) normalizeKeys() {
 		// Drop options that are the same as the default.
 		keptOptions := make([]*sqlparser.IndexOption, 0, len(key.Options))
 		for _, option := range key.Options {
-			switch strings.ToUpper(option.Name) {
-			case "USING":
+			switch option.Name {
+			case "using":
 				if strings.EqualFold(option.String, "BTREE") {
 					continue
 				}
-			case "VISIBLE":
+			case "visible":
 				continue
 			}
 			keptOptions = append(keptOptions, option)
@@ -1138,39 +1134,39 @@ func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
 	if option.Value != nil {
 		value = sqlparser.CanonicalString(option.Value)
 	}
-	switch strings.ToUpper(option.Name) {
-	case "CHECKSUM":
+	switch option.Name {
+	case "checksum":
 		return value == "0"
-	case "COMMENT":
+	case "comment":
 		return option.String == ""
-	case "COMPRESSION":
+	case "compression":
 		return value == "" || value == "''"
-	case "CONNECTION":
+	case "connection":
 		return value == "" || value == "''"
-	case "DATA DIRECTORY":
+	case "data directory":
 		return value == "" || value == "''"
-	case "DELAY_KEY_WRITE":
+	case "delay_key_write":
 		return value == "0"
-	case "ENCRYPTION":
+	case "encryption":
 		return value == "N"
-	case "INDEX DIRECTORY":
+	case "index directory":
 		return value == "" || value == "''"
-	case "KEY_BLOCK_SIZE":
+	case "key_block_size":
 		return value == "0"
-	case "MAX_ROWS":
+	case "max_rows":
 		return value == "0"
-	case "MIN_ROWS":
+	case "min_rows":
 		return value == "0"
-	case "PACK_KEYS":
-		return strings.EqualFold(option.String, "DEFAULT")
-	case "ROW_FORMAT":
-		return strings.EqualFold(option.String, "DEFAULT")
-	case "STATS_AUTO_RECALC":
-		return strings.EqualFold(option.String, "DEFAULT")
-	case "STATS_PERSISTENT":
-		return strings.EqualFold(option.String, "DEFAULT")
-	case "STATS_SAMPLE_PAGES":
-		return strings.EqualFold(option.String, "DEFAULT")
+	case "pack_keys":
+		return option.String == "default"
+	case "row_format":
+		return option.String == "default"
+	case "stats_auto_recalc":
+		return option.String == "default"
+	case "stats_persistent":
+		return option.String == "default"
+	case "stats_sample_pages":
+		return option.String == "default"
 	default:
 		return false
 	}
@@ -1196,69 +1192,69 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 		if _, ok := t2OptionsMap[t1Option.Name]; !ok {
 			// option exists in t1 but not in t2, hence it is dropped
 			var tableOption *sqlparser.TableOption
-			switch strings.ToUpper(t1Option.Name) {
-			case "AUTO_INCREMENT":
+			switch t1Option.Name {
+			case "auto_increment":
 				// skip
-			case "AUTOEXTEND_SIZE":
+			case "autoextend_size":
 				// skip
-			case "AVG_ROW_LENGTH":
+			case "avg_row_length":
 				// skip. MyISAM only, not interesting
-			case "CHARSET":
+			case "charset":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv().LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
+					tableOption = &sqlparser.TableOption{Name: "charset", String: c.Env.CollationEnv().LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
 					// in all other strategies we ignore the charset
 				}
-			case "CHECKSUM":
+			case "checksum":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
-			case "COLLATE":
+			case "collate":
 				// skip. the default collation is applied per CHARSET
-			case "COMMENT":
+			case "comment":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
-			case "COMPRESSION":
+			case "compression":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
-			case "CONNECTION":
+			case "connection":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
-			case "DATA DIRECTORY":
+			case "data directory":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
-			case "DELAY_KEY_WRITE":
+			case "delay_key_write":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
-			case "ENCRYPTION":
+			case "encryption":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("N")}
-			case "ENGINE":
+			case "engine":
 				// skip
-			case "ENGINE_ATTRIBUTE":
+			case "engine_attribute":
 				// skip
-			case "INDEX DIRECTORY":
+			case "index directory":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
-			case "INSERT_METHOD":
+			case "insert_method":
 				// MyISAM only. skip
-			case "KEY_BLOCK_SIZE":
+			case "key_block_size":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
-			case "MAX_ROWS":
+			case "max_rows":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
-			case "MIN_ROWS":
+			case "min_rows":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
-			case "PACK_KEYS":
-				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
-			case "PASSWORD":
+			case "pack_keys":
+				tableOption = &sqlparser.TableOption{String: "default"}
+			case "password":
 				// unused option. skip
-			case "ROW_FORMAT":
-				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
-			case "SECONDARY_ENGINE_ATTRIBUTE":
+			case "row_format":
+				tableOption = &sqlparser.TableOption{String: "default"}
+			case "secondary_engine_attribute":
 				// unused option. skip
-			case "STATS_AUTO_RECALC":
-				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
-			case "STATS_PERSISTENT":
-				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
-			case "STATS_SAMPLE_PAGES":
-				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
-			case "TABLESPACE":
+			case "stats_auto_recalc":
+				tableOption = &sqlparser.TableOption{String: "default"}
+			case "stats_persistent":
+				tableOption = &sqlparser.TableOption{String: "default"}
+			case "stats_sample_pages":
+				tableOption = &sqlparser.TableOption{String: "default"}
+			case "tablespace":
 				// not supporting the change, skip
-			case "UNION":
+			case "union":
 				// MyISAM/MERGE only. Skip
 			default:
-				return &UnsupportedTableOptionError{Table: c.Name(), Option: strings.ToUpper(t1Option.Name)}
+				return &UnsupportedTableOptionError{Table: c.Name(), Option: t1Option.Name}
 			}
 			if tableOption != nil {
 				tableOption.Name = t1Option.Name
@@ -1280,8 +1276,8 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			if !sqlparser.Equals.TableOptions(options1, options2) {
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
-				switch strings.ToUpper(t1Option.Name) {
-				case "CHARSET", "COLLATE":
+				switch t1Option.Name {
+				case "charset", "collate":
 					switch hints.TableCharsetCollateStrategy {
 					case TableCharsetCollateStrict:
 						modifyTableOption(t1Option, t2Option)
@@ -1293,7 +1289,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 					case TableCharsetCollateIgnoreAlways:
 						// ignore always
 					}
-				case "AUTO_INCREMENT":
+				case "auto_increment":
 					switch hints.AutoIncrementStrategy {
 					case AutoIncrementApplyAlways:
 						modifyTableOption(t1Option, t2Option)
@@ -1327,14 +1323,14 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 	// added options
 	for _, t2Option := range t2Options {
 		if _, ok := t1OptionsMap[t2Option.Name]; !ok {
-			switch strings.ToUpper(t2Option.Name) {
-			case "CHARSET", "COLLATE":
+			switch t2Option.Name {
+			case "charset", "collate":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
 					addTableOption(t2Option)
 					// in all other strategies we ignore the charset
 				}
-			case "AUTO_INCREMENT":
+			case "auto_increment":
 				switch hints.AutoIncrementStrategy {
 				case AutoIncrementApplyAlways, AutoIncrementApplyHigher:
 					addTableOption(t2Option)
@@ -2486,7 +2482,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			for _, option := range opt {
 				func() {
 					for i, existingOption := range c.TableSpec.Options {
-						if strings.EqualFold(option.Name, existingOption.Name) {
+						if option.Name == existingOption.Name {
 							if isDefaultTableOptionValue(option) {
 								// remove the option
 								c.TableSpec.Options = append(c.TableSpec.Options[0:i], c.TableSpec.Options[i+1:]...)
@@ -2897,7 +2893,7 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 // AutoIncrementValue returns the value of the AUTO_INCREMENT option, or zero if not exists.
 func (c *CreateTableEntity) AutoIncrementValue() (autoIncrement uint64, err error) {
 	for _, option := range c.TableSpec.Options {
-		if strings.ToUpper(option.Name) == "AUTO_INCREMENT" {
+		if option.Name == "auto_increment" {
 			autoIncrement, err := strconv.ParseUint(option.Value.Val, 10, 64)
 			if err != nil {
 				return 0, err

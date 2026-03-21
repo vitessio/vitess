@@ -84,7 +84,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	switch c.Type {
-	case "BINARY":
+	case "binary":
 		b := evalToBinary(e)
 		if c.Length != nil {
 			b.truncateInPlace(*c.Length)
@@ -92,7 +92,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		b.tt = int16(c.convertToBinaryType(e.SQLType()))
 		return b, nil
 
-	case "CHAR", "NCHAR":
+	case "char", "nchar":
 		t, err := evalToVarchar(e, c.Collation, true)
 		if err != nil {
 			// return NULL on error
@@ -103,13 +103,13 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		t.tt = int16(c.convertToCharType(e.SQLType()))
 		return t, nil
-	case "DECIMAL":
+	case "decimal":
 		m, d := c.decimalPrecision()
 		return evalToDecimal(e, m, d), nil
-	case "DOUBLE", "REAL":
+	case "double", "real":
 		f, _ := evalToFloat(e)
 		return f, nil
-	case "FLOAT":
+	case "float":
 		if c.Length != nil {
 			switch p := *c.Length; {
 			case p > 53:
@@ -117,13 +117,13 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 		return nil, c.returnUnsupportedError()
-	case "SIGNED", "SIGNED INTEGER":
+	case "signed", "signed integer":
 		return evalToInt64(e), nil
-	case "UNSIGNED", "UNSIGNED INTEGER":
+	case "unsigned", "unsigned integer":
 		return evalToInt64(e).toUint64(), nil
-	case "JSON":
+	case "json":
 		return evalToJSON(e)
-	case "DATETIME":
+	case "datetime":
 		p := ptr.Unwrap(c.Length, 0)
 		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
@@ -132,12 +132,12 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			return dt, nil
 		}
 		return nil, nil
-	case "DATE":
+	case "date":
 		if d := evalToDate(e, env.now, env.sqlmode.AllowZeroDate()); d != nil {
 			return d, nil
 		}
 		return nil, nil
-	case "TIME":
+	case "time":
 		p := ptr.Unwrap(c.Length, 0)
 		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
@@ -146,7 +146,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			return t, nil
 		}
 		return nil, nil
-	case "YEAR":
+	case "year":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")
@@ -187,52 +187,52 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 	var convt ctype
 
 	switch conv.Type {
-	case "BINARY":
+	case "binary":
 		convt = ctype{Type: conv.convertToBinaryType(arg.Type), Col: collationBinary}
 		c.asm.Convert_xb(1, convt.Type, conv.Length)
 
-	case "CHAR", "NCHAR":
+	case "char", "nchar":
 		convt = ctype{
 			Type: conv.convertToCharType(arg.Type),
 			Col:  collations.TypedCollation{Collation: conv.Collation},
 		}
 		c.asm.Convert_xc(1, convt.Type, convt.Col.Collation, conv.Length)
 
-	case "DECIMAL":
+	case "decimal":
 		m, d := conv.decimalPrecision()
 		convt = ctype{Type: sqltypes.Decimal, Col: collationNumeric, Size: m, Scale: d}
 		c.asm.Convert_xd(1, m, d)
 
-	case "DOUBLE", "REAL":
+	case "double", "real":
 		convt = c.compileToFloat(arg, 1)
 
-	case "FLOAT":
+	case "float":
 		return ctype{}, conv.returnUnsupportedError()
 
-	case "SIGNED", "SIGNED INTEGER":
+	case "signed", "signed integer":
 		convt = c.compileToInt64(arg, 1)
 
-	case "UNSIGNED", "UNSIGNED INTEGER":
+	case "unsigned", "unsigned integer":
 		convt = c.compileToUint64(arg, 1)
 
-	case "JSON":
+	case "json":
 		// TODO: what does NULL map to?
 		convt, err = c.compileToJSON(arg, 1)
 		if err != nil {
 			return ctype{}, err
 		}
 
-	case "DATE":
+	case "date":
 		convt = c.compileToDate(arg, 1)
 
-	case "DATETIME":
+	case "datetime":
 		p := ptr.Unwrap(conv.Length, 0)
 		if p > 6 {
 			return ctype{}, c.unsupported(conv)
 		}
 		convt = c.compileToDateTime(arg, 1, p)
 
-	case "TIME":
+	case "time":
 		p := ptr.Unwrap(conv.Length, 0)
 		if p > 6 {
 			return ctype{}, c.unsupported(conv)

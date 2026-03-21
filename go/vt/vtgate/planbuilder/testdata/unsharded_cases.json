@@ -12,7 +12,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+        "Query": "create procedure p1 (in a char(3), out b int) begin select c from x where d = e; end;"
       },
       "TablesUsed": [
         "main.p1"

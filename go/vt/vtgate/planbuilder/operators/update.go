@@ -596,19 +596,19 @@ func getCastTypeForColumn(updatedTable *vindexes.BaseTable, updExpr *sqlparser.U
 	case sqltypes.IsNull(ty):
 		return ""
 	case sqltypes.IsSigned(ty):
-		return "SIGNED"
+		return "signed"
 	case sqltypes.IsUnsigned(ty):
-		return "UNSIGNED"
+		return "unsigned"
 	case sqltypes.IsFloat(ty):
-		return "FLOAT"
+		return "float"
 	case sqltypes.IsDecimal(ty):
-		return "DECIMAL"
+		return "decimal"
 	case sqltypes.IsDateOrTime(ty):
-		return "DATETIME"
+		return "datetime"
 	case sqltypes.IsBinary(ty):
-		return "BINARY"
+		return "binary"
 	case sqltypes.IsText(ty):
-		return "CHAR"
+		return "char"
 	default:
 		return ""
 	}
