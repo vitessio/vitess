@@ -156,12 +156,14 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 	for key, primaryAlias := range primaries {
 		alias, parseErr := topoproto.ParseTabletAlias(primaryAlias)
 		if parseErr != nil {
-			vtorcView[key] = true
+			// Can't parse alias — abstain from tiebreaker rather than
+			// treating unknown state as confirmation of failure.
 			continue
 		}
 		instance, found, err := inst.ReadInstance(alias)
 		if err != nil || !found || instance == nil {
-			vtorcView[key] = true
+			// Can't read instance — abstain. Only break a tie when we
+			// have positive evidence the health check failed.
 			continue
 		}
 		vtorcView[key] = !instance.IsLastCheckValid
@@ -186,11 +188,20 @@ type ersDisabledFlags struct {
 }
 
 // gossipShardPrimaries returns a map of "keyspace/shard" -> primary tablet alias
-// and a map of ERS-disabled flags.
+// and a map of ERS-disabled flags (both keyspace and shard level).
 func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[string]ersDisabledFlags) {
 	primaries := make(map[string]string)
 	disabled := make(map[string]ersDisabledFlags)
 	seen := make(map[string]bool)
+
+	// Pre-load shard-level ERS-disabled state from VTOrc's DB.
+	// ReadKeyspaceShardStats returns per-shard data with both keyspace
+	// and shard disable flags already joined.
+	shardStats, _ := inst.ReadKeyspaceShardStats()
+	ersMap := make(map[string]bool, len(shardStats))
+	for _, s := range shardStats {
+		ersMap[s.Keyspace+"/"+s.Shard] = s.DisableEmergencyReparent
+	}
 
 	for _, m := range state.Members() {
 		ks := m.Meta[gossip.MetaKeyKeyspace]
@@ -210,11 +221,11 @@ func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[str
 		}
 		primaries[key] = topoproto.TabletAliasString(primary.Alias)
 
-		ksInfo, err := inst.ReadKeyspace(ks)
-		if err == nil && ksInfo != nil && ksInfo.VtorcState != nil {
-			disabled[key] = ersDisabledFlags{
-				keyspace: ksInfo.VtorcState.DisableEmergencyReparent,
-			}
+		// ersMap has the combined keyspace OR shard disable flag.
+		// Set both fields so isERSEnabled() correctly blocks recovery
+		// when either keyspace or shard has ERS disabled.
+		if ersDisabled := ersMap[key]; ersDisabled {
+			disabled[key] = ersDisabledFlags{keyspace: true, shard: true}
 		}
 	}
 	return primaries, disabled

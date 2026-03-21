@@ -121,6 +121,7 @@ func TestGossipEndToEnd(t *testing.T) {
 	}, 300*time.Millisecond, 10*time.Millisecond)
 
 	transport.SetOffline("node3", true)
+	g3.Stop() // Simulate process death: stop outgoing gossip too.
 	assert.Eventually(t, func() bool {
 		return g1.Snapshot()["node3"].Status == gossip.StatusDown &&
 			g2.Snapshot()["node3"].Status == gossip.StatusDown

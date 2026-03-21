@@ -301,6 +301,16 @@ func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 	}
 
 	g.mu.Lock()
+	// Refresh self state so peers see a current timestamp on every
+	// gossip round. Without this, the local node's LastUpdate goes
+	// stale and peers mark it Down via MaxUpdateAge.
+	if g.cfg.NodeID != "" {
+		state := g.states[g.cfg.NodeID]
+		state.Status = StatusAlive
+		state.LastUpdate = now
+		g.states[g.cfg.NodeID] = state
+		g.observeLocked(g.cfg.NodeID, now)
+	}
 	msg := g.snapshotMessageLocked()
 	g.mu.Unlock()
 
