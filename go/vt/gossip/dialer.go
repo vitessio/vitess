@@ -19,6 +19,7 @@ package gossip
 import (
 	"context"
 	"io"
+	"log/slog"
 
 	"google.golang.org/grpc"
 
@@ -33,7 +34,7 @@ type GRPCDialer struct{}
 func (GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
 	conn, err := grpcclient.DialContext(ctx, target, grpcclient.FailFast(false))
 	if err != nil {
-		log.Errorf("gossip dial failed to %s: %v", target, err)
+		log.Error("gossip dial failed", slog.String("target", target), slog.Any("error", err))
 		return nil, err
 	}
 	client := gossippb.NewGossipClient(conn)

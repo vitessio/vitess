@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"io"
+	"log/slog"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -61,7 +62,7 @@ func startGossip() {
 		}
 
 		if err := gossipAgent.Start(context.Background()); err != nil {
-			log.Errorf("failed to start gossip: %v", err)
+			log.Error("failed to start gossip", slog.Any("error", err))
 			return
 		}
 

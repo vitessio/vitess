@@ -1094,7 +1094,7 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	if analysisEntry.Analysis == inst.PrimaryTabletUnreachableByQuorum {
 		gossipEntries := getGossipQuorumAnalyses()
 		for _, entry := range gossipEntries {
-			if entry.AnalyzedInstanceAlias == analysisEntry.AnalyzedInstanceAlias && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
+			if topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias) && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
 				return false, nil
 			}
 		}

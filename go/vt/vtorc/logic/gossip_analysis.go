@@ -122,8 +122,13 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 		return nil
 	}
 
+	alias, err := topoproto.ParseTabletAlias(primaryAlias)
+	if err != nil {
+		return nil
+	}
+
 	return &inst.DetectionAnalysis{
-		AnalyzedInstanceAlias: primaryAlias,
+		AnalyzedInstanceAlias: alias,
 		AnalyzedKeyspace:      group.keyspace,
 		AnalyzedShard:         group.shard,
 		Analysis:              inst.PrimaryTabletUnreachableByQuorum,
@@ -149,7 +154,12 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 
 	vtorcView := make(map[string]bool, len(primaries))
 	for key, primaryAlias := range primaries {
-		instance, found, err := inst.ReadInstance(primaryAlias)
+		alias, parseErr := topoproto.ParseTabletAlias(primaryAlias)
+		if parseErr != nil {
+			vtorcView[key] = true
+			continue
+		}
+		instance, found, err := inst.ReadInstance(alias)
 		if err != nil || !found || instance == nil {
 			vtorcView[key] = true
 			continue

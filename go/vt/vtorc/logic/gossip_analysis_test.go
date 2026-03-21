@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/gossip"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
@@ -50,9 +51,9 @@ func makeMember(id, keyspace, shard, alias string) gossip.Member {
 func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -60,13 +61,13 @@ func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-	assert.Equal(t, "zone1-100", results[0].AnalyzedInstanceAlias)
+	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
 	assert.Equal(t, "ks", results[0].AnalyzedKeyspace)
 	assert.Equal(t, "0", results[0].AnalyzedShard)
 	assert.True(t, results[0].IsClusterPrimary)
@@ -76,9 +77,9 @@ func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
@@ -86,7 +87,7 @@ func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
 			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -96,10 +97,10 @@ func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
 func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "0", "zone1-400"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "0", "zone1-0000000400"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -108,7 +109,7 @@ func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
 			"node4": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -118,15 +119,15 @@ func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
 func TestQuorumAnalysis_InsufficientObservers(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
 			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -136,9 +137,9 @@ func TestQuorumAnalysis_InsufficientObservers(t *testing.T) {
 func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -146,7 +147,7 @@ func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
 			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -157,11 +158,11 @@ func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
 func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "0", "zone1-400"),
-			makeMember("node5", "ks", "0", "zone1-500"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "0", "zone1-0000000400"),
+			makeMember("node5", "ks", "0", "zone1-0000000500"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -171,7 +172,7 @@ func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
 			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -181,11 +182,11 @@ func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
 func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "0", "zone1-400"),
-			makeMember("node5", "ks", "0", "zone1-500"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "0", "zone1-0000000400"),
+			makeMember("node5", "ks", "0", "zone1-0000000500"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -195,7 +196,7 @@ func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
 			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": true}
 
 	results := analyzeGossipQuorum(state, primaries, vtorcView)
@@ -207,11 +208,11 @@ func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
 func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "0", "zone1-400"),
-			makeMember("node5", "ks", "0", "zone1-500"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "0", "zone1-0000000400"),
+			makeMember("node5", "ks", "0", "zone1-0000000500"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -221,7 +222,7 @@ func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
 			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": false}
 
 	results := analyzeGossipQuorum(state, primaries, vtorcView)
@@ -232,10 +233,10 @@ func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
 func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "0", "zone1-400"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "0", "zone1-0000000400"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -244,7 +245,7 @@ func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
 			"node4": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -255,12 +256,12 @@ func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
 func TestQuorumAnalysis_MultipleShardsIndependent(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
-			makeMember("node4", "ks", "80-", "zone1-400"),
-			makeMember("node5", "ks", "80-", "zone1-500"),
-			makeMember("node6", "ks", "80-", "zone1-600"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("node4", "ks", "80-", "zone1-0000000400"),
+			makeMember("node5", "ks", "80-", "zone1-0000000500"),
+			makeMember("node6", "ks", "80-", "zone1-0000000600"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
@@ -272,23 +273,23 @@ func TestQuorumAnalysis_MultipleShardsIndependent(t *testing.T) {
 		},
 	}
 	primaries := map[string]string{
-		"ks/0":   "zone1-100",
-		"ks/80-": "zone1-400",
+		"ks/0":   "zone1-0000000100",
+		"ks/80-": "zone1-0000000400",
 	}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
-	assert.Equal(t, "zone1-100", results[0].AnalyzedInstanceAlias)
+	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
 	assert.Equal(t, "0", results[0].AnalyzedShard)
 }
 
 func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusSuspect, LastUpdate: time.Now()},
@@ -296,7 +297,7 @@ func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
 			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
 		},
 	}
-	primaries := map[string]string{"ks/0": "zone1-100"}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
 	results := analyzeGossipQuorum(state, primaries, nil)
 
@@ -304,7 +305,7 @@ func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
 }
 
 func TestQuorumAnalysis_NilState(t *testing.T) {
-	results := analyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-100"}, nil)
+	results := analyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil)
 
 	assert.Empty(t, results)
 }
@@ -312,9 +313,9 @@ func TestQuorumAnalysis_NilState(t *testing.T) {
 func TestQuorumAnalysis_ShardNotInPrimariesMap(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-100"),
-			makeMember("node2", "ks", "0", "zone1-200"),
-			makeMember("node3", "ks", "0", "zone1-300"),
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
 		},
 		states: map[gossip.NodeID]gossip.State{
 			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
