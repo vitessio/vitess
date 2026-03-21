@@ -4340,7 +4340,12 @@ type EmergencyReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
-	ExpectNoPrimary bool                  `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
+	// ExpectNoPrimary, if true, requires that the shard currently has no
+	// primary recorded in topology (Shard.PrimaryAlias is unset) for the
+	// reparent operation to proceed. If a primary alias is set, the RPC
+	// fails with FAILED_PRECONDITION. The check uses PrimaryAlias only, not
+	// IsPrimaryServing or tablet-reported types.
+	ExpectNoPrimary bool `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -10448,7 +10453,12 @@ type PlannedReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
-	ExpectNoPrimary bool                  `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
+	// ExpectNoPrimary, if true, requires that the shard currently has no
+	// primary recorded in topology (Shard.PrimaryAlias is unset) for the
+	// reparent operation to proceed. If a primary alias is set, the RPC
+	// fails with FAILED_PRECONDITION. The check uses PrimaryAlias only, not
+	// IsPrimaryServing or tablet-reported types.
+	ExpectNoPrimary bool `protobuf:"varint,9,opt,name=expect_no_primary,json=expectNoPrimary,proto3" json:"expect_no_primary,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
