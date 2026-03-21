@@ -60433,6 +60433,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary */
         expected_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest expect_no_primary */
+        expect_no_primary?: (boolean|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -60467,6 +60470,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary. */
         public expected_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest expect_no_primary. */
+        public expect_no_primary: boolean;
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
@@ -72058,6 +72064,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest expected_primary */
         expected_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest expect_no_primary */
+        expect_no_primary?: (boolean|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -72092,6 +72101,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest expected_primary. */
         public expected_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest expect_no_primary. */
+        public expect_no_primary: boolean;
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.
