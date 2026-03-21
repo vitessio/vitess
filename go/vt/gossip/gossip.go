@@ -87,6 +87,7 @@ type (
 		NodeID       NodeID
 		BindAddr     string
 		Seeds        []Member
+		Meta         map[string]string
 		PhiThreshold float64
 		PingInterval time.Duration
 		ProbeTimeout time.Duration
@@ -115,6 +116,12 @@ const (
 	StatusAlive
 	StatusSuspect
 	StatusDown
+)
+
+const (
+	MetaKeyKeyspace    = "keyspace"
+	MetaKeyShard       = "shard"
+	MetaKeyTabletAlias = "tablet_alias"
 )
 
 type (
@@ -149,7 +156,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	}
 
 	if cfg.NodeID != "" {
-		g.members[cfg.NodeID] = Member{ID: cfg.NodeID, Addr: cfg.BindAddr}
+		g.members[cfg.NodeID] = Member{ID: cfg.NodeID, Addr: cfg.BindAddr, Meta: cfg.Meta}
 		g.states[cfg.NodeID] = State{Status: StatusAlive, LastUpdate: g.clock.Now()}
 		g.detectors[cfg.NodeID] = newPhiAccrual(50)
 	}
@@ -168,10 +175,13 @@ func (g *Gossip) Start(ctx context.Context) error {
 		return nil
 	}
 
+	g.mu.Lock()
+	g.stop = make(chan struct{})
+	g.stopped.Store(false)
+	g.mu.Unlock()
+
 	ticker := time.NewTicker(g.cfg.PingInterval)
 	go func() {
-		g.stopped.Store(false)
-		g.stop = make(chan struct{})
 		defer g.stopped.Store(true)
 		defer ticker.Stop()
 		for {
@@ -194,7 +204,7 @@ func (g *Gossip) Start(ctx context.Context) error {
 func (g *Gossip) Stop() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if !g.stopped.Load() {
+	if g.stopped.Load() {
 		return
 	}
 	close(g.stop)
@@ -339,11 +349,13 @@ func (g *Gossip) updateSuspicion(now time.Time) {
 			continue
 		}
 		phi := detector.Phi(now)
-		if phi > state.Phi {
-			state.Phi = phi
-		}
-		if state.Status == StatusAlive && phi >= g.cfg.PhiThreshold {
-			state.Status = StatusSuspect
+		state.Phi = phi
+		if phi >= g.cfg.PhiThreshold {
+			if state.Status == StatusAlive {
+				state.Status = StatusSuspect
+			}
+		} else if state.Status == StatusSuspect {
+			state.Status = StatusAlive
 		}
 		if g.cfg.MaxUpdateAge > 0 && now.Sub(state.LastUpdate) > g.cfg.MaxUpdateAge {
 			state.Status = StatusDown

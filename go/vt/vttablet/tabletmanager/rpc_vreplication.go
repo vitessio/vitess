@@ -676,26 +676,47 @@ func getOptionSetString(config map[string]string) string {
 	}
 	sort.Strings(keys)
 	sort.Strings(deletedKeys)
-	clause := "options"
+	clause := strings.Builder{}
 	if len(deletedKeys) > 0 {
 		// We need to quote the key in the json functions because flag names can contain hyphens.
-		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
+		clause.WriteString("json_remove(options, '$.config.\"")
+		clause.WriteString(deletedKeys[0])
+		clause.WriteString("\"'")
 		for _, k := range deletedKeys[1:] {
-			clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
+			clause.WriteString(", '$.config.\"")
+			clause.WriteString(k)
+			clause.WriteString("\"'")
 		}
-		clause += ")"
+		clause.WriteString(")")
 	}
 	if len(keys) > 0 {
-		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		var prev string
+		if clause.Len() == 0 {
+			prev = "options"
+		} else {
+			prev = clause.String()
+			clause.Reset()
+		}
+		// clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		clause.WriteString("json_set(")
+		clause.WriteString(prev)
+		clause.WriteString(", '$.config', json_object(), ")
 		for i, k := range keys {
 			if i > 0 {
-				clause += ", "
+				clause.WriteString(", ")
 			}
-			clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
+			clause.WriteString("'$.config.\"")
+			clause.WriteString(k)
+			clause.WriteString("\"', '")
+			clause.WriteString(strings.TrimSpace(config[k]))
+			clause.WriteString("'")
 		}
-		clause += ")"
+		clause.WriteString(")")
 	}
-	options = ", options = " + clause
+	if clause.Len() == 0 {
+		clause.WriteString("options")
+	}
+	options = ", options = " + clause.String()
 	return options
 }
 

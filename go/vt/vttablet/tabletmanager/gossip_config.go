@@ -50,7 +50,7 @@ func init() {
 	})
 }
 
-func (cfg gossipConfig) agent(nodeID string, grpcAddr string) *gossip.Gossip {
+func (cfg gossipConfig) agent(nodeID string, grpcAddr string, meta map[string]string) *gossip.Gossip {
 	if !cfg.enabled {
 		return nil
 	}
@@ -74,6 +74,7 @@ func (cfg gossipConfig) agent(nodeID string, grpcAddr string) *gossip.Gossip {
 		NodeID:       gossip.NodeID(nodeID),
 		BindAddr:     bindAddr,
 		Seeds:        seeds,
+		Meta:         meta,
 		PhiThreshold: cfg.phiThreshold,
 		PingInterval: cfg.pingInterval,
 		ProbeTimeout: cfg.probeTimeout,

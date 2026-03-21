@@ -36,6 +36,12 @@ func newGossipAgent(cfg gossipConfig, tablet *topodatapb.Tablet) (*gossip.Gossip
 		grpcAddr = grpcAddr + ":" + strconv.Itoa(int(port))
 	}
 
-	agent := cfg.agent(nodeID, grpcAddr)
+	meta := map[string]string{
+		gossip.MetaKeyKeyspace:    tablet.Keyspace,
+		gossip.MetaKeyShard:       tablet.Shard,
+		gossip.MetaKeyTabletAlias: nodeID,
+	}
+
+	agent := cfg.agent(nodeID, grpcAddr, meta)
 	return agent, agent != nil
 }

@@ -60,6 +60,7 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
 )
 
 type StructureAnalysisCode string

@@ -534,7 +534,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
@@ -940,6 +940,17 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 		}
 	}
 
+	// Also check gossip-based analyses. The SQL-based analysis won't find
+	// PrimaryTabletUnreachableByQuorum since it comes from gossip state.
+	if analysisEntry.Analysis == inst.PrimaryTabletUnreachableByQuorum {
+		gossipEntries := getGossipQuorumAnalyses()
+		for _, entry := range gossipEntries {
+			if entry.AnalyzedInstanceAlias == analysisEntry.AnalyzedInstanceAlias && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
+				return false, nil
+			}
+		}
+	}
+
 	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
 	return true, nil
 }
@@ -952,6 +963,11 @@ func CheckAndRecover() {
 		log.Error(err)
 		return
 	}
+
+	// Merge gossip-based quorum analyses before the metrics loop
+	// so they appear in detectedProblems monitoring.
+	gossipAnalyses := getGossipQuorumAnalyses()
+	detectionAnalysis = append(detectionAnalysis, gossipAnalyses...)
 
 	// Regardless of if the problem is solved or not we want to monitor active
 	// issues, we use a map of labels and set a counter to `1` for each problem
