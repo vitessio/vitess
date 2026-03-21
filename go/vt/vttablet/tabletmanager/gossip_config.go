@@ -29,7 +29,6 @@ import (
 type gossipConfig struct {
 	enabled      bool
 	listenAddr   string
-	seedAddrs    []string
 	phiThreshold float64
 	pingInterval time.Duration
 	probeTimeout time.Duration
@@ -41,7 +40,6 @@ var vttabletGossipConfig gossipConfig
 func init() {
 	servenv.OnParseFor("vttablet", func(fs *pflag.FlagSet) {
 		utils.SetFlagStringVar(fs, &vttabletGossipConfig.listenAddr, "gossip-listen-addr", vttabletGossipConfig.listenAddr, "Address to bind gossip gRPC server (defaults to grpc bind addr)")
-		utils.SetFlagStringSliceVar(fs, &vttabletGossipConfig.seedAddrs, "gossip-seed-addrs", vttabletGossipConfig.seedAddrs, "Comma-separated list of gossip seed addresses")
 		utils.SetFlagBoolVar(fs, &vttabletGossipConfig.enabled, "gossip-enabled", vttabletGossipConfig.enabled, "Enable gossip protocol participation")
 		utils.SetFlagFloat64Var(fs, &vttabletGossipConfig.phiThreshold, "gossip-phi-threshold", 4, "Phi accrual threshold for suspecting peers")
 		utils.SetFlagDurationVar(fs, &vttabletGossipConfig.pingInterval, "gossip-ping-interval", 1*time.Second, "Gossip ping interval")
@@ -50,17 +48,9 @@ func init() {
 	})
 }
 
-func (cfg gossipConfig) agent(nodeID string, grpcAddr string, meta map[string]string) *gossip.Gossip {
+func (cfg gossipConfig) agent(nodeID string, grpcAddr string, meta map[string]string, seeds []gossip.Member) *gossip.Gossip {
 	if !cfg.enabled {
 		return nil
-	}
-
-	seeds := make([]gossip.Member, 0, len(cfg.seedAddrs))
-	for _, addr := range cfg.seedAddrs {
-		if addr == "" {
-			continue
-		}
-		seeds = append(seeds, gossip.Member{ID: gossip.NodeID(addr), Addr: addr})
 	}
 
 	bindAddr := cfg.listenAddr

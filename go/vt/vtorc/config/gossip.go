@@ -23,7 +23,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
-	"vitess.io/vitess/go/vt/gossip"
 )
 
 var (
@@ -40,14 +39,6 @@ var (
 		viperutil.Options[string]{
 			FlagName: "gossip-listen-addr",
 			Default:  "",
-			Dynamic:  false,
-		},
-	)
-	gossipSeedAddrs = viperutil.Configure(
-		"gossip-seed-addrs",
-		viperutil.Options[[]string]{
-			FlagName: "gossip-seed-addrs",
-			Default:  []string{},
 			Dynamic:  false,
 		},
 	)
@@ -88,7 +79,6 @@ var (
 func registerGossipFlags(fs *pflag.FlagSet) {
 	fs.Bool("gossip-enabled", gossipEnabled.Default(), "Enable gossip protocol participation")
 	fs.String("gossip-listen-addr", gossipListenAddr.Default(), "Address to bind gossip gRPC server")
-	fs.StringSlice("gossip-seed-addrs", gossipSeedAddrs.Default(), "Comma-separated list of gossip seed addresses")
 	fs.Float64("gossip-phi-threshold", gossipPhiThreshold.Default(), "Phi accrual threshold for suspecting peers")
 	fs.Duration("gossip-ping-interval", gossipPingInterval.Default(), "Gossip ping interval")
 	fs.Duration("gossip-probe-timeout", gossipProbeTimeout.Default(), "Gossip probe timeout")
@@ -97,7 +87,6 @@ func registerGossipFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		gossipEnabled,
 		gossipListenAddr,
-		gossipSeedAddrs,
 		gossipPhiThreshold,
 		gossipPingInterval,
 		gossipProbeTimeout,
@@ -111,18 +100,6 @@ func GossipEnabled() bool {
 
 func GossipListenAddr() string {
 	return gossipListenAddr.Get()
-}
-
-func GossipSeeds() []gossip.Member {
-	seeds := gossipSeedAddrs.Get()
-	members := make([]gossip.Member, 0, len(seeds))
-	for _, addr := range seeds {
-		if addr == "" {
-			continue
-		}
-		members = append(members, gossip.Member{ID: gossip.NodeID(addr), Addr: addr})
-	}
-	return members
 }
 
 func GossipPhiThreshold() float64 {

@@ -31,7 +31,6 @@ func TestVTOrcGossipFlags(t *testing.T) {
 
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, []string{
 		"--gossip-enabled",
-		"--gossip-seed-addrs", "localhost:16100",
 		"--gossip-listen-addr", "localhost:16101",
 	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 

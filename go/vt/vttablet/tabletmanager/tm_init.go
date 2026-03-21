@@ -422,7 +422,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
 	if tm.Gossip == nil {
-		if agent, enabled := newGossipAgent(vttabletGossipConfig, tablet); enabled {
+		if agent, enabled := newGossipAgent(vttabletGossipConfig, tablet, tm.TopoServer); enabled {
 			tm.Gossip = agent
 			tm.GossipEnabled = enabled
 		}

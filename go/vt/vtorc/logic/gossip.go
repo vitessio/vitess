@@ -18,19 +18,24 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/db"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -44,13 +49,13 @@ func startGossip() {
 			return
 		}
 
-		dialer := gossipDialer{seeds: config.GossipSeeds()}
-		transport := gossip.NewGRPCTransport(dialer)
+		seeds := discoverGossipSeeds()
+		transport := gossip.NewGRPCTransport(gossipDialer{})
 
 		gossipAgent = gossip.New(gossip.Config{
 			NodeID:       gossip.NodeID(config.GossipNodeID()),
 			BindAddr:     config.GossipListenAddr(),
-			Seeds:        config.GossipSeeds(),
+			Seeds:        seeds,
 			PhiThreshold: config.GossipPhiThreshold(),
 			PingInterval: config.GossipPingInterval(),
 			ProbeTimeout: config.GossipProbeTimeout(),
@@ -77,16 +82,36 @@ func stopGossip() {
 	gossipAgent.Stop()
 }
 
-type gossipDialer struct {
-	seeds []gossip.Member
+// discoverGossipSeeds queries VTOrc's tablet DB for all known tablets
+// and returns their gRPC addresses as gossip seeds.
+func discoverGossipSeeds() []gossip.Member {
+	query := `SELECT info FROM vitess_tablet`
+	var seeds []gossip.Member
+	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+	_ = db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		tablet := &topodatapb.Tablet{}
+		if err := opts.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
+			return nil
+		}
+		grpcPort, ok := tablet.PortMap["grpc"]
+		if !ok || grpcPort == 0 || tablet.Hostname == "" {
+			return nil
+		}
+		addr := fmt.Sprintf("%s:%d", tablet.Hostname, grpcPort)
+		seeds = append(seeds, gossip.Member{
+			ID:   gossip.NodeID(addr),
+			Addr: addr,
+		})
+		return nil
+	})
+	return seeds
 }
+
+type gossipDialer struct{}
 
 func (d gossipDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
 	if target == "" {
-		if len(d.seeds) == 0 {
-			return nil, nil
-		}
-		target = d.seeds[0].Addr
+		return nil, nil
 	}
 	conn, err := grpcclient.DialContext(ctx, target, grpcclient.FailFast(false))
 	if err != nil {
