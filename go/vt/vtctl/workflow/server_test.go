@@ -1684,13 +1684,13 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, createJournalQR)
 	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, freezeWFQR)
 
-	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	ts, state, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
 	require.NoError(t, err)
 
 	_, _, err = env.ws.switchWrites(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace: targetKeyspaceName,
 		Workflow: workflowName,
-	}, ts, time.Second, false)
+	}, ts, state, time.Second, false)
 	require.NoError(t, err)
 
 	rules, err := topotools.GetRoutingRules(context.Background(), env.ts)
