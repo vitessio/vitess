@@ -419,7 +419,7 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 				// conditions above. This is safe because traffic mirroring
 				// currently only supports SELECT-family plans, which must
 				// continue to respect denied-table rules.
-				for plan := planbuilder.PlanType(0); plan < planbuilder.NumPlans; plan++ {
+				for plan := range planbuilder.NumPlans {
 					// Skip all SELECT-family plans (e.g. PlanSelect*), which
 					// are the only plans that should remain subject to table
 					// denial when allow_reads_from_denied_tables is enabled.
