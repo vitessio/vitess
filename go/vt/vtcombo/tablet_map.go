@@ -92,7 +92,7 @@ func CreateTablet(
 		Cell: cell,
 		Uid:  uid,
 	}
-	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
+	log.Info(fmt.Sprintf("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard))
 
 	controller := tabletserver.NewServer(ctx, env, topoproto.TabletAliasString(alias), ts, alias, srvTopoCounts)
 	initTabletType := tabletType
@@ -418,7 +418,7 @@ func CreateKs(
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
 		} else {
-			log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
+			log.Info(fmt.Sprintf("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace))
 		}
 	}
 
@@ -756,6 +756,16 @@ func (itc *internalTabletConn) VStreamResults(
 	send func(*binlogdatapb.VStreamResultsResponse) error,
 ) error {
 	err := itc.tablet.qsc.QueryService().VStreamResults(ctx, target, query, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// BinlogDumpGTID is part of the QueryService interface.
+func (itc *internalTabletConn) BinlogDumpGTID(
+	ctx context.Context,
+	request *binlogdatapb.BinlogDumpGTIDRequest,
+	send func(*binlogdatapb.BinlogDumpResponse) error,
+) error {
+	err := itc.tablet.qsc.QueryService().BinlogDumpGTID(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

@@ -26,9 +26,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
-var (
-	defaultTimeout = time.Hour
-)
+var defaultTimeout = time.Hour
 
 // RunCommandAndWait executes a single command on a given vtctld and blocks until the command did return or timed out.
 // Output from vtctld is streamed as logutilpb.Event messages which

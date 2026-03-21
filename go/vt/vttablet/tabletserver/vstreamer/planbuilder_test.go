@@ -730,7 +730,7 @@ func TestPlanBuilder(t *testing.T) {
 		// analyzeExpr tests.
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, * from t1"},
-		outErr:  `unsupported: *`,
+		outErr:  `syntax error: unexpected '*' at position 13`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select none from t1"},
@@ -826,7 +826,8 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	}, {
 		name:     "less-than-with-and",
 		inFilter: "select * from t1 where id < 2 and val <= 'xyz'",
-		outFilters: []Filter{{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
+		outFilters: []Filter{
+			{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
 			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}, {

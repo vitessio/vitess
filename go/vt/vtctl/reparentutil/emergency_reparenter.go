@@ -205,7 +205,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, shardInfo.PrimaryAlias, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -858,7 +858,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
@@ -892,7 +892,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs))
 			continue
 		}
 		updatedValidCandidates[alias] = validCandidates[alias]

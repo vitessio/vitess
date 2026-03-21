@@ -120,8 +120,8 @@ func TestNoInitialKeyspace(t *testing.T) {
 	err = clusterInstance.VtgateProcess.TearDown()
 	require.NoError(t, err)
 
-	// check info logs
-	all, err := os.ReadFile(path.Join(logDir, "vtgate.INFO"))
+	// check stderr logs
+	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "No keyspace to load")
 }

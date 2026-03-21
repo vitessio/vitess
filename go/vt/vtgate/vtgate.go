@@ -120,6 +120,15 @@ var (
 		},
 	)
 
+	enableBinlogDump = viperutil.Configure(
+		"enable_binlog_dump",
+		viperutil.Options[bool]{
+			FlagName: "enable-binlog-dump",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
 	transactionMode = viperutil.Configure(
 		"transaction_mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
@@ -194,6 +203,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	fs.Bool("enable-online-ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")
 	fs.Bool("enable-direct-ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
+	fs.Bool("enable-binlog-dump", enableBinlogDump.Default(), "Allow users to perform binlog dump operations for CDC/replication")
 	utils.SetFlagBoolVar(fs, &enableSchemaChangeSignal, "schema-change-signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
 	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
@@ -209,6 +219,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
 		enableDirectDDL,
+		enableBinlogDump,
 		transactionMode,
 	)
 }
@@ -297,7 +308,8 @@ func Init(
 ) *VTGate {
 	ts, err := serv.GetTopoServer()
 	if err != nil {
-		log.Fatalf("Unable to get Topo server: %v", err)
+		log.Error(fmt.Sprintf("Unable to get Topo server: %v", err))
+		os.Exit(1)
 	}
 
 	// We need to get the keyspaces and rebuild the keyspace graphs
@@ -309,21 +321,24 @@ func Init(
 	} else {
 		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
 		if err != nil {
-			log.Fatalf("Unable to get all keyspaces: %v", err)
+			log.Error(fmt.Sprintf("Unable to get all keyspaces: %v", err))
+			os.Exit(1)
 		}
 	}
 	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
 	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
-		log.Fatalf("rebuildTopoGraphs failed: %v", err)
+		log.Error(fmt.Sprintf("rebuildTopoGraphs failed: %v", err))
+		os.Exit(1)
 	}
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
-	// we can't go on much further, so we log.Fatal out.
+	// we can't go on much further, so we exit the process.
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
-		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
+		log.Error(fmt.Sprintf("tabletGateway.WaitForTablets failed: %v", err))
+		os.Exit(1)
 	}
 
 	dynamicConfig := NewDynamicViperConfig()
@@ -331,16 +346,18 @@ func Init(
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if discovery.FilteringKeyspaces() {
-		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
+		log.Info(fmt.Sprintf("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch))
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
 		if err != nil {
-			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+			log.Error(fmt.Sprintf("Unable to construct SrvTopo server: %v", err.Error()))
+			os.Exit(1)
 		}
 	}
 
 	if _, err := schema.ParseDDLStrategy(defaultDDLStrategy); err != nil {
-		log.Fatalf("Invalid value for -ddl-strategy: %v", err.Error())
+		log.Error(fmt.Sprintf("Invalid value for -ddl-strategy: %v", err.Error()))
+		os.Exit(1)
 	}
 	tc := NewTxConn(gw, dynamicConfig)
 	// ScatterConn depends on TxConn to perform forced rollbacks.
@@ -362,7 +379,8 @@ func Init(
 	})
 	// This should never happen.
 	if !created {
-		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
+		log.Error("Failed to create a new sidecar database identifier cache during init as one already existed!")
+		os.Exit(1)
 	}
 
 	var si SchemaInfo // default nil
@@ -386,7 +404,8 @@ func Init(
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
+		log.Error(fmt.Sprintf("error initializing query logger: %v", err))
+		os.Exit(1)
 	}
 
 	// connect the schema tracker with the vschema manager
@@ -438,7 +457,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		switch {
 		case err == nil:
 		case topo.IsErrType(err, topo.NoNode):
-			log.Infof("Rebuilding Serving Keyspace %v", ks)
+			log.Info(fmt.Sprintf("Rebuilding Serving Keyspace %v", ks))
 			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
 			}
@@ -452,7 +471,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 	case err == nil:
 		for _, ks := range keyspaces {
 			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
-				log.Infof("Rebuilding Serving Vschema")
+				log.Info("Rebuilding Serving Vschema")
 				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 					return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
 				}
@@ -461,7 +480,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
-		log.Infof("Rebuilding Serving Vschema")
+		log.Info("Rebuilding Serving Vschema")
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 			return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
@@ -475,11 +494,11 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
-		log.Warningf("Unable to get all keyspaces: %v", err)
+		log.Warn(fmt.Sprintf("Unable to get all keyspaces: %v", err))
 		return
 	}
 	if len(keyspaces) == 0 {
-		log.Infof("No keyspace to load")
+		log.Info("No keyspace to load")
 	}
 	for _, keyspace := range keyspaces {
 		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
@@ -489,7 +508,7 @@ func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, s
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
 	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
-		log.Warningf("Unable to resolve destination: %v", err)
+		log.Warn(fmt.Sprintf("Unable to resolve destination: %v", err))
 		return
 	}
 
@@ -497,7 +516,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 	for {
 		select {
 		case <-timeout:
-			log.Warningf("Unable to get initial schema reload for keyspace: %s", keyspace)
+			log.Warn("Unable to get initial schema reload for keyspace: " + keyspace)
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
@@ -558,7 +577,7 @@ func (vtg *VTGate) Execute(
 	prepared bool,
 ) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -620,7 +639,7 @@ func (vtg *VTGate) ExecuteMulti(
 // ExecuteBatch executes a batch of queries.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"ExecuteBatch", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -649,7 +668,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
@@ -735,7 +754,7 @@ func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) 
 // Prepare supports non-streaming prepare statement query with multi shards
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, paramsCount uint16, err error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -836,7 +855,7 @@ func formatError(err error) error {
 // HandlePanic recovers from panics, and logs / increment counters
 func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}

@@ -278,11 +278,11 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 	}()
 
@@ -396,8 +396,7 @@ func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num-shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema-ddl-authorized-users=%"
-	alsoLogToStderr := "--alsologtostderr" // better debugging
-	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
+	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	args = append(args, flags...)
 
 	if err = New().ParseFlags(args); err != nil {

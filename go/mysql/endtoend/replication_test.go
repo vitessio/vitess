@@ -108,10 +108,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 
 	// One go routine is waiting on events.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		for {
 			data, err := conn.ReadPacket()
 			if err != nil {
@@ -135,7 +132,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 				t.Errorf("ReadPacket returned a weird packet: %v", data)
 			}
 		}
-	}()
+	})
 
 	// Connect and create a table.
 	ctx := context.Background()
@@ -909,9 +906,11 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	// Create the table with all fields.
 	createTable := "create table replicationtypes(id int"
+	var createTableSb912 strings.Builder
 	for _, tcase := range testcases {
-		createTable += fmt.Sprintf(", %v %v", tcase.name, tcase.createType)
+		createTableSb912.WriteString(fmt.Sprintf(", %v %v", tcase.name, tcase.createType))
 	}
+	createTable += createTableSb912.String()
 	createTable += ", primary key(id))"
 	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
 		t.Fatal(err)
@@ -919,9 +918,11 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	// Insert the value with all fields.
 	insert := "insert into replicationtypes set id=1"
+	var insertSb922 strings.Builder
 	for _, tcase := range testcases {
-		insert += fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue)
+		insertSb922.WriteString(fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue))
 	}
+	insert += insertSb922.String()
 
 	result, err := dConn.ExecuteFetch(insert, 0, false)
 	require.NoError(t, err, "insert failed: %v", err)
@@ -1020,9 +1021,11 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	// Re-select both rows, make sure all columns are the same.
 	stmt := "select id"
+	var stmtSb1023 strings.Builder
 	for _, tcase := range testcases {
-		stmt += ", " + tcase.name
+		stmtSb1023.WriteString(", " + tcase.name)
 	}
+	stmt += stmtSb1023.String()
 	stmt += " from replicationtypes"
 	result, err = dConn.ExecuteFetch(stmt, 2, false)
 	require.NoError(t, err, "select failed: %v", err)

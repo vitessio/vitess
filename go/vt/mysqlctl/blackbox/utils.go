@@ -173,7 +173,7 @@ func SetBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 
 func createBackupDir(root string, dirs ...string) error {
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path.Join(root, dir), 0755); err != nil {
+		if err := os.MkdirAll(path.Join(root, dir), 0o755); err != nil {
 			return err
 		}
 	}
@@ -182,7 +182,7 @@ func createBackupDir(root string, dirs ...string) error {
 }
 
 func createBackupFiles(root string, fileCount int, ext string) error {
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		f, err := os2.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
 		if err != nil {
 			return err

@@ -38,8 +38,10 @@ import (
 	"vitess.io/vitess/go/vt/vttest"
 )
 
-var cluster *vttest.LocalCluster
-var querylog <-chan string
+var (
+	cluster  *vttest.LocalCluster
+	querylog <-chan string
+)
 
 func main() {
 	flag.Parse()
@@ -50,7 +52,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir("./")))
 	mux.HandleFunc("/exec", exec)
-	go http.ListenAndServe(":8000", mux)
+	go func() {
+		_ = http.ListenAndServe(":8000", mux)
+	}()
 
 	wait()
 	cluster.TearDown()
@@ -82,13 +86,15 @@ func runCluster() {
 	}
 	env, err := vttest.NewLocalTestEnv(12345)
 	if err != nil {
-		log.Exitf("Error: %v", err)
+		log.Error(fmt.Sprintf("Error: %v", err))
+		os.Exit(1)
 	}
 	cluster.Env = env
 	err = cluster.Setup()
 	if err != nil {
 		cluster.TearDown()
-		log.Exitf("Error: %v", err)
+		log.Error(fmt.Sprintf("Error: %v", err))
+		os.Exit(1)
 	}
 }
 
@@ -112,7 +118,7 @@ func exec(w http.ResponseWriter, req *http.Request) {
 		response := map[string]string{
 			"error": err.Error(),
 		}
-		enc.Encode(response)
+		_ = enc.Encode(response)
 		return
 	}
 	defer conn.Close()
@@ -154,7 +160,7 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	execQuery(conn, "product", "select * from product", "product", "0", response)
 	execQuery(conn, "customer_seq", "select * from customer_seq", "product", "0", response)
 	execQuery(conn, "corder_keyspace_idx", "select * from corder_keyspace_idx", "product", "0", response)
-	enc.Encode(response)
+	_ = enc.Encode(response)
 }
 
 func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response map[string]any) {
@@ -187,7 +193,7 @@ func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response ma
 			"title": title,
 			"error": err.Error(),
 		}
-		log.Errorf("error: %v", err)
+		log.Error(fmt.Sprintf("error: %v", err))
 		return
 	}
 	response[key] = resultToMap(title, qr)
@@ -205,7 +211,7 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]any {
 			if value.Type() == sqltypes.VarBinary {
 				bytes, err := value.ToBytes()
 				if err != nil {
-					log.Errorf("Error converting value to bytes: %v", err)
+					log.Error(fmt.Sprintf("Error converting value to bytes: %v", err))
 					return nil
 				}
 				srow = append(srow, hex.EncodeToString(bytes))
@@ -228,16 +234,17 @@ func streamQuerylog(port int) (<-chan string, error) {
 	request := fmt.Sprintf("http://localhost:%d/debug/querylog", port)
 	resp, err := http.Get(request)
 	if err != nil {
-		log.Errorf("Error reading stream: %v: %v", request, err)
+		log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 		return nil, err
 	}
+	defer resp.Body.Close()
 	ch := make(chan string, 100)
 	go func() {
 		buffered := bufio.NewReader(resp.Body)
 		for {
 			str, err := buffered.ReadString('\n')
 			if err != nil {
-				log.Errorf("Error reading stream: %v: %v", request, err)
+				log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 				close(ch)
 				resp.Body.Close()
 				return

@@ -25,7 +25,7 @@ import (
 func TestFormattingFromMySQL(t *testing.T) {
 	const FormatString = `%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %%`
 
-	var cases = []struct {
+	cases := []struct {
 		timestamp string
 		output    string
 	}{

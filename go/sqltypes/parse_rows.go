@@ -143,7 +143,7 @@ func RowsEquals(want, got []Row) error {
 		}
 	}
 
-	var matched = make([]bool, len(want))
+	matched := make([]bool, len(want))
 	for _, aa := range want {
 		var ok bool
 		for i, bb := range got {

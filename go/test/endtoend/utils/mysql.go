@@ -25,6 +25,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -119,7 +120,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 
 func createMySQLDir(portNo uint32) (string, error) {
 	mysqlDir := mysqlctl.TabletDir(portNo)
-	err := os.Mkdir(mysqlDir, 0700)
+	err := os.Mkdir(mysqlDir, 0o700)
 	if err != nil {
 		return "", err
 	}
@@ -233,14 +234,18 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	}
 
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	var errStrSb236 strings.Builder
 	for _, row := range vtQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		errStrSb236.WriteString(fmt.Sprintf("%s\n", row))
 	}
+	errStr += errStrSb236.String()
 	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
+	var errStrSb241 strings.Builder
 	for _, row := range mysqlQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		errStrSb241.WriteString(fmt.Sprintf("%s\n", row))
 	}
+	errStr += errStrSb241.String()
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
 	if vtConn != nil {
 		qr, _ := ExecAllowError(t, vtConn, "vexplain plan "+query)

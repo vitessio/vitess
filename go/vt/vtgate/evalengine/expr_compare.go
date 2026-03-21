@@ -64,9 +64,11 @@ type (
 	compareNullSafeEQ struct{}
 )
 
-var _ IR = (*ComparisonExpr)(nil)
-var _ IR = (*InExpr)(nil)
-var _ IR = (*LikeExpr)(nil)
+var (
+	_ IR = (*ComparisonExpr)(nil)
+	_ IR = (*InExpr)(nil)
+	_ IR = (*LikeExpr)(nil)
+)
 
 func (*ComparisonExpr) filterExpr() {}
 func (*InExpr) filterExpr()         {}

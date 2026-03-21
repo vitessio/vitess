@@ -42,11 +42,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	transport "github.com/aws/smithy-go/endpoints"
-	"github.com/aws/smithy-go/middleware"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
@@ -95,7 +96,7 @@ var (
 	delimiter = "/"
 
 	// minimum part size
-	minPartSize int64
+	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -110,7 +111,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &tlsSkipVerifyCert, "s3-backup-tls-skip-verify-cert", false, "skip the 'certificate is valid' check for SSL connections.")
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
-	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
+	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 }
 
 func init() {
@@ -141,18 +142,66 @@ func newEndpointResolver() *endpointResolver {
 	}
 }
 
-type iClient interface {
-	manager.UploadAPIClient
-	manager.DownloadAPIClient
+type timedS3Client struct {
+	client    *s3.Client
+	sendStats stats.Stats
 }
 
-type clientWrapper struct {
-	*s3.Client
+func (c *timedS3Client) appendTimingOption(optFns []func(*s3.Options)) []func(*s3.Options) {
+	timedOptions := make([]func(*s3.Options), 0, len(optFns)+1)
+	timedOptions = append(timedOptions, optFns...)
+	timedOptions = append(timedOptions, withRequestTiming(c.sendStats))
+	return timedOptions
+}
+
+func (c *timedS3Client) PutObject(ctx context.Context, input *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	return c.client.PutObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) UploadPart(ctx context.Context, input *s3.UploadPartInput, optFns ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
+	return c.client.UploadPart(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) CreateMultipartUpload(ctx context.Context, input *s3.CreateMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
+	return c.client.CreateMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) CompleteMultipartUpload(ctx context.Context, input *s3.CompleteMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {
+	return c.client.CompleteMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) AbortMultipartUpload(ctx context.Context, input *s3.AbortMultipartUploadInput, optFns ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
+	return c.client.AbortMultipartUpload(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return c.client.GetObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	return c.client.HeadObject(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func (c *timedS3Client) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	return c.client.ListObjectsV2(ctx, input, c.appendTimingOption(optFns)...)
+}
+
+func withRequestTiming(sendStats stats.Stats) func(*s3.Options) {
+	return func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, func(stack *smithymiddleware.Stack) error {
+			return stack.Finalize.Add(smithymiddleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input smithymiddleware.FinalizeInput, next smithymiddleware.FinalizeHandler) (smithymiddleware.FinalizeOutput, smithymiddleware.Metadata, error) {
+				start := time.Now()
+				output, metadata, err := next.HandleFinalize(ctx, input)
+				sendStats.TimedIncrement(time.Since(start))
+				return output, metadata, err
+			}), smithymiddleware.Before)
+		})
+	}
 }
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    iClient
+	s3Client  *s3.Client
 	bs        *S3BackupStorage
 	dir       string
 	name      string
@@ -193,49 +242,49 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 }
 
 func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
-	bh.waitGroup.Add(1)
-
-	go func() {
-		defer bh.waitGroup.Done()
-		uploader := manager.NewUploader(bh.client, func(u *manager.Uploader) {
-			u.PartSize = partSizeBytes
-		})
+	bh.waitGroup.Go(func() {
 		object := objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+
+		tmClient := transfermanager.New(&timedS3Client{client: bh.s3Client, sendStats: sendStats}, func(o *transfermanager.Options) {
+			o.PartSizeBytes = partSizeBytes
+		})
+
+		// Convert ServerSideEncryption type from s3/types to transfermanager/types
+		var tmSSE tmtypes.ServerSideEncryption
+		if bh.bs.s3SSE.awsAlg != "" {
+			tmSSE = tmtypes.ServerSideEncryption(bh.bs.s3SSE.awsAlg)
+		}
+
+		_, err := tmClient.UploadObject(ctx, &transfermanager.UploadObjectInput{
 			Bucket:               &bucket,
 			Key:                  &object,
 			Body:                 reader,
-			ServerSideEncryption: bh.bs.s3SSE.awsAlg,
+			ServerSideEncryption: tmSSE,
 			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 			SSECustomerKey:       bh.bs.s3SSE.customerKey,
 			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-		}, func(u *manager.Uploader) {
-			u.ClientOptions = append(u.ClientOptions, func(o *s3.Options) {
-				o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
-					return stack.Finalize.Add(middleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
-						start := time.Now()
-						output, metadata, err := next.HandleFinalize(ctx, input)
-						sendStats.TimedIncrement(time.Since(start))
-						return output, metadata, err
-					}), middleware.Before)
-				})
-			})
 		})
 		if err != nil {
 			closer(err)
 			bh.RecordError(filename, err)
 		}
-	}()
+	})
 }
 
 // calculateUploadPartSize is a helper to calculate the part size, taking into consideration the minimum part size
 // passed in by an operator.
 func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
+	const (
+		defaultUploadPartSize = 5 * 1024 * 1024 // 5MiB
+		minUploadPartSize     = 5 * 1024 * 1024 // 5MiB - S3 requirement
+		maxUploadParts        = 10000           // S3 limit
+	)
+
 	// Calculate s3 upload part size using the source filesize
-	partSizeBytes = manager.DefaultUploadPartSize
+	partSizeBytes = defaultUploadPartSize
 	if filesize > 0 {
-		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
+		minimumPartSize := float64(filesize) / float64(maxUploadParts)
 		// Round up to ensure large enough partsize
 		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
 		if calculatedPartSizeBytes > partSizeBytes {
@@ -244,7 +293,7 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 	}
 
 	if minPartSize != 0 && partSizeBytes < minPartSize {
-		if minPartSize > MaxPartSize || minPartSize < manager.MinUploadPartSize { // 5GiB and 5MiB respectively
+		if minPartSize > MaxPartSize || minPartSize < minUploadPartSize { // 5GiB and 5MiB respectively
 			return 0, fmt.Errorf("%w, currently set to %s",
 				ErrPartSize, humanize.IBytes(uint64(minPartSize)),
 			)
@@ -279,21 +328,12 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 	object := objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-	out, err := bh.client.GetObject(ctx, &s3.GetObjectInput{
+	out, err := (&timedS3Client{client: bh.s3Client, sendStats: sendStats}).GetObject(ctx, &s3.GetObjectInput{
 		Bucket:               &bucket,
 		Key:                  &object,
 		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 		SSECustomerKey:       bh.bs.s3SSE.customerKey,
 		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-	}, func(o *s3.Options) {
-		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
-			return stack.Finalize.Add(middleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
-				start := time.Now()
-				output, metadata, err := next.HandleFinalize(ctx, input)
-				sendStats.TimedIncrement(time.Since(start))
-				return output, metadata, err
-			}), middleware.Before)
-		})
 	})
 	if err != nil {
 		return nil, err
@@ -313,11 +353,11 @@ type S3ServerSideEncryption struct {
 func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 	s3ServerSideEncryption.reset()
 
-	if strings.HasPrefix(sse, sseCustomerPrefix) {
-		sseCustomerKeyFile := strings.TrimPrefix(sse, sseCustomerPrefix)
+	if after, ok := strings.CutPrefix(sse, sseCustomerPrefix); ok {
+		sseCustomerKeyFile := after
 		base64CodedKey, err := os.ReadFile(sseCustomerKeyFile)
 		if err != nil {
-			log.Errorf(err.Error())
+			log.Error(err.Error())
 			return err
 		}
 
@@ -364,7 +404,7 @@ func newS3BackupStorage() *S3BackupStorage {
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Infof("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket)
+	log.Info(fmt.Sprintf("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -376,7 +416,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	} else {
 		searchPrefix = objName(dir, "")
 	}
-	log.Infof("objName: %s", searchPrefix)
+	log.Info("objName: " + searchPrefix)
 
 	query := &s3.ListObjectsV2Input{
 		Bucket:    &bucket,
@@ -408,7 +448,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	result := make([]backupstorage.BackupHandle, 0, len(subdirs))
 	for _, subdir := range subdirs {
 		result = append(result, &S3BackupHandle{
-			client:   &clientWrapper{Client: c},
+			s3Client: c,
 			bs:       bs,
 			dir:      dir,
 			name:     subdir,
@@ -420,14 +460,14 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 
 // StartBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
-	log.Infof("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket)
+	log.Info(fmt.Sprintf("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
 	}
 
 	return &S3BackupHandle{
-		client:   &clientWrapper{Client: c},
+		s3Client: c,
 		bs:       bs,
 		dir:      dir,
 		name:     name,
@@ -437,7 +477,7 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 
 // RemoveBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Infof("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket)
+	log.Info(fmt.Sprintf("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
 
 	c, err := bs.client()
 	if err != nil {
@@ -471,7 +511,6 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 				Quiet:   &quiet,
 			},
 		})
-
 		if err != nil {
 			return err
 		}

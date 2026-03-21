@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"maps"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -71,9 +72,7 @@ func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VC
 // GetFields fetches the field info.
 func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
-	for k, v := range bindVars {
-		combinedVars[k] = v
-	}
+	maps.Copy(combinedVars, bindVars)
 	switch ps.Opcode {
 	case opcode.PulloutValue:
 		combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
@@ -94,23 +93,17 @@ func (ps *UncorrelatedSubquery) NeedsTransaction() bool {
 	return ps.Subquery.NeedsTransaction() || ps.Outer.NeedsTransaction()
 }
 
-var (
-	errSqRow = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one row")
-)
+var errSqRow = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one row")
 
 func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
-	for k, v := range bindVars {
-		subqueryBindVars[k] = v
-	}
+	maps.Copy(subqueryBindVars, bindVars)
 	result, err := vcursor.ExecutePrimitive(ctx, ps.Subquery, subqueryBindVars, false)
 	if err != nil {
 		return nil, err
 	}
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
-	for k, v := range bindVars {
-		combinedVars[k] = v
-	}
+	maps.Copy(combinedVars, bindVars)
 	switch ps.Opcode {
 	case opcode.PulloutValue:
 		switch len(result.Rows) {

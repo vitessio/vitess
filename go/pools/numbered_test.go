@@ -87,7 +87,7 @@ func BenchmarkRegisterUnregister(b *testing.B) {
 	p := NewNumbered()
 	id := int64(1)
 	val := "foobarbazdummyval"
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		p.Register(id, val)
 		p.Unregister(id, "some reason")
 	}

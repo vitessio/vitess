@@ -136,10 +136,7 @@ func TestTxSerializer(t *testing.T) {
 
 	// tx2 (gets queued and must wait).
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		done2, waited2, err2 := txs.Wait(context.Background(), "t1 where1", "t1")
 		if err2 != nil {
 			t.Error(err2)
@@ -152,7 +149,7 @@ func TestTxSerializer(t *testing.T) {
 		}
 
 		done2()
-	}()
+	})
 	// Wait until tx2 is waiting before we try tx3.
 	if err := waitForPending(txs, "t1 where1", 2); err != nil {
 		t.Error(err)
@@ -218,10 +215,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 
 	// tx3 (gets queued and must wait).
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		done3, waited3, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
 		if err3 != nil {
 			t.Error(err3)
@@ -234,7 +228,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 		}
 
 		done3()
-	}()
+	})
 
 	// Wait until tx3 is waiting before we finish tx2 and unblock tx3.
 	if err := waitForPending(txs, "t1 where1", 3); err != nil {
@@ -344,27 +338,21 @@ func TestTxSerializerCancel(t *testing.T) {
 	// tx3 (gets queued and must wait).
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		_, _, err3 := txs.Wait(ctx3, "t1 where1", "t1")
 		if err3 != context.Canceled {
 			t.Error(err3)
 		}
 
 		txDone <- 3
-	}()
+	})
 	// Wait until tx3 is waiting before we try tx4.
 	if err := waitForPending(txs, "t1 where1", 3); err != nil {
 		t.Error(err)
 	}
 
 	// tx4 (gets queued and must wait as well).
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		done4, waited4, err4 := txs.Wait(context.Background(), "t1 where1", "t1")
 		if err4 != nil {
 			t.Error(err4)
@@ -376,7 +364,7 @@ func TestTxSerializerCancel(t *testing.T) {
 		txDone <- 4
 
 		done4()
-	}()
+	})
 	// Wait until tx4 is waiting before we start to cancel tx3.
 	if err := waitForPending(txs, "t1 where1", 4); err != nil {
 		t.Error(err)
@@ -543,9 +531,7 @@ func BenchmarkTxSerializer_NoHotRow(b *testing.B) {
 	cfg.HotRowProtection.MaxConcurrency = 5
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
 		if err != nil {
 			b.Error(err)

@@ -73,6 +73,10 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
+	InitializeForgetAliasesCache()
+}
+
+func InitializeForgetAliasesCache() {
 	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
 	cacheInitializationCompleted.Store(true)
 }
@@ -118,19 +122,20 @@ func ExpireTableData(tableName string, timestampColumn string) error {
 // logReadTopologyInstanceError logs an error, if applicable, for a ReadTopologyInstance operation,
 // providing context and hint as for the source of the error. If there's no hint just provide the
 // original error.
-func logReadTopologyInstanceError(tabletAlias string, hint string, err error) error {
+func logReadTopologyInstanceError(tabletAlias *topodatapb.TabletAlias, hint string, err error) error {
 	if err == nil {
 		return nil
 	}
-	if !util.ClearToLog("ReadTopologyInstance", tabletAlias) {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	if !util.ClearToLog("ReadTopologyInstance", tabletAliasString) {
 		return err
 	}
 	var msg string
 	if hint == "" {
-		msg = fmt.Sprintf("ReadTopologyInstance(%+v): %+v", tabletAlias, err)
+		msg = fmt.Sprintf("ReadTopologyInstance(%+v): %+v", tabletAliasString, err)
 	} else {
 		msg = fmt.Sprintf("ReadTopologyInstance(%+v) %+v: %+v",
-			tabletAlias,
+			tabletAliasString,
 			strings.ReplaceAll(hint, "%", "%%"), // escape %
 			err)
 	}
@@ -151,7 +156,7 @@ func RegisterStats() {
 // It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
+func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = logReadTopologyInstanceError(tabletAlias, "Unexpected, aborting", tb.Errorf("%+v", r))
@@ -168,7 +173,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	partialSuccess := false
 	errorChan := make(chan error, 32)
 
-	if tabletAlias == "" {
+	if tabletAlias == nil {
 		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
@@ -198,7 +203,13 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tablet)
 	if err != nil {
+		if tablet.Type == topodatapb.TabletType_PRIMARY {
+			RecordPrimaryHealthCheck(tabletAlias, false)
+		}
 		goto Cleanup
+	}
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
 	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
 		stalledDisk = true
@@ -303,7 +314,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
+			log.Warn(fmt.Sprintf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64))
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -325,7 +336,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	// -------------------------------------------------------------------------
 
 	instance.Cell = tablet.Alias.Cell
-	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+	instance.InstanceAlias = tablet.Alias
 
 	{
 		latency.Start("backend")
@@ -392,34 +403,44 @@ Cleanup:
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
-	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
-		var primaryInstance *Instance
-		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
-		if primaryAlias != "" {
-			// Check if the current tablet is the primary.
-			// If it is, then we don't need to run errant gtid detection on it.
-			if primaryAlias == instance.InstanceAlias {
-				return nil
-			}
-			primaryInstance, _, _ = ReadInstance(primaryAlias)
-		}
-		// Only run errant GTID detection, if we are sure that the data read of the current primary
-		// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
-		// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
-		// accepted by the old primary (this tablet) that don't show in the new primary's set.
-		if primaryInstance != nil {
-			if primaryInstance.SourceHost == "" {
-				instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
-			}
+	primaryAlias, _, err := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return fmt.Errorf("failed to read shard primary for %s/%s: %w", tablet.Keyspace, tablet.Shard, err)
+	}
+
+	// Check if the current tablet is the primary. If it is, then we don't need to
+	// run errant GTID detection on it.
+	if topoproto.TabletAliasEqual(primaryAlias, instance.InstanceAlias) {
+		return nil
+	}
+
+	var primaryInstance *Instance
+	if primaryAlias != nil {
+		primaryInstance, _, err = ReadInstance(primaryAlias)
+		if err != nil {
+			return fmt.Errorf("failed to read primary instance %v: %w", topoproto.TabletAliasString(primaryAlias), err)
 		}
 	}
+
+	// Only run errant GTID detection if we are sure that the data read of the current primary
+	// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
+	// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
+	// accepted by the old primary (this tablet) that don't show in the new primary's set.
+	if primaryInstance != nil && primaryInstance.SourceHost == "" {
+		// If the instance has no replication source and no primary GTID set yet, or if the instance's replication
+		// source is not the primary, use the shard primary's executed GTID set for comparison.
+		if (instance.SourceHost == "" && instance.primaryExecutedGtidSet == "") || !sourceIsPrimary(instance, primaryInstance) {
+			instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
+		}
+	}
+
 	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
 		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
-		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+		for uuid := range strings.SplitSeq(instance.AncestryUUID, ",") {
 			uuidSID, err := replication.ParseSID(uuid)
 			if err != nil {
 				continue
@@ -443,11 +464,24 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			errantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
 			if !errantGtidSet.Empty() {
 				instance.GtidErrant = errantGtidSet.String()
-				currentErrantGTIDCount.Set(instance.InstanceAlias, errantGtidSet.Count())
+				currentErrantGTIDCount.Set(topoproto.TabletAliasString(instance.InstanceAlias), errantGtidSet.Count())
 			}
 		}
 	}
 	return err
+}
+
+// sourceIsPrimary returns true if the instance's replication source is the given primary.
+func sourceIsPrimary(instance *Instance, primaryInstance *Instance) bool {
+	if instance.SourceHost == "" {
+		return false
+	}
+
+	if instance.SourceUUID != "" && primaryInstance.ServerUUID != "" {
+		return instance.SourceUUID == primaryInstance.ServerUUID
+	}
+
+	return instance.SourceHost == primaryInstance.Hostname && instance.SourcePort == primaryInstance.Port
 }
 
 // getKeyspaceShardName returns a single string having both the keyspace and shard
@@ -500,7 +534,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -518,7 +552,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 }
 
 // readInstanceRow reads a single instance row from the vtorc backend database.
-func readInstanceRow(m sqlutils.RowMap) *Instance {
+func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance := NewInstance()
 
 	instance.Hostname = m.GetString("hostname")
@@ -584,8 +618,13 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.AllowTLS = m.GetBool("allow_tls")
-	instance.InstanceAlias = m.GetString("alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
+
+	var err error
+	instance.InstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
+	if err != nil {
+		return instance, err
+	}
 
 	instance.applyFlavorName()
 
@@ -603,13 +642,13 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 		instance.Problems = append(instance.Problems, "errant_gtid")
 	}
 
-	return instance
+	return instance, nil
 }
 
 // readInstancesByCondition is a generic function to read instances from the backend database
 func readInstancesByCondition(condition string, args []any, sort string) ([](*Instance), error) {
 	readFunc := func() ([]*Instance, error) {
-		var instances []*Instance
+		instances := make([]*Instance, 0)
 
 		if sort == "" {
 			sort = `alias`
@@ -632,12 +671,15 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		)
 
 		err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-			instance := readInstanceRow(m)
+			instance, err := readInstanceRow(m)
+			if err != nil {
+				return err
+			}
 			instances = append(instances, instance)
 			return nil
 		})
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return instances, err
 		}
 		return instances, err
@@ -655,9 +697,10 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 }
 
 // ReadInstance reads an instance from the vtorc backend database
-func ReadInstance(tabletAlias string) (*Instance, bool, error) {
+func ReadInstance(tabletAlias *topodatapb.TabletAlias) (*Instance, bool, error) {
 	condition := `alias = ?`
-	instances, err := readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
+	args := sqlutils.Args(topoproto.TabletAliasString(tabletAlias))
+	instances, err := readInstancesByCondition(condition, args, "")
 	// We know there will be at most one (alias is the PK).
 	// And we expect to find one.
 	readInstanceCounter.Add(1)
@@ -671,7 +714,7 @@ func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 }
 
 // ReadProblemInstances reads all instances with problems
-func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) {
+func ReadProblemInstances(keyspace, shard string) ([]*Instance, error) {
 	condition := `
 		keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 		AND shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
@@ -685,12 +728,15 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			OR (gtid_errant != '')
 		)`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5, config.GetReasonableReplicationLagSeconds(), config.GetReasonableReplicationLagSeconds())
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5,
+		config.GetReasonableReplicationLagSeconds(),
+		config.GetReasonableReplicationLagSeconds(),
+	)
 	return readInstancesByCondition(condition, args, "")
 }
 
 // ReadInstancesWithErrantGTIds reads all instances with errant GTIDs
-func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, error) {
+func ReadInstancesWithErrantGTIds(keyspace, shard string) ([]*Instance, error) {
 	condition := `
 		keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 		AND shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
@@ -701,7 +747,7 @@ func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, e
 }
 
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key
-func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, err error) {
+func GetKeyspaceShardName(tabletAlias *topodatapb.TabletAlias) (keyspace, shard string, err error) {
 	query := `SELECT
 		keyspace,
 		shard
@@ -710,18 +756,19 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 	WHERE
 		alias = ?
 	`
-	err = db.QueryVTOrc(query, sqlutils.Args(tabletAlias), func(m sqlutils.RowMap) error {
+	args := sqlutils.Args(topoproto.TabletAliasString(tabletAlias))
+	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		keyspace = m.GetString("keyspace")
 		shard = m.GetString("shard")
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return keyspace, shard, err
 }
 
-// ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
+// ReadOutdatedInstances reads and returns tablet aliases for all instances that are not up to date (i.e.
 // pre-configured time has passed since they were last checked) or the ones whose tablet information was read
 // but not the mysql information. This could happen if the durability policy of the keyspace wasn't
 // available at the time it was discovered. This would lead to not having the record of the tablet in the
@@ -730,8 +777,8 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
-func ReadOutdatedInstanceKeys() ([]string, error) {
-	var res []string
+func ReadOutdatedInstances() ([]*topodatapb.TabletAlias, error) {
+	res := make([]*topodatapb.TabletAlias, 0)
 	query := `SELECT
 		alias
 	FROM
@@ -750,21 +797,23 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		vitess_tablet.alias = database_instance.alias
 	)
 	WHERE
-		database_instance.alias IS NULL
-	`
+		database_instance.alias IS NULL`
 	args := sqlutils.Args(config.GetInstancePollSeconds(), 2*config.GetInstancePollSeconds())
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		tabletAlias := m.GetString("alias")
+		tabletAlias, err := topoproto.ParseTabletAlias(m.GetString("alias"))
+		if err != nil {
+			return err
+		}
 		if !InstanceIsForgotten(tabletAlias) {
 			// only if not in "forget" cache
 			res = append(res, tabletAlias)
 		}
-		// We don;t return an error because we want to keep filling the outdated instances list.
+		// We don't return an error because we want to keep filling the outdated instances list.
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return res, err
 }
@@ -900,7 +949,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()
-		args = append(args, instance.InstanceAlias)
+		args = append(args, topoproto.TabletAliasString(instance.InstanceAlias))
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
 		args = append(args, instance.Cell)
@@ -966,7 +1015,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		return sql, args, errors.New(errMsg)
 	}
 
@@ -998,7 +1047,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 // WriteInstance stores an instance in the vtorc backend
 func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError error) error {
 	if lastError != nil {
-		log.Infof("writeInstance: will not update database_instance due to error: %+v", lastError)
+		log.Info(fmt.Sprintf("writeInstance: will not update database_instance due to error: %+v", lastError))
 		return nil
 	}
 	return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
@@ -1006,7 +1055,7 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledDisk bool) error {
+func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess bool, stalledDisk bool) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`UPDATE database_instance
 			SET
@@ -1018,10 +1067,10 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledD
 			`,
 			partialSuccess,
 			stalledDisk,
-			tabletAlias,
+			topoproto.TabletAliasString(tabletAlias),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}
@@ -1036,7 +1085,7 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledD
 // And so we make sure to note down *before* we even attempt to access the instance; and this raises a red flag when we
 // wish to access the instance again: if last_attempted_check is *newer* than last_checked, that's bad news and means
 // we have a "hanging" issue.
-func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
+func UpdateInstanceLastAttemptedCheck(tabletAlias *topodatapb.TabletAlias) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`UPDATE database_instance
 			SET
@@ -1044,68 +1093,69 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 			WHERE
 				alias = ?
 			`,
-			tabletAlias,
+			topoproto.TabletAliasString(tabletAlias),
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
 
-func InstanceIsForgotten(tabletAlias string) bool {
-	_, found := forgetAliases.Get(tabletAlias)
+// InstanceIsForgotten returns true if an instance was forgotten.
+func InstanceIsForgotten(tabletAlias *topodatapb.TabletAlias) bool {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	_, found := forgetAliases.Get(tabletAliasString)
 	return found
 }
 
 // ForgetInstance removes an instance entry from the vtorc backed database.
 // It may be auto-rediscovered through topology or requested for discovery by multiple means.
-func ForgetInstance(tabletAlias string) error {
-	if tabletAlias == "" {
+func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
+	if tabletAlias == nil {
 		errMsg := "ForgetInstance(): empty tabletAlias"
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		return errors.New(errMsg)
 	}
-	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
-	log.Infof("Forgetting: %v", tabletAlias)
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
+	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
 
 	// Remove this tablet from errant GTID count metric.
-	currentErrantGTIDCount.Reset(tabletAlias)
+	currentErrantGTIDCount.Reset(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE
-		FROM vitess_tablet
+	_, err := db.ExecVTOrc(`DELETE FROM
+			vitess_tablet
 		WHERE
-			alias = ?
-		`,
-		tabletAlias,
+			alias = ?`,
+		tabletAliasString,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE
-		FROM database_instance
+	sqlResult, err := db.ExecVTOrc(`DELETE FROM
+			database_instance
 		WHERE
-			alias = ?
-		`,
-		tabletAlias,
+			alias = ?`,
+		tabletAliasString,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
+		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
 		log.Error(errMsg)
 		return errors.New(errMsg)
 	}
@@ -1123,16 +1173,16 @@ func ForgetLongUnseenInstances() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	if rows > 0 {
-		_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+		_ = AuditOperation("forget-unseen", nil, fmt.Sprintf("Forgotten instances: %d", rows))
 	}
 	return err
 }
@@ -1162,7 +1212,7 @@ func SnapshotTopologies() error {
 			`,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 
@@ -1172,20 +1222,17 @@ func SnapshotTopologies() error {
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
-	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
-		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
-	}
+	expireSeconds := max(config.GetReasonableReplicationLagSeconds()*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`DELETE
-			FROM database_instance_stale_binlog_coordinates
+		_, err := db.ExecVTOrc(`DELETE FROM
+				database_instance_stale_binlog_coordinates
 			WHERE
 				first_seen < DATETIME('now', PRINTF('-%d SECOND', ?))
 			`,
 			expireSeconds,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}
@@ -1199,7 +1246,7 @@ func GetDatabaseState() (string, error) {
 		Rows      []sqlutils.RowMap
 	}
 
-	var dbState []tableState
+	dbState := make([]tableState, 0, len(db.TableNames))
 	for _, tableName := range db.TableNames {
 		ts := tableState{
 			TableName: tableName,

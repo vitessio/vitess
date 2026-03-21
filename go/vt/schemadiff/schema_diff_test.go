@@ -257,13 +257,11 @@ func TestPermutationsContext(t *testing.T) {
 
 func TestSchemaDiff(t *testing.T) {
 	ctx := context.Background()
-	var (
-		createQueries = []string{
-			"create table t1 (id int primary key, info int not null);",
-			"create table t2 (id int primary key, ts timestamp);",
-			"create view v1 as select id from t1",
-		}
-	)
+	createQueries := []string{
+		"create table t1 (id int primary key, info int not null);",
+		"create table t2 (id int primary key, ts timestamp);",
+		"create view v1 as select id from t1",
+	}
 	tt := []struct {
 		name                  string
 		fromQueries           []string

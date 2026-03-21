@@ -13,9 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { renderHook } from '@testing-library/react-hooks';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { QueryErrorPlaceholder } from './QueryErrorPlaceholder';
 import * as httpAPI from '../../api/http';
@@ -45,8 +44,8 @@ describe('QueryErrorPlaceholder', () => {
         const errorMessage = 'nope';
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error(errorMessage));
 
-        const { result, waitFor } = queryHelper();
-        await waitFor(() => result.current.isError);
+        const { result } = queryHelper();
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
@@ -65,8 +64,8 @@ describe('QueryErrorPlaceholder', () => {
 
         expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(0);
 
-        const { result, waitFor } = queryHelper();
-        await waitFor(() => result.current.isError);
+        const { result } = queryHelper();
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
@@ -79,17 +78,16 @@ describe('QueryErrorPlaceholder', () => {
 
         fireEvent.click(button);
 
-        await waitFor(() => result.current.isFetching);
-        expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(2);
+        await waitFor(() => expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(2));
     });
 
     it('does not render when no error', async () => {
         (httpAPI.fetchClusters as any).mockResolvedValueOnce({ clusters: [] });
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
-        await waitFor(() => result.current.isSuccess);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
         const placeholder = screen.queryByRole('status');
         expect(placeholder).toBeNull();
@@ -97,15 +95,15 @@ describe('QueryErrorPlaceholder', () => {
 
     it('does not render when loading', async () => {
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error());
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
 
+        // Initially the query is pending/loading, so the error placeholder should not render
         const { rerender } = render(<QueryErrorPlaceholder query={result.current} />);
-        await waitFor(() => result.current.isLoading);
-
         let placeholder = screen.queryByRole('status');
         expect(placeholder).toBeNull();
 
-        await waitFor(() => !result.current.isLoading);
+        // Wait for the error state
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         rerender(<QueryErrorPlaceholder query={result.current} />);
         placeholder = screen.queryByRole('status');

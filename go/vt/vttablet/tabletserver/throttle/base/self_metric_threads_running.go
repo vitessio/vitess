@@ -20,14 +20,11 @@ import (
 	"context"
 )
 
-var (
-	threadsRunningMetricQuery = "show global status like 'threads_running'"
-)
+var threadsRunningMetricQuery = "show global status like 'threads_running'"
 
 var _ SelfMetric = registerSelfMetric(&ThreadsRunningSelfMetric{})
 
-type ThreadsRunningSelfMetric struct {
-}
+type ThreadsRunningSelfMetric struct{}
 
 func (m *ThreadsRunningSelfMetric) Name() MetricName {
 	return ThreadsRunningMetricName

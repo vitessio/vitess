@@ -155,7 +155,7 @@ func TestConnPoolMaxIdleCount(t *testing.T) {
 	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
 
 	var conns []*PooledConn
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		conn, err := connPool.Get(context.Background(), nil)
 		require.NoError(t, err)
 		conns = append(conns, conn)
@@ -300,7 +300,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 
 	// Step 1
 	var conns []*PooledConn
-	for i := 0; i < capacity; i++ {
+	for range capacity {
 		dbConn, err = connPool.Get(context.Background(), sa)
 		require.NoError(t, err)
 		conns = append(conns, dbConn)

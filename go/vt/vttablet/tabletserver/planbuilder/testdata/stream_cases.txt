@@ -50,6 +50,14 @@
   "FullQuery": "show table status"
 }
 
+# show binary log status
+"show binary log status"
+{
+  "PlanID": "SelectStream",
+  "TableName": "",
+  "FullQuery": "show binary log status"
+}
+
 # other
 "desc foo"
 {

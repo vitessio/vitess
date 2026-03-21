@@ -39,9 +39,11 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var inclusionsMu sync.Mutex
-var inclusionsForSource = make(map[propertySource]*uset.UnicodeSet)
-var inclusionsForProperty = make(map[Property]*uset.UnicodeSet)
+var (
+	inclusionsMu          sync.Mutex
+	inclusionsForSource   = make(map[propertySource]*uset.UnicodeSet)
+	inclusionsForProperty = make(map[Property]*uset.UnicodeSet)
+)
 
 func getInclusionsForSource(src propertySource) (*uset.UnicodeSet, error) {
 	if inc, ok := inclusionsForSource[src]; ok {

@@ -227,14 +227,14 @@ func ParseBackupName(dir string, name string) (backupTime *time.Time, alias *top
 
 	btime, err := time.Parse(BackupTimestampFormat, timestamp)
 	if err != nil {
-		log.Errorf("error parsing backup time for %s/%s: %s", dir, name, err)
+		log.Error(fmt.Sprintf("error parsing backup time for %s/%s: %s", dir, name, err))
 	} else {
 		backupTime = &btime
 	}
 
 	alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		log.Errorf("error parsing tablet alias for %s/%s: %s", dir, name, err)
+		log.Error(fmt.Sprintf("error parsing tablet alias for %s/%s: %s", dir, name, err))
 		alias = nil
 	}
 
@@ -257,7 +257,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
 			// found active db
-			log.Warningf("checkNoDB failed, found active db %v", dbName)
+			log.Warn(fmt.Sprintf("checkNoDB failed, found active db %v", dbName))
 			return false, nil
 		}
 	}
@@ -287,7 +287,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 			// These paths are actually filename prefixes, not directories.
 			// An extension of the form ".###" is appended by mysqld.
 			path += ".*"
-			log.Infof("Restore: removing files in %v (%v)", name, path)
+			log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
 			matches, err := filepath.Glob(path)
 			if err != nil {
 				return vterrors.Wrapf(err, "can't expand path glob %q", path)
@@ -302,10 +302,10 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 		// Regular directory: delete recursively.
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			log.Infof("Restore: skipping removal of nonexistent %v (%v)", name, path)
+			log.Info(fmt.Sprintf("Restore: skipping removal of nonexistent %v (%v)", name, path))
 			continue
 		}
-		log.Infof("Restore: removing files in %v (%v)", name, path)
+		log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
 		if err := os.RemoveAll(path); err != nil {
 			return vterrors.Wrapf(err, "can't remove existing files in %v (%v)", name, path)
 		}
@@ -315,21 +315,23 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 // ShouldRestore checks whether a database with tables already exists
 // and returns whether a restore action should be performed
-func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
-	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysqld MysqlDaemon,
+	dbName string, deleteBeforeRestore bool,
+) (bool, error) {
+	if deleteBeforeRestore || RestoreWasInterrupted(cnf) {
 		return true, nil
 	}
-	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	// If this doesn't succeed, we should not attempt a restore
-	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+	if err := mysqld.Wait(ctx, cnf); err != nil {
 		return false, err
 	}
-	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
-		params.Logger.Errorf("error waiting for the grants: %v", err)
+	if err := mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		logger.Errorf("error waiting for the grants: %v", err)
 		return false, err
 	}
-	return checkNoDB(ctx, params.Mysqld, params.DbName)
+	return checkNoDB(ctx, mysqld, dbName)
 }
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have

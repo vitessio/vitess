@@ -35,7 +35,7 @@ func TestYamlVars(t *testing.T) {
 		3.141,
 	}
 
-	//testing Marshal
+	// testing Marshal
 	var marshalData []byte
 	var err error
 	t.Run("Marshal", func(t *testing.T) {
@@ -48,7 +48,7 @@ StringField: tricky text to test text
 `, string(marshalData))
 	})
 
-	//testing Unmarshal
+	// testing Unmarshal
 	t.Run("Unmarshal", func(t *testing.T) {
 		var unmarshalData TestStruct
 		err = Unmarshal(marshalData, &unmarshalData)

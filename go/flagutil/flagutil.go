@@ -26,9 +26,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var (
-	errInvalidKeyValuePair = errors.New("invalid key:value pair")
-)
+var errInvalidKeyValuePair = errors.New("invalid key:value pair")
 
 // StringListValue is a []string flag that accepts a comma separated
 // list of elements. To include an element containing a comma, quote

@@ -57,7 +57,7 @@ func (code PulloutOpcode) NeedsListArg() bool {
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code PulloutOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -127,7 +127,7 @@ func (code AggregateOpcode) String() string {
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
 // SQLType returns the opcode return sql type, and a bool telling is we are sure about this type or not
@@ -265,7 +265,7 @@ func (code WindowOpcode) String() string {
 // MarshalJSON serializes the WindowOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code WindowOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
 // SQLType returns the opcode return sql type, and a bool telling is we are sure about this type or not

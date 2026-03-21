@@ -17,11 +17,10 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"errors"
 	"net/http/httptest"
 	"testing"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 )

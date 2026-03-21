@@ -42,6 +42,7 @@ func newFakeWriter() *fakeWriter {
 		messages: make(map[string]bool),
 	}
 }
+
 func (fw *fakeWriter) write(pri syslog.Priority, msg string) error {
 	fw.messages[strings.TrimSpace(msg)] = true
 	return nil
@@ -74,6 +75,7 @@ func newFailingFakeWriter() *failingFakeWriter {
 		numberProcessed: 0,
 	}
 }
+
 func (fw *failingFakeWriter) write(pri syslog.Priority, msg string) error {
 	fw.numberProcessed++
 	if fw.numberProcessed%4 == 0 {

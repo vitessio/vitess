@@ -39,14 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -134,6 +132,11 @@ func prepareCluster(t *testing.T) {
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
+	// restore() returns as soon as the vttablet's HTTP endpoint is responsive,
+	// but RestoreData runs in the background and holds the actionSema for the
+	// entire duration of the restore. We need to wait for it to finish before
+	// issuing RPCs like SetWritable that also need the actionSema.
+	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
@@ -194,9 +197,9 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.Infof("taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("taking backup %s", time.Now()))
 	dataPointReader := vtBackup(t, false, true, true)
-	log.Infof("done taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("done taking backup %s", time.Now()))
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -261,7 +264,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
 	}
 
-	log.Infof("starting backup tablet %s", time.Now())
+	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	if err != nil {
 		return nil, err
@@ -337,7 +340,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-	log.Infof("restoring tablet %s", time.Now())
+	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
 	// Start tablets
@@ -347,6 +350,28 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.SupportsBackup = true
 	err := tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
+}
+
+// waitForRestoreComplete waits for a vttablet's background restore to finish.
+// The tablet type transitions replica -> restore -> replica during a restore.
+// This function polls until it observes "restore" and then sees "replica" again.
+// If the restore completes faster than the polling interval and "restore" is
+// never observed, the function returns since the restore is already done.
+func waitForRestoreComplete(t *testing.T, vttablet *cluster.VttabletProcess, timeout time.Duration) {
+	t.Helper()
+	sawRestore := false
+	assert.Eventually(t, func() bool {
+		tabletType := vttablet.GetTabletType()
+		if tabletType == "restore" {
+			sawRestore = true
+		}
+		return sawRestore && tabletType == "replica"
+	}, timeout, 300*time.Millisecond)
+	if sawRestore {
+		require.Equal(t, "replica", vttablet.GetTabletType(), "timed out waiting for tablet restore to complete")
+	}
+	// If we never observed "restore" type, the restore likely completed
+	// before we started polling. Nothing to wait for.
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
@@ -436,7 +461,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -445,7 +470,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -478,7 +503,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)

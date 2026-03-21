@@ -70,7 +70,6 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 		TableSettings:         tableSettings,
 		MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
 	})
-
 	if err != nil {
 		return err
 	}

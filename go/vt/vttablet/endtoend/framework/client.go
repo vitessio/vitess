@@ -19,6 +19,7 @@ package framework
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
@@ -444,9 +445,7 @@ func (client *QueryClient) GetSchema(
 ) (schemaDef map[string]string, udfs []*querypb.UDFInfo, err error) {
 	schemaDef = make(map[string]string)
 	err = client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
-		for tableName, schemaDefinition := range schemaRes.TableDefinition {
-			schemaDef[tableName] = schemaDefinition
-		}
+		maps.Copy(schemaDef, schemaRes.TableDefinition)
 		udfs = append(udfs, schemaRes.Udfs...)
 		return nil
 	})

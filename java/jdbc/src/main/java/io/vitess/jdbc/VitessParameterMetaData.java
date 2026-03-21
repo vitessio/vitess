@@ -20,6 +20,9 @@ import java.sql.ParameterMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 
+/**
+ * VitessParameterMetaData provides metadata about parameters in a PreparedStatement.
+ */
 public class VitessParameterMetaData implements ParameterMetaData {
 
   private final int parameterCount;

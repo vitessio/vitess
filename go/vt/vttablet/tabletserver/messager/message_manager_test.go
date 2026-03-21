@@ -147,7 +147,7 @@ func TestReceiverCancel(t *testing.T) {
 	_ = mm.Subscribe(ctx, r1.rcv)
 
 	// r1 should eventually be unsubscribed.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 		if len(mm.receivers) != 0 {
@@ -161,7 +161,7 @@ func TestReceiverCancel(t *testing.T) {
 func TestMessageManagerState(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), semaphore.NewWeighted(1))
 	// Do it twice
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		mm.Open()
 		// Idempotence.
 		mm.Open()
@@ -246,7 +246,7 @@ func TestMessageManagerSend(t *testing.T) {
 	// It may take some time for this to happen.
 	inQueue := true
 	inFlight := true
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		mm.cache.mu.Lock()
 		if _, ok := mm.cache.inQueue["1"]; !ok {
 			inQueue = false
@@ -279,7 +279,7 @@ func TestMessageManagerSend(t *testing.T) {
 
 	// Cancel and wait for it to take effect.
 	cancel()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 		mm.mu.Lock()
@@ -326,7 +326,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	<-r2.ch
 
 	// Wait.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -338,7 +338,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	// Receive on this channel will allow the next postpone to go through.
 	<-ch
 	// Wait.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -612,7 +612,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	}}
 	var got [][]sqltypes.Value
 	// We should get it in 2 iterations.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		qr := <-r1.ch
 		got = append(got, qr.Rows...)
 	}
@@ -674,7 +674,7 @@ func TestMessagesPending1(t *testing.T) {
 	// Now, let's pull more than 3 items. It should
 	// trigger the poller, and there should be no wait.
 	start := time.Now()
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
@@ -707,7 +707,7 @@ func TestMessagesPending2(t *testing.T) {
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.
 	start := time.Now()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
@@ -892,7 +892,8 @@ func (fv *fakeVStreamer) setPollerResponse(pr []*binlogdatapb.VStreamResultsResp
 }
 
 func (fv *fakeVStreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	fv.streamInvocations.Add(1)
 	for {
 		fv.mu.Lock()

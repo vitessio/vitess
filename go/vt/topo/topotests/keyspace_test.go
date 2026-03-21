@@ -17,7 +17,6 @@ limitations under the License.
 package topotests
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,8 +30,7 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -48,8 +46,7 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

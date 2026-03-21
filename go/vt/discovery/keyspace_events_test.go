@@ -95,11 +95,9 @@ func TestKeyspaceEventConcurrency(t *testing.T) {
 	}()
 	// Start up concurent go-routines that will broadcast keyspace events.
 	for i := 1; i <= concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kew.broadcast(&KeyspaceEvent{})
-		}()
+		})
 	}
 	wg.Wait()
 	for {
@@ -135,8 +133,7 @@ func TestKeyspaceEventConcurrency(t *testing.T) {
 // keyspace state.
 func TestKeyspaceEventTypes(t *testing.T) {
 	utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell"
 	keyspace := "testks"
 	factory := faketopo.NewFakeTopoFactory()
@@ -641,8 +638,7 @@ func TestOnHealthCheck(t *testing.T) {
 	}
 }
 
-type fakeTopoServer struct {
-}
+type fakeTopoServer struct{}
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {

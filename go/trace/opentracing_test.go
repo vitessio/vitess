@@ -54,17 +54,19 @@ func TestNewSpan(t *testing.T) {
 	svc := openTracingService{
 		Tracer: &fakeTracer{},
 	}
-	clientSpan := svc.New(nil, "test-label")
+	clientSpan, ctx := svc.New(t.Context(), "test-label")
 	require.NotEmpty(t, clientSpan)
+	require.NotNil(t, ctx)
 
-	clientSpan = svc.New(clientSpan, "client-span")
+	clientSpan, ctx = svc.New(ctx, "client-span")
 	require.NotEmpty(t, clientSpan)
+	require.NotNil(t, ctx)
 
 	spanFromCtx, ok := svc.FromContext(context.Background())
 	require.False(t, ok)
 	require.Nil(t, spanFromCtx)
 
-	ctx := svc.NewContext(context.TODO(), clientSpan)
+	ctx = svc.NewContext(t.Context(), clientSpan)
 	require.NotNil(t, ctx)
 	clientSpan.Finish()
 

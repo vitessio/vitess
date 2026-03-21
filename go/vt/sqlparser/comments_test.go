@@ -29,7 +29,7 @@ import (
 )
 
 func TestSplitComments(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		input, outSQL, outLeadingComments, outTrailingComments string
 	}{{
 		input:               "/",
@@ -150,7 +150,7 @@ func TestSplitComments(t *testing.T) {
 }
 
 func TestStripLeadingComments(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		input, outSQL string
 	}{{
 		input:  "/",
@@ -223,7 +223,7 @@ a`,
 }
 
 func TestExtractMysqlComment(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		input, outSQL, outVersion string
 	}{{
 		input:      "/*!50708SET max_execution_time=5000 */",
@@ -253,7 +253,7 @@ func TestExtractMysqlComment(t *testing.T) {
 }
 
 func TestExtractCommentDirectives(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		input string
 		vals  map[string]string
 	}{{

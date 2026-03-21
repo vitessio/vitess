@@ -43,7 +43,7 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 
 	// Wait up to 10ms until the watch gets notified of the update
 	ok := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		select {
 		case vschema := <-watch:
 			_, ok = vschema.Keyspaces[ks].Vindexes[name]
@@ -59,7 +59,7 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 	}
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		vschema := executor.vm.GetCurrentSrvVschema()
 		vindex, ok := vschema.Keyspaces[ks].Vindexes[name]
 		if ok {
@@ -76,7 +76,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 	t.Helper()
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		vschema := executor.vm.GetCurrentSrvVschema()
 		var gotTables []string
 		for t := range vschema.Keyspaces[ks].Tables {
@@ -104,7 +104,7 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 	t.Helper()
 
 	// Wait up to 10ms until the vindex manager gets notified of the update
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		vschema := executor.vm.GetCurrentSrvVschema()
 		table, ok := vschema.Keyspaces[ks].Tables[table]
 

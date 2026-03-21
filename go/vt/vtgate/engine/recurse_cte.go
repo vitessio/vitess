@@ -128,7 +128,7 @@ func (r *RecurseCTE) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (r *RecurseCTE) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"JoinVars": orderedStringIntMap(r.Vars),
 	}
 

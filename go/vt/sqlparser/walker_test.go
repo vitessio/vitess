@@ -24,7 +24,7 @@ import (
 )
 
 func BenchmarkWalkLargeExpression(b *testing.B) {
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			exp := NewGenerator(5).Expression(ExprGeneratorConfig{})
 			count := 0

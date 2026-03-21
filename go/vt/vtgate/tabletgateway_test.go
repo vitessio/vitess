@@ -147,7 +147,7 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 	diffCellTablets := []*discovery.TabletHealth{ts3, ts4}
 	mixedTablets := []*discovery.TabletHealth{ts1, ts2, ts3, ts4}
 	// repeat shuffling 10 times and every time the same cell tablets should be in the front
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tg.shuffleTablets("cell1", sameCellTablets)
 		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
 		assert.Equal(t, sameCellTablets[0].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")

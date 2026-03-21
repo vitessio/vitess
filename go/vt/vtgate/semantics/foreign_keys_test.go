@@ -231,7 +231,8 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 		tables: makeTableCollector(&FakeSI{
 			KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 				"ks": vschemapb.Keyspace_managed,
-			}}, tbl["t4"],
+			},
+		}, tbl["t4"],
 			tbl["t5"]),
 	}
 	updateExprs := sqlparser.UpdateExprs{

@@ -17,8 +17,10 @@ limitations under the License.
 package ptr
 
 // Of returns a pointer to the given value
+//
+//go:fix inline
 func Of[T any](x T) *T {
-	return &x
+	return new(x)
 }
 
 // Unwrap dereferences the given pointer if it's not nil.

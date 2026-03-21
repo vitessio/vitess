@@ -1,6 +1,6 @@
 version: "2"
 run:
-  go: "1.25"
+  go: "1.26"
 linters:
   default: none
   enable:
@@ -11,6 +11,7 @@ linters:
     - govet
     - ineffassign
     - mirror
+    - modernize
     - nolintlint
     - nosprintfhostport
     - perfsprint
@@ -214,8 +215,8 @@ linters:
       - examples$
 formatters:
   enable:
-    - gofmt
     - goimports
+    - gofumpt
   settings:
     goimports:
       local-prefixes:
@@ -225,3 +226,4 @@ formatters:
     paths:
       - examples$
       - ^go/vt/proto/
+      - ^test/antithesis/

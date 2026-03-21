@@ -170,7 +170,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -486,12 +486,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
-		for i := 0; i < count; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range count {
+			wg.Go(func() {
 				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", false)
-			}()
+			})
 		}
 		wg.Wait()
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
@@ -505,12 +503,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
-		for i := 0; i < count; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range count {
+			wg.Go(func() {
 				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", false)
-			}()
+			})
 		}
 		wg.Wait()
 		// cancelling via vtctl does not return values. We CANCEL ALL via vtctl, then validate via VTGate that nothing remains to be cancelled.
@@ -882,7 +878,7 @@ func insertRow(t *testing.T) {
 }
 
 func insertRows(t *testing.T, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		insertRow(t)
 	}
 }
@@ -917,8 +913,8 @@ func testMigrationRowCount(t *testing.T, uuid string) {
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" //nolint
-	for i := 0; i < totalTableCount; i++ {
+	sqlQuery := ""
+	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)

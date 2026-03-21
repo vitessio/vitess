@@ -44,7 +44,6 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 		Alias:      alias,
 		ClusterIds: r.URL.Query()["cluster_id"],
 	})
-
 	if err != nil {
 		return vtadminhttp.NewJSONResponse(nil, err)
 	}

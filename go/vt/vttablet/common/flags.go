@@ -65,6 +65,7 @@ var (
 func GetVReplicationNetReadTimeout() int {
 	return vreplicationNetReadTimeout
 }
+
 func GetVReplicationNetWriteTimeout() int {
 	return vreplicationNetWriteTimeout
 }

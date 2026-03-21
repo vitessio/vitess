@@ -475,7 +475,7 @@ func BenchmarkEncReadInt(b *testing.B) {
 
 func BenchmarkEncGtidData(b *testing.B) {
 	b.ReportAllocs()
-	for range b.N {
+	for b.Loop() {
 		_ = encGtidData("xxx")
 	}
 }

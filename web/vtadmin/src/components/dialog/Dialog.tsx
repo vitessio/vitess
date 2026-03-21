@@ -1,5 +1,5 @@
 import { Fragment, useRef } from 'react';
-import { Dialog as HUDialog, Transition } from '@headlessui/react';
+import { Dialog as HUDialog, DialogBackdrop, Transition } from '@headlessui/react';
 import { Icon, Icons } from '../Icon';
 
 interface DialogProps {
@@ -68,7 +68,7 @@ const Dialog: React.FC<DialogProps> = ({
                         leaveFrom="opacity-100"
                         leaveTo="opacity-0"
                     >
-                        <HUDialog.Overlay className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+                        <DialogBackdrop className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
                     </Transition.Child>
 
                     {/* This element is to trick the browser into centering the modal contents. */}

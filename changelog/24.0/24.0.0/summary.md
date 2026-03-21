@@ -6,8 +6,17 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+        - [View Routing Rules](#view-routing-rules)
+        - [Tablet targeting via USE statement](#tablet-targeting)
+    - **[Breaking Changes](#breaking-changes)**
+        - [External Decompressor No Longer Read from Backup MANIFEST by Default](#vttablet-external-decompressor-manifest)
 - **[Minor Changes](#minor-changes)**
+    - **[Logging](#minor-changes-logging)**
+        - [Structured logging](#structured-logging)
+    - **[VReplication](#minor-changes-vreplication)**
+        - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
@@ -15,12 +24,16 @@
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
+        - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
-        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
-        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [New `--cell` Flag](#vtorc-cell-flag)
+        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
+        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
+        - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
+        - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -34,9 +47,98 @@ Previously, all window function queries required single-shard routing, which lim
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
+#### <a id="view-routing-rules"/>View Routing Rules</a>
+
+Vitess now supports routing rules for views, and can be applied the same as tables with `vtctldclient ApplyRoutingRules`. When a view routing rule is active, VTGate rewrites queries that reference the source view to use the target view's definition instead. For example, given this routing rule:
+
+```json
+{
+  "rules": [
+    {
+      "from_table": "source_ks.my_view",
+      "to_tables": ["target_ks.my_view"]
+    }
+  ]
+}
+```
+
+And this view definition:
+
+```sql
+CREATE VIEW target_ks.my_view AS SELECT id, name FROM user;
+```
+
+A query like `SELECT * FROM source_ks.my_view` would be internally rewritten to:
+
+```sql
+SELECT * FROM (SELECT id, name FROM target_ks.user) AS my_view;
+```
+
+View routing rules require the schema tracker to monitor views, which means VTGate must be started with the `--enable-views` flag and VTTablet with the `--queryserver-enable-views` flag. The target view must exist in the specified keyspace for the routing rule to function correctly. For more details, see the [Schema Routing Rules documentation](https://vitess.io/docs/24.0/reference/features/schema-routing-rules/).
+
+#### <a id="tablet-targeting"/>Tablet targeting via USE statement</a>
+
+VTGate now supports routing queries to a specific tablet by alias using an extended `USE` statement syntax:
+
+```sql
+USE keyspace:shard@tablet_type|tablet_alias;
+```
+
+For example, to target a specific replica tablet:
+
+```sql
+USE commerce:-80@replica|zone1-0000000100;
+```
+
+Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
+
+Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
+
+### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="vttablet-external-decompressor-manifest"/>External Decompressor No Longer Read from Backup MANIFEST by Default</a>
+
+The external decompressor command stored in a backup's `MANIFEST` file is no longer used at restore time by default. Previously, when no `--external-decompressor` flag was provided, VTTablet would fall back to the command specified in the `MANIFEST`. This posed a security risk: an attacker with write access to backup storage could modify the `MANIFEST` to execute arbitrary commands on the tablet.
+
+Starting in v24, the `MANIFEST`-based decompressor is ignored unless you explicitly opt in with the new `--external-decompressor-use-manifest` flag. If you rely on this behavior, add the flag to your VTTablet configuration, but be aware of the security implications.
+
+See [#19460](https://github.com/vitessio/vitess/pull/19460) for details.
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
+### <a id="minor-changes-logging"/>Logging</a>
+
+#### <a id="structured-logging"/>Structured logging</a>
+
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
+
+`glog` is deprecated as of v24 and will be removed in v25.
+
+### <a id="minor-changes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-shards-flag-start-stop"/>`--shards` flag for MoveTables/Reshard start and stop</a>
+
+The `start` and `stop` commands for MoveTables and Reshard workflows now support the `--shards` flag, allowing users to start or stop workflows on a specific subset of shards rather than all shards at once.
+
+**Example usage:**
+
+```bash
+# Start workflow on specific shards only
+vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer start --shards="-80,80-"
+
+# Stop workflow on specific shards only
+vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
+```
+
 ### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-removed-grpc-send-session-in-streaming"/>Removed `--grpc-send-session-in-streaming` flag</a>
+
+The VTGate flag `--grpc-send-session-in-streaming` has been removed. This flag was deprecated in v22 via [#17907](https://github.com/vitessio/vitess/pull/17907) and defaulted to `true`.
+
+The session is now always sent as the last packet in the streaming response for `StreamExecute` and `StreamExecuteMulti` RPCs. This behavior is required to support transactions in streaming and cannot be disabled.
+
+**Impact**: Remove any usage of the `--grpc-send-session-in-streaming` flag from VTGate startup scripts or configuration.
 
 #### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>New default for `--legacy-replication-lag-algorithm` flag</a>
 
@@ -91,6 +193,12 @@ All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `Quer
 
 These metrics help monitor throttling patterns, identify which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before configuration changes.
 
+#### <a id="vttablet-querythrottler-config-watch"/>QueryThrottler Event-Driven Configuration Updates</a>
+
+QueryThrottler configuration is now stored in `SrvKeyspace` within the topology server and managed using standard topology tools. Previously, tablets polled for configuration changes every 60 seconds. Tablets now use event-driven watches (`WatchSrvKeyspace`) to receive updates immediately when throttling configuration changes. All tablets in a keyspace see configuration changes at roughly the same time, and topology server changes are versioned and auditable.
+
+This change replaces the previous file-based configuration loader with a protobuf-defined configuration structure stored in the topology. The new configuration includes fields for enabling/disabling throttling, selecting the throttling strategy, and configuring strategy-specific rules.
+
 #### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
 
 OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
@@ -109,20 +217,6 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
-#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
-
-The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. This metric was deprecated in v23.
-
-**Migration**: Use `discoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
-
-**Impact**: Monitoring dashboards or alerting systems using `discoverInstanceTimings` must be updated to use `discoveryInstanceTimings`.
-
-#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
-
-VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
-
-This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
-
 #### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
 
 VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
@@ -132,3 +226,44 @@ When provided, VTOrc validates that the cell exists in the topology service on s
 This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
 
 **Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.
+
+#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
+
+VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
+
+This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
+
+VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+
+The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+
+See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
+
+#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
+
+The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
+
+**Migration**: Use `DiscoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
+
+**Impact**: Monitoring dashboards or alerting systems using `DiscoverInstanceTimings` must be updated to use `DiscoveryInstanceTimings`.
+
+#### <a id="vtorc-snapshot-topology-deprecation"/>Deprecation of Snapshot Topology feature</a>
+
+VTOrc's Snapshot Topology feature, which is enabled by setting `--snapshot-topology-interval` to a non-zero-value is deprecated as of v24 and the logic is planned for removal in v25.
+
+The lack of facilities to read the snapshots created by this feature coupled with the in-memory nature of VTOrc's backend means this logic has limited usefulness. This deprecation is explained and tracked in detail in https://github.com/vitessio/vitess/issues/18691.
+
+**Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
+
+**Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+
+#### <a id="vtorc-replication-analysis-api-removed"/>Deprecated `/api/replication-analysis` Endpoint Removed</a>
+
+The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use `/api/detection-analysis` instead, which provides the same functionality.
+
+**Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
+
+**Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
+

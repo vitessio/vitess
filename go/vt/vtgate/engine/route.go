@@ -41,12 +41,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -59,6 +57,9 @@ type Route struct {
 
 	// Query specifies the query to be executed.
 	Query string
+
+	// QueryStatement is the parsed AST of Query
+	QueryStatement sqlparser.Statement
 
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
@@ -103,9 +104,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -379,12 +378,14 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["
+		var sysTabSchemaSb378 strings.Builder
 		for idx, tableSchema := range route.SysTableTableSchema {
 			if idx != 0 {
-				sysTabSchema += ", "
+				sysTabSchemaSb378.WriteString(", ")
 			}
-			sysTabSchema += sqlparser.String(tableSchema)
+			sysTabSchemaSb378.WriteString(sqlparser.String(tableSchema))
 		}
+		sysTabSchema += sysTabSchemaSb378.String()
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
 	}
@@ -512,6 +513,18 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
+	// Remove FOR UPDATE locks for warming reads if present
+	warmingQueries := queries
+	if modifiedQuery, ok := removeForUpdateLocks(route.QueryStatement); ok {
+		warmingQueries = make([]*querypb.BoundQuery, len(queries))
+		for i, query := range queries {
+			warmingQueries[i] = &querypb.BoundQuery{
+				Sql:           modifiedQuery,
+				BindVariables: query.BindVariables,
+			}
+		}
+	}
+
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
@@ -527,14 +540,33 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
-				log.Warningf("Failed to execute warming replica read: %v", errs)
+				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
 				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
 			}
 		}(replicaVCursor)
 	default:
-		log.Warning("Failed to execute warming replica read as pool is full")
+		log.Warn("Failed to execute warming replica read as pool is full")
 	}
+}
+
+func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return "", false
+	}
+
+	lock := sel.GetLock()
+	if lock != sqlparser.ForUpdateLock &&
+		lock != sqlparser.ForUpdateLockNoWait &&
+		lock != sqlparser.ForUpdateLockSkipLocked {
+		return "", false
+	}
+
+	clonedSel := sqlparser.CloneSelectStatement(sel)
+	clonedSel.SetLock(sqlparser.NoLock)
+
+	return sqlparser.String(clonedSel), true
 }

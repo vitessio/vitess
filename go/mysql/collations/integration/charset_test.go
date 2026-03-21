@@ -31,7 +31,7 @@ import (
 )
 
 func TestLocalEncodings(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		input     []byte
 	}{
@@ -66,7 +66,7 @@ func TestCJKStress(t *testing.T) {
 		}
 	}
 
-	var charsets = []charset.Charset{
+	charsets := []charset.Charset{
 		charset.Charset_latin1{},
 		// charset.Charset_gb18030{},
 		charset.Charset_gb2312{},

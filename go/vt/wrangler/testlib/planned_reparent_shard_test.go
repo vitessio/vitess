@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -50,8 +50,7 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -166,8 +165,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -263,8 +261,10 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(newPrimary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 
 	// check what was run
@@ -302,8 +302,7 @@ func TestPlannedReparentInitialization(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -388,8 +387,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -496,8 +494,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -602,8 +599,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -653,8 +649,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(primary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
@@ -682,8 +680,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -740,8 +737,10 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(primary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
@@ -767,8 +766,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -907,8 +905,7 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)

@@ -38,9 +38,9 @@ var _ Primitive = (*MergeSort)(nil)
 
 // MergeSort performs a merge-sort of rows returned by each Input. This should
 // only be used for StreamExecute. One row from each stream is added to the
-// merge-sorter heap. Every time a value is pulled out of the heap,
+// merge-sorter tree. Every time a value is pulled out of the tree,
 // a new value is added to it from the stream that was the source of the value that
-// was pulled out. Since the input streams are sorted the same way that the heap is
+// was pulled out. Since the input streams are sorted the same way that the tree is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
 // MergeSort only supports the StreamExecute function of a Primitive. So, it cannot
 // be used like other Primitives in VTGate. However, it satisfies the Primitive API
@@ -98,7 +98,7 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	}
 
 	var errs []error
-	// Prime the heap. One element must be pulled from each stream.
+	// Prime the merge tree. One element must be pulled from each stream.
 	for i, handle := range handles {
 		select {
 		case row, ok := <-handle.row:
@@ -122,11 +122,12 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	merge.Init()
 
 	// Iterate one row at a time:
-	// Pop a row from the heap and send it out.
+	// Pop a row from the merge tree and send it out.
 	// Then pull the next row from the stream the popped
-	// row came from and push it into the heap.
+	// row came from and replace it in the tree, or remove
+	// it if the stream is exhausted.
 	for merge.Len() != 0 {
-		row, stream := merge.Pop()
+		row, stream := merge.Peek()
 		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{row}}); err != nil {
 			return err
 		}
@@ -137,9 +138,10 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				if handles[stream].err != nil {
 					return handles[stream].err
 				}
+				merge.Pop()
 				continue
 			}
-			merge.Push(row, stream)
+			merge.ReplaceMin(row, stream)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

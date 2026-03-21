@@ -720,7 +720,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// // check it's there
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,
@@ -732,7 +731,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	assert.Nil(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,
@@ -1273,7 +1271,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	hc.AddTablet(tablet1)
 
 	numTriggers := 10
-	for i := 0; i < numTriggers; i++ {
+	for range numTriggers {
 		// Since the previous target was a primary, and there are no other
 		// primary tablets for the given keyspace shard, we will see the healtcheck
 		// send on the loadTablets trigger. We just want to verify the information
@@ -1283,7 +1281,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 
 	ch := hc.GetLoadTabletsTrigger()
 	require.Len(t, ch, numTriggers)
-	for i := 0; i < numTriggers; i++ {
+	for range numTriggers {
 		// Read from the channel and verify we indeed have the right values.
 		kss := <-ch
 		require.EqualValues(t, ks, kss.Keyspace)
@@ -1595,7 +1593,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	// Run multiple updates really quickly
 	// one after the other.
 	totalUpdates := 10
-	for i := 0; i < totalUpdates; i++ {
+	for range totalUpdates {
 		hc.broadcast(&TabletHealth{})
 	}
 	// Unsubscribe from the healthcheck
@@ -1632,7 +1630,7 @@ func TestHealthCheckBufferFull(t *testing.T) {
 		printStackCalled.Store(true)
 	}
 	hcUpdateCount := 2050
-	for i := 0; i < hcUpdateCount; i++ {
+	for range hcUpdateCount {
 		hc.broadcast(&TabletHealth{Tablet: topo.NewTablet(0, "cell", "host")})
 	}
 

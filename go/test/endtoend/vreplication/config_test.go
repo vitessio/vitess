@@ -295,7 +295,7 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
   }
 }
 `
-	//ordersSchema = "create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';"
+	// ordersSchema = "create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';"
 	ordersVSchema = `
 {
   "sharded": true,

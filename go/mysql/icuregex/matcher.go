@@ -30,9 +30,11 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/uprops"
 )
 
-const timerInitialValue = 10000
-const defaultTimeout = 3
-const defaultStackLimit = 0
+const (
+	timerInitialValue = 10000
+	defaultTimeout    = 3
+	defaultStackLimit = 0
+)
 
 type Matcher struct {
 	pattern *Pattern

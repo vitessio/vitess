@@ -134,7 +134,6 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 	}
 
 	_, err = fmt.Fprintf(w, "Percentage of time spent on scatter queries: %2.2f%%", results.PercentTimeScatter)
-
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 	}

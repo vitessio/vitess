@@ -48,6 +48,10 @@ updates:
       - "/go/mysql/collations/tools/colldump"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "mysql"
+        versions:
+          - ">= 8.5"
     groups:
       all:
         patterns:

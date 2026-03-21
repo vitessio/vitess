@@ -55,17 +55,15 @@ func TestResilientQueryGetCurrentValueInitialization(t *testing.T) {
 	// Hammer the resilient query with multiple get requests just as it is created.
 	// We expect all of them to work.
 	wg := sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// To test with both stale and not-stale, we use the modulo of our index.
 		stale := i%2 == 0
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			res, err := rq.getCurrentValue(ctx, cell, stale)
 			// Assert that we don't have any error and the value matches what we want.
 			assert.NoError(t, err)
 			assert.EqualValues(t, cell, res)
-		}()
+		})
 	}
 	// Wait for the wait group to be empty, otherwise the test is marked a success before any of the go routines finish completion!
 	wg.Wait()

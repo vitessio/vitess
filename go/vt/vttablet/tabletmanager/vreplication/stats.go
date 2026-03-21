@@ -33,9 +33,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	globalStats = &vrStats{}
-)
+var globalStats = &vrStats{}
 
 func init() {
 	globalStats.register()

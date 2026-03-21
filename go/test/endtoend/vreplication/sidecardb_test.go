@@ -32,14 +32,18 @@ func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables [
 	return numTablets, tables
 }
 
-var sidecarDBTables []string
-var numSidecarDBTables int
-var ddls1, ddls2 []string
+var (
+	sidecarDBTables    []string
+	numSidecarDBTables int
+	ddls1, ddls2       []string
+)
 
 func init() {
-	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
+	sidecarDBTables = []string{
+		"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
 		"redo_state", "redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "semisync_heartbeat",
-		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
+		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log",
+	}
 	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
 		"drop table _vt.vreplication_log",
@@ -110,6 +114,7 @@ func TestSidecarDB(t *testing.T) {
 		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
 	})
 }
+
 func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 	_, tables2 := getSidecarDBTables(t, tabletID)
 	require.EqualValues(t, tables, tables2)

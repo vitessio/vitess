@@ -751,8 +751,7 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))

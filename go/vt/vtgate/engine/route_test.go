@@ -189,7 +189,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 					tbl: &vindexes.BaseTable{
 						Name:     sqlparser.NewIdentifierCS("routedTable"),
 						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
-					}}
+					},
+				}
 			}
 			_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
@@ -1771,16 +1772,18 @@ func TestBuildMultiColumnVindexValues(t *testing.T) {
 				},
 			},
 		}, {
-			input: [][][]sqltypes.Value{{
-				{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
-				{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+			input: [][][]sqltypes.Value{
+				{
+					{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
+					{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+				},
 			},
-			},
-			output: [][][]*querypb.Value{{
-				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
-				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
-				{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
-			},
+			output: [][][]*querypb.Value{
+				{
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
+				},
 			},
 		},
 	}

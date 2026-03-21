@@ -25,7 +25,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Vtrpc;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-
 import java.sql.BatchUpdateException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -507,7 +506,7 @@ public class VitessStatement implements Statement {
         throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
       }
 
-      this.retrieveGeneratedKeys = true;// mimicking mysql-connector-j
+      this.retrieveGeneratedKeys = true; // mimicking mysql-connector-j
       return this.generateBatchUpdateResult(cursorWithErrorList, batchedArgs);
     } finally {
       this.clearBatch();

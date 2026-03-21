@@ -192,9 +192,11 @@ func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parse
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
-	if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(CreateOptions.OnDDL)]; !ok {
+	normalized := strings.ToUpper(CreateOptions.OnDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[normalized]; !ok {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
+	CreateOptions.OnDDL = normalized
 	return nil
 }
 
@@ -331,6 +333,10 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
 	cmd.Flags().StringSliceVar(&CreateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 }
+
+var StartStopOptions = struct {
+	Shards []string
+}{}
 
 var MirrorTrafficOptions = struct {
 	DryRun      bool

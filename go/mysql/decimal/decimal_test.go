@@ -371,7 +371,7 @@ func TestCopy(t *testing.T) {
 		t.Error("expecting copy and origin to be equals, but they are not")
 	}
 
-	//change value
+	// change value
 	cpy = cpy.Add(New(1, 0))
 
 	if cpy.Cmp(origin) == 0 {

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/ioutil"
@@ -48,8 +49,7 @@ import (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by invoking xtrabackup with
 // the appropriate parameters
-type XtrabackupEngine struct {
-}
+type XtrabackupEngine struct{}
 
 var (
 	// path where backup engine program is located
@@ -306,7 +306,8 @@ func (be *XtrabackupEngine) backupFiles(
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + params.Cnf.Path,
 		"--backup",
 		"--socket=" + params.Cnf.SocketFile,
 		"--slave-info",
@@ -318,7 +319,11 @@ func (be *XtrabackupEngine) backupFiles(
 		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
 	}
 	if xtrabackupBackupFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupBackupFlags)...)
+		backupFlags, err := shlex.Split(xtrabackupBackupFlags)
+		if err != nil {
+			return replicationPosition, vterrors.Wrap(err, "failed to parse --xtrabackup-backup-flags")
+		}
+		flagsToExec = append(flagsToExec, backupFlags...)
 	}
 
 	// Create a cancellable Context for calls to bh.AddFile().
@@ -433,11 +438,9 @@ func (be *XtrabackupEngine) backupFiles(
 	}()
 
 	// Copy from the stream output to destination file (optional gzip)
-	blockSize := int64(xtrabackupStripeBlockSize)
-	if blockSize < 1024 {
+	blockSize := max(int64(xtrabackupStripeBlockSize),
 		// Enforce minimum block size.
-		blockSize = 1024
-	}
+		1024)
 	// Add a buffer in front of the raw stdout pipe so io.CopyN() can use the
 	// buffered reader's WriteTo() method instead of allocating a new buffer
 	// every time.
@@ -541,12 +544,17 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + cnf.Path,
 		"--prepare",
 		"--target-dir=" + tempDir,
 	}
 	if xtrabackupPrepareFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupPrepareFlags)...)
+		prepareFlags, err := shlex.Split(xtrabackupPrepareFlags)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to parse --xtrabackup-prepare-flags")
+		}
+		flagsToExec = append(flagsToExec, prepareFlags...)
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, err := prepareCmd.StdoutPipe()
@@ -576,7 +584,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// then move-back
 	logger.Infof("Restore: Move extracted and prepared files to final locations")
 
-	flagsToExec = []string{"--defaults-file=" + cnf.Path,
+	flagsToExec = []string{
+		"--defaults-file=" + cnf.Path,
 		"--move-back",
 		"--target-dir=" + tempDir,
 	}
@@ -643,16 +652,13 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-			var deCompressionEngine = bm.CompressionEngine
+			deCompressionEngine := bm.CompressionEngine
 			if deCompressionEngine == "" {
 				// For backward compatibility. Incase if Manifest is from N-1 binary
 				// then we assign the default value of compressionEngine.
 				deCompressionEngine = PgzipCompressor
 			}
-			externalDecompressorCmd := ExternalDecompressorCmd
-			if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-				externalDecompressorCmd = bm.ExternalDecompressor
-			}
+			externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 			if externalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
 					deCompressionEngine = externalDecompressorCmd
@@ -722,7 +728,11 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if xbstreamRestoreFlags != "" {
-			flagsToExec = append(flagsToExec, strings.Fields(xbstreamRestoreFlags)...)
+			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
+			}
+			flagsToExec = append(flagsToExec, restoreFlags...)
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
@@ -821,7 +831,7 @@ func addStripeFiles(ctx context.Context, params BackupParams, backupHandle backu
 	}
 
 	files := []io.WriteCloser{}
-	for i := 0; i < numStripes; i++ {
+	for i := range numStripes {
 		filename := stripeFileName(baseFileName, i)
 		params.Logger.Infof("Opening backup stripe file %v", filename)
 		file, err := backupHandle.AddFile(ctx, filename, totalSize/int64(numStripes))
@@ -848,7 +858,7 @@ func readStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandl
 	}
 
 	files := []io.ReadCloser{}
-	for i := 0; i < numStripes; i++ {
+	for i := range numStripes {
 		file, err := backupHandle.ReadFile(ctx, stripeFileName(baseFileName, i))
 		if err != nil {
 			// Close any files we already opened and clear them from the result.

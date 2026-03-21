@@ -79,7 +79,8 @@ func TestDiffTables(t *testing.T) {
 				"+	`i` int,",
 				"+	`b` tinyint(1),",
 				" 	PRIMARY KEY (`id`)",
-				" )"},
+				" )",
+			},
 		},
 		{
 			name: "alter columns from tinyint(1) to boolean",

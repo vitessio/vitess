@@ -101,7 +101,7 @@ func newMoveTables(vc *VitessCluster, mt *moveTablesWorkflow, flavor workflowFla
 	default:
 		panic("unreachable")
 	}
-	log.Infof("Using moveTables flavor: %s", mt2.Flavor())
+	log.Info("Using moveTables flavor: " + mt2.Flavor())
 	return mt2
 }
 
@@ -250,7 +250,7 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 	default:
 		panic("unreachable")
 	}
-	log.Infof("Using reshard flavor: %s", rs2.Flavor())
+	log.Info("Using reshard flavor: " + rs2.Flavor())
 	return rs2
 }
 

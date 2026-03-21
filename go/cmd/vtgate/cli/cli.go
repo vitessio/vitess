@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -110,20 +111,14 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 	if cell == "" {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell flag must be set")
 	}
-	hasCell := false
-	for _, v := range cellsInTopo {
-		if v == cell {
-			hasCell = true
-			break
-		}
-	}
+	hasCell := slices.Contains(cellsInTopo, cell)
 	if !hasCell {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell:[%v] does not exist in topo", cell)
 	}
 
 	// cells_to_watch valid check
 	cells := make([]string, 0, 1)
-	for _, c := range strings.Split(cellsToWatch, ",") {
+	for c := range strings.SplitSeq(cellsToWatch, ",") {
 		if c == "" {
 			continue
 		}

@@ -28,7 +28,7 @@ const (
 
 func TestTick(t *testing.T) {
 	tkr := NewRandTicker(testDuration, testVariance)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		start := time.Now()
 		end := <-tkr.C
 		diff := start.Add(testDuration).Sub(end)

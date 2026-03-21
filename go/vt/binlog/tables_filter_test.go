@@ -18,6 +18,7 @@ package binlog
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -157,9 +158,11 @@ func TestTablesFilterMalformed(t *testing.T) {
 
 func bltToString(tx *binlogdatapb.BinlogTransaction) string {
 	result := ""
+	var resultSb160 strings.Builder
 	for _, statement := range tx.Statements {
-		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql))
+		resultSb160.WriteString(fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql)))
 	}
+	result += resultSb160.String()
 	result += fmt.Sprintf("position: \"%v\" ", tx.EventToken.Position)
 	return result
 }

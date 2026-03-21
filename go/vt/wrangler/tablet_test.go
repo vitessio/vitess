@@ -33,8 +33,7 @@ import (
 // shard name to lower case when it's a keyrange, and populates
 // KeyRange properly.
 func TestInitTabletShardConversion(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -61,8 +60,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 
 // TestDeleteTabletBasic tests delete of non-primary tablet
 func TestDeleteTabletBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -90,8 +88,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 // TestDeleteTabletTruePrimary tests that you can delete a true primary tablet
 // only if allowPrimary is set to true
 func TestDeleteTabletTruePrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -132,8 +129,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 // TestDeleteTabletFalsePrimary tests that you can delete a false primary tablet
 // with allowPrimary set to false
 func TestDeleteTabletFalsePrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -180,8 +176,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 // TestDeleteTabletShardNonExisting tests that you can delete a true primary
 // tablet if a shard does not exists anymore.
 func TestDeleteTabletShardNonExisting(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)

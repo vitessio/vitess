@@ -107,7 +107,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Errorf("ResilientQuery uncaught panic, cell :%v, err :%v)", key, err)
+					log.Error(fmt.Sprintf("ResilientQuery uncaught panic, cell :%v, err :%v)", key, err))
 				}
 			}()
 
@@ -132,14 +132,14 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 			} else {
 				q.counts.Add(errorCategory, 1)
 				if entry.insertionTime.IsZero() {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, wkey, err)
+					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, wkey, err))
 				} else if newCtx.Err() == context.DeadlineExceeded {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value)
+					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value))
 				} else if entry.value != nil && time.Since(entry.insertionTime) < q.cacheTTL {
 					q.counts.Add(cachedCategory, 1)
-					log.Warningf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value)
+					log.Warn(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value))
 				} else {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired, keeping cached value)", ctx, wkey, err)
+					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (cached value expired, keeping cached value)", ctx, wkey, err))
 				}
 			}
 

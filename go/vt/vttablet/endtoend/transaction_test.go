@@ -298,7 +298,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	}()
 
 	started := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -323,7 +323,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	}()
 
 	started = false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -350,7 +350,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	}()
 
 	started := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -375,7 +375,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	}()
 
 	started = false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -402,7 +402,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	}()
 
 	started := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -427,7 +427,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	}()
 
 	started = false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queries := framework.LiveQueryz()
 		if len(queries) == 1 {
 			started = true
@@ -610,6 +610,7 @@ func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
 		ac.t.Error(message)
 	}
 }
+
 func (ac *AsyncChecker) shouldNotNotify(timeout time.Duration, message string) {
 	select {
 	case <-ac.ch:
@@ -632,8 +633,7 @@ func TestTransactionWatcherSignal(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := newAsyncChecker(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() {
 		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.TxUnresolved {
@@ -646,7 +646,8 @@ func TestTransactionWatcherSignal(t *testing.T) {
 
 	err = client.CreateTransaction("aa", []*querypb.Target{
 		{Keyspace: "test1", Shard: "0"},
-		{Keyspace: "test2", Shard: "1"}})
+		{Keyspace: "test2", Shard: "1"},
+	})
 	require.NoError(t, err)
 
 	// wait for unresolved transaction signal
