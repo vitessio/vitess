@@ -415,37 +415,19 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			// This pathway exists in order to allow traffic to pass to the
 			// target of a MoveTables workflow after using MirrorTraffic.
 			if ts.allowReadsFromDeniedTables[ts.tablet.Type] {
-				// If a plan does not match any of the types below, it will be
-				// allowed to execute in spite of the table conditions above.
-				//
-				// The only plan supported by traffic mirror at present is
-				// PlanSelect, so add all other plans below.
-				qr.AddPlanCond(planbuilder.PlanNextval)
-				qr.AddPlanCond(planbuilder.PlanInsert)
-				qr.AddPlanCond(planbuilder.PlanInsertMessage)
-				qr.AddPlanCond(planbuilder.PlanUpdate)
-				qr.AddPlanCond(planbuilder.PlanUpdateLimit)
-				qr.AddPlanCond(planbuilder.PlanDelete)
-				qr.AddPlanCond(planbuilder.PlanDeleteLimit)
-				qr.AddPlanCond(planbuilder.PlanDDL)
-				qr.AddPlanCond(planbuilder.PlanSet)
-				qr.AddPlanCond(planbuilder.PlanOtherRead)
-				qr.AddPlanCond(planbuilder.PlanOtherAdmin)
-				qr.AddPlanCond(planbuilder.PlanMessageStream)
-				qr.AddPlanCond(planbuilder.PlanSavepoint)
-				qr.AddPlanCond(planbuilder.PlanRelease)
-				qr.AddPlanCond(planbuilder.PlanSRollback)
-				qr.AddPlanCond(planbuilder.PlanShow)
-				qr.AddPlanCond(planbuilder.PlanLoad)
-				qr.AddPlanCond(planbuilder.PlanFlush)
-				qr.AddPlanCond(planbuilder.PlanUnlockTables)
-				qr.AddPlanCond(planbuilder.PlanCallProc)
-				qr.AddPlanCond(planbuilder.PlanAlterMigration)
-				qr.AddPlanCond(planbuilder.PlanRevertMigration)
-				qr.AddPlanCond(planbuilder.PlanShowMigrations)
-				qr.AddPlanCond(planbuilder.PlanShowMigrationLogs)
-				qr.AddPlanCond(planbuilder.PlanShowThrottledApps)
-				qr.AddPlanCond(planbuilder.PlanShowThrottlerStatus)
+				// Allow all non-select plans to execute in spite of the table
+				// conditions above. This is safe because traffic mirroring
+				// currently only supports SELECT-family plans, which must
+				// continue to respect denied-table rules.
+				for plan := planbuilder.PlanType(0); plan < planbuilder.NumPlans; plan++ {
+					// Skip all SELECT-family plans (e.g. PlanSelect*), which
+					// are the only plans that should remain subject to table
+					// denial when allow_reads_from_denied_tables is enabled.
+					if strings.HasPrefix(plan.String(), "Select") {
+						continue
+					}
+					qr.AddPlanCond(plan)
+				}
 			}
 			denyListRules.Add(qr)
 		}
