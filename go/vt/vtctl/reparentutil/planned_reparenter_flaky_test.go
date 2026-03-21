@@ -2516,9 +2516,10 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		shard    string
 		opts     PlannedReparentOptions
 
-		shouldErr        bool
-		errShouldContain string
-		expectedEvent    *events.Reparent
+		shouldErr                  bool
+		errShouldContain           string
+		expectNoPrimaryGuardPassed bool
+		expectedEvent              *events.Reparent
 	}{
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
@@ -3427,8 +3428,20 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			expectedEvent:    nil,
 		},
 		{
-			name: "expect no primary and no primary recorded",
-			tmc:  &testutil.TabletManagerClient{},
+			name: "expect no primary passes guard, fails reachability check",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: errors.New("expect-no-primary flaky test: stub reachability check"),
+					},
+					"zone1-0000000200": {
+						Error: errors.New("expect-no-primary flaky test: stub reachability check"),
+					},
+				},
+			},
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
@@ -3466,8 +3479,10 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			opts: PlannedReparentOptions{
 				ExpectNoPrimary: true,
 			},
-			shouldErr:     true,
-			expectedEvent: nil,
+			shouldErr:                  true,
+			errShouldContain:           "expect-no-primary flaky test: stub reachability check",
+			expectNoPrimaryGuardPassed: true,
+			expectedEvent:              nil,
 		},
 	}
 
@@ -3515,6 +3530,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
+				if tt.expectNoPrimaryGuardPassed {
+					assert.NotContains(t, err.Error(), "expected no primary for shard", "ExpectNoPrimary must not fail when topology has no primary alias")
+				}
 				return
 			}
 

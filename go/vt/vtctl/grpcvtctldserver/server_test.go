@@ -4676,15 +4676,16 @@ func TestEmergencyReparentShard(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
-		name    string
-		ts      *topo.Server
-		tmc     tmclient.TabletManagerClient
-		tablets []*topodatapb.Tablet
-
-		req                 *vtctldatapb.EmergencyReparentShardRequest
-		expected            *vtctldatapb.EmergencyReparentShardResponse
-		expectEventsToOccur bool
-		shouldErr           bool
+		name                       string
+		ts                         *topo.Server
+		tmc                        tmclient.TabletManagerClient
+		tablets                    []*topodatapb.Tablet
+		req                        *vtctldatapb.EmergencyReparentShardRequest
+		expected                   *vtctldatapb.EmergencyReparentShardResponse
+		expectEventsToOccur        bool
+		shouldErr                  bool
+		errShouldContain           string
+		expectNoPrimaryGuardPassed bool
 	}{
 		{
 			name: "successful reparent",
@@ -4853,9 +4854,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 			shouldErr:           true,
 			expectEventsToOccur: true,
+			errShouldContain:    "expected no primary for shard testkeyspace/-, but found primary zone1-0000000100",
 		},
 		{
-			name: "expect no primary and no primary recorded",
+			name: "expect no primary passes guard, fails stop replication",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
@@ -4877,14 +4879,24 @@ func TestEmergencyReparentShard(t *testing.T) {
 					Shard:    "-",
 				},
 			},
-			tmc: &testutil.TabletManagerClient{},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {Error: errors.New("expect-no-primary grpc test: stub stop replication")},
+					"zone1-0000000101": {Error: errors.New("expect-no-primary grpc test: stub stop replication")},
+				},
+			},
 			req: &vtctldatapb.EmergencyReparentShardRequest{
 				Keyspace:        "testkeyspace",
 				Shard:           "-",
 				ExpectNoPrimary: true,
 			},
-			shouldErr:           true,
-			expectEventsToOccur: true,
+			shouldErr:                  true,
+			expectEventsToOccur:        true,
+			errShouldContain:           "expect-no-primary grpc test: stub stop replication",
+			expectNoPrimaryGuardPassed: true,
 		},
 	}
 
@@ -4915,7 +4927,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}()
 
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.errShouldContain != "" {
+					assert.ErrorContains(t, err, tt.errShouldContain)
+				}
+				if tt.expectNoPrimaryGuardPassed {
+					assert.NotContains(t, err.Error(), "expected no primary for shard", "ExpectNoPrimary must not fail when topology has no primary alias")
+				}
 
 				return
 			}
@@ -8850,6 +8868,7 @@ func TestPlannedReparentShard(t *testing.T) {
 		expected            *vtctldatapb.PlannedReparentShardResponse
 		expectEventsToOccur bool
 		expectedErr         string
+		expectedErrContains string
 	}{
 		{
 			name: "successful reparent",
@@ -9086,29 +9105,7 @@ func TestPlannedReparentShard(t *testing.T) {
 					Shard:    "-",
 				},
 			},
-			tmc: &testutil.TabletManagerClient{
-				DemotePrimaryResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
-				}{
-					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{
-							Position: "primary-demotion position",
-						},
-						Error: nil,
-					},
-				},
-				GetGlobalStatusVarsResults: map[string]struct {
-					Statuses map[string]string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Statuses: map[string]string{
-							reparentutil.InnodbBufferPoolsDataVar: "123",
-						},
-					},
-				},
-			},
+			tmc: &testutil.TabletManagerClient{},
 			req: &vtctldatapb.PlannedReparentShardRequest{
 				Keyspace:        "testkeyspace",
 				Shard:           "-",
@@ -9117,7 +9114,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectedErr: "expected no primary for shard testkeyspace/-, but found primary zone1-0000000100",
 		},
 		{
-			name: "expect no primary and no primary recorded",
+			name: "expect no primary passes guard, fails reachability check",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
@@ -9139,14 +9136,26 @@ func TestPlannedReparentShard(t *testing.T) {
 					Shard:    "-",
 				},
 			},
-			tmc: &testutil.TabletManagerClient{},
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: errors.New("expect-no-primary grpc test: stub reachability check"),
+					},
+					"zone1-0000000200": {
+						Error: errors.New("expect-no-primary grpc test: stub reachability check"),
+					},
+				},
+			},
 			req: &vtctldatapb.PlannedReparentShardRequest{
 				Keyspace:        "testkeyspace",
 				Shard:           "-",
 				ExpectNoPrimary: true,
 			},
-			expectedErr:         "assert.AnError general error for testing",
 			expectEventsToOccur: true,
+			expectedErrContains: "expect-no-primary grpc test: stub reachability check",
 		},
 	}
 
@@ -9178,6 +9187,14 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
+
+				return
+			}
+
+			if tt.expectedErrContains != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.expectedErrContains)
+				assert.NotContains(t, err.Error(), "expected no primary for shard", "ExpectNoPrimary must not fail when topology has no primary alias")
 
 				return
 			}

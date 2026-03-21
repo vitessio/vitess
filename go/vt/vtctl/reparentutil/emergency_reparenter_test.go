@@ -1945,12 +1945,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "expected no primary for shard testkeyspace/-, but found primary zone1-0000000100",
 		},
 		{
-			name:       "expect no primary and no primary recorded",
+			name:       "expect no primary passes guard, fails stop replication",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
 				ExpectNoPrimary: true,
 			},
-			tmc: &testutil.TabletManagerClient{},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {Error: errors.New("expect-no-primary erp test: stub stop replication")},
+					"zone1-0000000101": {Error: errors.New("expect-no-primary erp test: stub stop replication")},
+				},
+			},
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
@@ -1981,10 +1989,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Shard:    "-",
 				},
 			},
-			keyspace:  "testkeyspace",
-			shard:     "-",
-			cells:     []string{"zone1"},
-			shouldErr: true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			shouldErr:        true,
+			errShouldContain: "expect-no-primary erp test: stub stop replication",
 		},
 	}
 
