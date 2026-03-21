@@ -885,6 +885,126 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorMessageStreamContextCanceled(t *testing.T) {
+	t.Run("canceled before call", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		defer tsv.StopService()
+
+		plan, err := tsv.qe.GetMessageStreamPlan("msg")
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		qre := &QueryExecutor{
+			ctx:      ctx,
+			query:    "stream from msg",
+			plan:     plan,
+			logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
+			tsv:      tsv,
+		}
+
+		callbackCalled := false
+		err = qre.MessageStream(func(qr *sqltypes.Result) error {
+			callbackCalled = true
+			return nil
+		})
+
+		require.ErrorIs(t, err, context.Canceled)
+		assert.False(t, callbackCalled, "callback must not be invoked when context is already canceled")
+	})
+
+	t.Run("canceled mid-stream", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		defer tsv.StopService()
+
+		plan, err := tsv.qe.GetMessageStreamPlan("msg")
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		qre := &QueryExecutor{
+			ctx:      ctx,
+			query:    "stream from msg",
+			plan:     plan,
+			logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
+			tsv:      tsv,
+		}
+
+		callCount := 0
+		err = qre.MessageStream(func(qr *sqltypes.Result) error {
+			callCount++
+			cancel()
+			return nil
+		})
+
+		require.ErrorIs(t, err, context.Canceled)
+		assert.GreaterOrEqual(t, callCount, 1, "callback should have been called at least once before cancel")
+	})
+
+	t.Run("clean stop via callback io.EOF", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		defer tsv.StopService()
+
+		plan, err := tsv.qe.GetMessageStreamPlan("msg")
+		require.NoError(t, err)
+
+		ctx := t.Context()
+
+		qre := &QueryExecutor{
+			ctx:      ctx,
+			query:    "stream from msg",
+			plan:     plan,
+			logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
+			tsv:      tsv,
+		}
+
+		err = qre.MessageStream(func(qr *sqltypes.Result) error {
+			return io.EOF
+		})
+
+		require.NoError(t, err)
+	})
+
+	t.Run("deadline exceeded before call", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		defer tsv.StopService()
+
+		plan, err := tsv.qe.GetMessageStreamPlan("msg")
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+
+		qre := &QueryExecutor{
+			ctx:      ctx,
+			query:    "stream from msg",
+			plan:     plan,
+			logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
+			tsv:      tsv,
+		}
+
+		err = qre.MessageStream(func(qr *sqltypes.Result) error {
+			return nil
+		})
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+}
+
 func TestQueryExecutorTableAcl(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
