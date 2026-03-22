@@ -2183,6 +2183,62 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
+// UpdateGossipConfig is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.UpdateGossipConfigRequest) (resp *vtctldatapb.UpdateGossipConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateGossipConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	if req.Enable && req.Disable {
+		return nil, errors.New("--enable and --disable are mutually exclusive")
+	}
+
+	update := func(gossipConfig *topodatapb.GossipConfig) *topodatapb.GossipConfig {
+		if gossipConfig == nil {
+			gossipConfig = &topodatapb.GossipConfig{}
+		}
+		if req.Enable {
+			gossipConfig.Enabled = true
+		}
+		if req.Disable {
+			gossipConfig.Enabled = false
+		}
+		if req.PhiThreshold > 0 {
+			gossipConfig.PhiThreshold = req.PhiThreshold
+		}
+		if req.PingInterval != "" {
+			gossipConfig.PingInterval = req.PingInterval
+		}
+		if req.MaxUpdateAge != "" {
+			gossipConfig.MaxUpdateAge = req.MaxUpdateAge
+		}
+		return gossipConfig
+	}
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateGossipConfig")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	ki.GossipConfig = update(ki.GossipConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceGossipConfig(ctx, req.Keyspace, []string{}, update)
+
+	return &vtctldatapb.UpdateGossipConfigResponse{}, err
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (resp *vtctldatapb.GetSrvVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvVSchema")

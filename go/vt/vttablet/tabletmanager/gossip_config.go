@@ -17,57 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"time"
-
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 )
 
-type gossipConfig struct {
-	enabled      bool
-	listenAddr   string
-	phiThreshold float64
-	pingInterval time.Duration
-	probeTimeout time.Duration
-	maxUpdateAge time.Duration
-}
-
-var vttabletGossipConfig gossipConfig
+var gossipListenAddr string
 
 func init() {
 	servenv.OnParseFor("vttablet", func(fs *pflag.FlagSet) {
-		utils.SetFlagStringVar(fs, &vttabletGossipConfig.listenAddr, "gossip-listen-addr", vttabletGossipConfig.listenAddr, "Address to bind gossip gRPC server (defaults to grpc bind addr)")
-		utils.SetFlagBoolVar(fs, &vttabletGossipConfig.enabled, "gossip-enabled", vttabletGossipConfig.enabled, "Enable gossip protocol participation")
-		utils.SetFlagFloat64Var(fs, &vttabletGossipConfig.phiThreshold, "gossip-phi-threshold", 4, "Phi accrual threshold for suspecting peers")
-		utils.SetFlagDurationVar(fs, &vttabletGossipConfig.pingInterval, "gossip-ping-interval", 1*time.Second, "Gossip ping interval")
-		utils.SetFlagDurationVar(fs, &vttabletGossipConfig.probeTimeout, "gossip-probe-timeout", 500*time.Millisecond, "Gossip probe timeout")
-		utils.SetFlagDurationVar(fs, &vttabletGossipConfig.maxUpdateAge, "gossip-max-update-age", 5*time.Second, "Max age before marking peer down")
+		utils.SetFlagStringVar(fs, &gossipListenAddr, "gossip-listen-addr", gossipListenAddr, "Address to bind gossip gRPC server (defaults to grpc bind addr)")
 	})
-}
-
-func (cfg gossipConfig) agent(nodeID string, grpcAddr string, meta map[string]string, seeds []gossip.Member) *gossip.Gossip {
-	if !cfg.enabled {
-		return nil
-	}
-
-	bindAddr := cfg.listenAddr
-	if bindAddr == "" {
-		bindAddr = grpcAddr
-	}
-
-	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{})
-
-	return gossip.New(gossip.Config{
-		NodeID:       gossip.NodeID(nodeID),
-		BindAddr:     bindAddr,
-		Seeds:        seeds,
-		Meta:         meta,
-		PhiThreshold: cfg.phiThreshold,
-		PingInterval: cfg.pingInterval,
-		ProbeTimeout: cfg.probeTimeout,
-		MaxUpdateAge: cfg.maxUpdateAge,
-	}, transport, nil)
 }

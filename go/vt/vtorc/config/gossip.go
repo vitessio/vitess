@@ -18,104 +18,28 @@ package config
 
 import (
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
 )
 
-var (
-	gossipEnabled = viperutil.Configure(
-		"gossip-enabled",
-		viperutil.Options[bool]{
-			FlagName: "gossip-enabled",
-			Default:  false,
-			Dynamic:  true,
-		},
-	)
-	gossipListenAddr = viperutil.Configure(
-		"gossip-listen-addr",
-		viperutil.Options[string]{
-			FlagName: "gossip-listen-addr",
-			Default:  "",
-			Dynamic:  false,
-		},
-	)
-	gossipPhiThreshold = viperutil.Configure(
-		"gossip-phi-threshold",
-		viperutil.Options[float64]{
-			FlagName: "gossip-phi-threshold",
-			Default:  4,
-			Dynamic:  false,
-		},
-	)
-	gossipPingInterval = viperutil.Configure(
-		"gossip-ping-interval",
-		viperutil.Options[time.Duration]{
-			FlagName: "gossip-ping-interval",
-			Default:  1 * time.Second,
-			Dynamic:  false,
-		},
-	)
-	gossipProbeTimeout = viperutil.Configure(
-		"gossip-probe-timeout",
-		viperutil.Options[time.Duration]{
-			FlagName: "gossip-probe-timeout",
-			Default:  500 * time.Millisecond,
-			Dynamic:  false,
-		},
-	)
-	gossipMaxUpdateAge = viperutil.Configure(
-		"gossip-max-update-age",
-		viperutil.Options[time.Duration]{
-			FlagName: "gossip-max-update-age",
-			Default:  5 * time.Second,
-			Dynamic:  false,
-		},
-	)
+var gossipListenAddr = viperutil.Configure(
+	"gossip-listen-addr",
+	viperutil.Options[string]{
+		FlagName: "gossip-listen-addr",
+		Default:  "",
+		Dynamic:  false,
+	},
 )
 
 func registerGossipFlags(fs *pflag.FlagSet) {
-	fs.Bool("gossip-enabled", gossipEnabled.Default(), "Enable gossip protocol participation")
 	fs.String("gossip-listen-addr", gossipListenAddr.Default(), "Address to bind gossip gRPC server")
-	fs.Float64("gossip-phi-threshold", gossipPhiThreshold.Default(), "Phi accrual threshold for suspecting peers")
-	fs.Duration("gossip-ping-interval", gossipPingInterval.Default(), "Gossip ping interval")
-	fs.Duration("gossip-probe-timeout", gossipProbeTimeout.Default(), "Gossip probe timeout")
-	fs.Duration("gossip-max-update-age", gossipMaxUpdateAge.Default(), "Max age before marking peer down")
-
-	viperutil.BindFlags(fs,
-		gossipEnabled,
-		gossipListenAddr,
-		gossipPhiThreshold,
-		gossipPingInterval,
-		gossipProbeTimeout,
-		gossipMaxUpdateAge,
-	)
-}
-
-func GossipEnabled() bool {
-	return gossipEnabled.Get()
+	viperutil.BindFlags(fs, gossipListenAddr)
 }
 
 func GossipListenAddr() string {
 	return gossipListenAddr.Get()
-}
-
-func GossipPhiThreshold() float64 {
-	return gossipPhiThreshold.Get()
-}
-
-func GossipPingInterval() time.Duration {
-	return gossipPingInterval.Get()
-}
-
-func GossipProbeTimeout() time.Duration {
-	return gossipProbeTimeout.Get()
-}
-
-func GossipMaxUpdateAge() time.Duration {
-	return gossipMaxUpdateAge.Get()
 }
 
 func GossipNodeID() string {

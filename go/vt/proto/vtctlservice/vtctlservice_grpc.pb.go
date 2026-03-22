@@ -267,6 +267,9 @@ type VtctldClient interface {
 	GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error)
 	// UpdateThrottlerConfig updates the tablet throttler configuration
 	UpdateThrottlerConfig(ctx context.Context, in *vtctldata.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateThrottlerConfigResponse, error)
+	// UpdateGossipConfig updates the gossip protocol configuration for
+	// all tablets in the given keyspace (across all cells).
+	UpdateGossipConfig(ctx context.Context, in *vtctldata.UpdateGossipConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateGossipConfigResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(ctx context.Context, in *vtctldata.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvVSchemaResponse, error)
 	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
@@ -985,6 +988,15 @@ func (c *vtctldClient) GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrv
 func (c *vtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldata.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateThrottlerConfigResponse, error) {
 	out := new(vtctldata.UpdateThrottlerConfigResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/UpdateThrottlerConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) UpdateGossipConfig(ctx context.Context, in *vtctldata.UpdateGossipConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateGossipConfigResponse, error) {
+	out := new(vtctldata.UpdateGossipConfigResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/UpdateGossipConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1860,6 +1872,9 @@ type VtctldServer interface {
 	GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error)
 	// UpdateThrottlerConfig updates the tablet throttler configuration
 	UpdateThrottlerConfig(context.Context, *vtctldata.UpdateThrottlerConfigRequest) (*vtctldata.UpdateThrottlerConfigResponse, error)
+	// UpdateGossipConfig updates the gossip protocol configuration for
+	// all tablets in the given keyspace (across all cells).
+	UpdateGossipConfig(context.Context, *vtctldata.UpdateGossipConfigRequest) (*vtctldata.UpdateGossipConfigResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error)
 	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
@@ -2234,6 +2249,9 @@ func (UnimplementedVtctldServer) GetSrvKeyspaces(context.Context, *vtctldata.Get
 }
 func (UnimplementedVtctldServer) UpdateThrottlerConfig(context.Context, *vtctldata.UpdateThrottlerConfigRequest) (*vtctldata.UpdateThrottlerConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateThrottlerConfig not implemented")
+}
+func (UnimplementedVtctldServer) UpdateGossipConfig(context.Context, *vtctldata.UpdateGossipConfigRequest) (*vtctldata.UpdateGossipConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateGossipConfig not implemented")
 }
 func (UnimplementedVtctldServer) GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
@@ -3387,6 +3405,24 @@ func _Vtctld_UpdateThrottlerConfig_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).UpdateThrottlerConfig(ctx, req.(*vtctldata.UpdateThrottlerConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_UpdateGossipConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.UpdateGossipConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).UpdateGossipConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/UpdateGossipConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).UpdateGossipConfig(ctx, req.(*vtctldata.UpdateGossipConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5014,6 +5050,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateThrottlerConfig",
 			Handler:    _Vtctld_UpdateThrottlerConfig_Handler,
+		},
+		{
+			MethodName: "UpdateGossipConfig",
+			Handler:    _Vtctld_UpdateGossipConfig_Handler,
 		},
 		{
 			MethodName: "GetSrvVSchema",

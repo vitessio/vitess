@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/topo"
@@ -28,8 +29,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func newGossipAgent(cfg gossipConfig, tablet *topodatapb.Tablet, ts *topo.Server) (*gossip.Gossip, bool) {
-	if !cfg.enabled || tablet == nil {
+func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts *topo.Server) (*gossip.Gossip, bool) {
+	if cfg == nil || !cfg.Enabled || tablet == nil {
 		return nil, false
 	}
 
@@ -49,7 +50,30 @@ func newGossipAgent(cfg gossipConfig, tablet *topodatapb.Tablet, ts *topo.Server
 
 	seeds := discoverSeeds(tablet, ts)
 
-	agent := cfg.agent(nodeID, grpcAddr, meta, seeds)
+	bindAddr := gossipListenAddr
+	if bindAddr == "" {
+		bindAddr = grpcAddr
+	}
+
+	pingInterval := parseDuration(cfg.PingInterval, 1*time.Second)
+	maxUpdateAge := parseDuration(cfg.MaxUpdateAge, 5*time.Second)
+	phiThreshold := cfg.PhiThreshold
+	if phiThreshold <= 0 {
+		phiThreshold = 4
+	}
+
+	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{})
+	agent := gossip.New(gossip.Config{
+		NodeID:       gossip.NodeID(nodeID),
+		BindAddr:     bindAddr,
+		Seeds:        seeds,
+		Meta:         meta,
+		PhiThreshold: phiThreshold,
+		PingInterval: pingInterval,
+		ProbeTimeout: 500 * time.Millisecond,
+		MaxUpdateAge: maxUpdateAge,
+	}, transport, nil)
+
 	return agent, agent != nil
 }
 
@@ -86,4 +110,15 @@ func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 		})
 	}
 	return seeds
+}
+
+func parseDuration(s string, fallback time.Duration) time.Duration {
+	if s == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
 }

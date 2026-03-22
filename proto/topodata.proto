@@ -272,6 +272,21 @@ message Shard {
   vtorcdata.Shard vtorc_state = 9;
 }
 
+// GossipConfig has the configuration for the gossip protocol
+// used for liveness detection across vttablets and VTOrc.
+// This is stored in the Keyspace record and propagated to
+// SrvKeyspace for tablet consumption.
+message GossipConfig {
+  // enabled controls whether gossip is active for this keyspace.
+  bool enabled = 1;
+  // phi_threshold is the phi-accrual threshold for suspecting a peer.
+  double phi_threshold = 2;
+  // ping_interval is the gossip exchange interval (e.g. "1s").
+  string ping_interval = 3;
+  // max_update_age is how long before a stale peer is marked down (e.g. "5s").
+  string max_update_age = 4;
+}
+
 // A Keyspace contains data about a keyspace.
 message Keyspace {
   // OBSOLETE string sharding_column_name = 1;
@@ -320,6 +335,10 @@ message Keyspace {
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
   querythrottler.Config query_throttler_config = 12;
+
+  // GossipConfig has the configuration for the gossip protocol
+  // used for liveness detection. Applies to the entire keyspace.
+  GossipConfig gossip_config = 13;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -455,6 +474,9 @@ message SrvKeyspace {
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
   querythrottler.Config query_throttler_config = 7;
+
+  // GossipConfig is copied from the global keyspace object.
+  GossipConfig gossip_config = 8;
 
 }
 

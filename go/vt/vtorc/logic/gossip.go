@@ -22,6 +22,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -45,21 +47,29 @@ var (
 
 func startGossip() {
 	gossipOnce.Do(func() {
-		if !config.GossipEnabled() {
+		cfg := findGossipConfig()
+		if cfg == nil || !cfg.Enabled {
 			return
 		}
 
 		seeds := discoverGossipSeeds()
 		transport := gossip.NewGRPCTransport(gossipDialer{})
 
+		pingInterval := parseDurationVTOrc(cfg.PingInterval, 1*time.Second)
+		maxUpdateAge := parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second)
+		phiThreshold := cfg.PhiThreshold
+		if phiThreshold <= 0 {
+			phiThreshold = 4
+		}
+
 		gossipAgent = gossip.New(gossip.Config{
 			NodeID:       gossip.NodeID(config.GossipNodeID()),
 			BindAddr:     config.GossipListenAddr(),
 			Seeds:        seeds,
-			PhiThreshold: config.GossipPhiThreshold(),
-			PingInterval: config.GossipPingInterval(),
-			ProbeTimeout: config.GossipProbeTimeout(),
-			MaxUpdateAge: config.GossipMaxUpdateAge(),
+			PhiThreshold: phiThreshold,
+			PingInterval: pingInterval,
+			ProbeTimeout: 500 * time.Millisecond,
+			MaxUpdateAge: maxUpdateAge,
 		}, transport, nil)
 
 		if gossipAgent == nil {
@@ -73,6 +83,35 @@ func startGossip() {
 
 		servenv.OnTerm(gossipAgent.Stop)
 	})
+}
+
+func findGossipConfig() *topodatapb.GossipConfig {
+	query := `SELECT keyspace FROM vitess_keyspace`
+	var cfg *topodatapb.GossipConfig
+	_ = db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		ks := row.GetString("keyspace")
+		ksInfo, err := inst.ReadKeyspace(ks)
+		if err != nil || ksInfo == nil {
+			return nil
+		}
+		ksCfg := ksInfo.GetGossipConfig()
+		if ksCfg != nil && ksCfg.Enabled {
+			cfg = ksCfg
+		}
+		return nil
+	})
+	return cfg
+}
+
+func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
+	if s == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
 }
 
 func stopGossip() {

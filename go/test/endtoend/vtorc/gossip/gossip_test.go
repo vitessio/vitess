@@ -30,7 +30,6 @@ func TestVTOrcGossipFlags(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, []string{
-		"--gossip-enabled",
 		"--gossip-listen-addr", "localhost:16101",
 	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 

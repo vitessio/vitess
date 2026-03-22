@@ -422,7 +422,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
 	if tm.Gossip == nil {
-		if agent, enabled := newGossipAgent(vttabletGossipConfig, tablet, tm.TopoServer); enabled {
+		gossipCfg := tm.getGossipConfig(tablet)
+		if agent, enabled := newGossipAgent(gossipCfg, tablet, tm.TopoServer); enabled {
 			tm.Gossip = agent
 			tm.GossipEnabled = enabled
 		}
@@ -571,6 +572,16 @@ func (tm *TabletManager) Stop() {
 
 	tm.MysqlDaemon.Close()
 	tm.tmState.Close()
+}
+
+func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.GossipConfig {
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	srvKs, err := tm.TopoServer.GetSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
+	if err != nil || srvKs == nil {
+		return nil
+	}
+	return srvKs.GossipConfig
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

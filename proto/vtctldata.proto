@@ -1097,6 +1097,23 @@ message UpdateThrottlerConfigRequest {
 message UpdateThrottlerConfigResponse {
 }
 
+message UpdateGossipConfigRequest {
+  string keyspace = 1;
+  // enable turns gossip on for the keyspace.
+  bool enable = 2;
+  // disable turns gossip off for the keyspace.
+  bool disable = 3;
+  // phi_threshold is the phi-accrual suspicion threshold. 0 means no change.
+  double phi_threshold = 4;
+  // ping_interval is the gossip exchange interval. Empty means no change.
+  string ping_interval = 5;
+  // max_update_age is how long before marking a peer down. Empty means no change.
+  string max_update_age = 6;
+}
+
+message UpdateGossipConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
