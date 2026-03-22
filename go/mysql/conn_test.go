@@ -946,6 +946,47 @@ func TestMultiStatement(t *testing.T) {
 	}
 }
 
+type slowQueryMultiHandler struct {
+	testRun
+}
+
+func (h slowQueryMultiHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	if err := callback(sqltypes.QueryResponse{QueryResult: selectRowsResult}, true, true); err != nil {
+		return err
+	}
+	c.StatusFlags |= ServerQueryWasSlow
+	c.SetPendingMultiResultStatusFlags(c.StatusFlags)
+	c.StatusFlags &^= ServerQueryWasSlow
+	return callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{}}, false, true)
+}
+
+func TestMultiStatementUsesCurrentStatusFlagsForOKOnlyResults(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.WriteComQuery("select 1; set autocommit = 1")
+	require.NoError(t, err)
+
+	res := sConn.handleNextCommand(slowQueryMultiHandler{})
+	require.True(t, res)
+
+	data, more, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, data.StatusFlags&ServerQueryWasSlow)
+
+	data, more, _, err = cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Zero(t, data.StatusFlags&ServerQueryWasSlow)
+}
+
 func TestMultiStatementOnSplitError(t *testing.T) {
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {

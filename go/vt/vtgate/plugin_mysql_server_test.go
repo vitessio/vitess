@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -1102,6 +1103,54 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, more)
 	assert.Zero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	seenOKOnly := false
+	session, err = vh.streamExecuteMultiQuery(context.Background(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; set autocommit = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if firstPacket && len(qr.QueryResult.Fields) == 0 {
+			seenOKOnly = true
+			assert.False(t, more)
+			assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.True(t, seenOKOnly)
+	assert.Equal(t, []bool{true, false}, mysqlCtx.slowQueryStates)
 }
 
 func TestGracefulShutdown(t *testing.T) {
