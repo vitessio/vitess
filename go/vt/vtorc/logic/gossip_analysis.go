@@ -25,8 +25,8 @@ import (
 )
 
 type (
-	// gossipStateProvider abstracts the Gossip agent for testing.
-	gossipStateProvider interface {
+	// GossipStateProvider abstracts the Gossip agent for testing.
+	GossipStateProvider interface {
 		Members() []gossip.Member
 		Snapshot() map[gossip.NodeID]gossip.State
 	}
@@ -40,7 +40,7 @@ type (
 
 const minQuorumObservers = 2
 
-func analyzeGossipQuorum(state gossipStateProvider, primaries map[string]string, vtorcView map[string]bool) []*inst.DetectionAnalysis {
+func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, vtorcView map[string]bool) []*inst.DetectionAnalysis {
 	if state == nil {
 		return nil
 	}
@@ -169,7 +169,7 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		vtorcView[key] = !instance.IsLastCheckValid
 	}
 
-	analyses := analyzeGossipQuorum(gossipAgent, primaries, vtorcView)
+	analyses := AnalyzeGossipQuorum(gossipAgent, primaries, vtorcView)
 
 	for _, a := range analyses {
 		key := a.AnalyzedKeyspace + "/" + a.AnalyzedShard
@@ -189,7 +189,7 @@ type ersDisabledFlags struct {
 
 // gossipShardPrimaries returns a map of "keyspace/shard" -> primary tablet alias
 // and a map of ERS-disabled flags (both keyspace and shard level).
-func gossipShardPrimaries(state gossipStateProvider) (map[string]string, map[string]ersDisabledFlags, error) {
+func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[string]ersDisabledFlags, error) {
 	primaries := make(map[string]string)
 	disabled := make(map[string]ersDisabledFlags)
 	seen := make(map[string]bool)

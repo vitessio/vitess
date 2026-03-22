@@ -163,6 +163,9 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	}
 
 	for _, seed := range cfg.Seeds {
+		if seed.ID == cfg.NodeID {
+			continue // Don't overwrite self-entry with a metadata-less seed.
+		}
 		g.members[seed.ID] = seed
 		g.states[seed.ID] = State{Status: StatusUnknown}
 		g.detectors[seed.ID] = newPhiAccrual(50)
@@ -233,6 +236,68 @@ func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
 	g.addMemberLocked(Member{ID: snapshot.NodeID, Addr: g.cfg.BindAddr})
 	g.bumpEpochLocked()
 	g.observeLocked(snapshot.NodeID, now)
+}
+
+// DebugState is a JSON-serializable snapshot of the gossip agent's
+// full internal state, intended for the /debug/gossip HTTP endpoint.
+type DebugState struct {
+	NodeID   NodeID                 `json:"node_id"`
+	BindAddr string                 `json:"bind_addr"`
+	Epoch    uint64                 `json:"epoch"`
+	Members  []DebugMember          `json:"members"`
+	States   map[NodeID]*DebugEntry `json:"states"`
+}
+
+type DebugMember struct {
+	ID   NodeID            `json:"id"`
+	Addr string            `json:"addr"`
+	Meta map[string]string `json:"meta,omitempty"`
+}
+
+type DebugEntry struct {
+	Status     string  `json:"status"`
+	Phi        float64 `json:"phi"`
+	LastUpdate string  `json:"last_update"`
+}
+
+func (g *Gossip) Debug() *DebugState {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	members := make([]DebugMember, 0, len(g.members))
+	for _, m := range g.members {
+		members = append(members, DebugMember(m))
+	}
+
+	states := make(map[NodeID]*DebugEntry, len(g.states))
+	for id, s := range g.states {
+		states[id] = &DebugEntry{
+			Status:     statusString(s.Status),
+			Phi:        s.Phi,
+			LastUpdate: s.LastUpdate.UTC().Format("2006-01-02T15:04:05.000Z"),
+		}
+	}
+
+	return &DebugState{
+		NodeID:   g.cfg.NodeID,
+		BindAddr: g.cfg.BindAddr,
+		Epoch:    g.epoch,
+		Members:  members,
+		States:   states,
+	}
+}
+
+func statusString(s Status) string {
+	switch s {
+	case StatusAlive:
+		return "alive"
+	case StatusSuspect:
+		return "suspect"
+	case StatusDown:
+		return "down"
+	default:
+		return "unknown"
+	}
 }
 
 func (g *Gossip) Snapshot() map[NodeID]State {
@@ -378,7 +443,17 @@ func (g *Gossip) addMemberLocked(member Member) {
 	if member.ID == "" {
 		return
 	}
-	if _, ok := g.members[member.ID]; ok {
+	if existing, ok := g.members[member.ID]; ok {
+		// Update metadata and address from gossip exchanges. This ensures
+		// seed entries (which start without metadata) get enriched, and
+		// metadata propagates through multi-hop gossip.
+		if len(member.Meta) > 0 {
+			existing.Meta = member.Meta
+			if member.Addr != "" {
+				existing.Addr = member.Addr
+			}
+			g.members[member.ID] = existing
+		}
 		return
 	}
 	g.members[member.ID] = member

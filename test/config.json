@@ -2363,6 +2363,24 @@
         "binlog-compression"
       ]
     },
+    "gossip": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/gossip"
+      ],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtorc",
+      "Tags": [],
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "vreplication_fk": {
       "File": "unused.go",
       "Packages": [

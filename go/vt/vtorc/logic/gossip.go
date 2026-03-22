@@ -18,9 +18,11 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -82,6 +84,11 @@ func startGossip() {
 		}
 
 		servenv.OnTerm(gossipAgent.Stop)
+
+		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(gossipAgent.Debug())
+		})
 	})
 }
 

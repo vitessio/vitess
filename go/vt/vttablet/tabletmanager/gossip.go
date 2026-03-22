@@ -17,6 +17,9 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"encoding/json"
+	"net/http"
+
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -37,4 +40,9 @@ func registerGossipService(tm *TabletManager) {
 	if servenv.GRPCCheckServiceMap("gossip") {
 		gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{Agent: tm.Gossip})
 	}
+
+	servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(tm.Gossip.Debug())
+	})
 }

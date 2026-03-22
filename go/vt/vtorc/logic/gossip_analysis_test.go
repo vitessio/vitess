@@ -63,7 +63,7 @@ func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -89,7 +89,7 @@ func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
@@ -111,7 +111,7 @@ func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
@@ -129,7 +129,7 @@ func TestQuorumAnalysis_InsufficientObservers(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
@@ -149,7 +149,7 @@ func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -174,7 +174,7 @@ func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
@@ -199,7 +199,7 @@ func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": true}
 
-	results := analyzeGossipQuorum(state, primaries, vtorcView)
+	results := AnalyzeGossipQuorum(state, primaries, vtorcView)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -225,7 +225,7 @@ func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": false}
 
-	results := analyzeGossipQuorum(state, primaries, vtorcView)
+	results := AnalyzeGossipQuorum(state, primaries, vtorcView)
 
 	assert.Empty(t, results)
 }
@@ -247,7 +247,7 @@ func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -277,7 +277,7 @@ func TestQuorumAnalysis_MultipleShardsIndependent(t *testing.T) {
 		"ks/80-": "zone1-0000000400",
 	}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
@@ -299,13 +299,13 @@ func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
 
 func TestQuorumAnalysis_NilState(t *testing.T) {
-	results := analyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil)
+	results := AnalyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil)
 
 	assert.Empty(t, results)
 }
@@ -325,7 +325,7 @@ func TestQuorumAnalysis_ShardNotInPrimariesMap(t *testing.T) {
 	}
 	primaries := map[string]string{}
 
-	results := analyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil)
 
 	assert.Empty(t, results)
 }
