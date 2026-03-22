@@ -2375,7 +2375,7 @@
       "Command": [],
       "Manual": false,
       "Shard": "vtorc",
-      "Tags": [],
+      "Tags": [
         "larger-runner",
         "limit-resources",
         "binlog-compression"
