@@ -185,6 +185,9 @@ type Conn struct {
 	// by Handler methods.
 	StatusFlags uint16
 
+	pendingMultiResultStatusFlags    uint16
+	hasPendingMultiResultStatusFlags bool
+
 	// CharacterSet is the charset for this connection, as negotiated
 	// in our handshake with the server. Note that although the MySQL protocol lists this
 	// as a "character set", the returned byte value is actually a Collation ID,
@@ -242,6 +245,20 @@ const (
 	execErr
 	connErr
 )
+
+func (c *Conn) SetPendingMultiResultStatusFlags(flags uint16) {
+	c.pendingMultiResultStatusFlags = flags
+	c.hasPendingMultiResultStatusFlags = true
+}
+
+func (c *Conn) consumePendingMultiResultStatusFlags() (uint16, bool) {
+	if !c.hasPendingMultiResultStatusFlags {
+		return 0, false
+	}
+	flags := c.pendingMultiResultStatusFlags
+	c.hasPendingMultiResultStatusFlags = false
+	return flags, true
+}
 
 // bufPool is used to allocate and free buffers in an efficient way.
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
@@ -1489,6 +1506,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	callbackCalled := false
 	res := execSuccess
 	previousStatusFlags := c.StatusFlags
+	c.hasPendingMultiResultStatusFlags = false
 	defer func() {
 		c.StatusFlags &^= ServerQueryWasSlow
 	}()
@@ -1496,15 +1514,16 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		currentStatusFlags := c.StatusFlags
 		callbackCalled = true
-		flag := currentStatusFlags
-		if more {
-			flag |= ServerMoreResultsExists
-		}
 
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && needsEndPacket {
-			if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
+			if flags, ok := c.consumePendingMultiResultStatusFlags(); ok {
+				if err := c.writeEndResultWithFlags(flags, true, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+					return err
+				}
+			} else if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return err
 			}
@@ -1528,6 +1547,10 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			needsEndPacket = true
 			previousStatusFlags = currentStatusFlags
 			if len(qr.QueryResult.Fields) == 0 {
+				flags := currentStatusFlags
+				if more {
+					flags |= ServerMoreResultsExists
+				}
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
 				//
@@ -1537,7 +1560,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 				ok := PacketOK{
 					affectedRows:     qr.QueryResult.RowsAffected,
 					lastInsertID:     qr.QueryResult.InsertID,
-					statusFlags:      flag,
+					statusFlags:      flags,
 					warnings:         handler.WarningCount(c),
 					info:             "",
 					sessionStateData: qr.QueryResult.SessionStateChanges,

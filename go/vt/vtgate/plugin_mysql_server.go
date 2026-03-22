@@ -355,7 +355,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
-			session, err = vh.vtg.StreamExecuteMulti(ctx, mysqlCtx, session, sql, callback)
+			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
 			firstPacket := true
 			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
@@ -389,12 +389,61 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 
 	fillInTxStatusFlags(c, session)
 	for idx, res := range queryResults {
-		setSlowQueryStatus(c, idx < len(mysqlCtx.slowQueryStates) && mysqlCtx.slowQueryStates[idx])
+		applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
 		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
 			return callbackErr
 		}
 	}
 	return nil
+}
+
+func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return session, err
+	}
+	if len(queries) == 0 {
+		return session, sqlparser.ErrEmpty
+	}
+	var cancel context.CancelFunc
+	for idx, query := range queries {
+		firstPacket := true
+		more := idx < len(queries)-1
+		var deferredResult *sqltypes.Result
+		func() {
+			if mysqlQueryTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				if firstPacket && len(result.Fields) == 0 {
+					deferredResult = result
+					firstPacket = false
+					return nil
+				}
+				if firstPacket {
+					applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
+				}
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+			})
+		}()
+		if err != nil {
+			if firstPacket {
+				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
+			}
+			return session, err
+		}
+		if deferredResult != nil {
+			applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
+			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
+				return session, err
+			}
+		}
+	}
+	return session, nil
 }
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
@@ -411,11 +460,23 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 }
 
 func setSlowQueryStatus(c *mysql.Conn, slow bool) {
-	if slow {
-		c.StatusFlags |= mysql.ServerQueryWasSlow
-		return
+	c.StatusFlags = slowQueryStatusFlags(c.StatusFlags, slow)
+}
+
+func applyMultiQueryStatusFlags(c *mysql.Conn, slowQueryStates []bool, idx int) {
+	if idx > 0 && idx-1 < len(slowQueryStates) {
+		c.SetPendingMultiResultStatusFlags(slowQueryStatusFlags(c.StatusFlags, slowQueryStates[idx-1]))
 	}
-	c.StatusFlags &^= mysql.ServerQueryWasSlow
+	if idx < len(slowQueryStates) {
+		setSlowQueryStatus(c, slowQueryStates[idx])
+	}
+}
+
+func slowQueryStatusFlags(statusFlags uint16, slow bool) uint16 {
+	if slow {
+		return statusFlags | mysql.ServerQueryWasSlow
+	}
+	return statusFlags &^ mysql.ServerQueryWasSlow
 }
 
 // ComPrepare is the handler for command prepare.
