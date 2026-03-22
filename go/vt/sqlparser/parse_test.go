@@ -2141,7 +2141,7 @@ var validSQL = []struct {
 	input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 	output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 }, {
-	input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	input:  "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	output: "create procedure p1 (in country char(3), out cities int) begin select count(*) from x where d = e; end;",
 }, {
 	input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
@@ -2231,7 +2231,7 @@ var validSQL = []struct {
 	input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 	output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 }, {
-	input: "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+	input:  "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
 	output: "create procedure t1 (in x bigint) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
 }, {
 	input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
