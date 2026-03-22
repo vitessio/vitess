@@ -436,6 +436,115 @@ func TestHandleJoinRejectsEmptyMember(t *testing.T) {
 	assert.False(t, exists, "empty node ID should not be in state map")
 }
 
+func TestPhiAccrualZeroStddev(t *testing.T) {
+	// When all intervals are identical, stddev=0.
+	// elapsed <= mean → phi=0, elapsed > mean → phi=100
+	p := newPhiAccrual(10)
+	base := time.Unix(0, 0)
+	p.Observe(base)
+	p.Observe(base.Add(10 * time.Millisecond))
+	p.Observe(base.Add(20 * time.Millisecond))
+
+	// elapsed == mean (10ms) → 0
+	assert.Equal(t, 0.0, p.Phi(base.Add(30*time.Millisecond)))
+	// elapsed < mean → 0
+	assert.Equal(t, 0.0, p.Phi(base.Add(25*time.Millisecond)))
+	// elapsed > mean → 100
+	assert.Equal(t, 100.0, p.Phi(base.Add(50*time.Millisecond)))
+}
+
+func TestPhiAccrualInsufficientIntervals(t *testing.T) {
+	p := newPhiAccrual(10)
+	base := time.Unix(0, 0)
+	// No observations at all
+	assert.Equal(t, 0.0, p.Phi(base))
+	// One observation, no intervals
+	p.Observe(base)
+	assert.Equal(t, 0.0, p.Phi(base.Add(time.Second)))
+	// Two observations, one interval — still < 2
+	p.Observe(base.Add(10 * time.Millisecond))
+	assert.Equal(t, 0.0, p.Phi(base.Add(time.Second)))
+}
+
+func TestPhiAccrualNormalRange(t *testing.T) {
+	// With some variance, phi should be a reasonable positive number
+	p := newPhiAccrual(10)
+	base := time.Unix(0, 0)
+	p.Observe(base)
+	p.Observe(base.Add(10 * time.Millisecond))
+	p.Observe(base.Add(22 * time.Millisecond))
+	p.Observe(base.Add(30 * time.Millisecond))
+
+	// Slightly past mean — should be low but positive
+	phi := p.Phi(base.Add(42 * time.Millisecond))
+	assert.True(t, phi > 0 && phi < 100, "phi should be in normal range, got %f", phi)
+}
+
+func TestObserveLockedCreatesDetector(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+
+	// observeLocked for a node with no existing detector
+	g.mu.Lock()
+	g.observeLocked("unknown-node", clock.Now())
+	detector := g.detectors["unknown-node"]
+	g.mu.Unlock()
+
+	assert.NotNil(t, detector, "observeLocked should create a detector for unknown nodes")
+}
+
+func TestGossipServiceWithAgent(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	agent := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4}, nil, clock)
+	service := &Service{Agent: agent}
+
+	// Join with a real agent
+	joinResp, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{
+		Member: Member{ID: "node2", Addr: "node2"},
+	}))
+	require.NoError(t, err)
+	assert.NotEmpty(t, joinResp.Members)
+
+	// PushPull with a real agent
+	pushResp, err := service.PushPull(t.Context(), toProtoMessage(&Message{
+		Members: []Member{{ID: "node3", Addr: "node3"}},
+		States:  []StateDigest{{NodeID: "node3", Status: StatusAlive, LastUpdate: clock.Now()}},
+	}))
+	require.NoError(t, err)
+	assert.NotEmpty(t, pushResp.Members)
+}
+
+func TestWithProbeTimeoutZero(t *testing.T) {
+	g := New(Config{NodeID: "node1", ProbeTimeout: 0}, nil, nil)
+	ctx, cancel := g.withProbeTimeout(t.Context())
+	defer cancel()
+	// Should not have a deadline (just a cancel)
+	_, hasDeadline := ctx.Deadline()
+	assert.False(t, hasDeadline)
+}
+
+func TestWithProbeTimeoutPositive(t *testing.T) {
+	g := New(Config{NodeID: "node1", ProbeTimeout: time.Second}, nil, nil)
+	ctx, cancel := g.withProbeTimeout(t.Context())
+	defer cancel()
+	_, hasDeadline := ctx.Deadline()
+	assert.True(t, hasDeadline)
+}
+
+func TestNewPhiAccrualMinSize(t *testing.T) {
+	p := newPhiAccrual(0)
+	assert.Equal(t, 1, p.maxSize)
+	p = newPhiAccrual(-5)
+	assert.Equal(t, 1, p.maxSize)
+}
+
+func TestStartWithZeroPingInterval(t *testing.T) {
+	g := New(Config{NodeID: "node1", PingInterval: 0}, nil, nil)
+	err := g.Start(t.Context())
+	assert.NoError(t, err)
+	// Should be a no-op, no goroutine started
+}
+
 type failingDialer struct{}
 
 func (failingDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
