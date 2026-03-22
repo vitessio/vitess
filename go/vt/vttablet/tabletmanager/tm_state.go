@@ -412,17 +412,12 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			for _, t := range tables {
 				qr.AddTableCond(t)
 			}
-			// This pathway exists in order to allow traffic to pass to the
-			// target of a MoveTables workflow after using MirrorTraffic.
+			// This pathway allows SELECT-family queries to bypass
+			// denied-table rules on the target of a MoveTables workflow
+			// when MirrorTraffic is active. Non-SELECT plans remain
+			// blocked by adding them as plan conditions on the deny rule.
 			if ts.allowReadsFromDeniedTables[ts.tablet.Type] {
-				// Allow all non-select plans to execute in spite of the table
-				// conditions above. This is safe because traffic mirroring
-				// currently only supports SELECT-family plans, which must
-				// continue to respect denied-table rules.
 				for plan := range planbuilder.NumPlans {
-					// Skip all SELECT-family plans (e.g. PlanSelect*), which
-					// are the only plans that should remain subject to table
-					// denial when allow_reads_from_denied_tables is enabled.
 					if strings.HasPrefix(plan.String(), "Select") {
 						continue
 					}
