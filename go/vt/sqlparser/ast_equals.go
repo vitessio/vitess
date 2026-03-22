@@ -5184,7 +5184,8 @@ func (cmp *Comparator) RefOfUnion(a, b *Union) bool {
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
-		cmp.RefOfSelectInto(a.Into, b.Into)
+		cmp.RefOfSelectInto(a.Into, b.Into) &&
+		a.SetOp == b.SetOp
 }
 
 // RefOfUnlockTables does deep equals between the two objects.

@@ -64,6 +64,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
+  setOp         SetOp
 }
 
 %union {
@@ -284,7 +285,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %nonassoc EMPTY_IGNORE_OR_REPLACE
 
 %token LEX_ERROR
-%left <str> UNION
+%left <str> UNION EXCEPT
+%left <str> INTERSECT
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <str> DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %left <str> ALL ANY SOME
@@ -430,7 +432,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION ROLLUP
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY BYTE CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
+%token <str> UNUSED ARRAY BYTE CUME_DIST DESCRIPTION DENSE_RANK EMPTY FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GET_MASTER_PUBLIC_KEY GET_SOURCE_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -539,7 +541,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> cache_opt separator_opt flush_option for_channel_opt show_for_channel_opt binlog_in_opt maxvalue
 %type <expr> binlog_from_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op replace local_opt
+%type <boolean> distinct_opt replace local_opt
+%type <setOp> union_op
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <strs> select_options select_options_opt flush_option_list
@@ -1180,19 +1183,19 @@ query_expression_body:
   }
 | query_expression_body union_op query_primary
   {
-    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2.Distinct, Right: $3, SetOp: $2.Type}
   }
 | query_expression_parens union_op query_primary
   {
-    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2.Distinct, Right: $3, SetOp: $2.Type}
   }
 | query_expression_body union_op query_expression_parens
   {
-    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2.Distinct, Right: $3, SetOp: $2.Type}
   }
 | query_expression_parens union_op query_expression_parens
   {
-    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2.Distinct, Right: $3, SetOp: $2.Type}
   }
 
 select_statement:
@@ -5394,15 +5397,39 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = true
+    $$ = SetOp{Type: UnionSetOp, Distinct: true}
   }
 | UNION ALL
   {
-    $$ = false
+    $$ = SetOp{Type: UnionSetOp, Distinct: false}
   }
 | UNION DISTINCT
   {
-    $$ = true
+    $$ = SetOp{Type: UnionSetOp, Distinct: true}
+  }
+| EXCEPT
+  {
+    $$ = SetOp{Type: ExceptSetOp, Distinct: true}
+  }
+| EXCEPT ALL
+  {
+    $$ = SetOp{Type: ExceptSetOp, Distinct: false}
+  }
+| EXCEPT DISTINCT
+  {
+    $$ = SetOp{Type: ExceptSetOp, Distinct: true}
+  }
+| INTERSECT
+  {
+    $$ = SetOp{Type: IntersectSetOp, Distinct: true}
+  }
+| INTERSECT ALL
+  {
+    $$ = SetOp{Type: IntersectSetOp, Distinct: false}
+  }
+| INTERSECT DISTINCT
+  {
+    $$ = SetOp{Type: IntersectSetOp, Distinct: true}
   }
 
 cache_opt:
@@ -8885,6 +8912,7 @@ reserved_keyword:
 | ELSEIF
 | EMPTY
 | ESCAPE
+| EXCEPT
 | EXISTS
 | EXIT
 | EXPLAIN
@@ -8909,6 +8937,7 @@ reserved_keyword:
 | INNER
 | INOUT
 | INSERT
+| INTERSECT
 | INTERVAL
 | INTO
 | IS
