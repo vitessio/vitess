@@ -18,6 +18,7 @@ package gossip
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
@@ -108,7 +109,11 @@ func fromProtoMessage(msg *gossippb.GossipMessage) *Message {
 
 	states := make([]StateDigest, 0, len(msg.States))
 	for _, state := range msg.States {
-		states = append(states, fromProtoState(state))
+		digest, err := fromProtoState(state)
+		if err != nil {
+			continue // Skip invalid states
+		}
+		states = append(states, digest)
 	}
 
 	return &Message{
@@ -213,16 +218,20 @@ func toProtoState(state StateDigest) *gossippb.GossipState {
 	}
 }
 
-func fromProtoState(state *gossippb.GossipState) StateDigest {
+func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 	if state == nil {
-		return StateDigest{}
+		return StateDigest{}, nil
+	}
+	status, err := fromProtoStatus(state.Status)
+	if err != nil {
+		return StateDigest{}, err
 	}
 	return StateDigest{
 		NodeID:     NodeID(state.NodeId),
-		Status:     fromProtoStatus(state.Status),
+		Status:     status,
 		Phi:        state.Phi,
 		LastUpdate: time.Unix(0, state.LastUpdateUnix),
-	}
+	}, nil
 }
 
 func toProtoStatus(status Status) gossippb.Status {
@@ -238,15 +247,17 @@ func toProtoStatus(status Status) gossippb.Status {
 	}
 }
 
-func fromProtoStatus(status gossippb.Status) Status {
+func fromProtoStatus(status gossippb.Status) (Status, error) {
 	switch status {
 	case gossippb.Status_STATUS_ALIVE:
-		return StatusAlive
+		return StatusAlive, nil
 	case gossippb.Status_STATUS_SUSPECT:
-		return StatusSuspect
+		return StatusSuspect, nil
 	case gossippb.Status_STATUS_DOWN:
-		return StatusDown
+		return StatusDown, nil
+	case gossippb.Status_STATUS_UNKNOWN:
+		return StatusUnknown, nil
 	default:
-		return StatusUnknown
+		return StatusUnknown, fmt.Errorf("unknown gossip status: %d", status)
 	}
 }

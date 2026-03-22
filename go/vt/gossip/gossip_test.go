@@ -242,7 +242,7 @@ func TestGossipJoinUsesTransport(t *testing.T) {
 	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, clock, time.Second)
 	g2 := newTestGossip("node2", nil, transport, clock, time.Second)
 
-	resp, err := g1.Join(t.Context(), Member{ID: "node1", Addr: "node1"})
+	resp, err := g1.Join(t.Context(), "node2")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -254,7 +254,7 @@ func TestGossipJoinUsesTransport(t *testing.T) {
 	assert.True(t, ids["node2"])
 
 	state := g2.Snapshot()["node1"]
-	assert.Equal(t, StatusUnknown, state.Status)
+	assert.Equal(t, StatusAlive, state.Status)
 }
 
 func TestGossipOnceMergesState(t *testing.T) {
@@ -315,7 +315,8 @@ func TestProtoConversions(t *testing.T) {
 
 	state := StateDigest{NodeID: "node1", Status: StatusSuspect, Phi: 2.5, LastUpdate: time.Unix(0, 5)}
 	protoState := toProtoState(state)
-	roundTripped := fromProtoState(protoState)
+	roundTripped, err := fromProtoState(protoState)
+	require.NoError(t, err)
 	assert.Equal(t, state.NodeID, roundTripped.NodeID)
 	assert.Equal(t, state.Status, roundTripped.Status)
 	assert.Equal(t, state.Phi, roundTripped.Phi)
@@ -512,6 +513,15 @@ func TestGossipServiceWithAgent(t *testing.T) {
 	}))
 	require.NoError(t, err)
 	assert.NotEmpty(t, pushResp.Members)
+}
+
+func TestGossipServiceRejectsEmptyMember(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	agent := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+	service := &Service{Agent: agent}
+
+	_, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{Member: Member{ID: "", Addr: ""}}))
+	assert.Error(t, err)
 }
 
 func TestWithProbeTimeoutZero(t *testing.T) {

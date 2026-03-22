@@ -284,13 +284,14 @@ func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	return &response
 }
 
-func (g *Gossip) Join(ctx context.Context, member Member) (*JoinResponse, error) {
-	if g.transport == nil {
+func (g *Gossip) Join(ctx context.Context, seedAddr string) (*JoinResponse, error) {
+	if g.transport == nil || seedAddr == "" {
 		return nil, nil
 	}
+	self := Member{ID: g.cfg.NodeID, Addr: g.cfg.BindAddr, Meta: g.cfg.Meta}
 	ctx, cancel := g.withProbeTimeout(ctx)
 	defer cancel()
-	return g.transport.Join(ctx, member.Addr, &JoinRequest{Member: member, Seeds: g.cfg.Seeds})
+	return g.transport.Join(ctx, seedAddr, &JoinRequest{Member: self, Seeds: g.cfg.Seeds})
 }
 
 func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {

@@ -50,10 +50,7 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 
 	seeds := discoverSeeds(tablet, ts)
 
-	bindAddr := gossipListenAddr
-	if bindAddr == "" {
-		bindAddr = grpcAddr
-	}
+	bindAddr := grpcAddr
 
 	pingInterval := parseDuration(cfg.PingInterval, 1*time.Second)
 	maxUpdateAge := parseDuration(cfg.MaxUpdateAge, 5*time.Second)

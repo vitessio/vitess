@@ -32,9 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -86,21 +86,26 @@ func startGossip() {
 }
 
 func findGossipConfig() *topodatapb.GossipConfig {
-	query := `SELECT keyspace FROM vitess_keyspace`
-	var cfg *topodatapb.GossipConfig
-	_ = db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
-		ks := row.GetString("keyspace")
-		ksInfo, err := inst.ReadKeyspace(ks)
-		if err != nil || ksInfo == nil {
-			return nil
-		}
-		ksCfg := ksInfo.GetGossipConfig()
-		if ksCfg != nil && ksCfg.Enabled {
-			cfg = ksCfg
-		}
+	if ts == nil {
 		return nil
-	})
-	return cfg
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+
+	keyspaces, err := ts.GetKeyspaces(ctx)
+	if err != nil {
+		return nil
+	}
+	for _, ksName := range keyspaces {
+		ki, err := ts.GetKeyspace(ctx, ksName)
+		if err != nil {
+			continue
+		}
+		if ki.GossipConfig != nil && ki.GossipConfig.Enabled {
+			return ki.GossipConfig
+		}
+	}
+	return nil
 }
 
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
