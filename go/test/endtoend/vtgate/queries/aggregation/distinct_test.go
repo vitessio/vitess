@@ -68,3 +68,33 @@ func TestDistinctIt(t *testing.T) {
 		mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
 	}
 }
+
+func TestDistinctWindowLimitShardTruncation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+		(101, 'A1', 'Analyst', NULL, '2024-01-01', 1000, NULL, 10),
+		(102, 'A2', 'Analyst', NULL, '2024-01-02', 1000, NULL, 10),
+		(103, 'A3', 'Analyst', NULL, '2024-01-03', 1000, NULL, 10),
+		(201, 'B1', 'Clerk',   NULL, '2024-02-01', 2000, NULL, 20),
+		(202, 'B2', 'Clerk',   NULL, '2024-02-02', 2000, NULL, 20),
+		(203, 'B3', 'Clerk',   NULL, '2024-02-03', 2000, NULL, 20),
+		(501, 'C1', 'Manager', NULL, '2024-03-01', 3000, NULL, 5),
+		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
+		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5)`)
+
+	mcmp.Exec(`SELECT empno, ename, job, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			LIMIT 3
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3`)
+}

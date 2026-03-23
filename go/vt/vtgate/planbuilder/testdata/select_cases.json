@@ -6541,5 +6541,136 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "DISTINCT with window function - multi-shard IN clause",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select first_value(col) over (partition by Id order by col desc) from `user` where 1 != 1",
+            "Query": "select distinct first_value(col) over (partition by Id order by col desc) from `user` where Id in ::__vals",
+            "Values": [
+              "(1, 2, 3)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "DISTINCT with window function and LIMIT - multi-shard IN clause",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "0"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select first_value(col) over (partition by Id order by col desc) from `user` where 1 != 1",
+                "Query": "select distinct first_value(col) over (partition by Id order by col desc) from `user` where Id in ::__vals limit :__upper_limit",
+                "Values": [
+                  "(1, 2, 3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "DISTINCT with window function - scatter",
+    "query": "select distinct row_number() over (partition by Id order by col) as rn, col from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct row_number() over (partition by Id order by col) as rn, col from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0",
+          "1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select row_number() over (partition by Id order by col asc) as rn, col from `user` where 1 != 1",
+            "Query": "select distinct row_number() over (partition by Id order by col asc) as rn, col from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "DISTINCT with window function - single shard",
+    "query": "select distinct row_number() over (partition by Id order by col) as rn, col from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select distinct row_number() over (partition by Id order by col) as rn, col from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select row_number() over (partition by Id order by col asc) as rn, col from `user` where 1 != 1",
+        "Query": "select distinct row_number() over (partition by Id order by col asc) as rn, col from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

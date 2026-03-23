@@ -899,6 +899,17 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 	case *Ordering:
 		in.Source = src.Source
 		return in, Rewrote("remove ordering under distinct")
+	case *Window:
+		if isDistinct(src.Source) {
+			debugNoRewrite("distinct push blocked: window source already has distinct")
+			return in, NoRewrite
+		}
+		src.Source = newDistinct(src.Source, nil, false)
+		if in.Required {
+			in.PushedPerformance = true
+			return in, Rewrote("push distinct under window - kept original")
+		}
+		return src, Rewrote("push distinct under window")
 	}
 
 	debugNoRewrite("distinct push blocked: unsupported source operator type %T", in.Source)
