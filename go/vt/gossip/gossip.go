@@ -140,6 +140,7 @@ func (r realClock) Now() time.Time {
 	return time.Now()
 }
 
+// New creates a gossip agent with the given configuration, transport, and clock.
 func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	if clock == nil {
 		clock = realClock{}
@@ -176,6 +177,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	return g
 }
 
+// Start begins the periodic gossip loop in a background goroutine.
 func (g *Gossip) Start(ctx context.Context) error {
 	if g.cfg.PingInterval <= 0 {
 		return nil
@@ -209,6 +211,7 @@ func (g *Gossip) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop halts the gossip loop. Safe to call multiple times.
 func (g *Gossip) Stop() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -252,6 +255,7 @@ func (g *Gossip) applyConfig(cfg Config, ticker *time.Ticker) {
 	}
 }
 
+// UpdateLocal refreshes the local node's health state in the gossip network.
 func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -324,6 +328,7 @@ func (g *Gossip) Debug() *DebugState {
 	}
 }
 
+// statusString returns the human-readable name for a gossip status.
 func statusString(s Status) string {
 	switch s {
 	case StatusAlive:
@@ -337,6 +342,7 @@ func statusString(s Status) string {
 	}
 }
 
+// Snapshot returns a copy of the current gossip state for all known nodes.
 func (g *Gossip) Snapshot() map[NodeID]State {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -346,6 +352,7 @@ func (g *Gossip) Snapshot() map[NodeID]State {
 	return result
 }
 
+// Members returns a copy of all known gossip members.
 func (g *Gossip) Members() []Member {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -357,6 +364,7 @@ func (g *Gossip) Members() []Member {
 	return result
 }
 
+// HandleJoin processes an incoming join request and returns the current cluster state.
 func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
 	if req == nil || req.Member.ID == "" {
 		return nil
@@ -377,6 +385,7 @@ func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
 	return response
 }
 
+// HandlePushPull processes an incoming push-pull exchange and returns the local state.
 func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	now := g.clock.Now()
 	g.mu.Lock()
@@ -386,6 +395,7 @@ func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	return &response
 }
 
+// Join sends a join request to the given seed address, registering this node in the cluster.
 func (g *Gossip) Join(ctx context.Context, seedAddr string) (*JoinResponse, error) {
 	if g.transport == nil || seedAddr == "" {
 		return nil, nil

@@ -32,6 +32,7 @@ func (tm *TabletManager) SetGossip(agent *gossip.Gossip, enabled bool) {
 	tm.GossipEnabled = enabled
 }
 
+// registerGossipService registers the gossip gRPC service and debug HTTP endpoint.
 func registerGossipService(tm *TabletManager) {
 	if tm == nil || tm.Gossip == nil || !tm.GossipEnabled {
 		return

@@ -29,6 +29,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// newGossipAgent creates a gossip agent from the keyspace-level config and tablet identity.
 func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts *topo.Server) (*gossip.Gossip, bool) {
 	if cfg == nil || !cfg.Enabled || tablet == nil {
 		return nil, false
@@ -109,6 +110,7 @@ func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 	return seeds
 }
 
+// parseDuration parses a duration string with a fallback for empty or invalid values.
 func parseDuration(s string, fallback time.Duration) time.Duration {
 	if s == "" {
 		return fallback

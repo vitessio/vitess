@@ -503,18 +503,18 @@ func TestPhiAccrualZeroStddev(t *testing.T) {
 func TestPhiAccrualInsufficientIntervals(t *testing.T) {
 	p := newPhiAccrual(10)
 	base := time.Unix(0, 0)
-	// No observations at all
+	// No observations at all.
 	assert.Equal(t, 0.0, p.Phi(base))
-	// One observation, no intervals
+	// One observation, no intervals.
 	p.Observe(base)
 	assert.Equal(t, 0.0, p.Phi(base.Add(time.Second)))
-	// Two observations, one interval — still < 2
+	// Two observations, one interval — still < 2.
 	p.Observe(base.Add(10 * time.Millisecond))
 	assert.Equal(t, 0.0, p.Phi(base.Add(time.Second)))
 }
 
 func TestPhiAccrualNormalRange(t *testing.T) {
-	// With some variance, phi should be a reasonable positive number
+	// With some variance, phi should be a reasonable positive number.
 	p := newPhiAccrual(10)
 	base := time.Unix(0, 0)
 	p.Observe(base)
@@ -522,7 +522,7 @@ func TestPhiAccrualNormalRange(t *testing.T) {
 	p.Observe(base.Add(22 * time.Millisecond))
 	p.Observe(base.Add(30 * time.Millisecond))
 
-	// Slightly past mean — should be low but positive
+	// Slightly past mean — should be low but positive.
 	phi := p.Phi(base.Add(42 * time.Millisecond))
 	assert.True(t, phi > 0 && phi < 100, "phi should be in normal range, got %f", phi)
 }
@@ -531,7 +531,7 @@ func TestObserveLockedCreatesDetector(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
 
-	// observeLocked for a node with no existing detector
+	// ObserveLocked for a node with no existing detector.
 	g.mu.Lock()
 	g.observeLocked("unknown-node", clock.Now())
 	detector := g.detectors["unknown-node"]
@@ -545,14 +545,14 @@ func TestGossipServiceWithAgent(t *testing.T) {
 	agent := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4}, nil, clock)
 	service := &Service{Agent: agent}
 
-	// Join with a real agent
+	// Join with a real agent.
 	joinResp, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{
 		Member: Member{ID: "node2", Addr: "node2"},
 	}))
 	require.NoError(t, err)
 	assert.NotEmpty(t, joinResp.Members)
 
-	// PushPull with a real agent
+	// PushPull with a real agent.
 	pushResp, err := service.PushPull(t.Context(), toProtoMessage(&Message{
 		Members: []Member{{ID: "node3", Addr: "node3"}},
 		States:  []StateDigest{{NodeID: "node3", Status: StatusAlive, LastUpdate: clock.Now()}},
@@ -574,7 +574,7 @@ func TestWithProbeTimeoutZero(t *testing.T) {
 	g := New(Config{NodeID: "node1", ProbeTimeout: 0}, nil, nil)
 	ctx, cancel := g.withProbeTimeout(t.Context())
 	defer cancel()
-	// Should not have a deadline (just a cancel)
+	// Should not have a deadline (just a cancel).
 	_, hasDeadline := ctx.Deadline()
 	assert.False(t, hasDeadline)
 }
@@ -598,7 +598,7 @@ func TestStartWithZeroPingInterval(t *testing.T) {
 	g := New(Config{NodeID: "node1", PingInterval: 0}, nil, nil)
 	err := g.Start(t.Context())
 	assert.NoError(t, err)
-	// Should be a no-op, no goroutine started
+	// Should be a no-op, no goroutine started.
 }
 
 func TestDebugState(t *testing.T) {

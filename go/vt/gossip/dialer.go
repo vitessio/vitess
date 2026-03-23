@@ -29,8 +29,10 @@ import (
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 )
 
+// GRPCDialer implements the Dialer interface using Vitess gRPC client connections.
 type GRPCDialer struct{}
 
+// Dial creates a new gRPC connection to the target and returns a gossip client.
 func (GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
 	conn, err := grpcclient.DialContext(ctx, target, grpcclient.FailFast(false))
 	if err != nil {

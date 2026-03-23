@@ -40,6 +40,7 @@ type (
 
 const minQuorumObservers = 2
 
+// AnalyzeGossipQuorum evaluates gossip state to detect primaries that a quorum of replicas consider unreachable.
 func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, vtorcView map[string]bool) []*inst.DetectionAnalysis {
 	if state == nil {
 		return nil

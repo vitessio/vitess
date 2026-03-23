@@ -106,7 +106,7 @@ func TestNewGossipAgent_Success(t *testing.T) {
 	require.NotNil(t, agent)
 	assert.True(t, enabled)
 
-	// Verify agent has correct members (self)
+	// Verify agent has correct members (self).
 	members := agent.Members()
 	require.Len(t, members, 1)
 	assert.Equal(t, "host1:15999", members[0].Addr)

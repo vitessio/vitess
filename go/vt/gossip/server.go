@@ -23,11 +23,13 @@ import (
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 )
 
+// Service implements the gossip gRPC server by delegating to a Gossip agent.
 type Service struct {
 	gossippb.UnimplementedGossipServer
 	Agent *Gossip
 }
 
+// Join handles an incoming gossip join RPC.
 func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*gossippb.GossipJoinResponse, error) {
 	if s.Agent == nil {
 		return &gossippb.GossipJoinResponse{}, nil
@@ -39,6 +41,7 @@ func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*g
 	return toProtoJoinResponse(resp), nil
 }
 
+// PushPull handles an incoming gossip push-pull RPC.
 func (s *Service) PushPull(ctx context.Context, msg *gossippb.GossipMessage) (*gossippb.GossipMessage, error) {
 	if s.Agent == nil {
 		return &gossippb.GossipMessage{}, nil

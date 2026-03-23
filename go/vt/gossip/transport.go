@@ -33,6 +33,7 @@ type Dialer interface {
 	Dial(ctx context.Context, target string) (gossippb.GossipClient, error)
 }
 
+// NewGRPCTransport creates a gossip transport backed by gRPC using the given dialer.
 func NewGRPCTransport(dialer Dialer) Transport {
 	return &grpcTransport{dialer: dialer}
 }
