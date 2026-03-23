@@ -168,7 +168,7 @@ func TestWatchGossipConfigNilTopo(t *testing.T) {
 	defer func() { ts = origTS }()
 
 	// Should return immediately without panic.
-	watchGossipConfig("")
+	watchGossipConfig(t.Context(), "")
 }
 
 func TestWatchGossipConfigEmptyKeyspace(t *testing.T) {
@@ -178,7 +178,7 @@ func TestWatchGossipConfigEmptyKeyspace(t *testing.T) {
 	defer func() { ts = origTS }()
 
 	// Should return immediately without panic.
-	watchGossipConfig("")
+	watchGossipConfig(ctx, "")
 }
 
 func TestStartGossipAgent(t *testing.T) {

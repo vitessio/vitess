@@ -43,8 +43,9 @@ import (
 )
 
 var (
-	gossipOnce  sync.Once
-	gossipAgent *gossip.Gossip
+	gossipOnce   sync.Once
+	gossipAgent  *gossip.Gossip
+	gossipCancel context.CancelFunc
 )
 
 func startGossip() {
@@ -67,7 +68,9 @@ func startGossip() {
 
 		// Always start the watcher so runtime enable works even if
 		// gossip was initially disabled.
-		go watchGossipConfig(ksName)
+		var gossipCtx context.Context
+		gossipCtx, gossipCancel = context.WithCancel(context.Background())
+		go watchGossipConfig(gossipCtx, ksName)
 	})
 }
 
@@ -159,20 +162,21 @@ func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
 }
 
 func stopGossip() {
-	if gossipAgent == nil {
-		return
+	if gossipCancel != nil {
+		gossipCancel()
 	}
-	gossipAgent.Stop()
+	if gossipAgent != nil {
+		gossipAgent.Stop()
+	}
 }
 
 // watchGossipConfig watches SrvKeyspace for gossip config changes and
 // manages the gossip agent lifecycle. Handles cold-enable, disable
 // (stopping and clearing the agent), and tuning changes.
-func watchGossipConfig(keyspace string) {
+func watchGossipConfig(ctx context.Context, keyspace string) {
 	if ts == nil || keyspace == "" {
 		return
 	}
-	ctx := context.Background()
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil || len(cells) == 0 {
 		return

@@ -175,6 +175,7 @@ type TabletManager struct {
 	Env                 *vtenv.Environment
 	Gossip              *gossip.Gossip
 	GossipEnabled       bool
+	gossipCancel        context.CancelFunc
 
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
@@ -437,7 +438,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	}
 	// Always start the watcher so runtime config changes (including
 	// cold-enable) can create/start/stop the gossip agent.
-	go tm.watchGossipConfig(tablet)
+	var gossipCtx context.Context
+	gossipCtx, tm.gossipCancel = context.WithCancel(tm.BatchCtx)
+	go tm.watchGossipConfig(gossipCtx, tablet)
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
 		return err
@@ -554,6 +557,9 @@ func (tm *TabletManager) Stop() {
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
 
+	if tm.gossipCancel != nil {
+		tm.gossipCancel()
+	}
 	if tm.Gossip != nil {
 		tm.Gossip.Stop()
 	}
@@ -594,8 +600,8 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 // the agent on first enable), disable (stopping and clearing the agent),
 // and tuning changes. This follows the tablet throttler's SrvKeyspace
 // watcher pattern.
-func (tm *TabletManager) watchGossipConfig(tablet *topodatapb.Tablet) {
-	_, changes, err := tm.TopoServer.WatchSrvKeyspace(tm.BatchCtx, tablet.Alias.Cell, tablet.Keyspace)
+func (tm *TabletManager) watchGossipConfig(ctx context.Context, tablet *topodatapb.Tablet) {
+	_, changes, err := tm.TopoServer.WatchSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
 	if err != nil {
 		return
 	}
