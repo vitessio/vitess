@@ -179,6 +179,7 @@ func init() {
 	pflag.StringVarP(&vflag, "verbose-output", "v", "y.output", "create parsing tables")
 	pflag.BoolVarP(&lflag, "disable-line-directives", "l", false, "disable line directives")
 	pflag.BoolVarP(&allowFastAppend, "fast-append", "f", false, "enable fast-append optimization")
+	pflag.IntVarP(&initialstacksize, "initial-stack-size", "s", 16, "initial parser stack size")
 }
 
 var initialstacksize = 16
@@ -3413,9 +3414,10 @@ type $$Parser interface {
 }
 
 type $$ParserImpl struct {
-	lval  $$SymType
-	stack [$$InitialStackSize]$$SymType
-	char  int
+	lval     $$SymType
+	stack    [$$InitialStackSize]$$SymType
+	char     int
+	maxStack int
 }
 
 func (p *$$ParserImpl) Lookahead() int {
@@ -3587,6 +3589,9 @@ $$stack:
 		nyys := make([]$$SymType, len($$S)*2)
 		copy(nyys, $$S)
 		$$S = nyys
+	}
+	if $$p > $$rcvr.maxStack {
+		$$rcvr.maxStack = $$p
 	}
 	$$S[$$p] = $$VAL
 	$$S[$$p].yys = $$state

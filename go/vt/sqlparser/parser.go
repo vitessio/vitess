@@ -37,8 +37,8 @@ var parserPool = sync.Pool{
 	},
 }
 
-// zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
-var zeroParser yyParserImpl
+// zeroSym is a zero-initialized yySymType used to clear stack entries.
+var zeroSym yySymType
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
@@ -51,10 +51,31 @@ var zeroParser yyParserImpl
 func yyParsePooled(yylex yyLexer) int {
 	parser := parserPool.Get().(*yyParserImpl)
 	defer func() {
-		*parser = zeroParser
+		// Only clear the stack entries that were actually used, rather than
+		// zeroing the entire struct. This avoids a costly duffcopy of the large
+		// yyParserImpl (128 * sizeof(yySymType) ≈ 36KB) on every parse.
+		// Stack entries must be cleared to release any GC-retaining interface
+		// values (union fields) that hold pointers to AST nodes.
+		depth := parser.maxStack + 1
+		if depth > len(parser.stack) {
+			depth = len(parser.stack)
+		}
+		for i := range depth {
+			parser.stack[i] = zeroSym
+		}
+		parser.lval = zeroSym
+		parser.char = -1
+		parser.maxStack = 0
 		parserPool.Put(parser)
 	}()
 	return parser.Parse(yylex)
+}
+
+// tokenizerPool is a pool for tokenizer objects to reduce allocations per parse.
+var tokenizerPool = sync.Pool{
+	New: func() any {
+		return &Tokenizer{}
+	},
 }
 
 // Instructions for creating new types: If a type
@@ -76,6 +97,7 @@ func yyParsePooled(yylex yyLexer) int {
 // error is ignored and the DDL is returned anyway.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := p.NewStringTokenizer(sql)
+	defer releaseTokenizer(tokenizer)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
@@ -88,8 +110,9 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 			case DDLStatement:
 				x.SetFullyParsed(false)
 			}
-			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
-			return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+			stmt := tokenizer.partialDDL
+			bindVars := tokenizer.BindVars
+			return stmt, bindVars, nil
 		}
 		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
@@ -97,7 +120,9 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+	stmt := tokenizer.ParseTrees[0]
+	bindVars := tokenizer.BindVars
+	return stmt, bindVars, nil
 }
 
 // ParseMultiple parses the SQL in full and returns a list of Statements, which
@@ -105,10 +130,12 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 // one SQL statement at a time.
 func (p *Parser) ParseMultiple(sql string) ([]Statement, error) {
 	tokenizer := p.NewStringTokenizer(sql)
+	defer releaseTokenizer(tokenizer)
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
-	return tokenizer.ParseTrees, nil
+	stmts := tokenizer.ParseTrees
+	return stmts, nil
 }
 
 // ParseMultipleIgnoreEmpty parses multiple statements, but ignores empty statements.
@@ -206,6 +233,7 @@ func (p *Parser) Parse(sql string) (Statement, error) {
 // partially parsed DDL statements.
 func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := p.NewStringTokenizer(sql)
+	defer releaseTokenizer(tokenizer)
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
@@ -226,6 +254,7 @@ var ErrMultipleStatements = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vt
 // and the remainder from the given buffer
 func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	tokenizer := p.NewStringTokenizer(blob)
+	defer releaseTokenizer(tokenizer)
 	tkn := 0
 	for {
 		tkn, _ = tokenizer.Scan()
@@ -290,6 +319,7 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 
 	pieces = make([]string, 0, 16)
 	tokenizer := p.NewStringTokenizer(blob)
+	defer releaseTokenizer(tokenizer)
 
 	tkn := 0
 	var stmt string
@@ -346,6 +376,7 @@ loop:
 // IsStatementIncomplete returns true if the statement is incomplete.
 func (p *Parser) IsStatementIncomplete(stmt string) bool {
 	tkn := p.NewStringTokenizer(stmt)
+	defer releaseTokenizer(tkn)
 	yyParsePooled(tkn)
 	if tkn.LastError != nil {
 		var pe PositionedErr

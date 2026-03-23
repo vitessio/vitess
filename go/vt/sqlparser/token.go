@@ -28,6 +28,16 @@ const (
 	eofChar = 0x100
 )
 
+// internedPosVars pre-computes the string representations of positional bind
+// variables ":v1" through ":v63" to avoid allocations for the common case.
+var internedPosVars [64]string
+
+func init() {
+	for i := range internedPosVars {
+		internedPosVars[i] = ":v" + strconv.Itoa(i)
+	}
+}
+
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
@@ -53,11 +63,17 @@ type Tokenizer struct {
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
-	return &Tokenizer{
-		buf:      sql,
-		BindVars: make(map[string]struct{}),
-		parser:   p,
-	}
+	tkn := tokenizerPool.Get().(*Tokenizer)
+	tkn.buf = sql
+	tkn.parser = p
+	return tkn
+}
+
+// releaseTokenizer returns a tokenizer to the pool after resetting its state.
+func releaseTokenizer(tkn *Tokenizer) {
+	// Reset all fields to avoid retaining references between uses.
+	*tkn = Tokenizer{}
+	tokenizerPool.Put(tkn)
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -216,10 +232,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			return int(ch), ""
 		case '?':
 			tkn.posVarIndex++
-			buf := make([]byte, 0, 8)
-			buf = append(buf, ":v"...)
-			buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-			return VALUE_ARG, string(buf)
+			if tkn.posVarIndex < len(internedPosVars) {
+				return VALUE_ARG, internedPosVars[tkn.posVarIndex]
+			}
+			var buf [12]byte
+			b := strconv.AppendInt(append(buf[:0], ":v"...), int64(tkn.posVarIndex), 10)
+			return VALUE_ARG, string(b)
 		case '.':
 			return int(ch), ""
 		case '/':

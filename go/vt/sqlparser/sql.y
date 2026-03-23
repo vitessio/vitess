@@ -45,7 +45,11 @@ func skipToEnd(yylex yyLexer) {
 }
 
 func markBindVariable(yylex yyLexer, bvar string) {
-  yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
+  tkn := yylex.(*Tokenizer)
+  if tkn.BindVars == nil {
+    tkn.BindVars = make(map[string]struct{})
+  }
+  tkn.BindVars[bvar] = struct{}{}
 }
 
 %}

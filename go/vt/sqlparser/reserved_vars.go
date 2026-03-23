@@ -156,6 +156,9 @@ func (r *ReservedVars) nextUnusedVar() string {
 // variable names starting with the given `prefix` and making sure that they
 // don't conflict with the given set of `known` variables.
 func NewReservedVars(prefix string, known BindVars) *ReservedVars {
+	if known == nil {
+		known = make(BindVars)
+	}
 	rv := &ReservedVars{
 		prefix:   prefix,
 		counter:  0,
