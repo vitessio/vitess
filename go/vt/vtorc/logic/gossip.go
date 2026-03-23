@@ -190,15 +190,20 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 		return false
 	}
 	// Try each cell until we find one serving this keyspace.
+	var initial *topo.WatchSrvKeyspaceData
 	var changes <-chan *topo.WatchSrvKeyspaceData
 	for _, cell := range cells {
-		_, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+		initial, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
 		if err == nil {
 			break
 		}
 	}
 	if changes == nil {
 		return false
+	}
+	// Apply the initial value so we don't miss config set before the watch.
+	if initial != nil && initial.Value != nil {
+		applyGossipConfigChange(initial.Value)
 	}
 	for change := range changes {
 		if change.Err != nil {
@@ -207,32 +212,37 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 			}
 			return true
 		}
-		if change.Value == nil {
-			continue
+		if change.Value != nil {
+			applyGossipConfigChange(change.Value)
 		}
-		cfg := change.Value.GossipConfig
-		if cfg == nil || !cfg.Enabled {
-			// Disable: stop agent and clear it so stale state isn't analyzed.
-			if gossipAgent != nil {
-				gossipAgent.Stop()
-				gossipAgent = nil
-			}
-			continue
-		}
-		// Enable or reconfigure.
-		if gossipAgent == nil {
-			// Cold-enable: create and start a new agent.
-			startGossipAgent(cfg)
-			continue
-		}
-		// Tuning update on running agent.
-		gossipAgent.Reconfigure(gossip.Config{
-			PhiThreshold: cfg.PhiThreshold,
-			PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
-			MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
-		})
 	}
 	return true
+}
+
+// applyGossipConfigChange processes a SrvKeyspace change for gossip config.
+// It handles enable, disable, and tuning updates.
+func applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace) {
+	cfg := srvKs.GossipConfig
+	if cfg == nil || !cfg.Enabled {
+		// Disable: stop agent and clear it so stale state isn't analyzed.
+		if gossipAgent != nil {
+			gossipAgent.Stop()
+			gossipAgent = nil
+		}
+		return
+	}
+	// Enable or reconfigure.
+	if gossipAgent == nil {
+		// Cold-enable: create and start a new agent.
+		startGossipAgent(cfg)
+		return
+	}
+	// Tuning update on running agent.
+	gossipAgent.Reconfigure(gossip.Config{
+		PhiThreshold: cfg.PhiThreshold,
+		PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
+		MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
+	})
 }
 
 // pollForGossipKeyspace periodically rescans topo for a keyspace with

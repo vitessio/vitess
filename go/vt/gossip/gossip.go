@@ -479,7 +479,10 @@ func (g *Gossip) updateSuspicion(now time.Time) {
 		} else if state.Status == StatusSuspect {
 			state.Status = StatusAlive
 		}
-		if g.cfg.MaxUpdateAge > 0 && now.Sub(state.LastUpdate) > g.cfg.MaxUpdateAge {
+		// Only apply MaxUpdateAge to nodes we have actually heard from.
+		// Seeds start with zero LastUpdate and must remain Unknown until
+		// their first gossip exchange, not age directly to Down.
+		if g.cfg.MaxUpdateAge > 0 && !state.LastUpdate.IsZero() && now.Sub(state.LastUpdate) > g.cfg.MaxUpdateAge {
 			state.Status = StatusDown
 		}
 		g.states[id] = state

@@ -601,9 +601,13 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 // and tuning changes. This follows the tablet throttler's SrvKeyspace
 // watcher pattern.
 func (tm *TabletManager) watchGossipConfig(ctx context.Context, tablet *topodatapb.Tablet) {
-	_, changes, err := tm.TopoServer.WatchSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
+	initial, changes, err := tm.TopoServer.WatchSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
 	if err != nil {
 		return
+	}
+	// Apply the initial value so we don't miss config set before the watch.
+	if initial != nil && initial.Value != nil {
+		tm.applyGossipConfigChange(initial.Value, tablet)
 	}
 	for change := range changes {
 		if change.Err != nil {
@@ -612,43 +616,44 @@ func (tm *TabletManager) watchGossipConfig(ctx context.Context, tablet *topodata
 			}
 			return
 		}
-		if change.Value == nil {
-			continue
+		if change.Value != nil {
+			tm.applyGossipConfigChange(change.Value, tablet)
 		}
-		cfg := change.Value.GossipConfig
-		if cfg == nil || !cfg.Enabled {
-			// Disable: stop agent and clear it so stale state isn't analyzed.
-			if tm.GossipEnabled && tm.Gossip != nil {
-				tm.Gossip.Stop()
-				tm.Gossip = nil
-				tm.GossipEnabled = false
-			}
-			continue
-		}
-		// Enable or reconfigure.
-		if tm.Gossip == nil {
-			// Cold-enable: create and start a new agent.
-			agent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
-			if !enabled {
-				continue
-			}
-			tm.Gossip = agent
-			tm.GossipEnabled = true
-			if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
-				log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
-				tm.Gossip = nil
-				tm.GossipEnabled = false
-			}
-			registerGossipService(tm)
-			continue
-		}
-		// Tuning update on running agent.
-		tm.Gossip.Reconfigure(gossip.Config{
-			PhiThreshold: cfg.PhiThreshold,
-			PingInterval: parseDuration(cfg.PingInterval, 0),
-			MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
-		})
 	}
+}
+
+// applyGossipConfigChange handles a SrvKeyspace change for gossip config.
+// It manages enable, disable, and tuning updates.
+func (tm *TabletManager) applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace, tablet *topodatapb.Tablet) {
+	cfg := srvKs.GossipConfig
+	if cfg == nil || !cfg.Enabled {
+		if tm.GossipEnabled && tm.Gossip != nil {
+			tm.Gossip.Stop()
+			tm.Gossip = nil
+			tm.GossipEnabled = false
+		}
+		return
+	}
+	if tm.Gossip == nil {
+		agent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
+		if !enabled {
+			return
+		}
+		tm.Gossip = agent
+		tm.GossipEnabled = true
+		if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
+			log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
+			tm.Gossip = nil
+			tm.GossipEnabled = false
+		}
+		registerGossipService(tm)
+		return
+	}
+	tm.Gossip.Reconfigure(gossip.Config{
+		PhiThreshold: cfg.PhiThreshold,
+		PingInterval: parseDuration(cfg.PingInterval, 0),
+		MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
+	})
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

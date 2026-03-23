@@ -2193,6 +2193,19 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 	if req.Enable && req.Disable {
 		return nil, errors.New("--enable and --disable are mutually exclusive")
 	}
+	if req.PhiThreshold < 0 {
+		return nil, fmt.Errorf("invalid phi-threshold: must be non-negative, got %v", req.PhiThreshold)
+	}
+	if req.PingInterval != "" {
+		if d, err := time.ParseDuration(req.PingInterval); err != nil || d <= 0 {
+			return nil, fmt.Errorf("invalid ping-interval %q: must be a positive duration", req.PingInterval)
+		}
+	}
+	if req.MaxUpdateAge != "" {
+		if d, err := time.ParseDuration(req.MaxUpdateAge); err != nil || d <= 0 {
+			return nil, fmt.Errorf("invalid max-update-age %q: must be a positive duration", req.MaxUpdateAge)
+		}
+	}
 
 	update := func(gossipConfig *topodatapb.GossipConfig) *topodatapb.GossipConfig {
 		if gossipConfig == nil {

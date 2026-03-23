@@ -331,6 +331,26 @@ func TestEqualTimestampPrefersAlive(t *testing.T) {
 	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status, "equal-timestamp Alive should override Down")
 }
 
+func TestNeverObservedSeedsStayUnknown(t *testing.T) {
+	clock := &testClock{now: time.Now()}
+	g := New(Config{
+		NodeID:       "node1",
+		BindAddr:     "node1",
+		PhiThreshold: 4,
+		MaxUpdateAge: 50 * time.Millisecond,
+		Seeds:        []Member{{ID: "node2", Addr: "node2"}},
+	}, nil, clock)
+
+	// Advance time well past MaxUpdateAge.
+	clock.now = clock.now.Add(10 * time.Second)
+	g.updateSuspicion(clock.Now())
+
+	// node2 was never observed — it should remain Unknown, not Down.
+	state := g.Snapshot()["node2"]
+	assert.Equal(t, StatusUnknown, state.Status,
+		"never-observed seeds must stay Unknown, not age to Down")
+}
+
 func TestEqualTimestampDoesNotDowngradeAlive(t *testing.T) {
 	clock := &testClock{now: time.Unix(100, 0)}
 	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)

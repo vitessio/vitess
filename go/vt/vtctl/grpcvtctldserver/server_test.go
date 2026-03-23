@@ -15121,6 +15121,45 @@ func TestUpdateGossipConfig(t *testing.T) {
 		})
 		assert.Error(t, err)
 	})
+
+	t.Run("invalid ping interval", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PingInterval: "banana",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid ping-interval")
+	})
+
+	t.Run("invalid max update age", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "-5s",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid max-update-age")
+	})
+
+	t.Run("negative phi threshold", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PhiThreshold: -1,
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid phi-threshold")
+	})
 }
 
 func TestMain(m *testing.M) {
