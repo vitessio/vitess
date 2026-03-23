@@ -38,6 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"os"
@@ -433,6 +434,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 			return err
 		}
 		servenv.OnTerm(tm.Gossip.Stop)
+		go tm.watchGossipConfig(tablet)
 	}
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
@@ -574,6 +576,7 @@ func (tm *TabletManager) Stop() {
 	tm.tmState.Close()
 }
 
+// getGossipConfig reads the gossip configuration from SrvKeyspace.
 func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.GossipConfig {
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
@@ -582,6 +585,43 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 		return nil
 	}
 	return srvKs.GossipConfig
+}
+
+// watchGossipConfig watches SrvKeyspace for gossip config changes and
+// applies them to the running gossip agent. This follows the same pattern
+// as the tablet throttler's SrvKeyspace watcher.
+func (tm *TabletManager) watchGossipConfig(tablet *topodatapb.Tablet) {
+	_, changes, err := tm.TopoServer.WatchSrvKeyspace(tm.BatchCtx, tablet.Alias.Cell, tablet.Keyspace)
+	if err != nil {
+		return
+	}
+	for change := range changes {
+		if change.Err != nil {
+			if !topo.IsErrType(change.Err, topo.Interrupted) {
+				log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+			}
+			return
+		}
+		if change.Value == nil {
+			continue
+		}
+		cfg := change.Value.GossipConfig
+		if cfg == nil {
+			continue
+		}
+		if !cfg.Enabled && tm.GossipEnabled {
+			tm.Gossip.Stop()
+			tm.GossipEnabled = false
+			continue
+		}
+		if cfg.Enabled && tm.Gossip != nil {
+			tm.Gossip.Reconfigure(gossip.Config{
+				PhiThreshold: cfg.PhiThreshold,
+				PingInterval: parseDuration(cfg.PingInterval, 0),
+				MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
+			})
+		}
+	}
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

@@ -85,7 +85,11 @@ type localClient struct {
 }
 
 func (c localClient) PushPull(ctx context.Context, in *gossippb.GossipMessage, opts ...grpc.CallOption) (*gossippb.GossipMessage, error) {
-	return toProtoMessage(c.peer.HandlePushPull(fromProtoMessage(in))), nil
+	decoded, err := fromProtoMessage(in)
+	if err != nil {
+		return nil, err
+	}
+	return toProtoMessage(c.peer.HandlePushPull(decoded)), nil
 }
 
 func (c localClient) Join(ctx context.Context, in *gossippb.GossipJoinRequest, opts ...grpc.CallOption) (*gossippb.GossipJoinResponse, error) {
@@ -553,6 +557,119 @@ func TestStartWithZeroPingInterval(t *testing.T) {
 	err := g.Start(t.Context())
 	assert.NoError(t, err)
 	// Should be a no-op, no goroutine started
+}
+
+func TestDebugState(t *testing.T) {
+	clock := &testClock{now: time.Unix(100, 0)}
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "addr1",
+		Meta:     map[string]string{"keyspace": "ks", "shard": "0"},
+		Seeds:    []Member{{ID: "node2", Addr: "addr2"}},
+	}, nil, clock)
+	g.UpdateLocal(HealthSnapshot{NodeID: "node1", Timestamp: clock.Now()})
+
+	debug := g.Debug()
+	assert.Equal(t, NodeID("node1"), debug.NodeID)
+	assert.Equal(t, "addr1", debug.BindAddr)
+	assert.Len(t, debug.Members, 2)
+	require.Contains(t, debug.States, NodeID("node1"))
+	assert.Equal(t, "alive", debug.States["node1"].Status)
+	assert.NotEmpty(t, debug.States["node1"].LastUpdate)
+	require.Contains(t, debug.States, NodeID("node2"))
+	assert.Equal(t, "unknown", debug.States["node2"].Status)
+}
+
+func TestStatusString(t *testing.T) {
+	assert.Equal(t, "alive", statusString(StatusAlive))
+	assert.Equal(t, "suspect", statusString(StatusSuspect))
+	assert.Equal(t, "down", statusString(StatusDown))
+	assert.Equal(t, "unknown", statusString(StatusUnknown))
+	assert.Equal(t, "unknown", statusString(Status(99)))
+}
+
+func TestAddMemberLockedEnrichesMetadata(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "addr1",
+		Seeds:    []Member{{ID: "node2", Addr: "addr2"}},
+	}, nil, clock)
+
+	// node2 starts without metadata (seed entry).
+	m := g.Members()
+	for _, member := range m {
+		if member.ID == "node2" {
+			assert.Empty(t, member.Meta)
+		}
+	}
+
+	// Gossip brings node2 with metadata — should enrich.
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "addr2", Meta: map[string]string{"keyspace": "ks"}}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: clock.Now()}},
+	})
+
+	for _, member := range g.Members() {
+		if member.ID == "node2" {
+			assert.Equal(t, "ks", member.Meta["keyspace"])
+		}
+	}
+}
+
+func TestReconfigure(t *testing.T) {
+	transport := newLocalTransport()
+	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, nil, time.Second)
+	g2 := newTestGossip("node2", []Member{{ID: "node1", Addr: "node1"}}, transport, nil, time.Second)
+
+	ctx := t.Context()
+	require.NoError(t, g1.Start(ctx))
+	require.NoError(t, g2.Start(ctx))
+	defer g1.Stop()
+	defer g2.Stop()
+
+	// Reconfigure with new phi threshold and max update age.
+	g1.Reconfigure(Config{
+		PhiThreshold: 10,
+		MaxUpdateAge: 30 * time.Second,
+		PingInterval: 50 * time.Millisecond,
+	})
+
+	// Give the gossip loop one tick to process the reconfig.
+	require.Eventually(t, func() bool {
+		g1.mu.Lock()
+		defer g1.mu.Unlock()
+		return g1.cfg.PhiThreshold == 10 &&
+			g1.cfg.MaxUpdateAge == 30*time.Second &&
+			g1.cfg.PingInterval == 50*time.Millisecond
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestReconfigurePartialUpdate(t *testing.T) {
+	transport := newLocalTransport()
+	g := newTestGossip("node1", nil, transport, nil, time.Second)
+	require.NoError(t, g.Start(t.Context()))
+	defer g.Stop()
+
+	// Only update phi threshold, leave others at zero (no change).
+	g.Reconfigure(Config{PhiThreshold: 8})
+
+	require.Eventually(t, func() bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return g.cfg.PhiThreshold == 8
+	}, time.Second, 10*time.Millisecond)
+
+	// Verify ping interval wasn't changed (still the test default).
+	g.mu.Lock()
+	assert.Equal(t, 10*time.Millisecond, g.cfg.PingInterval)
+	g.mu.Unlock()
+}
+
+func TestReconfigureOnStoppedAgent(t *testing.T) {
+	g := New(Config{NodeID: "node1", PingInterval: 10 * time.Millisecond}, nil, nil)
+	// Reconfigure on a never-started agent should not panic.
+	g.Reconfigure(Config{PhiThreshold: 5})
 }
 
 type failingDialer struct{}

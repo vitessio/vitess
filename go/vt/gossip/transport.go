@@ -47,7 +47,7 @@ func (t *grpcTransport) PushPull(ctx context.Context, addr string, msg *Message)
 	if err != nil {
 		return nil, err
 	}
-	return fromProtoMessage(response), nil
+	return fromProtoMessage(response)
 }
 
 func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest) (*JoinResponse, error) {
@@ -61,7 +61,7 @@ func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest)
 		return nil, err
 	}
 
-	return fromProtoJoinResponse(response), nil
+	return fromProtoJoinResponse(response)
 }
 
 func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
@@ -97,9 +97,9 @@ func toProtoMessageValue(msg Message) *gossippb.GossipMessage {
 	return toProtoMessage(&msg)
 }
 
-func fromProtoMessage(msg *gossippb.GossipMessage) *Message {
+func fromProtoMessage(msg *gossippb.GossipMessage) (*Message, error) {
 	if msg == nil {
-		return &Message{}
+		return &Message{}, nil
 	}
 
 	members := make([]Member, 0, len(msg.Members))
@@ -111,7 +111,7 @@ func fromProtoMessage(msg *gossippb.GossipMessage) *Message {
 	for _, state := range msg.States {
 		digest, err := fromProtoState(state)
 		if err != nil {
-			continue // Skip invalid states
+			return nil, err
 		}
 		states = append(states, digest)
 	}
@@ -120,7 +120,7 @@ func fromProtoMessage(msg *gossippb.GossipMessage) *Message {
 		Members: members,
 		States:  states,
 		Epoch:   msg.Epoch,
-	}
+	}, nil
 }
 
 func toProtoJoinRequest(req *JoinRequest) *gossippb.GossipJoinRequest {
@@ -171,9 +171,9 @@ func toProtoJoinResponse(resp *JoinResponse) *gossippb.GossipJoinResponse {
 	}
 }
 
-func fromProtoJoinResponse(resp *gossippb.GossipJoinResponse) *JoinResponse {
+func fromProtoJoinResponse(resp *gossippb.GossipJoinResponse) (*JoinResponse, error) {
 	if resp == nil {
-		return &JoinResponse{}
+		return &JoinResponse{}, nil
 	}
 
 	members := make([]Member, 0, len(resp.Members))
@@ -181,10 +181,15 @@ func fromProtoJoinResponse(resp *gossippb.GossipJoinResponse) *JoinResponse {
 		members = append(members, fromProtoMember(member))
 	}
 
+	initial, err := fromProtoMessage(resp.Initial)
+	if err != nil {
+		return nil, err
+	}
+
 	return &JoinResponse{
 		Members: members,
-		Initial: *fromProtoMessage(resp.Initial),
-	}
+		Initial: *initial,
+	}, nil
 }
 
 func toProtoMember(member Member) *gossippb.Member {

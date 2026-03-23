@@ -14994,6 +14994,135 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
+func TestUpdateGossipConfig(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	t.Run("enable with config", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enable:       true,
+			PhiThreshold: 5,
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled)
+		assert.Equal(t, float64(5), ki.GossipConfig.PhiThreshold)
+		assert.Equal(t, "2s", ki.GossipConfig.PingInterval)
+		assert.Equal(t, "10s", ki.GossipConfig.MaxUpdateAge)
+	})
+
+	t.Run("disable", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		// First enable.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enable:   true,
+		})
+		require.NoError(t, err)
+
+		// Then disable.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Disable:  true,
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.False(t, ki.GossipConfig.Enabled)
+	})
+
+	t.Run("enable and disable mutually exclusive", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enable:   true,
+			Disable:  true,
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "mutually exclusive")
+	})
+
+	t.Run("partial update preserves existing config", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		// Set initial config.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enable:       true,
+			PhiThreshold: 5,
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		// Update only MaxUpdateAge — other fields should be preserved.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "20s",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled, "enabled should be preserved")
+		assert.Equal(t, float64(5), ki.GossipConfig.PhiThreshold, "phi should be preserved")
+		assert.Equal(t, "2s", ki.GossipConfig.PingInterval, "ping interval should be preserved")
+		assert.Equal(t, "20s", ki.GossipConfig.MaxUpdateAge, "max update age should be updated")
+	})
+
+	t.Run("nonexistent keyspace", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "nonexistent",
+			Enable:   true,
+		})
+		assert.Error(t, err)
+	})
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())

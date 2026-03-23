@@ -49,7 +49,7 @@ var (
 
 func startGossip() {
 	gossipOnce.Do(func() {
-		cfg := findGossipConfig()
+		cfg, ksName := findGossipConfig()
 		if cfg == nil || !cfg.Enabled {
 			return
 		}
@@ -89,30 +89,50 @@ func startGossip() {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(gossipAgent.Debug())
 		})
+
+		go watchGossipConfig(ksName)
 	})
 }
 
-func findGossipConfig() *topodatapb.GossipConfig {
+// findGossipConfig scans all keyspaces for an enabled GossipConfig.
+// Returns the config and the keyspace name it was found in (for watching).
+// If multiple keyspaces have gossip enabled with differing configs,
+// the first one found is used and a warning is logged.
+func findGossipConfig() (*topodatapb.GossipConfig, string) {
 	if ts == nil {
-		return nil
+		return nil, ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
-		return nil
+		return nil, ""
 	}
+	var found *topodatapb.GossipConfig
+	var foundKs string
 	for _, ksName := range keyspaces {
 		ki, err := ts.GetKeyspace(ctx, ksName)
 		if err != nil {
 			continue
 		}
-		if ki.GossipConfig != nil && ki.GossipConfig.Enabled {
-			return ki.GossipConfig
+		if ki.GossipConfig == nil || !ki.GossipConfig.Enabled {
+			continue
+		}
+		if found == nil {
+			found = ki.GossipConfig
+			foundKs = ksName
+			continue
+		}
+		if found.PhiThreshold != ki.GossipConfig.PhiThreshold ||
+			found.PingInterval != ki.GossipConfig.PingInterval ||
+			found.MaxUpdateAge != ki.GossipConfig.MaxUpdateAge {
+			log.Warn("multiple keyspaces have gossip enabled with different configs",
+				slog.String("using", foundKs),
+				slog.String("conflict", ksName))
 		}
 	}
-	return nil
+	return found, foundKs
 }
 
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
@@ -131,6 +151,50 @@ func stopGossip() {
 		return
 	}
 	gossipAgent.Stop()
+}
+
+// watchGossipConfig watches SrvKeyspace for gossip config changes and
+// applies them to the running gossip agent. Uses the first available
+// cell for the watch.
+func watchGossipConfig(keyspace string) {
+	if ts == nil || keyspace == "" {
+		return
+	}
+	ctx := context.Background()
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil || len(cells) == 0 {
+		return
+	}
+	_, changes, err := ts.WatchSrvKeyspace(ctx, cells[0], keyspace)
+	if err != nil {
+		return
+	}
+	for change := range changes {
+		if change.Err != nil {
+			if !topo.IsErrType(change.Err, topo.Interrupted) {
+				log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+			}
+			return
+		}
+		if change.Value == nil {
+			continue
+		}
+		cfg := change.Value.GossipConfig
+		if cfg == nil {
+			continue
+		}
+		if !cfg.Enabled && gossipAgent != nil {
+			gossipAgent.Stop()
+			continue
+		}
+		if cfg.Enabled && gossipAgent != nil {
+			gossipAgent.Reconfigure(gossip.Config{
+				PhiThreshold: cfg.PhiThreshold,
+				PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
+				MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
+			})
+		}
+	}
 }
 
 // discoverGossipSeeds queries VTOrc's tablet DB for all known tablets

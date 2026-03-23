@@ -43,6 +43,10 @@ func (s *Service) PushPull(ctx context.Context, msg *gossippb.GossipMessage) (*g
 	if s.Agent == nil {
 		return &gossippb.GossipMessage{}, nil
 	}
-	resp := s.Agent.HandlePushPull(fromProtoMessage(msg))
+	decoded, err := fromProtoMessage(msg)
+	if err != nil {
+		return nil, err
+	}
+	resp := s.Agent.HandlePushPull(decoded)
 	return toProtoMessage(resp), nil
 }

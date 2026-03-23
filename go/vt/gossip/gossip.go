@@ -101,11 +101,12 @@ type (
 		clock     Clock
 		rng       *rand.Rand
 
-		mu        sync.Mutex
-		members   map[NodeID]Member
-		states    map[NodeID]State
-		detectors map[NodeID]*phiAccrual
-		epoch     uint64
+		mu         sync.Mutex
+		members    map[NodeID]Member
+		states     map[NodeID]State
+		detectors  map[NodeID]*phiAccrual
+		epoch      uint64
+		reconfigCh chan Config
 
 		stop    chan struct{}
 		stopped atomic.Bool
@@ -145,15 +146,16 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	}
 
 	g := &Gossip{
-		cfg:       cfg,
-		transport: transport,
-		clock:     clock,
-		rng:       rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), uint64(time.Now().UnixNano())+1)),
-		members:   make(map[NodeID]Member),
-		states:    make(map[NodeID]State),
-		detectors: make(map[NodeID]*phiAccrual),
-		stop:      make(chan struct{}),
-		stopped:   atomic.Bool{},
+		cfg:        cfg,
+		transport:  transport,
+		clock:      clock,
+		rng:        rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), uint64(time.Now().UnixNano())+1)),
+		members:    make(map[NodeID]Member),
+		states:     make(map[NodeID]State),
+		detectors:  make(map[NodeID]*phiAccrual),
+		reconfigCh: make(chan Config, 1),
+		stop:       make(chan struct{}),
+		stopped:    atomic.Bool{},
 	}
 
 	if cfg.NodeID != "" {
@@ -194,6 +196,8 @@ func (g *Gossip) Start(ctx context.Context) error {
 				return
 			case <-g.stop:
 				return
+			case newCfg := <-g.reconfigCh:
+				g.applyConfig(newCfg, ticker)
 			case <-ticker.C:
 				now := g.clock.Now()
 				g.gossipOnce(ctx, now)
@@ -213,6 +217,33 @@ func (g *Gossip) Stop() {
 	}
 	close(g.stop)
 	g.stopped.Store(true)
+}
+
+// Reconfigure sends updated tuning parameters to the running gossip loop.
+// Changes to PhiThreshold, PingInterval, and MaxUpdateAge take effect on
+// the next gossip tick. This is safe to call concurrently.
+func (g *Gossip) Reconfigure(cfg Config) {
+	select {
+	case g.reconfigCh <- cfg:
+	default:
+	}
+}
+
+// applyConfig updates the gossip agent's tuning parameters from the
+// given config. Called from within the gossip loop goroutine.
+func (g *Gossip) applyConfig(cfg Config, ticker *time.Ticker) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if cfg.PhiThreshold > 0 {
+		g.cfg.PhiThreshold = cfg.PhiThreshold
+	}
+	if cfg.MaxUpdateAge > 0 {
+		g.cfg.MaxUpdateAge = cfg.MaxUpdateAge
+	}
+	if cfg.PingInterval > 0 && cfg.PingInterval != g.cfg.PingInterval {
+		g.cfg.PingInterval = cfg.PingInterval
+		ticker.Reset(cfg.PingInterval)
+	}
 }
 
 func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
@@ -444,14 +475,18 @@ func (g *Gossip) addMemberLocked(member Member) {
 		return
 	}
 	if existing, ok := g.members[member.ID]; ok {
-		// Update metadata and address from gossip exchanges. This ensures
-		// seed entries (which start without metadata) get enriched, and
-		// metadata propagates through multi-hop gossip.
+		updated := false
+		// Update address independently of metadata so corrected
+		// addresses are never ignored due to missing metadata.
+		if member.Addr != "" && member.Addr != existing.Addr {
+			existing.Addr = member.Addr
+			updated = true
+		}
 		if len(member.Meta) > 0 {
 			existing.Meta = member.Meta
-			if member.Addr != "" {
-				existing.Addr = member.Addr
-			}
+			updated = true
+		}
+		if updated {
 			g.members[member.ID] = existing
 		}
 		return
