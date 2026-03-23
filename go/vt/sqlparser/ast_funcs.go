@@ -1058,7 +1058,7 @@ func (node IdentifierCI) Equal(in IdentifierCI) bool {
 
 // EqualString performs a case-insensitive compare with str.
 func (node IdentifierCI) EqualString(str string) bool {
-	return node.Lowered() == strings.ToLower(str)
+	return strings.EqualFold(node.val, str)
 }
 
 // EqualsAnyString returns true if any of these strings match
