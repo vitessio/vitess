@@ -77,6 +77,10 @@ func TestRootWithInternalVtctld(t *testing.T) {
 		command.VtctldClientProtocol = origProtocol
 	})
 
+	// Create a keyspace for UpdateGossipConfig test.
+	_, err := ts.GetOrCreateShard(ctx, "test_ks", "0")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		command   string
 		args      []string
@@ -93,6 +97,15 @@ func TestRootWithInternalVtctld(t *testing.T) {
 		{
 			command:   "NoCommandDrJones",
 			expectErr: "unknown command", // Invalid command
+		},
+		{
+			command: "UpdateGossipConfig",
+			args:    []string{"--enable", "--phi-threshold", "5", "--ping-interval", "2s", "--max-update-age", "10s", "test_ks"},
+		},
+		{
+			command:   "UpdateGossipConfig",
+			args:      []string{"--enable", "--disable", "test_ks"},
+			expectErr: "mutually exclusive",
 		},
 	}
 

@@ -23,7 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func TestNewGossipAgent_NilConfig(t *testing.T) {
@@ -148,4 +150,74 @@ func TestDiscoverSeeds_NilTopoServer(t *testing.T) {
 	}
 	seeds := discoverSeeds(tablet, nil)
 	assert.Nil(t, seeds)
+}
+
+func TestDiscoverSeeds_WithTablets(t *testing.T) {
+	ctx := t.Context()
+	topoServer := memorytopo.NewServer(ctx, "zone1")
+
+	// Create shard and add tablets.
+	_, err := topoServer.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+
+	self := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"grpc": 15100},
+		Keyspace: "ks",
+		Shard:    "0",
+	}
+	peer := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Hostname: "host2",
+		PortMap:  map[string]int32{"grpc": 15200},
+		Keyspace: "ks",
+		Shard:    "0",
+	}
+	peerNoGrpc := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 300},
+		Hostname: "host3",
+		PortMap:  map[string]int32{"vt": 15300},
+		Keyspace: "ks",
+		Shard:    "0",
+	}
+
+	require.NoError(t, topoServer.CreateTablet(ctx, self))
+	require.NoError(t, topoServer.CreateTablet(ctx, peer))
+	require.NoError(t, topoServer.CreateTablet(ctx, peerNoGrpc))
+
+	seeds := discoverSeeds(self, topoServer)
+
+	// Should find peer (has grpc port) but not self or peerNoGrpc.
+	assert.Len(t, seeds, 1)
+	assert.Equal(t, "host2:15200", seeds[0].Addr)
+}
+
+func TestDiscoverSeeds_EmptyShard(t *testing.T) {
+	ctx := t.Context()
+	topoServer := memorytopo.NewServer(ctx, "zone1")
+
+	_, err := topoServer.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+
+	self := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"grpc": 15100},
+		Keyspace: "ks",
+		Shard:    "0",
+	}
+	require.NoError(t, topoServer.CreateTablet(ctx, self))
+
+	seeds := discoverSeeds(self, topoServer)
+	// Only self in shard — no seeds.
+	assert.Empty(t, seeds)
+}
+
+func TestSetGossip(t *testing.T) {
+	tm := &TabletManager{}
+	agent := gossip.New(gossip.Config{}, nil, nil)
+	tm.SetGossip(agent, true)
+	assert.Equal(t, agent, tm.Gossip)
+	assert.True(t, tm.GossipEnabled)
 }
