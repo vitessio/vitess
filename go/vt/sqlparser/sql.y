@@ -914,7 +914,7 @@ signal_condition_value:
 sqlstate_condition_value:
   SQLSTATE value_opt STRING
   {
-    $$ = &HandlerConditionSQLState{SQLStateValue: NewStrLiteral($3)}
+    $$ = &HandlerConditionSQLState{SQLStateValue: na(yylex).newStrLiteral($3)}
   }
 
 condition_name:
@@ -1261,7 +1261,7 @@ stream_statement:
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: na(yylex).newWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -1269,11 +1269,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), $8, NewWhere(HavingClause, $9), $10)
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8), $9)
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
   }
 | values_statement
   {
@@ -1317,25 +1317,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: na(yylex).newWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: na(yylex).newWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: na(yylex).newWhere(WhereClause, $9)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: na(yylex).newWhere(WhereClause, $8)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: na(yylex).newWhere(WhereClause, $8)}
   }
 
 from_or_using:
@@ -1400,11 +1400,11 @@ set_list:
 set_expression:
   set_variable '=' ON
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+    $$ = &SetExpr{Var: $1, Expr: na(yylex).newStrLiteral("on")}
   }
 | set_variable '=' OFF
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+    $$ = &SetExpr{Var: $1, Expr: na(yylex).newStrLiteral("off")}
   }
 | set_variable '=' expression
   {
@@ -1452,15 +1452,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: na(yylex).newStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("on")}
   }
 
 isolation_level:
@@ -1918,7 +1918,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = na(yylex).newStrLiteral($3)
     $$ = $1
   }
 | column_attribute_list_opt keys
@@ -1941,7 +1941,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt SRID INTEGRAL
   {
-    $1.SRID = NewIntLiteral($3)
+    $1.SRID = na(yylex).newIntLiteral($3)
     $$ = $1
   }
 | column_attribute_list_opt VISIBLE
@@ -1956,11 +1956,11 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.EngineAttribute = NewStrLiteral($4)
+    $1.EngineAttribute = na(yylex).newStrLiteral($4)
   }
 | column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+    $1.SecondaryEngineAttribute = na(yylex).newStrLiteral($4)
   }
 
 column_format:
@@ -2012,7 +2012,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = na(yylex).newStrLiteral($3)
     $$ = $1
   }
 | generated_column_attribute_list_opt keys
@@ -2022,7 +2022,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt SRID INTEGRAL
   {
-    $1.SRID = NewIntLiteral($3)
+    $1.SRID = na(yylex).newIntLiteral($3)
     $$ = $1
   }
 | generated_column_attribute_list_opt VISIBLE
@@ -2105,19 +2105,19 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | HEX
   {
-    $$ = NewHexLiteral($1)
+    $$ = na(yylex).newHexLiteral($1)
   }
 | HEXNUM
   {
-    $$ = NewHexNumLiteral($1)
+    $$ = na(yylex).newHexNumLiteral($1)
   }
 | BITNUM
   {
-    $$ = NewBitLiteral($1)
+    $$ = na(yylex).newBitLiteral($1)
   }
 | BIT_LITERAL
   {
-    $$ = NewBitLiteral("0b" + $1)
+    $$ = na(yylex).newBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -2125,19 +2125,19 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newHexNumLiteral($2)}
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newHexLiteral($2)}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
@@ -2146,11 +2146,11 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | DATE STRING
   {
-    $$ = NewDateLiteral($2)
+    $$ = na(yylex).newDateLiteral($2)
   }
 | TIME STRING
   {
-    $$ = NewTimeLiteral($2)
+    $$ = na(yylex).newTimeLiteral($2)
   }
 | TIMESTAMP STRING
   {
@@ -2334,15 +2334,15 @@ literal
 NUM_literal:
 INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | FLOAT
   {
-    $$ = NewFloatLiteral($1)
+    $$ = na(yylex).newFloatLiteral($1)
   }
 | DECIMAL
   {
-    $$ = NewDecimalLiteral($1)
+    $$ = na(yylex).newDecimalLiteral($1)
   }
 
 text_literal:
@@ -2358,15 +2358,15 @@ text_start
 text_start:
 STRING
   {
-    $$ = NewStrLiteral($1)
+    $$ = na(yylex).newStrLiteral($1)
   }
 | NCHAR_STRING
   {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+    $$ = &UnaryExpr{Operator: NStringOp, Expr: na(yylex).newStrLiteral($1)}
   }
  | underscore_charsets STRING %prec UNARY
    {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newStrLiteral($2)}
    }
 
 text_literal_or_arg:
@@ -2811,11 +2811,11 @@ index_option:
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
     // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newIntLiteral($3)}
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($2)}
   }
 | VISIBLE
   {
@@ -2831,11 +2831,11 @@ index_option:
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 
 equal_opt:
@@ -3145,15 +3145,15 @@ space_separated_table_option_list:
 table_option:
   AUTO_INCREMENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | AUTOEXTEND_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newIntLiteral($3)}
   }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | default_optional charset_or_character_set equal_opt charset
   {
@@ -3165,35 +3165,35 @@ table_option:
   }
 | CHECKSUM equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:na(yylex).newStrLiteral($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:na(yylex).newStrLiteral($4)}
   }
 | DELAY_KEY_WRITE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | ENGINE equal_opt table_alias
   {
@@ -3201,7 +3201,7 @@ table_option:
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
@@ -3209,19 +3209,19 @@ table_option:
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | MAX_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | MIN_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | PACK_KEYS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | PACK_KEYS equal_opt DEFAULT
   {
@@ -3229,7 +3229,7 @@ table_option:
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | ROW_FORMAT equal_opt row_format_options
   {
@@ -3237,11 +3237,11 @@ table_option:
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
@@ -3249,7 +3249,7 @@ table_option:
   }
 | STATS_PERSISTENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
@@ -3257,7 +3257,7 @@ table_option:
   }
 | STATS_SAMPLE_PAGES equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
@@ -3351,11 +3351,11 @@ ratio_opt:
   }
 | RATIO INTEGRAL
   {
-    $$ = NewIntLiteral($2)
+    $$ = na(yylex).newIntLiteral($2)
   }
 | RATIO DECIMAL
   {
-    $$ = NewDecimalLiteral($2)
+    $$ = na(yylex).newDecimalLiteral($2)
   }
 
 alter_commands_list:
@@ -4110,7 +4110,7 @@ partition_operation:
   }
 | COALESCE PARTITION INTEGRAL
   {
-    $$ = &PartitionSpec{Action:CoalesceAction, Number:NewIntLiteral($3) }
+    $$ = &PartitionSpec{Action:CoalesceAction, Number:na(yylex).newIntLiteral($3) }
   }
 | EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
   {
@@ -4342,19 +4342,19 @@ partition_engine:
 partition_comment:
   COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = NewStrLiteral($3)
+    $$ = na(yylex).newStrLiteral($3)
   }
 
 partition_data_directory:
   DATA DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = na(yylex).newStrLiteral($4)
   }
 
 partition_index_directory:
   INDEX DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = na(yylex).newStrLiteral($4)
   }
 
 partition_max_rows:
@@ -4850,7 +4850,7 @@ for_query_opt:
   }
 | FOR QUERY INTEGRAL
   {
-    $$ = NewIntLiteral($3)
+    $$ = na(yylex).newIntLiteral($3)
   }
 
 binlog_in_opt:
@@ -4870,7 +4870,7 @@ binlog_from_opt:
   }
 | FROM INTEGRAL
   {
-    $$ = NewIntLiteral($2)
+    $$ = na(yylex).newIntLiteral($2)
   }
 
 show_for_channel_opt:
@@ -7424,7 +7424,7 @@ null_int_variable_arg:
   }
 | INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | user_defined_variable
   {
@@ -7979,11 +7979,11 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntLiteral("1")
+    $$ = na(yylex).newIntLiteral("1")
   }
 | INTEGRAL VALUES
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | VALUE_ARG VALUES
   {
@@ -8685,15 +8685,15 @@ charset_or_character_set_or_names:
 charset_value:
   sql_id
   {
-    $$ = NewStrLiteral($1.String())
+    $$ = na(yylex).newStrLiteral($1.String())
   }
 | STRING
   {
-    $$ = NewStrLiteral($1)
+    $$ = na(yylex).newStrLiteral($1)
   }
 | BINARY
   {
-    $$ = NewStrLiteral("binary")
+    $$ = na(yylex).newStrLiteral("binary")
   }
 | DEFAULT
   {

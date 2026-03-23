@@ -59,9 +59,11 @@ func (p *Parser) getTokenizer(sql string) *Tokenizer {
 
 func releaseTokenizer(tkn *Tokenizer) {
 	bindVars := tkn.BindVars
+	alloc := tkn.alloc
 	*tkn = Tokenizer{}
 	clear(bindVars)
 	tkn.BindVars = bindVars
+	tkn.alloc = alloc
 	tokenizerPool.Put(tkn)
 }
 

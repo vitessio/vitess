@@ -48,6 +48,7 @@ type Tokenizer struct {
 	Pos    int
 	buf    string
 	parser *Parser
+	alloc  nodeAllocator
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
