@@ -15108,6 +15108,68 @@ func TestUpdateGossipConfig(t *testing.T) {
 		assert.Equal(t, "20s", ki.GossipConfig.MaxUpdateAge, "max update age should be updated")
 	})
 
+	t.Run("enable only stores no tuning values", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enable:   true,
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled)
+		// Tuning fields should be zero/empty — runtime applies defaults.
+		assert.Equal(t, float64(0), ki.GossipConfig.PhiThreshold)
+		assert.Empty(t, ki.GossipConfig.PingInterval)
+		assert.Empty(t, ki.GossipConfig.MaxUpdateAge)
+	})
+
+	t.Run("zero and empty values do not overwrite existing config", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		// Set initial config with all fields.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enable:       true,
+			PhiThreshold: 6,
+			PingInterval: "3s",
+			MaxUpdateAge: "15s",
+		})
+		require.NoError(t, err)
+
+		// Send an update with all zero/empty tuning values — nothing should change.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PhiThreshold: 0,
+			PingInterval: "",
+			MaxUpdateAge: "",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled, "enabled should be unchanged")
+		assert.Equal(t, float64(6), ki.GossipConfig.PhiThreshold, "phi should be unchanged")
+		assert.Equal(t, "3s", ki.GossipConfig.PingInterval, "ping interval should be unchanged")
+		assert.Equal(t, "15s", ki.GossipConfig.MaxUpdateAge, "max update age should be unchanged")
+	})
+
 	t.Run("nonexistent keyspace", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 
