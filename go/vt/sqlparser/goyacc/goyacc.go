@@ -382,6 +382,13 @@ type Row struct {
 
 var stateTable []Row
 
+// excaIdx maps state number to offset into yyExca; -1 if the state has no exceptions.
+// excaOffset tracks the current write offset into the yyExca table during generation.
+var (
+	excaIdx    []int
+	excaOffset int
+)
+
 var zznewstate = 0
 
 const EOF = -1
@@ -2318,7 +2325,14 @@ func output() {
 	if !lflag {
 		fmt.Fprintf(ftable, "\n//line yacctab:1")
 	}
-	fmt.Fprintf(ftable, "\nvar %sExca = [...]int{\n", prefix)
+	fmt.Fprintf(ftable, "\nvar %sExca = [...]int16{\n", prefix)
+
+	// Initialize the exception index table
+	excaIdx = make([]int, nstate)
+	for i := range excaIdx {
+		excaIdx[i] = -1
+	}
+	excaOffset = 0
 
 	if len(errors) > 0 {
 		stateTable = make([]Row, nstate)
@@ -2395,6 +2409,10 @@ func output() {
 	}
 
 	fmt.Fprintf(ftable, "}\n")
+
+	// Emit the exception index table for O(1) state-to-offset lookup
+	arout("ExcaIdx", excaIdx, nstate)
+
 	ftable.WriteRune('\n')
 	fmt.Fprintf(ftable, "const %sPrivate = %v\n", prefix, PRIVATE)
 }
@@ -2508,16 +2526,20 @@ func wract(i int) {
 				continue
 			}
 			if flag == 0 {
+				excaIdx[i] = excaOffset
 				fmt.Fprintf(ftable, "\t-1, %v,\n", i)
+				excaOffset += 2
 			}
 			flag++
 			fmt.Fprintf(ftable, "\t%v, %v,\n", p, p1)
+			excaOffset += 2
 			zzexcp++
 		}
 	}
 	if flag != 0 {
 		defact[i] = -2
 		fmt.Fprintf(ftable, "\t-2, %v,\n", lastred)
+		excaOffset += 2
 	}
 	optst[i] = os
 }
@@ -3043,10 +3065,10 @@ func others() {
 	}
 	arout("Tok2", temp1, c+1)
 
-	// table 3 has everything else
-	ftable.WriteRune('\n')
-	fmt.Fprintf(ftable, "var %sTok3 = [...]int{\n\t", prefix)
-	c = 0
+	// table 3 has everything else -- emit as direct-indexed array
+	// First pass: find the range of token values
+	tok3Min := 1<<31 - 1
+	tok3Max := -1 << 31
 	for i = 1; i <= ntokens; i++ {
 		j = tokset[i].value
 		if j >= 0 && j < 256 {
@@ -3055,20 +3077,47 @@ func others() {
 		if j >= PRIVATE && j < 256+PRIVATE {
 			continue
 		}
+		if j < tok3Min {
+			tok3Min = j
+		}
+		if j > tok3Max {
+			tok3Max = j
+		}
+	}
 
-		if c%5 != 0 {
-			ftable.WriteRune(' ')
+	if tok3Max >= tok3Min {
+		tok3Size := tok3Max - tok3Min + 1
+		tok3 := make([]int, tok3Size)
+		for i = 1; i <= ntokens; i++ {
+			j = tokset[i].value
+			if j >= 0 && j < 256 {
+				continue
+			}
+			if j >= PRIVATE && j < 256+PRIVATE {
+				continue
+			}
+			tok3[j-tok3Min] = i
 		}
-		fmt.Fprintf(ftable, "%d, %d,", j, i)
-		c++
-		if c%5 == 0 {
-			fmt.Fprint(ftable, "\n\t")
+
+		ftable.WriteRune('\n')
+		fmt.Fprintf(ftable, "const %sTok3Base = %d\n", prefix, tok3Min)
+		typ := minType(tok3, tok3Size)
+		fmt.Fprintf(ftable, "var %sTok3 = [...]%s{", prefix+"", typ)
+		for i = range tok3Size {
+			if i%10 == 0 {
+				fmt.Fprintf(ftable, "\n\t")
+			} else {
+				ftable.WriteRune(' ')
+			}
+			fmt.Fprintf(ftable, "%d,", tok3[i])
 		}
+		fmt.Fprintf(ftable, "\n}\n")
+	} else {
+		// No tok3 entries
+		ftable.WriteRune('\n')
+		fmt.Fprintf(ftable, "const %sTok3Base = 0\n", prefix)
+		fmt.Fprintf(ftable, "var %sTok3 = [...]int16{}\n", prefix)
 	}
-	if c%5 != 0 {
-		ftable.WriteRune(' ')
-	}
-	fmt.Fprintf(ftable, "%d,\n}\n", 0)
 
 	// Custom error messages.
 	fmt.Fprintf(ftable, "\n")
@@ -3160,10 +3209,37 @@ Loop:
 	}
 }
 
+func minType(v []int, n int) string {
+	lo, hi := 0, 0
+	for i := range n {
+		if v[i] < lo {
+			lo = v[i]
+		}
+		if v[i] > hi {
+			hi = v[i]
+		}
+	}
+	switch {
+	case lo >= -128 && hi <= 127:
+		return "int8"
+	case lo >= 0 && hi <= 255:
+		return "uint8"
+	case lo >= -32768 && hi <= 32767:
+		return "int16"
+	case lo >= 0 && hi <= 65535:
+		return "uint16"
+	case lo >= -2147483648 && hi <= 2147483647:
+		return "int32"
+	default:
+		return "int"
+	}
+}
+
 func arout(s string, v []int, n int) {
 	s = prefix + s
+	typ := minType(v, n)
 	ftable.WriteRune('\n')
-	fmt.Fprintf(ftable, "var %v = [...]int{", s)
+	fmt.Fprintf(ftable, "var %v = [...]%s{", s, typ)
 	for i := range n {
 		if i%10 == 0 {
 			fmt.Fprintf(ftable, "\n\t")
@@ -3397,7 +3473,7 @@ var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
 const yaccpartext = `
 /*	parser for yacc output	*/
 
-var (
+const (
 	$$Debug        = 0
 	$$ErrorVerbose = false
 )
@@ -3465,9 +3541,9 @@ func $$ErrorMessage(state, lookAhead int) string {
 	expected := make([]int, 0, 4)
 
 	// Look for shiftable tokens.
-	base := $$Pact[state]
+	base := int($$Pact[state])
 	for tok := TOKSTART; tok-1 < len($$Toknames); tok++ {
-		if n := base + tok; n >= 0 && n < $$Last && $$Chk[$$Act[n]] == tok {
+		if n := base + tok; n >= 0 && n < $$Last && int($$Chk[int($$Act[n])]) == tok {
 			if len(expected) == cap(expected) {
 				return res
 			}
@@ -3475,16 +3551,13 @@ func $$ErrorMessage(state, lookAhead int) string {
 		}
 	}
 
-	if $$Def[state] == -2 {
-		i := 0
-		for $$Exca[i] != -1 || $$Exca[i+1] != state {
-			i += 2
-		}
+	if int($$Def[state]) == -2 {
+		i := int($$ExcaIdx[state])
 
 		// Look for tokens that we accept or reduce.
-		for i += 2; $$Exca[i] >= 0; i += 2 {
-			tok := $$Exca[i]
-			if tok < TOKSTART || $$Exca[i+1] == 0 {
+		for i += 2; int($$Exca[i]) >= 0; i += 2 {
+			tok := int($$Exca[i])
+			if tok < TOKSTART || int($$Exca[i+1]) == 0 {
 				continue
 			}
 			if len(expected) == cap(expected) {
@@ -3494,7 +3567,7 @@ func $$ErrorMessage(state, lookAhead int) string {
 		}
 
 		// If the default action is to accept or reduce, give up.
-		if $$Exca[i+1] != 0 {
+		if int($$Exca[i+1]) != 0 {
 			return res
 		}
 	}
@@ -3514,30 +3587,29 @@ func $$lex1(lex $$Lexer, lval *$$SymType) (char, token int) {
 	token = 0
 	char = lex.Lex(lval)
 	if char <= 0 {
-		token = $$Tok1[0]
+		token = int($$Tok1[0])
 		goto out
 	}
 	if char < len($$Tok1) {
-		token = $$Tok1[char]
+		token = int($$Tok1[char])
 		goto out
 	}
 	if char >= $$Private {
 		if char < $$Private+len($$Tok2) {
-			token = $$Tok2[char-$$Private]
+			token = int($$Tok2[char-$$Private])
 			goto out
 		}
 	}
-	for i := 0; i < len($$Tok3); i += 2 {
-		token = $$Tok3[i+0]
-		if token == char {
-			token = $$Tok3[i+1]
+	if idx := char - $$Tok3Base; idx >= 0 && idx < len($$Tok3) {
+		token = int($$Tok3[idx])
+		if token != 0 {
 			goto out
 		}
 	}
 
 out:
 	if token == 0 {
-		token = $$Tok2[1] /* unknown char */
+		token = int($$Tok2[1]) /* unknown char */
 	}
 	if $$Debug >= 3 {
 		__yyfmt__.Printf("lex %s(%d)\n", $$Tokname(token), uint(char))
@@ -3592,7 +3664,7 @@ $$stack:
 	$$S[$$p].yys = $$state
 
 $$newstate:
-	$$n = $$Pact[$$state]
+	$$n = int($$Pact[$$state])
 	if $$n <= $$Flag {
 		goto $$default /* simple state */
 	}
@@ -3603,8 +3675,8 @@ $$newstate:
 	if $$n < 0 || $$n >= $$Last {
 		goto $$default
 	}
-	$$n = $$Act[$$n]
-	if $$Chk[$$n] == $$token { /* valid shift */
+	$$n = int($$Act[$$n])
+	if int($$Chk[$$n]) == $$token { /* valid shift */
 		$$rcvr.char = -1
 		$$token = -1
 		$$VAL = $$rcvr.lval
@@ -3617,27 +3689,21 @@ $$newstate:
 
 $$default:
 	/* default state action */
-	$$n = $$Def[$$state]
+	$$n = int($$Def[$$state])
 	if $$n == -2 {
 		if $$rcvr.char < 0 {
 			$$rcvr.char, $$token = $$lex1($$lex, &$$rcvr.lval)
 		}
 
 		/* look through exception table */
-		xi := 0
-		for {
-			if $$Exca[xi+0] == -1 && $$Exca[xi+1] == $$state {
-				break
-			}
-			xi += 2
-		}
+		xi := int($$ExcaIdx[$$state])
 		for xi += 2; ; xi += 2 {
-			$$n = $$Exca[xi+0]
+			$$n = int($$Exca[xi+0])
 			if $$n < 0 || $$n == $$token {
 				break
 			}
 		}
-		$$n = $$Exca[xi+1]
+		$$n = int($$Exca[xi+1])
 		if $$n < 0 {
 			goto ret0
 		}
@@ -3659,10 +3725,10 @@ $$default:
 
 			/* find a state where "error" is a legal shift action */
 			for $$p >= 0 {
-				$$n = $$Pact[$$S[$$p].yys] + $$ErrCode
+				$$n = int($$Pact[$$S[$$p].yys]) + $$ErrCode
 				if $$n >= 0 && $$n < $$Last {
-					$$state = $$Act[$$n] /* simulate a shift of "error" */
-					if $$Chk[$$state] == $$ErrCode {
+					$$state = int($$Act[$$n]) /* simulate a shift of "error" */
+					if int($$Chk[$$state]) == $$ErrCode {
 						goto $$stack
 					}
 				}
@@ -3698,7 +3764,7 @@ $$default:
 	$$pt := $$p
 	_ = $$pt // guard against "declared and not used"
 
-	$$p -= $$R2[$$n]
+	$$p -= int($$R2[$$n])
 	// $$p is now the index of $0. Perform the default action. Iff the
 	// reduced production is ε, $1 is possibly out of range.
 	if $$p+1 >= len($$S) {
@@ -3709,16 +3775,16 @@ $$default:
 	$$VAL = $$S[$$p+1]
 
 	/* consult goto table to find next state */
-	$$n = $$R1[$$n]
-	$$g := $$Pgo[$$n]
+	$$n = int($$R1[$$n])
+	$$g := int($$Pgo[$$n])
 	$$j := $$g + $$S[$$p].yys + 1
 
 	if $$j >= $$Last {
-		$$state = $$Act[$$g]
+		$$state = int($$Act[$$g])
 	} else {
-		$$state = $$Act[$$j]
-		if $$Chk[$$state] != -$$n {
-			$$state = $$Act[$$g]
+		$$state = int($$Act[$$j])
+		if int($$Chk[$$state]) != -$$n {
+			$$state = int($$Act[$$g])
 		}
 	}
 	// dummy call; replaced with literal code
