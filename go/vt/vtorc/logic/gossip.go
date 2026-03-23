@@ -49,49 +49,61 @@ var (
 
 func startGossip() {
 	gossipOnce.Do(func() {
-		cfg, ksName := findGossipConfig()
-		if cfg == nil || !cfg.Enabled {
-			return
-		}
-
-		seeds := discoverGossipSeeds()
-		transport := gossip.NewGRPCTransport(gossipDialer{})
-
-		pingInterval := parseDurationVTOrc(cfg.PingInterval, 1*time.Second)
-		maxUpdateAge := parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second)
-		phiThreshold := cfg.PhiThreshold
-		if phiThreshold <= 0 {
-			phiThreshold = 4
-		}
-
-		gossipAgent = gossip.New(gossip.Config{
-			NodeID:       gossip.NodeID(config.GossipNodeID()),
-			BindAddr:     config.GossipListenAddr(),
-			Seeds:        seeds,
-			PhiThreshold: phiThreshold,
-			PingInterval: pingInterval,
-			ProbeTimeout: 500 * time.Millisecond,
-			MaxUpdateAge: maxUpdateAge,
-		}, transport, nil)
-
-		if gossipAgent == nil {
-			return
-		}
-
-		if err := gossipAgent.Start(context.Background()); err != nil {
-			log.Error("failed to start gossip", slog.Any("error", err))
-			return
-		}
-
-		servenv.OnTerm(gossipAgent.Stop)
-
+		// Register the debug endpoint once — it safely returns empty
+		// when gossipAgent is nil.
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(gossipAgent.Debug())
+			if gossipAgent != nil {
+				_ = json.NewEncoder(w).Encode(gossipAgent.Debug())
+			} else {
+				_, _ = w.Write([]byte("null\n"))
+			}
 		})
 
+		cfg, ksName := findGossipConfig()
+		if cfg != nil && cfg.Enabled {
+			startGossipAgent(cfg)
+		}
+
+		// Always start the watcher so runtime enable works even if
+		// gossip was initially disabled.
 		go watchGossipConfig(ksName)
 	})
+}
+
+// startGossipAgent creates and starts the gossip agent from the given config.
+func startGossipAgent(cfg *topodatapb.GossipConfig) {
+	seeds := discoverGossipSeeds()
+	transport := gossip.NewGRPCTransport(gossipDialer{})
+
+	pingInterval := parseDurationVTOrc(cfg.PingInterval, 1*time.Second)
+	maxUpdateAge := parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second)
+	phiThreshold := cfg.PhiThreshold
+	if phiThreshold <= 0 {
+		phiThreshold = 4
+	}
+
+	gossipAgent = gossip.New(gossip.Config{
+		NodeID:       gossip.NodeID(config.GossipNodeID()),
+		BindAddr:     config.GossipListenAddr(),
+		Seeds:        seeds,
+		PhiThreshold: phiThreshold,
+		PingInterval: pingInterval,
+		ProbeTimeout: 500 * time.Millisecond,
+		MaxUpdateAge: maxUpdateAge,
+	}, transport, nil)
+
+	if gossipAgent == nil {
+		return
+	}
+
+	if err := gossipAgent.Start(context.Background()); err != nil {
+		log.Error("failed to start gossip", slog.Any("error", err))
+		gossipAgent = nil
+		return
+	}
+
+	servenv.OnTerm(gossipAgent.Stop)
 }
 
 // findGossipConfig scans all keyspaces for an enabled GossipConfig.
@@ -127,7 +139,7 @@ func findGossipConfig() (*topodatapb.GossipConfig, string) {
 		if found.PhiThreshold != ki.GossipConfig.PhiThreshold ||
 			found.PingInterval != ki.GossipConfig.PingInterval ||
 			found.MaxUpdateAge != ki.GossipConfig.MaxUpdateAge {
-			log.Warn("multiple keyspaces have gossip enabled with different configs",
+			log.Error("multiple keyspaces have gossip enabled with different configs; using first found",
 				slog.String("using", foundKs),
 				slog.String("conflict", ksName))
 		}
@@ -154,8 +166,8 @@ func stopGossip() {
 }
 
 // watchGossipConfig watches SrvKeyspace for gossip config changes and
-// applies them to the running gossip agent. Uses the first available
-// cell for the watch.
+// manages the gossip agent lifecycle. Handles cold-enable, disable
+// (stopping and clearing the agent), and tuning changes.
 func watchGossipConfig(keyspace string) {
 	if ts == nil || keyspace == "" {
 		return
@@ -180,20 +192,26 @@ func watchGossipConfig(keyspace string) {
 			continue
 		}
 		cfg := change.Value.GossipConfig
-		if cfg == nil {
+		if cfg == nil || !cfg.Enabled {
+			// Disable: stop agent and clear it so stale state isn't analyzed.
+			if gossipAgent != nil {
+				gossipAgent.Stop()
+				gossipAgent = nil
+			}
 			continue
 		}
-		if !cfg.Enabled && gossipAgent != nil {
-			gossipAgent.Stop()
+		// Enable or reconfigure.
+		if gossipAgent == nil {
+			// Cold-enable: create and start a new agent.
+			startGossipAgent(cfg)
 			continue
 		}
-		if cfg.Enabled && gossipAgent != nil {
-			gossipAgent.Reconfigure(gossip.Config{
-				PhiThreshold: cfg.PhiThreshold,
-				PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
-				MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
-			})
-		}
+		// Tuning update on running agent.
+		gossipAgent.Reconfigure(gossip.Config{
+			PhiThreshold: cfg.PhiThreshold,
+			PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
+			MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
+		})
 	}
 }
 

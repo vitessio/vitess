@@ -434,8 +434,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 			return err
 		}
 		servenv.OnTerm(tm.Gossip.Stop)
-		go tm.watchGossipConfig(tablet)
 	}
+	// Always start the watcher so runtime config changes (including
+	// cold-enable) can create/start/stop the gossip agent.
+	go tm.watchGossipConfig(tablet)
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
 		return err
@@ -588,8 +590,10 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 }
 
 // watchGossipConfig watches SrvKeyspace for gossip config changes and
-// applies them to the running gossip agent. This follows the same pattern
-// as the tablet throttler's SrvKeyspace watcher.
+// manages the gossip agent lifecycle. It handles cold-enable (creating
+// the agent on first enable), disable (stopping and clearing the agent),
+// and tuning changes. This follows the tablet throttler's SrvKeyspace
+// watcher pattern.
 func (tm *TabletManager) watchGossipConfig(tablet *topodatapb.Tablet) {
 	_, changes, err := tm.TopoServer.WatchSrvKeyspace(tm.BatchCtx, tablet.Alias.Cell, tablet.Keyspace)
 	if err != nil {
@@ -606,21 +610,38 @@ func (tm *TabletManager) watchGossipConfig(tablet *topodatapb.Tablet) {
 			continue
 		}
 		cfg := change.Value.GossipConfig
-		if cfg == nil {
+		if cfg == nil || !cfg.Enabled {
+			// Disable: stop agent and clear it so stale state isn't analyzed.
+			if tm.GossipEnabled && tm.Gossip != nil {
+				tm.Gossip.Stop()
+				tm.Gossip = nil
+				tm.GossipEnabled = false
+			}
 			continue
 		}
-		if !cfg.Enabled && tm.GossipEnabled {
-			tm.Gossip.Stop()
-			tm.GossipEnabled = false
+		// Enable or reconfigure.
+		if tm.Gossip == nil {
+			// Cold-enable: create and start a new agent.
+			agent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
+			if !enabled {
+				continue
+			}
+			tm.Gossip = agent
+			tm.GossipEnabled = true
+			if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
+				log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
+				tm.Gossip = nil
+				tm.GossipEnabled = false
+			}
+			registerGossipService(tm)
 			continue
 		}
-		if cfg.Enabled && tm.Gossip != nil {
-			tm.Gossip.Reconfigure(gossip.Config{
-				PhiThreshold: cfg.PhiThreshold,
-				PingInterval: parseDuration(cfg.PingInterval, 0),
-				MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
-			})
-		}
+		// Tuning update on running agent.
+		tm.Gossip.Reconfigure(gossip.Config{
+			PhiThreshold: cfg.PhiThreshold,
+			PingInterval: parseDuration(cfg.PingInterval, 0),
+			MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
+		})
 	}
 }
 

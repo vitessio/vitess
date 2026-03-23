@@ -310,6 +310,48 @@ func TestGossipIgnoresOlderStateUpdate(t *testing.T) {
 	assert.Equal(t, StatusAlive, state.Status)
 }
 
+func TestEqualTimestampPrefersAlive(t *testing.T) {
+	clock := &testClock{now: time.Unix(100, 0)}
+	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+
+	ts := clock.Now()
+
+	// First, learn about node2 as Down at timestamp T.
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "node2"}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusDown, LastUpdate: ts}},
+	})
+	assert.Equal(t, StatusDown, g.Snapshot()["node2"].Status)
+
+	// Then receive Alive at the same timestamp T — should override Down.
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "node2"}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: ts}},
+	})
+	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status, "equal-timestamp Alive should override Down")
+}
+
+func TestEqualTimestampDoesNotDowngradeAlive(t *testing.T) {
+	clock := &testClock{now: time.Unix(100, 0)}
+	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+
+	ts := clock.Now()
+
+	// Learn about node2 as Alive at timestamp T.
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "node2"}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: ts}},
+	})
+	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status)
+
+	// Then receive Down at the same timestamp T — should NOT override Alive.
+	g.HandlePushPull(&Message{
+		Members: []Member{{ID: "node2", Addr: "node2"}},
+		States:  []StateDigest{{NodeID: "node2", Status: StatusDown, LastUpdate: ts}},
+	})
+	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status, "equal-timestamp Down should not override Alive")
+}
+
 func TestProtoConversions(t *testing.T) {
 	member := Member{ID: "node1", Addr: "addr", Meta: map[string]string{"role": "seed"}}
 	protoMember := toProtoMember(member)

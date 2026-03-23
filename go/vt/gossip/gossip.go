@@ -221,8 +221,14 @@ func (g *Gossip) Stop() {
 
 // Reconfigure sends updated tuning parameters to the running gossip loop.
 // Changes to PhiThreshold, PingInterval, and MaxUpdateAge take effect on
-// the next gossip tick. This is safe to call concurrently.
+// the next gossip tick. If a previous config update is pending, it is
+// replaced by the latest one. This is safe to call concurrently.
 func (g *Gossip) Reconfigure(cfg Config) {
+	// Drain any pending config to make room for the latest.
+	select {
+	case <-g.reconfigCh:
+	default:
+	}
 	select {
 	case g.reconfigCh <- cfg:
 	default:
@@ -516,12 +522,24 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 			digest.LastUpdate = now
 		}
 		current := g.states[digest.NodeID]
-		if digest.LastUpdate.After(current.LastUpdate) || current.LastUpdate.IsZero() {
+		isNewer := digest.LastUpdate.After(current.LastUpdate)
+		isEqual := digest.LastUpdate.Equal(current.LastUpdate) && !current.LastUpdate.IsZero()
+		isEmpty := current.LastUpdate.IsZero()
+		if isNewer || isEmpty {
 			current.Status = digest.Status
 			current.Phi = digest.Phi
 			current.LastUpdate = digest.LastUpdate
 			g.states[digest.NodeID] = current
 			g.observeLocked(digest.NodeID, now)
+			g.bumpEpochLocked()
+		} else if isEqual && digest.Status == StatusAlive && current.Status != StatusAlive {
+			// On equal timestamps, prefer Alive over Down/Suspect.
+			// This prevents a late-starting observer from permanently
+			// latching onto a Down verdict when an Alive at the same
+			// timestamp is also available in the gossip network.
+			current.Status = digest.Status
+			current.Phi = digest.Phi
+			g.states[digest.NodeID] = current
 			g.bumpEpochLocked()
 		}
 	}
