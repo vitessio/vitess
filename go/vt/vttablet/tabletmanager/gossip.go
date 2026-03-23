@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/servenv"
@@ -32,18 +33,29 @@ func (tm *TabletManager) SetGossip(agent *gossip.Gossip, enabled bool) {
 	tm.GossipEnabled = enabled
 }
 
-// registerGossipService registers the gossip gRPC service and debug HTTP endpoint.
+var gossipServiceOnce sync.Once
+
+// registerGossipService registers the gossip gRPC service and debug HTTP
+// endpoint. It is safe to call multiple times — registration happens only
+// once. The handlers are nil-safe so they remain valid across
+// enable/disable transitions.
 func registerGossipService(tm *TabletManager) {
-	if tm == nil || tm.Gossip == nil || !tm.GossipEnabled {
+	if tm == nil {
 		return
 	}
 
-	if servenv.GRPCCheckServiceMap("gossip") {
-		gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{Agent: tm.Gossip})
-	}
+	gossipServiceOnce.Do(func() {
+		if servenv.GRPCCheckServiceMap("gossip") {
+			gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{Agent: tm.Gossip})
+		}
 
-	servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tm.Gossip.Debug())
+		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if tm.Gossip != nil {
+				_ = json.NewEncoder(w).Encode(tm.Gossip.Debug())
+			} else {
+				_, _ = w.Write([]byte("null\n"))
+			}
+		})
 	})
 }

@@ -67,10 +67,16 @@ func startGossip() {
 		}
 
 		// Always start the watcher so runtime enable works even if
-		// gossip was initially disabled.
+		// gossip was initially disabled. If no keyspace has gossip
+		// enabled yet, pollForGossipKeyspace rescans periodically
+		// until one is found.
 		var gossipCtx context.Context
 		gossipCtx, gossipCancel = context.WithCancel(context.Background())
-		go watchGossipConfig(gossipCtx, ksName)
+		if ksName != "" {
+			go watchGossipConfig(gossipCtx, ksName)
+		} else {
+			go pollForGossipKeyspace(gossipCtx)
+		}
 	})
 }
 
@@ -181,8 +187,15 @@ func watchGossipConfig(ctx context.Context, keyspace string) {
 	if err != nil || len(cells) == 0 {
 		return
 	}
-	_, changes, err := ts.WatchSrvKeyspace(ctx, cells[0], keyspace)
-	if err != nil {
+	// Try each cell until we find one serving this keyspace.
+	var changes <-chan *topo.WatchSrvKeyspaceData
+	for _, cell := range cells {
+		_, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+		if err == nil {
+			break
+		}
+	}
+	if changes == nil {
 		return
 	}
 	for change := range changes {
@@ -216,6 +229,29 @@ func watchGossipConfig(ctx context.Context, keyspace string) {
 			PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
 			MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
 		})
+	}
+}
+
+// pollForGossipKeyspace periodically rescans topo for a keyspace with
+// gossip enabled. Once found, it starts the gossip agent and transitions
+// to the normal SrvKeyspace watcher. This handles the cold-enable case
+// where no keyspace had gossip enabled at VTOrc startup.
+func pollForGossipKeyspace(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cfg, ksName := findGossipConfig()
+			if cfg == nil || !cfg.Enabled || ksName == "" {
+				continue
+			}
+			startGossipAgent(cfg)
+			watchGossipConfig(ctx, ksName)
+			return
+		}
 	}
 }
 
