@@ -148,11 +148,10 @@ func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Should return the first one found and not panic.
+	// Conflicting configs should fail fast — return nil.
 	cfg, ksName := findGossipConfig()
-	require.NotNil(t, cfg)
-	assert.True(t, cfg.Enabled)
-	assert.NotEmpty(t, ksName)
+	assert.Nil(t, cfg, "conflicting gossip configs should refuse to start")
+	assert.Empty(t, ksName)
 }
 
 func TestGossipDialerEmptyTarget(t *testing.T) {

@@ -148,9 +148,10 @@ func findGossipConfig() (*topodatapb.GossipConfig, string) {
 		if found.PhiThreshold != ki.GossipConfig.PhiThreshold ||
 			found.PingInterval != ki.GossipConfig.PingInterval ||
 			found.MaxUpdateAge != ki.GossipConfig.MaxUpdateAge {
-			log.Error("multiple keyspaces have gossip enabled with different configs; using first found",
-				slog.String("using", foundKs),
-				slog.String("conflict", ksName))
+			log.Error("refusing to start gossip: multiple keyspaces have conflicting configs",
+				slog.String("keyspace1", foundKs),
+				slog.String("keyspace2", ksName))
+			return nil, ""
 		}
 	}
 	return found, foundKs
@@ -178,14 +179,15 @@ func stopGossip() {
 
 // watchGossipConfig watches SrvKeyspace for gossip config changes and
 // manages the gossip agent lifecycle. Handles cold-enable, disable
-// (stopping and clearing the agent), and tuning changes.
-func watchGossipConfig(ctx context.Context, keyspace string) {
+// (stopping and clearing the agent), and tuning changes. Returns true
+// if a watch was successfully established.
+func watchGossipConfig(ctx context.Context, keyspace string) bool {
 	if ts == nil || keyspace == "" {
-		return
+		return false
 	}
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil || len(cells) == 0 {
-		return
+		return false
 	}
 	// Try each cell until we find one serving this keyspace.
 	var changes <-chan *topo.WatchSrvKeyspaceData
@@ -196,14 +198,14 @@ func watchGossipConfig(ctx context.Context, keyspace string) {
 		}
 	}
 	if changes == nil {
-		return
+		return false
 	}
 	for change := range changes {
 		if change.Err != nil {
 			if !topo.IsErrType(change.Err, topo.Interrupted) {
 				log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
 			}
-			return
+			return true
 		}
 		if change.Value == nil {
 			continue
@@ -230,12 +232,13 @@ func watchGossipConfig(ctx context.Context, keyspace string) {
 			MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
 		})
 	}
+	return true
 }
 
 // pollForGossipKeyspace periodically rescans topo for a keyspace with
 // gossip enabled. Once found, it starts the gossip agent and transitions
-// to the normal SrvKeyspace watcher. This handles the cold-enable case
-// where no keyspace had gossip enabled at VTOrc startup.
+// to the normal SrvKeyspace watcher. Only stops polling after a watch
+// is successfully established.
 func pollForGossipKeyspace(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -248,9 +251,13 @@ func pollForGossipKeyspace(ctx context.Context) {
 			if cfg == nil || !cfg.Enabled || ksName == "" {
 				continue
 			}
-			startGossipAgent(cfg)
-			watchGossipConfig(ctx, ksName)
-			return
+			if gossipAgent == nil {
+				startGossipAgent(cfg)
+			}
+			if watchGossipConfig(ctx, ksName) {
+				return
+			}
+			// Watch failed to attach — keep polling.
 		}
 	}
 }

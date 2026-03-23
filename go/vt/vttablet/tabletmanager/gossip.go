@@ -46,7 +46,9 @@ func registerGossipService(tm *TabletManager) {
 
 	gossipServiceOnce.Do(func() {
 		if servenv.GRPCCheckServiceMap("gossip") {
-			gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{Agent: tm.Gossip})
+			gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
+				GetAgent: func() *gossip.Gossip { return tm.Gossip },
+			})
 		}
 
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {

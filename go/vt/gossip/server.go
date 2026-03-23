@@ -24,17 +24,20 @@ import (
 )
 
 // Service implements the gossip gRPC server by delegating to a Gossip agent.
+// GetAgent is called on each request so the service always uses the current
+// agent, even across enable/disable/re-enable transitions.
 type Service struct {
 	gossippb.UnimplementedGossipServer
-	Agent *Gossip
+	GetAgent func() *Gossip
 }
 
 // Join handles an incoming gossip join RPC.
 func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*gossippb.GossipJoinResponse, error) {
-	if s.Agent == nil {
+	agent := s.GetAgent()
+	if agent == nil {
 		return &gossippb.GossipJoinResponse{}, nil
 	}
-	resp := s.Agent.HandleJoin(fromProtoJoinRequest(req))
+	resp := agent.HandleJoin(fromProtoJoinRequest(req))
 	if resp == nil {
 		return nil, errors.New("invalid join request")
 	}
@@ -43,13 +46,14 @@ func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*g
 
 // PushPull handles an incoming gossip push-pull RPC.
 func (s *Service) PushPull(ctx context.Context, msg *gossippb.GossipMessage) (*gossippb.GossipMessage, error) {
-	if s.Agent == nil {
+	agent := s.GetAgent()
+	if agent == nil {
 		return &gossippb.GossipMessage{}, nil
 	}
 	decoded, err := fromProtoMessage(msg)
 	if err != nil {
 		return nil, err
 	}
-	resp := s.Agent.HandlePushPull(decoded)
+	resp := agent.HandlePushPull(decoded)
 	return toProtoMessage(resp), nil
 }

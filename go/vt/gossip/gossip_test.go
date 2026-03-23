@@ -401,7 +401,7 @@ func TestGRPCTransportErrorPropagation(t *testing.T) {
 }
 
 func TestGossipServiceNilAgent(t *testing.T) {
-	service := &Service{}
+	service := &Service{GetAgent: func() *Gossip { return nil }}
 
 	joinResp, err := service.Join(t.Context(), &gossippb.GossipJoinRequest{})
 	require.NoError(t, err)
@@ -543,7 +543,7 @@ func TestObserveLockedCreatesDetector(t *testing.T) {
 func TestGossipServiceWithAgent(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	agent := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4}, nil, clock)
-	service := &Service{Agent: agent}
+	service := &Service{GetAgent: func() *Gossip { return agent }}
 
 	// Join with a real agent.
 	joinResp, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{
@@ -564,7 +564,7 @@ func TestGossipServiceWithAgent(t *testing.T) {
 func TestGossipServiceRejectsEmptyMember(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	agent := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
-	service := &Service{Agent: agent}
+	service := &Service{GetAgent: func() *Gossip { return agent }}
 
 	_, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{Member: Member{ID: "", Addr: ""}}))
 	assert.Error(t, err)
