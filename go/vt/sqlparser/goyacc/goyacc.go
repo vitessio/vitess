@@ -396,6 +396,15 @@ const EOF = -1
 func main() {
 	setup() // initialize and read productions
 
+	// Infer the data array size for the discriminated union from Go type sizes.
+	if len(gotypes) > 0 {
+		words, err := inferUnionDataWords()
+		if err != nil {
+			errorf("failed to infer union data size: %v", err)
+		}
+		unionDataSize = words
+	}
+
 	tbitset = (ntokens + 32) / 32
 	cpres()  // make table of which productions yield a given nonterminal
 	cempty() // make a table of which nonterminals can match the empty string
@@ -681,7 +690,7 @@ outer:
 			}
 			fcode.Write(act.Bytes())
 			if unionType != "" {
-				fmt.Fprintf(fcode, "\n\t\t%sVAL.data = [%d]__yyunsafe__.Pointer{}", prefix, unionDataWords)
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.data = %sZeroData", prefix, prefix)
 				fmt.Fprintf(fcode, "\n\t\t*(*%s)(__yyunsafe__.Pointer(&%sVAL.data)) = %sLOCAL", unionType, prefix, prefix)
 			}
 
@@ -1125,32 +1134,24 @@ type gotypeinfo struct {
 
 var gotypes = make(map[string]*gotypeinfo)
 
-const unionDataWords = 6 // 48 bytes — fits the largest %union member (VindexParam)
+var unionDataSize int // inferred from Go type sizes after setup()
 
 func typeinfo() {
 	if !lflag {
 		fmt.Fprintf(ftable, "\n//line %v:%v\n", infile, lineno)
 	}
+	fmt.Fprintf(ftable, "type %sData = [%d]__yyunsafe__.Pointer\n", prefix, unionDataSize)
+	fmt.Fprintf(ftable, "var %sZeroData %sData\n\n", prefix, prefix)
+
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
-	hasUnion := false
-	for _, tt := range gotypes {
-		if tt.union {
-			hasUnion = true
-			break
-		}
-	}
-	if hasUnion {
-		fmt.Fprintf(ftable, "\n\tdata [%d]__yyunsafe__.Pointer", unionDataWords)
-	}
-	ftable.Write(ftypes.Bytes())
+	fmt.Fprintf(ftable, "\n\tdata %sData", prefix)
 	fmt.Fprintf(ftable, "\n\tyys int")
 	fmt.Fprintf(ftable, "\n}\n\n")
 
+	// All types get unsafe-cast accessors + setters.
 	var sortedTypes []string
-	for member, tt := range gotypes {
-		if tt.union {
-			sortedTypes = append(sortedTypes, member)
-		}
+	for member := range gotypes {
+		sortedTypes = append(sortedTypes, member)
 	}
 	sort.Strings(sortedTypes)
 
@@ -1158,6 +1159,11 @@ func typeinfo() {
 		tt := gotypes[member]
 		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
 		fmt.Fprintf(ftable, "\treturn *(*%s)(__yyunsafe__.Pointer(&st.data))\n", tt.typename)
+		fmt.Fprintf(ftable, "}\n")
+
+		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) set%s(v %s) {\n", prefix, member, tt.typename)
+		fmt.Fprintf(ftable, "\tst.data = %sZeroData\n", prefix)
+		fmt.Fprintf(ftable, "\t*(*%s)(__yyunsafe__.Pointer(&st.data)) = v\n", tt.typename)
 		fmt.Fprintf(ftable, "}\n")
 	}
 }
@@ -1179,10 +1185,7 @@ out:
 			if state == readingType {
 				gotypes[member.String()] = &gotypeinfo{
 					typename: typ.String(),
-					union:    union,
-				}
-				if !union {
-					fmt.Fprintf(ftypes, "\n\t%s %s", member.Bytes(), typ.Bytes())
+					union:    true,
 				}
 				member.Reset()
 				typ.Reset()

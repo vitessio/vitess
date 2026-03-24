@@ -9034,682 +9034,1534 @@ var yyPgo = [...]int16{
 }
 
 //line sql.y:9555
+type yyData = [6]__yyunsafe__.Pointer
+
+var yyZeroData yyData
+
 type yySymType struct {
-	data  [6]__yyunsafe__.Pointer
-	empty struct{}
-	yys   int
+	data yyData
+	yys  int
 }
 
 func (st *yySymType) JSONTableExprUnion() *JSONTableExpr {
 	return *(**JSONTableExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setJSONTableExpr(v *JSONTableExpr) {
+	st.data = yyZeroData
+	*(**JSONTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) LengthScaleOptionUnion() LengthScaleOption {
 	return *(*LengthScaleOption)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setLengthScaleOption(v LengthScaleOption) {
+	st.data = yyZeroData
+	*(*LengthScaleOption)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) aliasedTableNameUnion() *AliasedTableExpr {
 	return *(**AliasedTableExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setaliasedTableName(v *AliasedTableExpr) {
+	st.data = yyZeroData
+	*(**AliasedTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) alterDatabaseUnion() *AlterDatabase {
 	return *(**AlterDatabase)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setalterDatabase(v *AlterDatabase) {
+	st.data = yyZeroData
+	*(**AlterDatabase)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) alterMigrationUnion() *AlterMigration {
 	return *(**AlterMigration)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setalterMigration(v *AlterMigration) {
+	st.data = yyZeroData
+	*(**AlterMigration)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) alterOptionUnion() AlterOption {
 	return *(*AlterOption)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setalterOption(v AlterOption) {
+	st.data = yyZeroData
+	*(*AlterOption)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) alterOptionsUnion() []AlterOption {
 	return *(*[]AlterOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setalterOptions(v []AlterOption) {
+	st.data = yyZeroData
+	*(*[]AlterOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) alterTableUnion() *AlterTable {
 	return *(**AlterTable)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setalterTable(v *AlterTable) {
+	st.data = yyZeroData
+	*(**AlterTable)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) argumentLessWindowExprTypeUnion() ArgumentLessWindowExprType {
 	return *(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setargumentLessWindowExprType(v ArgumentLessWindowExprType) {
+	st.data = yyZeroData
+	*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) boolValUnion() BoolVal {
 	return *(*BoolVal)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setboolVal(v BoolVal) {
+	st.data = yyZeroData
+	*(*BoolVal)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) booleanUnion() bool {
 	return *(*bool)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setboolean(v bool) {
+	st.data = yyZeroData
+	*(*bool)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) colKeyOptUnion() ColumnKeyOption {
 	return *(*ColumnKeyOption)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolKeyOpt(v ColumnKeyOption) {
+	st.data = yyZeroData
+	*(*ColumnKeyOption)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) colNameUnion() *ColName {
 	return *(**ColName)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolName(v *ColName) {
+	st.data = yyZeroData
+	*(**ColName)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) colNamesUnion() []*ColName {
 	return *(*[]*ColName)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolNames(v []*ColName) {
+	st.data = yyZeroData
+	*(*[]*ColName)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) colTupleUnion() ColTuple {
 	return *(*ColTuple)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolTuple(v ColTuple) {
+	st.data = yyZeroData
+	*(*ColTuple)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) columnCharsetUnion() ColumnCharset {
 	return *(*ColumnCharset)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolumnCharset(v ColumnCharset) {
+	st.data = yyZeroData
+	*(*ColumnCharset)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) columnDefinitionUnion() *ColumnDefinition {
 	return *(**ColumnDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolumnDefinition(v *ColumnDefinition) {
+	st.data = yyZeroData
+	*(**ColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) columnDefinitionsUnion() []*ColumnDefinition {
 	return *(*[]*ColumnDefinition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolumnDefinitions(v []*ColumnDefinition) {
+	st.data = yyZeroData
+	*(*[]*ColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) columnFormatUnion() ColumnFormat {
 	return *(*ColumnFormat)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolumnFormat(v ColumnFormat) {
+	st.data = yyZeroData
+	*(*ColumnFormat)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) columnStorageUnion() ColumnStorage {
 	return *(*ColumnStorage)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolumnStorage(v ColumnStorage) {
+	st.data = yyZeroData
+	*(*ColumnStorage)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) columnTypeUnion() *ColumnType {
 	return *(**ColumnType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolumnType(v *ColumnType) {
+	st.data = yyZeroData
+	*(**ColumnType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) columnTypeOptionsUnion() *ColumnTypeOptions {
 	return *(**ColumnTypeOptions)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcolumnTypeOptions(v *ColumnTypeOptions) {
+	st.data = yyZeroData
+	*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) columnsUnion() Columns {
 	return *(*Columns)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcolumns(v Columns) {
+	st.data = yyZeroData
+	*(*Columns)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) comparisonExprOperatorUnion() ComparisonExprOperator {
 	return *(*ComparisonExprOperator)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcomparisonExprOperator(v ComparisonExprOperator) {
+	st.data = yyZeroData
+	*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) compoundStatementUnion() CompoundStatement {
 	return *(*CompoundStatement)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcompoundStatement(v CompoundStatement) {
+	st.data = yyZeroData
+	*(*CompoundStatement)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) compoundStatementsUnion() *CompoundStatements {
 	return *(**CompoundStatements)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcompoundStatements(v *CompoundStatements) {
+	st.data = yyZeroData
+	*(**CompoundStatements)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) constraintDefinitionUnion() *ConstraintDefinition {
 	return *(**ConstraintDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setconstraintDefinition(v *ConstraintDefinition) {
+	st.data = yyZeroData
+	*(**ConstraintDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) constraintInfoUnion() ConstraintInfo {
 	return *(*ConstraintInfo)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setconstraintInfo(v ConstraintInfo) {
+	st.data = yyZeroData
+	*(*ConstraintInfo)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) convertTypeUnion() *ConvertType {
 	return *(**ConvertType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setconvertType(v *ConvertType) {
+	st.data = yyZeroData
+	*(**ConvertType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) createDatabaseUnion() *CreateDatabase {
 	return *(**CreateDatabase)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcreateDatabase(v *CreateDatabase) {
+	st.data = yyZeroData
+	*(**CreateDatabase)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) createProcedureUnion() *CreateProcedure {
 	return *(**CreateProcedure)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcreateProcedure(v *CreateProcedure) {
+	st.data = yyZeroData
+	*(**CreateProcedure)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) createTableUnion() *CreateTable {
 	return *(**CreateTable)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcreateTable(v *CreateTable) {
+	st.data = yyZeroData
+	*(**CreateTable)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) createViewUnion() *CreateView {
 	return *(**CreateView)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setcreateView(v *CreateView) {
+	st.data = yyZeroData
+	*(**CreateView)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) cteUnion() *CommonTableExpr {
 	return *(**CommonTableExpr)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setcte(v *CommonTableExpr) {
+	st.data = yyZeroData
+	*(**CommonTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) ctesUnion() []*CommonTableExpr {
 	return *(*[]*CommonTableExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setctes(v []*CommonTableExpr) {
+	st.data = yyZeroData
+	*(*[]*CommonTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) databaseOptionUnion() DatabaseOption {
 	return *(*DatabaseOption)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setdatabaseOption(v DatabaseOption) {
+	st.data = yyZeroData
+	*(*DatabaseOption)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) databaseOptionsUnion() []DatabaseOption {
 	return *(*[]DatabaseOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setdatabaseOptions(v []DatabaseOption) {
+	st.data = yyZeroData
+	*(*[]DatabaseOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) definerUnion() *Definer {
 	return *(**Definer)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setdefiner(v *Definer) {
+	st.data = yyZeroData
+	*(**Definer)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) derivedTableUnion() *DerivedTable {
 	return *(**DerivedTable)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setderivedTable(v *DerivedTable) {
+	st.data = yyZeroData
+	*(**DerivedTable)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) elseIfUnion() *ElseIfBlock {
 	return *(**ElseIfBlock)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setelseIf(v *ElseIfBlock) {
+	st.data = yyZeroData
+	*(**ElseIfBlock)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) elseIfsUnion() []*ElseIfBlock {
 	return *(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setelseIfs(v []*ElseIfBlock) {
+	st.data = yyZeroData
+	*(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
+func (st *yySymType) emptyUnion() struct{} {
+	return *(*struct{})(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setempty(v struct{}) {
+	st.data = yyZeroData
+	*(*struct{})(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) explainTypeUnion() ExplainType {
 	return *(*ExplainType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setexplainType(v ExplainType) {
+	st.data = yyZeroData
+	*(*ExplainType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) exprUnion() Expr {
 	return *(*Expr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setexpr(v Expr) {
+	st.data = yyZeroData
+	*(*Expr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) exprsUnion() []Expr {
 	return *(*[]Expr)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setexprs(v []Expr) {
+	st.data = yyZeroData
+	*(*[]Expr)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) firstOrLastValueExprTypeUnion() FirstOrLastValueExprType {
 	return *(*FirstOrLastValueExprType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setfirstOrLastValueExprType(v FirstOrLastValueExprType) {
+	st.data = yyZeroData
+	*(*FirstOrLastValueExprType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) frameClauseUnion() *FrameClause {
 	return *(**FrameClause)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setframeClause(v *FrameClause) {
+	st.data = yyZeroData
+	*(**FrameClause)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) framePointUnion() *FramePoint {
 	return *(**FramePoint)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setframePoint(v *FramePoint) {
+	st.data = yyZeroData
+	*(**FramePoint)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) framePointTypeUnion() FramePointType {
 	return *(*FramePointType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setframePointType(v FramePointType) {
+	st.data = yyZeroData
+	*(*FramePointType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) frameUnitTypeUnion() FrameUnitType {
 	return *(*FrameUnitType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setframeUnitType(v FrameUnitType) {
+	st.data = yyZeroData
+	*(*FrameUnitType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) fromFirstLastClauseUnion() *FromFirstLastClause {
 	return *(**FromFirstLastClause)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setfromFirstLastClause(v *FromFirstLastClause) {
+	st.data = yyZeroData
+	*(**FromFirstLastClause)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) fromFirstLastTypeUnion() FromFirstLastType {
 	return *(*FromFirstLastType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setfromFirstLastType(v FromFirstLastType) {
+	st.data = yyZeroData
+	*(*FromFirstLastType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) groupByUnion() *GroupBy {
 	return *(**GroupBy)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setgroupBy(v *GroupBy) {
+	st.data = yyZeroData
+	*(**GroupBy)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) handlerActionUnion() HandlerAction {
 	return *(*HandlerAction)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) sethandlerAction(v HandlerAction) {
+	st.data = yyZeroData
+	*(*HandlerAction)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) handlerConditionUnion() HandlerCondition {
 	return *(*HandlerCondition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) sethandlerCondition(v HandlerCondition) {
+	st.data = yyZeroData
+	*(*HandlerCondition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) handlerConditionsUnion() []HandlerCondition {
 	return *(*[]HandlerCondition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) sethandlerConditions(v []HandlerCondition) {
+	st.data = yyZeroData
+	*(*[]HandlerCondition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) identifierCIUnion() IdentifierCI {
 	return *(*IdentifierCI)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setidentifierCI(v IdentifierCI) {
+	st.data = yyZeroData
+	*(*IdentifierCI)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) identifierCSUnion() IdentifierCS {
 	return *(*IdentifierCS)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setidentifierCS(v IdentifierCS) {
+	st.data = yyZeroData
+	*(*IdentifierCS)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) ignoreUnion() Ignore {
 	return *(*Ignore)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setignore(v Ignore) {
+	st.data = yyZeroData
+	*(*Ignore)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) ignoreOrReplaceTypeUnion() IgnoreOrReplaceType {
 	return *(*IgnoreOrReplaceType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setignoreOrReplaceType(v IgnoreOrReplaceType) {
+	st.data = yyZeroData
+	*(*IgnoreOrReplaceType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) indexColumnUnion() *IndexColumn {
 	return *(**IndexColumn)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setindexColumn(v *IndexColumn) {
+	st.data = yyZeroData
+	*(**IndexColumn)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) indexColumnsUnion() []*IndexColumn {
 	return *(*[]*IndexColumn)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setindexColumns(v []*IndexColumn) {
+	st.data = yyZeroData
+	*(*[]*IndexColumn)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) indexDefinitionUnion() *IndexDefinition {
 	return *(**IndexDefinition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setindexDefinition(v *IndexDefinition) {
+	st.data = yyZeroData
+	*(**IndexDefinition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) indexHintUnion() *IndexHint {
 	return *(**IndexHint)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setindexHint(v *IndexHint) {
+	st.data = yyZeroData
+	*(**IndexHint)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) indexHintForTypeUnion() IndexHintForType {
 	return *(*IndexHintForType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setindexHintForType(v IndexHintForType) {
+	st.data = yyZeroData
+	*(*IndexHintForType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) indexHintsUnion() IndexHints {
 	return *(*IndexHints)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setindexHints(v IndexHints) {
+	st.data = yyZeroData
+	*(*IndexHints)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) indexInfoUnion() *IndexInfo {
 	return *(**IndexInfo)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setindexInfo(v *IndexInfo) {
+	st.data = yyZeroData
+	*(**IndexInfo)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) indexOptionUnion() *IndexOption {
 	return *(**IndexOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setindexOption(v *IndexOption) {
+	st.data = yyZeroData
+	*(**IndexOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) indexOptionsUnion() []*IndexOption {
 	return *(*[]*IndexOption)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setindexOptions(v []*IndexOption) {
+	st.data = yyZeroData
+	*(*[]*IndexOption)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) insUnion() *Insert {
 	return *(**Insert)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setins(v *Insert) {
+	st.data = yyZeroData
+	*(**Insert)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) insertActionUnion() InsertAction {
 	return *(*InsertAction)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setinsertAction(v InsertAction) {
+	st.data = yyZeroData
+	*(*InsertAction)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) intPtrUnion() *int {
 	return *(**int)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setintPtr(v *int) {
+	st.data = yyZeroData
+	*(**int)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) integerUnion() int {
 	return *(*int)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setinteger(v int) {
+	st.data = yyZeroData
+	*(*int)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) intervalTypeUnion() IntervalType {
 	return *(*IntervalType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setintervalType(v IntervalType) {
+	st.data = yyZeroData
+	*(*IntervalType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) isExprOperatorUnion() IsExprOperator {
 	return *(*IsExprOperator)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setisExprOperator(v IsExprOperator) {
+	st.data = yyZeroData
+	*(*IsExprOperator)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) joinConditionUnion() *JoinCondition {
 	return *(**JoinCondition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setjoinCondition(v *JoinCondition) {
+	st.data = yyZeroData
+	*(**JoinCondition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) joinTypeUnion() JoinType {
 	return *(*JoinType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setjoinType(v JoinType) {
+	st.data = yyZeroData
+	*(*JoinType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) jsonObjectParamUnion() *JSONObjectParam {
 	return *(**JSONObjectParam)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setjsonObjectParam(v *JSONObjectParam) {
+	st.data = yyZeroData
+	*(**JSONObjectParam)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) jsonObjectParamsUnion() []*JSONObjectParam {
 	return *(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setjsonObjectParams(v []*JSONObjectParam) {
+	st.data = yyZeroData
+	*(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) jtColumnDefinitionUnion() *JtColumnDefinition {
 	return *(**JtColumnDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setjtColumnDefinition(v *JtColumnDefinition) {
+	st.data = yyZeroData
+	*(**JtColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) jtColumnListUnion() []*JtColumnDefinition {
 	return *(*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setjtColumnList(v []*JtColumnDefinition) {
+	st.data = yyZeroData
+	*(*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) jtOnResponseUnion() *JtOnResponse {
 	return *(**JtOnResponse)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setjtOnResponse(v *JtOnResponse) {
+	st.data = yyZeroData
+	*(**JtOnResponse)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) killTypeUnion() KillType {
 	return *(*KillType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setkillType(v KillType) {
+	st.data = yyZeroData
+	*(*KillType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) lagLeadExprTypeUnion() LagLeadExprType {
 	return *(*LagLeadExprType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setlagLeadExprType(v LagLeadExprType) {
+	st.data = yyZeroData
+	*(*LagLeadExprType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) limitUnion() *Limit {
 	return *(**Limit)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setlimit(v *Limit) {
+	st.data = yyZeroData
+	*(**Limit)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) literalUnion() *Literal {
 	return *(**Literal)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setliteral(v *Literal) {
+	st.data = yyZeroData
+	*(**Literal)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) lockUnion() Lock {
 	return *(*Lock)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setlock(v Lock) {
+	st.data = yyZeroData
+	*(*Lock)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) lockTypeUnion() LockType {
 	return *(*LockType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setlockType(v LockType) {
+	st.data = yyZeroData
+	*(*LockType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) matchActionUnion() MatchAction {
 	return *(*MatchAction)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setmatchAction(v MatchAction) {
+	st.data = yyZeroData
+	*(*MatchAction)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) matchExprOptionUnion() MatchExprOption {
 	return *(*MatchExprOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setmatchExprOption(v MatchExprOption) {
+	st.data = yyZeroData
+	*(*MatchExprOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) namedWindowUnion() *NamedWindow {
 	return *(**NamedWindow)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setnamedWindow(v *NamedWindow) {
+	st.data = yyZeroData
+	*(**NamedWindow)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) namedWindowsUnion() NamedWindows {
 	return *(*NamedWindows)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setnamedWindows(v NamedWindows) {
+	st.data = yyZeroData
+	*(*NamedWindows)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) nullTreatmentClauseUnion() *NullTreatmentClause {
 	return *(**NullTreatmentClause)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setnullTreatmentClause(v *NullTreatmentClause) {
+	st.data = yyZeroData
+	*(**NullTreatmentClause)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) nullTreatmentTypeUnion() NullTreatmentType {
 	return *(*NullTreatmentType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setnullTreatmentType(v NullTreatmentType) {
+	st.data = yyZeroData
+	*(*NullTreatmentType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) optLikeUnion() *OptLike {
 	return *(**OptLike)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setoptLike(v *OptLike) {
+	st.data = yyZeroData
+	*(**OptLike)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) optValUnion() Expr {
 	return *(*Expr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setoptVal(v Expr) {
+	st.data = yyZeroData
+	*(*Expr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) orderUnion() *Order {
 	return *(**Order)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setorder(v *Order) {
+	st.data = yyZeroData
+	*(**Order)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) orderByUnion() OrderBy {
 	return *(*OrderBy)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setorderBy(v OrderBy) {
+	st.data = yyZeroData
+	*(*OrderBy)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) orderDirectionUnion() OrderDirection {
 	return *(*OrderDirection)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setorderDirection(v OrderDirection) {
+	st.data = yyZeroData
+	*(*OrderDirection)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) overClauseUnion() *OverClause {
 	return *(**OverClause)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setoverClause(v *OverClause) {
+	st.data = yyZeroData
+	*(**OverClause)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) partDefUnion() *PartitionDefinition {
 	return *(**PartitionDefinition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setpartDef(v *PartitionDefinition) {
+	st.data = yyZeroData
+	*(**PartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) partDefsUnion() []*PartitionDefinition {
 	return *(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setpartDefs(v []*PartitionDefinition) {
+	st.data = yyZeroData
+	*(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) partSpecUnion() *PartitionSpec {
 	return *(**PartitionSpec)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setpartSpec(v *PartitionSpec) {
+	st.data = yyZeroData
+	*(**PartitionSpec)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) partSpecsUnion() []*PartitionSpec {
 	return *(*[]*PartitionSpec)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setpartSpecs(v []*PartitionSpec) {
+	st.data = yyZeroData
+	*(*[]*PartitionSpec)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) partitionByTypeUnion() PartitionByType {
 	return *(*PartitionByType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setpartitionByType(v PartitionByType) {
+	st.data = yyZeroData
+	*(*PartitionByType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) partitionDefinitionOptionsUnion() *PartitionDefinitionOptions {
 	return *(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setpartitionDefinitionOptions(v *PartitionDefinitionOptions) {
+	st.data = yyZeroData
+	*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) partitionEngineUnion() *PartitionEngine {
 	return *(**PartitionEngine)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setpartitionEngine(v *PartitionEngine) {
+	st.data = yyZeroData
+	*(**PartitionEngine)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) partitionOptionUnion() *PartitionOption {
 	return *(**PartitionOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setpartitionOption(v *PartitionOption) {
+	st.data = yyZeroData
+	*(**PartitionOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) partitionValueRangeUnion() *PartitionValueRange {
 	return *(**PartitionValueRange)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setpartitionValueRange(v *PartitionValueRange) {
+	st.data = yyZeroData
+	*(**PartitionValueRange)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) partitionsUnion() Partitions {
 	return *(*Partitions)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setpartitions(v Partitions) {
+	st.data = yyZeroData
+	*(*Partitions)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) procParamUnion() *ProcParameter {
 	return *(**ProcParameter)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setprocParam(v *ProcParameter) {
+	st.data = yyZeroData
+	*(**ProcParameter)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) procParamModeUnion() ProcParameterMode {
 	return *(*ProcParameterMode)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setprocParamMode(v ProcParameterMode) {
+	st.data = yyZeroData
+	*(*ProcParameterMode)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) procParamsUnion() []*ProcParameter {
 	return *(*[]*ProcParameter)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setprocParams(v []*ProcParameter) {
+	st.data = yyZeroData
+	*(*[]*ProcParameter)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) referenceActionUnion() ReferenceAction {
 	return *(*ReferenceAction)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setreferenceAction(v ReferenceAction) {
+	st.data = yyZeroData
+	*(*ReferenceAction)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) referenceDefinitionUnion() *ReferenceDefinition {
 	return *(**ReferenceDefinition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setreferenceDefinition(v *ReferenceDefinition) {
+	st.data = yyZeroData
+	*(**ReferenceDefinition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) renameTablePairsUnion() []*RenameTablePair {
 	return *(*[]*RenameTablePair)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setrenameTablePairs(v []*RenameTablePair) {
+	st.data = yyZeroData
+	*(*[]*RenameTablePair)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) revertMigrationUnion() *RevertMigration {
 	return *(**RevertMigration)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setrevertMigration(v *RevertMigration) {
+	st.data = yyZeroData
+	*(**RevertMigration)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) rowAliasUnion() *RowAlias {
 	return *(**RowAlias)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setrowAlias(v *RowAlias) {
+	st.data = yyZeroData
+	*(**RowAlias)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) scopeUnion() Scope {
 	return *(*Scope)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setscope(v Scope) {
+	st.data = yyZeroData
+	*(*Scope)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) selStmtUnion() SelectStatement {
 	return *(*SelectStatement)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setselStmt(v SelectStatement) {
+	st.data = yyZeroData
+	*(*SelectStatement)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) selectExprUnion() SelectExpr {
 	return *(*SelectExpr)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setselectExpr(v SelectExpr) {
+	st.data = yyZeroData
+	*(*SelectExpr)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) selectExprsUnion() *SelectExprs {
 	return *(**SelectExprs)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setselectExprs(v *SelectExprs) {
+	st.data = yyZeroData
+	*(**SelectExprs)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) selectIntoUnion() *SelectInto {
 	return *(**SelectInto)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setselectInto(v *SelectInto) {
+	st.data = yyZeroData
+	*(**SelectInto)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) setExprUnion() *SetExpr {
 	return *(**SetExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setsetExpr(v *SetExpr) {
+	st.data = yyZeroData
+	*(**SetExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) setExprsUnion() SetExprs {
 	return *(*SetExprs)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsetExprs(v SetExprs) {
+	st.data = yyZeroData
+	*(*SetExprs)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) showFilterUnion() *ShowFilter {
 	return *(**ShowFilter)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setshowFilter(v *ShowFilter) {
+	st.data = yyZeroData
+	*(**ShowFilter)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) signalConditionNameUnion() SignalConditionName {
 	return *(*SignalConditionName)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsignalConditionName(v SignalConditionName) {
+	st.data = yyZeroData
+	*(*SignalConditionName)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) signalSetUnion() *SignalSet {
 	return *(**SignalSet)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setsignalSet(v *SignalSet) {
+	st.data = yyZeroData
+	*(**SignalSet)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) signalSetsUnion() []*SignalSet {
 	return *(*[]*SignalSet)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsignalSets(v []*SignalSet) {
+	st.data = yyZeroData
+	*(*[]*SignalSet)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) starExprUnion() StarExpr {
 	return *(*StarExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setstarExpr(v StarExpr) {
+	st.data = yyZeroData
+	*(*StarExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) statementUnion() Statement {
 	return *(*Statement)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setstatement(v Statement) {
+	st.data = yyZeroData
+	*(*Statement)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) statementsUnion() []Statement {
 	return *(*[]Statement)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setstatements(v []Statement) {
+	st.data = yyZeroData
+	*(*[]Statement)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) strUnion() string {
 	return *(*string)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setstr(v string) {
+	st.data = yyZeroData
+	*(*string)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) strsUnion() []string {
 	return *(*[]string)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setstrs(v []string) {
+	st.data = yyZeroData
+	*(*[]string)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) subPartitionUnion() *SubPartition {
 	return *(**SubPartition)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsubPartition(v *SubPartition) {
+	st.data = yyZeroData
+	*(**SubPartition)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) subPartitionDefinitionUnion() *SubPartitionDefinition {
 	return *(**SubPartitionDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setsubPartitionDefinition(v *SubPartitionDefinition) {
+	st.data = yyZeroData
+	*(**SubPartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) subPartitionDefinitionOptionsUnion() *SubPartitionDefinitionOptions {
 	return *(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsubPartitionDefinitionOptions(v *SubPartitionDefinitionOptions) {
+	st.data = yyZeroData
+	*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) subPartitionDefinitionsUnion() SubPartitionDefinitions {
 	return *(*SubPartitionDefinitions)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setsubPartitionDefinitions(v SubPartitionDefinitions) {
+	st.data = yyZeroData
+	*(*SubPartitionDefinitions)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) subqueryUnion() *Subquery {
 	return *(**Subquery)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setsubquery(v *Subquery) {
+	st.data = yyZeroData
+	*(**Subquery)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) tableAndLockTypeUnion() *TableAndLockType {
 	return *(**TableAndLockType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settableAndLockType(v *TableAndLockType) {
+	st.data = yyZeroData
+	*(**TableAndLockType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) tableAndLockTypesUnion() TableAndLockTypes {
 	return *(*TableAndLockTypes)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settableAndLockTypes(v TableAndLockTypes) {
+	st.data = yyZeroData
+	*(*TableAndLockTypes)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) tableExprUnion() TableExpr {
 	return *(*TableExpr)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settableExpr(v TableExpr) {
+	st.data = yyZeroData
+	*(*TableExpr)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) tableExprsUnion() TableExprs {
 	return *(*TableExprs)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settableExprs(v TableExprs) {
+	st.data = yyZeroData
+	*(*TableExprs)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) tableNameUnion() TableName {
 	return *(*TableName)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settableName(v TableName) {
+	st.data = yyZeroData
+	*(*TableName)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) tableNamesUnion() TableNames {
 	return *(*TableNames)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settableNames(v TableNames) {
+	st.data = yyZeroData
+	*(*TableNames)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) tableOptionUnion() *TableOption {
 	return *(**TableOption)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settableOption(v *TableOption) {
+	st.data = yyZeroData
+	*(**TableOption)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) tableOptionsUnion() TableOptions {
 	return *(*TableOptions)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settableOptions(v TableOptions) {
+	st.data = yyZeroData
+	*(*TableOptions)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) tableSpecUnion() *TableSpec {
 	return *(**TableSpec)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settableSpec(v *TableSpec) {
+	st.data = yyZeroData
+	*(**TableSpec)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) tableStmtUnion() TableStatement {
 	return *(*TableStatement)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settableStmt(v TableStatement) {
+	st.data = yyZeroData
+	*(*TableStatement)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) trimTypeUnion() TrimType {
 	return *(*TrimType)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settrimType(v TrimType) {
+	st.data = yyZeroData
+	*(*TrimType)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) txAccessModeUnion() TxAccessMode {
 	return *(*TxAccessMode)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) settxAccessMode(v TxAccessMode) {
+	st.data = yyZeroData
+	*(*TxAccessMode)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) txAccessModesUnion() []TxAccessMode {
 	return *(*[]TxAccessMode)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) settxAccessModes(v []TxAccessMode) {
+	st.data = yyZeroData
+	*(*[]TxAccessMode)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) updateExprUnion() *UpdateExpr {
 	return *(**UpdateExpr)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setupdateExpr(v *UpdateExpr) {
+	st.data = yyZeroData
+	*(**UpdateExpr)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) updateExprsUnion() UpdateExprs {
 	return *(*UpdateExprs)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setupdateExprs(v UpdateExprs) {
+	st.data = yyZeroData
+	*(*UpdateExprs)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) userOrRoleUnion() *UserOrRole {
 	return *(**UserOrRole)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setuserOrRole(v *UserOrRole) {
+	st.data = yyZeroData
+	*(**UserOrRole)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) userOrRolesUnion() []UserOrRole {
 	return *(*[]UserOrRole)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setuserOrRoles(v []UserOrRole) {
+	st.data = yyZeroData
+	*(*[]UserOrRole)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) valTupleUnion() ValTuple {
 	return *(*ValTuple)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setvalTuple(v ValTuple) {
+	st.data = yyZeroData
+	*(*ValTuple)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) valuesUnion() Values {
 	return *(*Values)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setvalues(v Values) {
+	st.data = yyZeroData
+	*(*Values)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) variableUnion() *Variable {
 	return *(**Variable)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setvariable(v *Variable) {
+	st.data = yyZeroData
+	*(**Variable)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) variablesUnion() []*Variable {
 	return *(*[]*Variable)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setvariables(v []*Variable) {
+	st.data = yyZeroData
+	*(*[]*Variable)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) vexplainTypeUnion() VExplainType {
 	return *(*VExplainType)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setvexplainType(v VExplainType) {
+	st.data = yyZeroData
+	*(*VExplainType)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) vindexParamUnion() VindexParam {
 	return *(*VindexParam)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setvindexParam(v VindexParam) {
+	st.data = yyZeroData
+	*(*VindexParam)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) vindexParamsUnion() []VindexParam {
 	return *(*[]VindexParam)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setvindexParams(v []VindexParam) {
+	st.data = yyZeroData
+	*(*[]VindexParam)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) whenUnion() *When {
 	return *(**When)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setwhen(v *When) {
+	st.data = yyZeroData
+	*(**When)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) whensUnion() []*When {
 	return *(*[]*When)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setwhens(v []*When) {
+	st.data = yyZeroData
+	*(*[]*When)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) windowDefinitionUnion() *WindowDefinition {
 	return *(**WindowDefinition)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setwindowDefinition(v *WindowDefinition) {
+	st.data = yyZeroData
+	*(**WindowDefinition)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) windowDefinitionsUnion() WindowDefinitions {
 	return *(*WindowDefinitions)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setwindowDefinitions(v WindowDefinitions) {
+	st.data = yyZeroData
+	*(*WindowDefinitions)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 func (st *yySymType) windowSpecificationUnion() *WindowSpecification {
 	return *(**WindowSpecification)(__yyunsafe__.Pointer(&st.data))
 }
 
+func (st *yySymType) setwindowSpecification(v *WindowSpecification) {
+	st.data = yyZeroData
+	*(**WindowSpecification)(__yyunsafe__.Pointer(&st.data)) = v
+}
+
 func (st *yySymType) withUnion() *With {
 	return *(**With)(__yyunsafe__.Pointer(&st.data))
+}
+
+func (st *yySymType) setwith(v *With) {
+	st.data = yyZeroData
+	*(**With)(__yyunsafe__.Pointer(&st.data)) = v
 }
 
 var yyR1 = [...]int16{
@@ -11572,7 +12424,7 @@ yydefault:
 			yyLOCAL = s
 			resetTokenizer(yylex)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 3:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11596,7 +12448,7 @@ yydefault:
 				yyLOCAL = &CommentOnly{Comments: yyDollar[1].strsUnion()}
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 5:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11605,7 +12457,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].statementUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 6:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -11614,7 +12466,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 7:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11623,7 +12475,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 43:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11632,7 +12484,7 @@ yydefault:
 		{
 			yyLOCAL = &SingleStatement{Statement: yyDollar[1].statementUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 44:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11641,7 +12493,7 @@ yydefault:
 		{
 			yyLOCAL = &BeginEndStatement{Statements: yyDollar[2].compoundStatementsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 45:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -11650,7 +12502,7 @@ yydefault:
 		{
 			yyLOCAL = &IfStatement{SearchCondition: yyDollar[2].exprUnion(), ThenStatements: yyDollar[4].compoundStatementsUnion(), ElseIfBlocks: yyDollar[5].elseIfsUnion(), ElseStatements: yyDollar[6].compoundStatementsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 46:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -11660,7 +12512,7 @@ yydefault:
 			yyDollar[3].columnTypeUnion().Options = yyDollar[4].columnTypeOptionsUnion()
 			yyLOCAL = &DeclareVar{VarNames: yyDollar[2].columnsUnion(), Type: yyDollar[3].columnTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 47:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -11669,7 +12521,7 @@ yydefault:
 		{
 			yyLOCAL = &DeclareHandler{Action: yyDollar[2].handlerActionUnion(), Conditions: yyDollar[5].handlerConditionsUnion(), Statement: yyDollar[6].compoundStatementUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 48:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -11678,7 +12530,7 @@ yydefault:
 		{
 			yyLOCAL = &DeclareCondition{Name: yyDollar[2].identifierCIUnion(), Condition: yyDollar[5].handlerConditionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 49:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11687,7 +12539,7 @@ yydefault:
 		{
 			yyLOCAL = &Signal{Condition: yyDollar[2].handlerConditionUnion(), SetValues: yyDollar[3].signalSetsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 50:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -11696,7 +12548,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*SignalSet)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 52:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -11712,7 +12564,7 @@ yydefault:
 		{
 			yyLOCAL = []*SignalSet{yyDollar[2].signalSetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*SignalSet)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 54:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11721,7 +12573,7 @@ yydefault:
 		{
 			yyLOCAL = &SignalSet{ConditionName: yyDollar[1].signalConditionNameUnion(), Value: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SignalSet)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 55:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11730,7 +12582,7 @@ yydefault:
 		{
 			yyLOCAL = ClassOriginType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 56:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11739,7 +12591,7 @@ yydefault:
 		{
 			yyLOCAL = SubclassOriginType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 57:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11748,7 +12600,7 @@ yydefault:
 		{
 			yyLOCAL = MessageTextType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 58:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11757,7 +12609,7 @@ yydefault:
 		{
 			yyLOCAL = MySQLErrNoType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 59:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11766,7 +12618,7 @@ yydefault:
 		{
 			yyLOCAL = ConstraintCatalogType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 60:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11775,7 +12627,7 @@ yydefault:
 		{
 			yyLOCAL = ConstraintSchemaType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 61:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11784,7 +12636,7 @@ yydefault:
 		{
 			yyLOCAL = ConstraintNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 62:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11793,7 +12645,7 @@ yydefault:
 		{
 			yyLOCAL = CatalogNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 63:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11802,7 +12654,7 @@ yydefault:
 		{
 			yyLOCAL = SchemaNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 64:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11811,7 +12663,7 @@ yydefault:
 		{
 			yyLOCAL = TableNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 65:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11820,7 +12672,7 @@ yydefault:
 		{
 			yyLOCAL = ColumnNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 66:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11829,7 +12681,7 @@ yydefault:
 		{
 			yyLOCAL = CursorNameType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SignalConditionName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 67:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11838,7 +12690,7 @@ yydefault:
 		{
 			yyLOCAL = ContinueAction
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 68:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11847,7 +12699,7 @@ yydefault:
 		{
 			yyLOCAL = ExitAction
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 69:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11856,7 +12708,7 @@ yydefault:
 		{
 			yyLOCAL = UndoAction
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 70:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11872,7 +12724,7 @@ yydefault:
 		{
 			yyLOCAL = []HandlerCondition{yyDollar[1].handlerConditionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 72:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11881,7 +12733,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionErrorCode{ErrorCode: convertStringToInt(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 73:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11890,7 +12742,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].handlerConditionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11899,7 +12751,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionSQLState{SQLStateValue: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 77:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11908,7 +12760,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionNamed{Name: yyDollar[1].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 78:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11917,7 +12769,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].handlerConditionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 79:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11926,7 +12778,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].handlerConditionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 80:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11935,7 +12787,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionSQLWarning{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -11944,7 +12796,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionNotFound{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -11953,7 +12805,7 @@ yydefault:
 		{
 			yyLOCAL = &HandlerConditionSQLException{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 83:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -11967,7 +12819,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 86:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -11976,7 +12828,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnTypeOptions{Default: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 87:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -11985,7 +12837,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnTypeOptions{Default: yyDollar[2].exprUnion(), DefaultLiteral: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 88:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -11994,7 +12846,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].compoundStatementUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*CompoundStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 91:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -12003,7 +12855,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 92:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12012,7 +12864,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].compoundStatementsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 93:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12021,7 +12873,7 @@ yydefault:
 		{
 			yyLOCAL = &CompoundStatements{Statements: []CompoundStatement{yyDollar[1].compoundStatementUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 94:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12031,7 +12883,7 @@ yydefault:
 			yyDollar[1].compoundStatementsUnion().Statements = append(yyDollar[1].compoundStatementsUnion().Statements, yyDollar[2].compoundStatementUnion())
 			yyLOCAL = yyDollar[1].compoundStatementsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 95:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -12040,7 +12892,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 96:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12049,7 +12901,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].compoundStatementsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CompoundStatements)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 97:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -12058,7 +12910,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 98:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12067,7 +12919,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].elseIfsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 99:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12083,7 +12935,7 @@ yydefault:
 		{
 			yyLOCAL = []*ElseIfBlock{yyDollar[1].elseIfUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 101:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12092,7 +12944,7 @@ yydefault:
 		{
 			yyLOCAL = &ElseIfBlock{SearchCondition: yyDollar[2].exprUnion(), ThenStatements: yyDollar[4].compoundStatementsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ElseIfBlock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 102:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12101,7 +12953,7 @@ yydefault:
 		{
 			yyLOCAL = NewVariableExpression(yyDollar[1].strUnion(), SingleAt)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 103:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12110,7 +12962,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 104:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12119,7 +12971,7 @@ yydefault:
 		{
 			yyLOCAL = NewVariableExpression(string(yyDollar[1].strUnion()), SingleAt)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 105:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12128,7 +12980,7 @@ yydefault:
 		{
 			yyLOCAL = NewVariableExpression(string(yyDollar[1].strUnion()), DoubleAt)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 106:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12137,7 +12989,7 @@ yydefault:
 		{
 			yyLOCAL = &OtherAdmin{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12146,7 +12998,7 @@ yydefault:
 		{
 			yyLOCAL = &Load{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 108:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12155,7 +13007,7 @@ yydefault:
 		{
 			yyLOCAL = &With{CTEs: yyDollar[2].ctesUnion(), Recursive: false}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**With)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 109:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12164,7 +13016,7 @@ yydefault:
 		{
 			yyLOCAL = &With{CTEs: yyDollar[3].ctesUnion(), Recursive: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**With)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 110:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -12173,7 +13025,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**With)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 111:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12182,7 +13034,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].withUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**With)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 112:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12200,7 +13052,7 @@ yydefault:
 			s[0] = yyDollar[1].cteUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*CommonTableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 114:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12209,7 +13061,7 @@ yydefault:
 		{
 			yyLOCAL = &CommonTableExpr{ID: yyDollar[1].identifierCSUnion(), Columns: yyDollar[2].columnsUnion(), Subquery: yyDollar[4].subqueryUnion().Select}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CommonTableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 115:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12218,7 +13070,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 116:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12227,7 +13079,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 117:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12237,7 +13089,7 @@ yydefault:
 			setLockIfPossible(yylex, yyDollar[2].tableStmtUnion(), yyDollar[3].lockUnion())
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 118:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12248,7 +13100,7 @@ yydefault:
 			yyDollar[1].tableStmtUnion().SetLimit(yyDollar[3].limitUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 119:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12258,7 +13110,7 @@ yydefault:
 			yyDollar[1].tableStmtUnion().SetLimit(yyDollar[2].limitUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 120:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12269,7 +13121,7 @@ yydefault:
 			yyDollar[1].tableStmtUnion().SetLimit(yyDollar[3].limitUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 121:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12281,7 +13133,7 @@ yydefault:
 			yyDollar[2].tableStmtUnion().SetLimit(yyDollar[4].limitUnion())
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 122:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12292,7 +13144,7 @@ yydefault:
 			yyDollar[2].tableStmtUnion().SetLimit(yyDollar[3].limitUnion())
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 123:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12304,7 +13156,7 @@ yydefault:
 			yyDollar[2].tableStmtUnion().SetLimit(yyDollar[4].limitUnion())
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 124:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12327,7 +13179,7 @@ yydefault:
 			te[0] = ate
 			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strsUnion()), se, []string{yyDollar[3].strUnion()} /*options*/, nil, te, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 126:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12336,7 +13188,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 127:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12345,7 +13197,7 @@ yydefault:
 		{
 			yyLOCAL = &Union{Left: yyDollar[1].tableStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 128:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12354,7 +13206,7 @@ yydefault:
 		{
 			yyLOCAL = &Union{Left: yyDollar[1].tableStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 129:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12363,7 +13215,7 @@ yydefault:
 		{
 			yyLOCAL = &Union{Left: yyDollar[1].tableStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 130:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12372,7 +13224,7 @@ yydefault:
 		{
 			yyLOCAL = &Union{Left: yyDollar[1].tableStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 131:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12381,7 +13233,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 132:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12391,7 +13243,7 @@ yydefault:
 			setLockIfPossible(yylex, yyDollar[1].tableStmtUnion(), yyDollar[2].lockUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 133:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12400,7 +13252,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 134:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12409,7 +13261,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 135:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12418,7 +13270,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 136:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12428,7 +13280,7 @@ yydefault:
 			setIntoIfPossible(yylex, yyDollar[1].tableStmtUnion(), yyDollar[2].selectIntoUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 137:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12439,7 +13291,7 @@ yydefault:
 			setLockIfPossible(yylex, yyDollar[1].tableStmtUnion(), yyDollar[3].lockUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 138:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12450,7 +13302,7 @@ yydefault:
 			setIntoIfPossible(yylex, yyDollar[1].tableStmtUnion(), yyDollar[3].selectIntoUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 139:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12460,7 +13312,7 @@ yydefault:
 			setIntoIfPossible(yylex, yyDollar[1].tableStmtUnion(), yyDollar[2].selectIntoUnion())
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 140:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12469,7 +13321,7 @@ yydefault:
 		{
 			yyLOCAL = &ValuesStatement{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), ListArg: ListArg(yyDollar[3].strUnion()[2:])}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 141:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12478,7 +13330,7 @@ yydefault:
 		{
 			yyLOCAL = &ValuesStatement{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Rows: yyDollar[3].valuesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 142:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -12487,7 +13339,7 @@ yydefault:
 		{
 			yyLOCAL = &Stream{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 143:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -12496,7 +13348,7 @@ yydefault:
 		{
 			yyLOCAL = &VStream{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 144:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -12505,7 +13357,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strsUnion()), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strsUnion() /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[7].exprUnion()), yyDollar[8].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 145:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -12514,7 +13366,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strsUnion()), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strsUnion() /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), yyDollar[7].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 146:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12523,7 +13375,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 147:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -12540,7 +13392,7 @@ yydefault:
 			ins.OnDup = OnDup(yyDollar[7].updateExprsUnion())
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 148:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -12566,7 +13418,7 @@ yydefault:
 			ins.OnDup = OnDup(yyDollar[8].updateExprsUnion())
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 149:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12575,7 +13427,7 @@ yydefault:
 		{
 			yyLOCAL = InsertAct
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*InsertAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 150:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12584,7 +13436,7 @@ yydefault:
 		{
 			yyLOCAL = ReplaceAct
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*InsertAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 151:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -12602,7 +13454,7 @@ yydefault:
 			upd.Limit = yyDollar[10].limitUnion()
 			yyLOCAL = upd
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 152:
 		yyDollar = yyS[yypt-11 : yypt+1]
@@ -12625,7 +13477,7 @@ yydefault:
 			del.Limit = yyDollar[11].limitUnion()
 			yyLOCAL = del
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 153:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -12641,7 +13493,7 @@ yydefault:
 			del.Where = na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion())
 			yyLOCAL = del
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 154:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -12657,7 +13509,7 @@ yydefault:
 			del.Where = na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())
 			yyLOCAL = del
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 155:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -12673,7 +13525,7 @@ yydefault:
 			del.Where = na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())
 			yyLOCAL = del
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 156:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12692,7 +13544,7 @@ yydefault:
 		{
 			yyLOCAL = TableNames{yyDollar[1].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableNames)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 159:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12708,7 +13560,7 @@ yydefault:
 		{
 			yyLOCAL = TableNames{yyDollar[1].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableNames)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 161:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12724,7 +13576,7 @@ yydefault:
 		{
 			yyLOCAL = TableNames{yyDollar[1].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableNames)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 163:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12740,7 +13592,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Partitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 165:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12749,7 +13601,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].partitionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Partitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 166:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12758,7 +13610,7 @@ yydefault:
 		{
 			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), yyDollar[3].setExprsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 167:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12769,7 +13621,7 @@ yydefault:
 			se[0] = yyDollar[1].setExprUnion()
 			yyLOCAL = se
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SetExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 168:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12785,7 +13637,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: na(yylex).newStrLiteral("on")}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 170:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12794,7 +13646,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: na(yylex).newStrLiteral("off")}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 171:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12803,7 +13655,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: yyDollar[1].variableUnion(), Expr: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 172:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12812,7 +13664,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].strUnion()), SessionScope), Expr: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 173:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12821,7 +13673,7 @@ yydefault:
 		{
 			yyLOCAL = NewSetVariable(string(yyDollar[1].strUnion()), NoScope)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 174:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12830,7 +13682,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 175:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12839,7 +13691,7 @@ yydefault:
 		{
 			yyLOCAL = NewSetVariable(string(yyDollar[2].strUnion()), yyDollar[1].scopeUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 176:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -12848,7 +13700,7 @@ yydefault:
 		{
 			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), UpdateSetExprsScope(yyDollar[5].setExprsUnion(), yyDollar[3].scopeUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 177:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -12857,7 +13709,7 @@ yydefault:
 		{
 			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), yyDollar[4].setExprsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 178:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12868,7 +13720,7 @@ yydefault:
 			se[0] = yyDollar[1].setExprUnion()
 			yyLOCAL = se
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SetExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 179:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -12884,7 +13736,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 181:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12893,7 +13745,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("off")}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 182:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12902,7 +13754,7 @@ yydefault:
 		{
 			yyLOCAL = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("on")}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SetExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 183:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12911,7 +13763,7 @@ yydefault:
 		{
 			yyLOCAL = RepeatableReadStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 184:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12920,7 +13772,7 @@ yydefault:
 		{
 			yyLOCAL = ReadCommittedStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 185:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12929,7 +13781,7 @@ yydefault:
 		{
 			yyLOCAL = ReadUncommittedStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 186:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12938,7 +13790,7 @@ yydefault:
 		{
 			yyLOCAL = SerializableStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 187:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12947,7 +13799,7 @@ yydefault:
 		{
 			yyLOCAL = SessionScope
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Scope)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 188:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12956,7 +13808,7 @@ yydefault:
 		{
 			yyLOCAL = SessionScope
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Scope)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 189:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -12965,7 +13817,7 @@ yydefault:
 		{
 			yyLOCAL = GlobalScope
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Scope)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 190:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12976,7 +13828,7 @@ yydefault:
 			yyDollar[1].createTableUnion().FullyParsed = true
 			yyLOCAL = yyDollar[1].createTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 191:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -12988,7 +13840,7 @@ yydefault:
 			yyDollar[1].createTableUnion().FullyParsed = true
 			yyLOCAL = yyDollar[1].createTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 192:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13000,7 +13852,7 @@ yydefault:
 			yyDollar[1].createTableUnion().FullyParsed = true
 			yyLOCAL = yyDollar[1].createTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 193:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13013,7 +13865,7 @@ yydefault:
 			yyDollar[1].createTableUnion().FullyParsed = true
 			yyLOCAL = yyDollar[1].createTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 194:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13022,7 +13874,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].createProcedureUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 195:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -13036,7 +13888,7 @@ yydefault:
 			yyDollar[1].alterTableUnion().FullyParsed = true
 			yyLOCAL = yyDollar[1].alterTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 196:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13048,7 +13900,7 @@ yydefault:
 			yyDollar[1].createViewUnion().CheckOption = yyDollar[5].strUnion()
 			yyLOCAL = yyDollar[1].createViewUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 197:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13059,7 +13911,7 @@ yydefault:
 			yyDollar[1].createDatabaseUnion().CreateOptions = yyDollar[2].databaseOptionsUnion()
 			yyLOCAL = yyDollar[1].createDatabaseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 198:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13068,7 +13920,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 199:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13077,7 +13929,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCI("")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 200:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13086,7 +13938,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 201:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13095,7 +13947,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 202:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13105,7 +13957,7 @@ yydefault:
 			var v []VindexParam
 			yyLOCAL = v
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]VindexParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 203:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13114,7 +13966,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].vindexParamsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]VindexParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 204:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13124,7 +13976,7 @@ yydefault:
 			yyLOCAL = make([]VindexParam, 0, 4)
 			yyLOCAL = append(yyLOCAL, yyDollar[1].vindexParamUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]VindexParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 205:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13140,7 +13992,7 @@ yydefault:
 		{
 			yyLOCAL = VindexParam{Key: yyDollar[1].identifierCIUnion(), Val: yyDollar[3].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VindexParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 207:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13149,7 +14001,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 208:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13158,7 +14010,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].jsonObjectParamsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 209:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13167,7 +14019,7 @@ yydefault:
 		{
 			yyLOCAL = []*JSONObjectParam{yyDollar[1].jsonObjectParamUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 210:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13183,7 +14035,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONObjectParam{Key: yyDollar[1].exprUnion(), Value: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JSONObjectParam)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 212:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -13192,7 +14044,7 @@ yydefault:
 		{
 			yyLOCAL = &CreateProcedure{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Definer: yyDollar[3].definerUnion(), Params: yyDollar[8].procParamsUnion(), Body: yyDollar[10].compoundStatementUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateProcedure)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 213:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -13202,7 +14054,7 @@ yydefault:
 			yyLOCAL = &CreateTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Temp: yyDollar[3].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 214:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -13211,7 +14063,7 @@ yydefault:
 		{
 			yyLOCAL = &CreateView{ViewName: yyDollar[6].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Definer: yyDollar[3].definerUnion(), Security: yyDollar[4].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 215:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -13220,7 +14072,7 @@ yydefault:
 		{
 			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].strUnion(), Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 216:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -13229,7 +14081,7 @@ yydefault:
 		{
 			yyLOCAL = &CreateView{ViewName: yyDollar[7].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 217:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13239,7 +14091,7 @@ yydefault:
 			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[4].tableNameUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 218:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -13249,7 +14101,7 @@ yydefault:
 			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[7].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCIUnion()}, Options: yyDollar[5].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 219:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -13259,7 +14111,7 @@ yydefault:
 			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 220:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -13269,7 +14121,7 @@ yydefault:
 			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 221:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -13279,7 +14131,7 @@ yydefault:
 			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 222:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13289,7 +14141,7 @@ yydefault:
 			yyLOCAL = &CreateDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), DBName: yyDollar[5].identifierCSUnion(), IfNotExists: yyDollar[4].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**CreateDatabase)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 223:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13299,7 +14151,7 @@ yydefault:
 			yyLOCAL = &AlterDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 			setDDL(yylex, yyLOCAL)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AlterDatabase)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 226:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13310,7 +14162,7 @@ yydefault:
 			yyLOCAL.Options = yyDollar[4].tableOptionsUnion()
 			yyLOCAL.PartitionOption = yyDollar[5].partitionOptionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 227:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13319,7 +14171,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 228:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13328,7 +14180,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].databaseOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 229:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13337,7 +14189,7 @@ yydefault:
 		{
 			yyLOCAL = []DatabaseOption{yyDollar[1].databaseOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 230:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13346,7 +14198,7 @@ yydefault:
 		{
 			yyLOCAL = []DatabaseOption{yyDollar[1].databaseOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 231:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13355,7 +14207,7 @@ yydefault:
 		{
 			yyLOCAL = []DatabaseOption{yyDollar[1].databaseOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 232:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13385,7 +14237,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 236:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13394,7 +14246,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 237:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13403,7 +14255,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: CharacterSetType, Value: string(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 238:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13412,7 +14264,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: CharacterSetType, Value: encodeSQLString(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 239:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13421,7 +14273,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: CollateType, Value: string(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 240:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13430,7 +14282,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: CollateType, Value: encodeSQLString(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 241:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13439,7 +14291,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: EncryptionType, Value: string(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 242:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13448,7 +14300,7 @@ yydefault:
 		{
 			yyLOCAL = DatabaseOption{Type: EncryptionType, Value: encodeSQLString(yyDollar[4].strUnion()), IsDefault: yyDollar[1].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 243:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13457,7 +14309,7 @@ yydefault:
 		{
 			yyLOCAL = &OptLike{LikeTable: yyDollar[2].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OptLike)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 244:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13466,7 +14318,7 @@ yydefault:
 		{
 			yyLOCAL = &OptLike{LikeTable: yyDollar[3].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OptLike)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 245:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13475,7 +14327,7 @@ yydefault:
 		{
 			yyLOCAL = []*ColumnDefinition{yyDollar[1].columnDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 246:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13492,7 +14344,7 @@ yydefault:
 			yyLOCAL = &TableSpec{}
 			yyLOCAL.AddColumn(yyDollar[1].columnDefinitionUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 248:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13502,7 +14354,7 @@ yydefault:
 			yyLOCAL = &TableSpec{}
 			yyLOCAL.AddConstraint(yyDollar[1].constraintDefinitionUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 249:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13547,7 +14399,7 @@ yydefault:
 			yyDollar[2].columnTypeUnion().Options.Reference = yyDollar[5].referenceDefinitionUnion()
 			yyLOCAL = &ColumnDefinition{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 255:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -13560,7 +14412,7 @@ yydefault:
 			yyDollar[2].columnTypeUnion().Options.Collate = yyDollar[3].strUnion()
 			yyLOCAL = &ColumnDefinition{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 256:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13569,7 +14421,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 257:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13578,7 +14430,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 258:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13587,7 +14439,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: ColKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 259:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13597,7 +14449,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Null = ptr.Of(true)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 260:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13607,7 +14459,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Null = ptr.Of(false)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 261:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13617,7 +14469,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Default = yyDollar[4].exprUnion()
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 262:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13628,7 +14480,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().DefaultLiteral = true
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 263:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13638,7 +14490,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().OnUpdate = yyDollar[4].exprUnion()
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 264:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13648,7 +14500,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Autoincrement = true
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 265:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13658,7 +14510,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Comment = na(yylex).newStrLiteral(yyDollar[3].strUnion())
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 266:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13668,7 +14520,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().KeyOpt = yyDollar[2].colKeyOptUnion()
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 267:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13684,7 +14536,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Collate = string(yyDollar[3].identifierCIUnion().String())
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 269:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13700,7 +14552,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().SRID = na(yylex).newIntLiteral(yyDollar[3].strUnion())
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 271:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13710,7 +14562,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Invisible = ptr.Of(false)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 272:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13720,7 +14572,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Invisible = ptr.Of(true)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 273:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -13741,7 +14593,7 @@ yydefault:
 		{
 			yyLOCAL = FixedFormat
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnFormat)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 276:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13750,7 +14602,7 @@ yydefault:
 		{
 			yyLOCAL = DynamicFormat
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnFormat)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 277:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13759,7 +14611,7 @@ yydefault:
 		{
 			yyLOCAL = DefaultFormat
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnFormat)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 278:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13768,7 +14620,7 @@ yydefault:
 		{
 			yyLOCAL = CompressedFormat
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnFormat)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 279:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13777,7 +14629,7 @@ yydefault:
 		{
 			yyLOCAL = VirtualStorage
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnStorage)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 280:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13786,7 +14638,7 @@ yydefault:
 		{
 			yyLOCAL = StoredStorage
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnStorage)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 281:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -13795,7 +14647,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnTypeOptions{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 282:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13805,7 +14657,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Storage = yyDollar[2].columnStorageUnion()
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 283:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13815,7 +14667,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Null = ptr.Of(true)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 284:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13825,7 +14677,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Null = ptr.Of(false)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 285:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13835,7 +14687,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Comment = na(yylex).newStrLiteral(yyDollar[3].strUnion())
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 286:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13845,7 +14697,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().KeyOpt = yyDollar[2].colKeyOptUnion()
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 287:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -13855,7 +14707,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().SRID = na(yylex).newIntLiteral(yyDollar[3].strUnion())
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 288:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13865,7 +14717,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Invisible = ptr.Of(false)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 289:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13875,7 +14727,7 @@ yydefault:
 			yyDollar[1].columnTypeOptionsUnion().Invisible = ptr.Of(true)
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 290:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13884,7 +14736,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 292:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13893,7 +14745,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_timestamp"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 293:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13902,7 +14754,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtime"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 294:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13911,7 +14763,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtimestamp"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 295:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13920,7 +14772,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_timestamp"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 296:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13929,7 +14781,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 297:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13938,7 +14790,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("sysdate"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 300:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13947,7 +14799,7 @@ yydefault:
 		{
 			yyLOCAL = &NullVal{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 302:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13956,7 +14808,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 303:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -13968,7 +14820,7 @@ yydefault:
 			ue.Expr = yyDollar[2].exprUnion()
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 304:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13977,7 +14829,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 305:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13986,7 +14838,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 306:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -13995,7 +14847,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].boolValUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 307:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14004,7 +14856,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newHexLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 308:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14013,7 +14865,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newHexNumLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 309:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14022,7 +14874,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newBitLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 310:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14031,7 +14883,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newBitLiteral("0b" + yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 311:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14040,7 +14892,7 @@ yydefault:
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].strUnion()[1:])
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 312:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14049,7 +14901,7 @@ yydefault:
 		{
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: na(yylex).newBitLiteral("0b" + yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 313:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14058,7 +14910,7 @@ yydefault:
 		{
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: na(yylex).newHexNumLiteral(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 314:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14067,7 +14919,7 @@ yydefault:
 		{
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: na(yylex).newBitLiteral(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 315:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14076,7 +14928,7 @@ yydefault:
 		{
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: na(yylex).newHexLiteral(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 316:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14086,7 +14938,7 @@ yydefault:
 			arg := parseBindVariable(yylex, yyDollar[2].strUnion()[1:])
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: arg}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 317:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14095,7 +14947,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newDateLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 318:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14104,7 +14956,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newTimeLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 319:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14113,7 +14965,7 @@ yydefault:
 		{
 			yyLOCAL = NewTimestampLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 320:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14122,7 +14974,7 @@ yydefault:
 		{
 			yyLOCAL = Armscii8Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 321:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14131,7 +14983,7 @@ yydefault:
 		{
 			yyLOCAL = ASCIIStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 322:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14140,7 +14992,7 @@ yydefault:
 		{
 			yyLOCAL = Big5Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 323:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14149,7 +15001,7 @@ yydefault:
 		{
 			yyLOCAL = UBinaryStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 324:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14158,7 +15010,7 @@ yydefault:
 		{
 			yyLOCAL = Cp1250Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 325:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14167,7 +15019,7 @@ yydefault:
 		{
 			yyLOCAL = Cp1251Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 326:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14176,7 +15028,7 @@ yydefault:
 		{
 			yyLOCAL = Cp1256Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 327:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14185,7 +15037,7 @@ yydefault:
 		{
 			yyLOCAL = Cp1257Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 328:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14194,7 +15046,7 @@ yydefault:
 		{
 			yyLOCAL = Cp850Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 329:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14203,7 +15055,7 @@ yydefault:
 		{
 			yyLOCAL = Cp852Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 330:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14212,7 +15064,7 @@ yydefault:
 		{
 			yyLOCAL = Cp866Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 331:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14221,7 +15073,7 @@ yydefault:
 		{
 			yyLOCAL = Cp932Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 332:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14230,7 +15082,7 @@ yydefault:
 		{
 			yyLOCAL = Dec8Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 333:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14239,7 +15091,7 @@ yydefault:
 		{
 			yyLOCAL = EucjpmsStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 334:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14248,7 +15100,7 @@ yydefault:
 		{
 			yyLOCAL = EuckrStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 335:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14257,7 +15109,7 @@ yydefault:
 		{
 			yyLOCAL = Gb18030Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 336:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14266,7 +15118,7 @@ yydefault:
 		{
 			yyLOCAL = Gb2312Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 337:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14275,7 +15127,7 @@ yydefault:
 		{
 			yyLOCAL = GbkStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 338:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14284,7 +15136,7 @@ yydefault:
 		{
 			yyLOCAL = Geostd8Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 339:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14293,7 +15145,7 @@ yydefault:
 		{
 			yyLOCAL = GreekStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 340:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14302,7 +15154,7 @@ yydefault:
 		{
 			yyLOCAL = HebrewStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 341:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14311,7 +15163,7 @@ yydefault:
 		{
 			yyLOCAL = Hp8Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 342:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14320,7 +15172,7 @@ yydefault:
 		{
 			yyLOCAL = Keybcs2Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 343:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14329,7 +15181,7 @@ yydefault:
 		{
 			yyLOCAL = Koi8rStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 344:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14338,7 +15190,7 @@ yydefault:
 		{
 			yyLOCAL = Koi8uStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 345:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14347,7 +15199,7 @@ yydefault:
 		{
 			yyLOCAL = Latin1Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 346:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14356,7 +15208,7 @@ yydefault:
 		{
 			yyLOCAL = Latin2Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 347:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14365,7 +15217,7 @@ yydefault:
 		{
 			yyLOCAL = Latin5Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 348:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14374,7 +15226,7 @@ yydefault:
 		{
 			yyLOCAL = Latin7Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 349:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14383,7 +15235,7 @@ yydefault:
 		{
 			yyLOCAL = MacceStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 350:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14392,7 +15244,7 @@ yydefault:
 		{
 			yyLOCAL = MacromanStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 351:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14401,7 +15253,7 @@ yydefault:
 		{
 			yyLOCAL = SjisStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 352:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14410,7 +15262,7 @@ yydefault:
 		{
 			yyLOCAL = Swe7Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 353:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14419,7 +15271,7 @@ yydefault:
 		{
 			yyLOCAL = Tis620Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 354:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14428,7 +15280,7 @@ yydefault:
 		{
 			yyLOCAL = Ucs2Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 355:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14437,7 +15289,7 @@ yydefault:
 		{
 			yyLOCAL = UjisStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 356:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14446,7 +15298,7 @@ yydefault:
 		{
 			yyLOCAL = Utf16Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 357:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14455,7 +15307,7 @@ yydefault:
 		{
 			yyLOCAL = Utf16leStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 358:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14464,7 +15316,7 @@ yydefault:
 		{
 			yyLOCAL = Utf32Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 359:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14473,7 +15325,7 @@ yydefault:
 		{
 			yyLOCAL = Utf8mb3Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 360:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14482,7 +15334,7 @@ yydefault:
 		{
 			yyLOCAL = Utf8mb4Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 361:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14491,7 +15343,7 @@ yydefault:
 		{
 			yyLOCAL = Utf8mb3Str
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 364:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14500,7 +15352,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 365:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14509,7 +15361,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newFloatLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 366:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14518,7 +15370,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newDecimalLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 367:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14527,7 +15379,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 368:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14536,7 +15388,7 @@ yydefault:
 		{
 			yyLOCAL = AppendString(yyDollar[1].exprUnion(), yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 369:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14545,7 +15397,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 370:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14557,7 +15409,7 @@ yydefault:
 			ue.Expr = na(yylex).newStrLiteral(yyDollar[1].strUnion())
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 371:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14566,7 +15418,7 @@ yydefault:
 		{
 			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].strUnion(), Expr: na(yylex).newStrLiteral(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 372:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14575,7 +15427,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 373:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14584,7 +15436,7 @@ yydefault:
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].strUnion()[1:])
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 374:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14593,7 +15445,7 @@ yydefault:
 		{
 			yyLOCAL = ColKeyPrimary
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnKeyOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 375:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14602,7 +15454,7 @@ yydefault:
 		{
 			yyLOCAL = ColKeyUnique
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnKeyOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 376:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14611,7 +15463,7 @@ yydefault:
 		{
 			yyLOCAL = ColKeyUniqueKey
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnKeyOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 377:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14620,7 +15472,7 @@ yydefault:
 		{
 			yyLOCAL = ColKey
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnKeyOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 378:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -14631,7 +15483,7 @@ yydefault:
 			yyLOCAL.Unsigned = yyDollar[2].booleanUnion()
 			yyLOCAL.Zerofill = yyDollar[3].booleanUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 382:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14641,7 +15493,7 @@ yydefault:
 			yyLOCAL = yyDollar[1].columnTypeUnion()
 			yyLOCAL.Length = yyDollar[2].intPtrUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 383:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14650,7 +15502,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].columnTypeUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 384:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14659,7 +15511,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 385:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14668,7 +15520,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 386:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14677,7 +15529,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 387:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14686,7 +15538,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 388:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14695,7 +15547,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 389:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14704,7 +15556,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 390:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14713,7 +15565,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 391:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14722,7 +15574,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 392:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14731,7 +15583,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 393:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14742,7 +15594,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 394:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14753,7 +15605,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 395:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14764,7 +15616,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 396:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14775,7 +15627,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 397:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14786,7 +15638,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 398:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14797,7 +15649,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 399:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14808,7 +15660,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 400:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14817,7 +15669,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 401:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14826,7 +15678,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 402:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14835,7 +15687,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 403:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14844,7 +15696,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 404:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14853,7 +15705,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 405:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -14862,7 +15714,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion(), Charset: yyDollar[3].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 406:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -14873,7 +15725,7 @@ yydefault:
 			// https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
 			yyLOCAL = &ColumnType{Type: "binary", Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 407:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -14882,7 +15734,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion(), Charset: yyDollar[3].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 408:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14891,7 +15743,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 409:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14900,7 +15752,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 410:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -14909,7 +15761,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion(), Charset: yyDollar[3].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 411:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14918,7 +15770,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Charset: yyDollar[2].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 412:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14927,7 +15779,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Charset: yyDollar[2].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 413:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14936,7 +15788,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Charset: yyDollar[2].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 414:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14945,7 +15797,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 415:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14954,7 +15806,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 416:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14963,7 +15815,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 417:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14972,7 +15824,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 418:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -14981,7 +15833,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 419:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -14990,7 +15842,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), EnumValues: yyDollar[3].strsUnion(), Charset: yyDollar[5].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 420:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -14999,7 +15851,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 421:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -15008,7 +15860,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion()), EnumValues: yyDollar[3].strsUnion(), Charset: yyDollar[5].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 422:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15017,7 +15869,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 423:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15026,7 +15878,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 424:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15035,7 +15887,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 425:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15044,7 +15896,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 426:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15053,7 +15905,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 427:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15062,7 +15914,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 428:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15071,7 +15923,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 429:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15080,7 +15932,7 @@ yydefault:
 		{
 			yyLOCAL = &ColumnType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColumnType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 430:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15090,7 +15942,7 @@ yydefault:
 			yyLOCAL = make([]string, 0, 4)
 			yyLOCAL = append(yyLOCAL, encodeSQLString(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 431:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15106,7 +15958,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 433:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15115,7 +15967,7 @@ yydefault:
 		{
 			yyLOCAL = ptr.Of(convertStringToInt(yyDollar[2].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 434:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15124,7 +15976,7 @@ yydefault:
 		{
 			yyLOCAL = LengthScaleOption{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 435:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -15136,7 +15988,7 @@ yydefault:
 				Scale:  ptr.Of(convertStringToInt(yyDollar[4].strUnion())),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 436:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15145,7 +15997,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].LengthScaleOptionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 437:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15156,7 +16008,7 @@ yydefault:
 				Length: ptr.Of(convertStringToInt(yyDollar[2].strUnion())),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 438:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15165,7 +16017,7 @@ yydefault:
 		{
 			yyLOCAL = LengthScaleOption{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 439:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15176,7 +16028,7 @@ yydefault:
 				Length: ptr.Of(convertStringToInt(yyDollar[2].strUnion())),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 440:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -15188,7 +16040,7 @@ yydefault:
 				Scale:  ptr.Of(convertStringToInt(yyDollar[4].strUnion())),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LengthScaleOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 441:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15197,7 +16049,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 442:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15206,7 +16058,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 443:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15215,7 +16067,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 444:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15224,7 +16076,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 445:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15233,7 +16085,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 446:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15242,7 +16094,7 @@ yydefault:
 		{
 			yyLOCAL = ColumnCharset{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 447:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15251,7 +16103,7 @@ yydefault:
 		{
 			yyLOCAL = ColumnCharset{Name: string(yyDollar[2].identifierCIUnion().String()), Binary: yyDollar[3].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 448:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15260,7 +16112,7 @@ yydefault:
 		{
 			yyLOCAL = ColumnCharset{Name: encodeSQLString(yyDollar[2].strUnion()), Binary: yyDollar[3].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 449:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15269,7 +16121,7 @@ yydefault:
 		{
 			yyLOCAL = ColumnCharset{Name: string(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 450:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15279,7 +16131,7 @@ yydefault:
 			// ASCII: Shorthand for CHARACTER SET latin1.
 			yyLOCAL = ColumnCharset{Name: "latin1", Binary: yyDollar[2].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 451:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15289,7 +16141,7 @@ yydefault:
 			// UNICODE: Shorthand for CHARACTER SET ucs2.
 			yyLOCAL = ColumnCharset{Name: "ucs2", Binary: yyDollar[2].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 452:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15299,7 +16151,7 @@ yydefault:
 			// BINARY: Shorthand for default CHARACTER SET but with binary collation
 			yyLOCAL = ColumnCharset{Name: "", Binary: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 453:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15309,7 +16161,7 @@ yydefault:
 			// BINARY ASCII: Shorthand for CHARACTER SET latin1 with binary collation
 			yyLOCAL = ColumnCharset{Name: "latin1", Binary: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 454:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15319,7 +16171,7 @@ yydefault:
 			// BINARY UNICODE: Shorthand for CHARACTER SET ucs2 with binary collation
 			yyLOCAL = ColumnCharset{Name: "ucs2", Binary: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColumnCharset)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 455:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15328,7 +16180,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 456:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15337,7 +16189,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 457:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15346,7 +16198,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 458:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15355,7 +16207,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[2].identifierCIUnion().String())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 459:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15364,7 +16216,7 @@ yydefault:
 		{
 			yyLOCAL = encodeSQLString(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 460:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -15373,7 +16225,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexDefinition{Info: yyDollar[1].indexInfoUnion(), Columns: yyDollar[3].indexColumnsUnion(), Options: yyDollar[5].indexOptionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 461:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15382,7 +16234,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 462:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15391,7 +16243,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].indexOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 463:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15400,7 +16252,7 @@ yydefault:
 		{
 			yyLOCAL = []*IndexOption{yyDollar[1].indexOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 464:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15416,7 +16268,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].indexOptionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 466:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15426,7 +16278,7 @@ yydefault:
 			// should not be string
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 467:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15435,7 +16287,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 468:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15444,7 +16296,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 469:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15453,7 +16305,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 470:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15462,7 +16314,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion()), String: yyDollar[3].identifierCIUnion().String()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 471:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15471,7 +16323,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 472:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15480,7 +16332,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 473:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15489,7 +16341,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 474:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15498,7 +16350,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 475:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -15507,7 +16359,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexInfo{Type: IndexTypePrimary, ConstraintName: NewIdentifierCI(yyDollar[1].strUnion()), Name: NewIdentifierCI("PRIMARY")}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 476:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15516,7 +16368,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexInfo{Type: IndexTypeSpatial, Name: NewIdentifierCI(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 477:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15525,7 +16377,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexInfo{Type: IndexTypeFullText, Name: NewIdentifierCI(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 478:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -15534,7 +16386,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexInfo{Type: IndexTypeUnique, ConstraintName: NewIdentifierCI(yyDollar[1].strUnion()), Name: NewIdentifierCI(yyDollar[4].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 479:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15543,7 +16395,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexInfo{Type: IndexTypeDefault, Name: NewIdentifierCI(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 480:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15552,7 +16404,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 481:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15561,7 +16413,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 482:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15570,7 +16422,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 483:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15579,7 +16431,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 484:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15588,7 +16440,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 485:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15597,7 +16449,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 486:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15606,7 +16458,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 487:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15615,7 +16467,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 488:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15624,7 +16476,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 489:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15633,7 +16485,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 490:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15642,7 +16494,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 491:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15651,7 +16503,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 492:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15660,7 +16512,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].identifierCIUnion().String())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 493:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15669,7 +16521,7 @@ yydefault:
 		{
 			yyLOCAL = []*IndexColumn{yyDollar[1].indexColumnUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexColumn)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 494:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15685,7 +16537,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexColumn{Column: yyDollar[1].identifierCIUnion(), Length: yyDollar[2].intPtrUnion(), Direction: yyDollar[3].orderDirectionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexColumn)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 496:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -15694,7 +16546,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexColumn{Expression: yyDollar[2].exprUnion(), Direction: yyDollar[4].orderDirectionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexColumn)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 497:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15703,7 +16555,7 @@ yydefault:
 		{
 			yyLOCAL = &ConstraintDefinition{Name: yyDollar[2].identifierCIUnion(), Details: yyDollar[3].constraintInfoUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConstraintDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 498:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15712,7 +16564,7 @@ yydefault:
 		{
 			yyLOCAL = &ConstraintDefinition{Details: yyDollar[1].constraintInfoUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConstraintDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 499:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15721,7 +16573,7 @@ yydefault:
 		{
 			yyLOCAL = &ConstraintDefinition{Name: yyDollar[2].identifierCIUnion(), Details: yyDollar[3].constraintInfoUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConstraintDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 500:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15730,7 +16582,7 @@ yydefault:
 		{
 			yyLOCAL = &ConstraintDefinition{Details: yyDollar[1].constraintInfoUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConstraintDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 501:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -15739,7 +16591,7 @@ yydefault:
 		{
 			yyLOCAL = &ForeignKeyDefinition{IndexName: NewIdentifierCI(yyDollar[3].strUnion()), Source: yyDollar[5].columnsUnion(), ReferenceDefinition: yyDollar[7].referenceDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ConstraintInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 502:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -15748,7 +16600,7 @@ yydefault:
 		{
 			yyLOCAL = &ReferenceDefinition{ReferencedTable: yyDollar[2].tableNameUnion(), ReferencedColumns: yyDollar[4].columnsUnion(), Match: yyDollar[6].matchActionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 503:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -15757,7 +16609,7 @@ yydefault:
 		{
 			yyLOCAL = &ReferenceDefinition{ReferencedTable: yyDollar[2].tableNameUnion(), ReferencedColumns: yyDollar[4].columnsUnion(), Match: yyDollar[6].matchActionUnion(), OnDelete: yyDollar[7].referenceActionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 504:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -15766,7 +16618,7 @@ yydefault:
 		{
 			yyLOCAL = &ReferenceDefinition{ReferencedTable: yyDollar[2].tableNameUnion(), ReferencedColumns: yyDollar[4].columnsUnion(), Match: yyDollar[6].matchActionUnion(), OnUpdate: yyDollar[7].referenceActionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 505:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -15775,7 +16627,7 @@ yydefault:
 		{
 			yyLOCAL = &ReferenceDefinition{ReferencedTable: yyDollar[2].tableNameUnion(), ReferencedColumns: yyDollar[4].columnsUnion(), Match: yyDollar[6].matchActionUnion(), OnDelete: yyDollar[7].referenceActionUnion(), OnUpdate: yyDollar[8].referenceActionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 506:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -15784,7 +16636,7 @@ yydefault:
 		{
 			yyLOCAL = &ReferenceDefinition{ReferencedTable: yyDollar[2].tableNameUnion(), ReferencedColumns: yyDollar[4].columnsUnion(), Match: yyDollar[6].matchActionUnion(), OnUpdate: yyDollar[7].referenceActionUnion(), OnDelete: yyDollar[8].referenceActionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 507:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15793,7 +16645,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 508:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15802,7 +16654,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].referenceDefinitionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ReferenceDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 509:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -15811,7 +16663,7 @@ yydefault:
 		{
 			yyLOCAL = &CheckConstraintDefinition{Expr: yyDollar[3].exprUnion(), Enforced: yyDollar[5].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ConstraintInfo)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 510:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15820,7 +16672,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].matchActionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 511:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15829,7 +16681,7 @@ yydefault:
 		{
 			yyLOCAL = Full
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 512:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15838,7 +16690,7 @@ yydefault:
 		{
 			yyLOCAL = Partial
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 513:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15847,7 +16699,7 @@ yydefault:
 		{
 			yyLOCAL = Simple
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 514:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15856,7 +16708,7 @@ yydefault:
 		{
 			yyLOCAL = DefaultMatch
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 515:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15865,7 +16717,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].matchActionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 516:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15874,7 +16726,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].referenceActionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 517:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -15883,7 +16735,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].referenceActionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 518:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15892,7 +16744,7 @@ yydefault:
 		{
 			yyLOCAL = Restrict
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 519:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15901,7 +16753,7 @@ yydefault:
 		{
 			yyLOCAL = Cascade
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 520:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15910,7 +16762,7 @@ yydefault:
 		{
 			yyLOCAL = NoAction
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 521:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15919,7 +16771,7 @@ yydefault:
 		{
 			yyLOCAL = SetDefault
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 522:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15928,7 +16780,7 @@ yydefault:
 		{
 			yyLOCAL = SetNull
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ReferenceAction)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 523:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15937,7 +16789,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 524:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15946,7 +16798,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 525:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15955,7 +16807,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 526:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15964,7 +16816,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 527:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -15973,7 +16825,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 528:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -15982,7 +16834,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 529:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -15991,7 +16843,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].booleanUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 530:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16000,7 +16852,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 531:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16009,7 +16861,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 532:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16018,7 +16870,7 @@ yydefault:
 		{
 			yyLOCAL = TableOptions{yyDollar[1].tableOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 533:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16041,7 +16893,7 @@ yydefault:
 		{
 			yyLOCAL = TableOptions{yyDollar[1].tableOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 536:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16057,7 +16909,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 538:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16066,7 +16918,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 539:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16075,7 +16927,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 540:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16084,7 +16936,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: (string(yyDollar[2].strUnion())), String: yyDollar[4].strUnion(), CaseSensitive: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 541:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16093,7 +16945,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[2].strUnion()), String: yyDollar[4].strUnion(), CaseSensitive: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 542:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16102,7 +16954,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 543:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16111,7 +16963,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 544:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16120,7 +16972,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 545:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16129,7 +16981,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 546:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16138,7 +16990,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: (string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())), Value: na(yylex).newStrLiteral(yyDollar[4].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 547:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16147,7 +16999,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: (string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())), Value: na(yylex).newStrLiteral(yyDollar[4].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 548:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16156,7 +17008,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 549:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16165,7 +17017,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 550:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16174,7 +17026,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: yyDollar[3].identifierCSUnion().String(), CaseSensitive: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 551:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16183,7 +17035,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 552:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16192,7 +17044,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 553:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16201,7 +17053,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 554:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16210,7 +17062,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 555:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16219,7 +17071,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 556:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16228,7 +17080,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 557:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16237,7 +17089,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 558:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16246,7 +17098,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 559:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16255,7 +17107,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 560:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16264,7 +17116,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newStrLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 561:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16273,7 +17125,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 562:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16282,7 +17134,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 563:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16291,7 +17143,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 564:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16300,7 +17152,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 565:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16309,7 +17161,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Value: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 566:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16318,7 +17170,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), String: (yyDollar[3].identifierCIUnion().String() + yyDollar[4].strUnion()), CaseSensitive: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 567:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16327,7 +17179,7 @@ yydefault:
 		{
 			yyLOCAL = &TableOption{Name: string(yyDollar[1].strUnion()), Tables: yyDollar[4].tableNamesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 568:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16336,7 +17188,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 569:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16345,7 +17197,7 @@ yydefault:
 		{
 			yyLOCAL = " " + string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 570:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16354,7 +17206,7 @@ yydefault:
 		{
 			yyLOCAL = " " + string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 580:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16363,7 +17215,7 @@ yydefault:
 		{
 			yyLOCAL = String(TableName{Qualifier: yyDollar[1].identifierCSUnion(), Name: yyDollar[3].identifierCSUnion()})
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 581:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16372,7 +17224,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 582:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16381,7 +17233,7 @@ yydefault:
 		{
 			yyLOCAL = encodeSQLString(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 583:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16390,7 +17242,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 584:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16399,7 +17251,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 586:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16408,7 +17260,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 587:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16417,7 +17269,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 588:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16426,7 +17278,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 589:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16435,7 +17287,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].colNameUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 590:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16444,7 +17296,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 591:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16453,7 +17305,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 592:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16462,7 +17314,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 593:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16471,7 +17323,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 594:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16480,7 +17332,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newDecimalLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 595:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -16489,7 +17341,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 596:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16498,7 +17350,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].alterOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 597:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16514,7 +17366,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].alterOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 599:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16530,7 +17382,7 @@ yydefault:
 		{
 			yyLOCAL = append(append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionsUnion()...), &OrderByOption{Cols: yyDollar[7].columnsUnion()})
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 601:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16539,7 +17391,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 602:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16562,7 +17414,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 605:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16571,7 +17423,7 @@ yydefault:
 		{
 			yyLOCAL = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 606:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16580,7 +17432,7 @@ yydefault:
 		{
 			yyLOCAL = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 607:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16589,7 +17441,7 @@ yydefault:
 		{
 			yyLOCAL = &AddIndexDefinition{IndexDefinition: yyDollar[2].indexDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 608:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16598,7 +17450,7 @@ yydefault:
 		{
 			yyLOCAL = &AddColumns{Columns: yyDollar[4].columnDefinitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 609:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16607,7 +17459,7 @@ yydefault:
 		{
 			yyLOCAL = &AddColumns{Columns: []*ColumnDefinition{yyDollar[3].columnDefinitionUnion()}, First: yyDollar[4].booleanUnion(), After: yyDollar[5].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 610:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16616,7 +17468,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterColumn{Column: yyDollar[3].colNameUnion(), DropDefault: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 611:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -16625,7 +17477,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterColumn{Column: yyDollar[3].colNameUnion(), DropDefault: false, DefaultVal: yyDollar[6].exprUnion(), DefaultLiteral: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 612:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -16634,7 +17486,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterColumn{Column: yyDollar[3].colNameUnion(), DropDefault: false, DefaultVal: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 613:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16643,7 +17495,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterColumn{Column: yyDollar[3].colNameUnion(), Invisible: ptr.Of(false)}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 614:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16652,7 +17504,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterColumn{Column: yyDollar[3].colNameUnion(), Invisible: ptr.Of(true)}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 615:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16661,7 +17513,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterCheck{Name: yyDollar[3].identifierCIUnion(), Enforced: yyDollar[4].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 616:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16670,7 +17522,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterIndex{Name: yyDollar[3].identifierCIUnion(), Invisible: false}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 617:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16679,7 +17531,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterIndex{Name: yyDollar[3].identifierCIUnion(), Invisible: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 618:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -16688,7 +17540,7 @@ yydefault:
 		{
 			yyLOCAL = &ChangeColumn{OldColumn: yyDollar[3].colNameUnion(), NewColDefinition: yyDollar[4].columnDefinitionUnion(), First: yyDollar[5].booleanUnion(), After: yyDollar[6].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 619:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16697,7 +17549,7 @@ yydefault:
 		{
 			yyLOCAL = &ModifyColumn{NewColDefinition: yyDollar[3].columnDefinitionUnion(), First: yyDollar[4].booleanUnion(), After: yyDollar[5].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 620:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16706,7 +17558,7 @@ yydefault:
 		{
 			yyLOCAL = &RenameColumn{OldName: yyDollar[3].colNameUnion(), NewName: yyDollar[5].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 621:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16715,7 +17567,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterCharset{CharacterSet: yyDollar[4].strUnion(), Collate: yyDollar[5].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 622:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16724,7 +17576,7 @@ yydefault:
 		{
 			yyLOCAL = &KeyState{Enable: false}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 623:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16733,7 +17585,7 @@ yydefault:
 		{
 			yyLOCAL = &KeyState{Enable: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 624:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16742,7 +17594,7 @@ yydefault:
 		{
 			yyLOCAL = &TablespaceOperation{Import: false}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 625:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16751,7 +17603,7 @@ yydefault:
 		{
 			yyLOCAL = &TablespaceOperation{Import: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 626:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16760,7 +17612,7 @@ yydefault:
 		{
 			yyLOCAL = &DropColumn{Name: yyDollar[3].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 627:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16769,7 +17621,7 @@ yydefault:
 		{
 			yyLOCAL = &DropKey{Type: NormalKeyType, Name: yyDollar[3].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 628:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16778,7 +17630,7 @@ yydefault:
 		{
 			yyLOCAL = &DropKey{Type: PrimaryKeyType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 629:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16787,7 +17639,7 @@ yydefault:
 		{
 			yyLOCAL = &DropKey{Type: ForeignKeyType, Name: yyDollar[4].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 630:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16796,7 +17648,7 @@ yydefault:
 		{
 			yyLOCAL = &DropKey{Type: CheckKeyType, Name: yyDollar[3].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 631:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16805,7 +17657,7 @@ yydefault:
 		{
 			yyLOCAL = &DropKey{Type: ConstraintType, Name: yyDollar[3].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 632:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16814,7 +17666,7 @@ yydefault:
 		{
 			yyLOCAL = &Force{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 633:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16823,7 +17675,7 @@ yydefault:
 		{
 			yyLOCAL = &RenameTableName{Table: yyDollar[3].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 634:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -16832,7 +17684,7 @@ yydefault:
 		{
 			yyLOCAL = &RenameIndex{OldName: yyDollar[3].identifierCIUnion(), NewName: yyDollar[5].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 635:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -16841,7 +17693,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 636:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16857,7 +17709,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(string(yyDollar[3].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 638:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16866,7 +17718,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(string(yyDollar[3].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 639:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16875,7 +17727,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(string(yyDollar[3].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 640:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16884,7 +17736,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(string(yyDollar[3].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 641:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16893,7 +17745,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: DefaultType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 642:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16902,7 +17754,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: NoneType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 643:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16911,7 +17763,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: SharedType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 644:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16920,7 +17772,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: ExclusiveType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 645:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16929,7 +17781,7 @@ yydefault:
 		{
 			yyLOCAL = &Validation{With: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 646:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16938,7 +17790,7 @@ yydefault:
 		{
 			yyLOCAL = &Validation{With: false}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 647:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16950,7 +17802,7 @@ yydefault:
 			yyDollar[1].alterTableUnion().PartitionOption = yyDollar[3].partitionOptionUnion()
 			yyLOCAL = yyDollar[1].alterTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 648:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16962,7 +17814,7 @@ yydefault:
 			yyDollar[1].alterTableUnion().PartitionSpec = &PartitionSpec{Action: RemoveAction}
 			yyLOCAL = yyDollar[1].alterTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 649:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -16974,7 +17826,7 @@ yydefault:
 			yyDollar[1].alterTableUnion().PartitionSpec = yyDollar[4].partSpecUnion()
 			yyLOCAL = yyDollar[1].alterTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 650:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -16985,7 +17837,7 @@ yydefault:
 			yyDollar[1].alterTableUnion().PartitionSpec = yyDollar[2].partSpecUnion()
 			yyLOCAL = yyDollar[1].alterTableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 651:
 		yyDollar = yyS[yypt-11 : yypt+1]
@@ -16994,7 +17846,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion(), Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].tableStmtUnion(), CheckOption: yyDollar[11].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 652:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17006,7 +17858,7 @@ yydefault:
 			yyDollar[1].alterDatabaseUnion().AlterOptions = yyDollar[3].databaseOptionsUnion()
 			yyLOCAL = yyDollar[1].alterDatabaseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 653:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17018,7 +17870,7 @@ yydefault:
 			yyDollar[1].alterDatabaseUnion().UpdateDataDirectory = true
 			yyLOCAL = yyDollar[1].alterDatabaseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 654:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -17035,7 +17887,7 @@ yydefault:
 				},
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 655:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17050,7 +17902,7 @@ yydefault:
 				},
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 656:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17059,7 +17911,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterVschema{Action: AddVschemaTableDDLAction, Table: yyDollar[6].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 657:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17068,7 +17920,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterVschema{Action: DropVschemaTableDDLAction, Table: yyDollar[6].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 658:
 		yyDollar = yyS[yypt-13 : yypt+1]
@@ -17086,7 +17938,7 @@ yydefault:
 				VindexCols: yyDollar[10].columnsUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 659:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -17101,7 +17953,7 @@ yydefault:
 				},
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 660:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17110,7 +17962,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterVschema{Action: AddSequenceDDLAction, Table: yyDollar[6].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 661:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17119,7 +17971,7 @@ yydefault:
 		{
 			yyLOCAL = &AlterVschema{Action: DropSequenceDDLAction, Table: yyDollar[6].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 662:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -17135,7 +17987,7 @@ yydefault:
 				},
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 663:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17147,7 +17999,7 @@ yydefault:
 				Table:  yyDollar[5].tableNameUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 664:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17159,7 +18011,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 665:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17171,7 +18023,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 666:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17182,7 +18034,7 @@ yydefault:
 				Type: CleanupAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 667:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17194,7 +18046,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 668:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17207,7 +18059,7 @@ yydefault:
 				Shards: string(yyDollar[7].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 669:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17218,7 +18070,7 @@ yydefault:
 				Type: LaunchAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 670:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17230,7 +18082,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 671:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17243,7 +18095,7 @@ yydefault:
 				Shards: string(yyDollar[7].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 672:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17254,7 +18106,7 @@ yydefault:
 				Type: CompleteAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 673:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17266,7 +18118,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 674:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17277,7 +18129,7 @@ yydefault:
 				Type: PostponeCompleteAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 675:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17289,7 +18141,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 676:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17300,7 +18152,7 @@ yydefault:
 				Type: CancelAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 677:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17314,7 +18166,7 @@ yydefault:
 				Ratio:  yyDollar[7].literalUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 678:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17327,7 +18179,7 @@ yydefault:
 				Ratio:  yyDollar[7].literalUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 679:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17339,7 +18191,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 680:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17350,7 +18202,7 @@ yydefault:
 				Type: UnthrottleAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 681:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17362,7 +18214,7 @@ yydefault:
 				UUID: string(yyDollar[4].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 682:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17373,7 +18225,7 @@ yydefault:
 				Type: ForceCutOverAllMigrationType,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 683:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17386,7 +18238,7 @@ yydefault:
 				Threshold: yyDollar[6].strUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 684:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17395,7 +18247,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 685:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17407,7 +18259,7 @@ yydefault:
 			yyDollar[3].partitionOptionUnion().Definitions = yyDollar[6].partDefsUnion()
 			yyLOCAL = yyDollar[3].partitionOptionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 686:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17420,7 +18272,7 @@ yydefault:
 				Expr:     yyDollar[4].exprUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 687:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17434,7 +18286,7 @@ yydefault:
 				ColList:      yyDollar[5].columnsUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 688:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17446,7 +18298,7 @@ yydefault:
 				Expr: yyDollar[3].exprUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 689:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17458,7 +18310,7 @@ yydefault:
 				ColList: yyDollar[4].columnsUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 690:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17467,7 +18319,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 691:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -17481,7 +18333,7 @@ yydefault:
 				SubPartitions: yyDollar[8].integerUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 692:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -17496,7 +18348,7 @@ yydefault:
 				SubPartitions: yyDollar[9].integerUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 693:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17505,7 +18357,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 694:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17514,7 +18366,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].partDefsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 695:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17523,7 +18375,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 696:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17532,7 +18384,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 697:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17541,7 +18393,7 @@ yydefault:
 		{
 			yyLOCAL = 0
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 698:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17550,7 +18402,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 699:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -17559,7 +18411,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONTableExpr{Expr: yyDollar[3].exprUnion(), Filter: yyDollar[5].exprUnion(), Columns: yyDollar[6].jtColumnListUnion(), Alias: yyDollar[8].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 700:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17568,7 +18420,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].jtColumnListUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 701:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17577,7 +18429,7 @@ yydefault:
 		{
 			yyLOCAL = []*JtColumnDefinition{yyDollar[1].jtColumnDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 702:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17593,7 +18445,7 @@ yydefault:
 		{
 			yyLOCAL = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: yyDollar[1].identifierCIUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 704:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -17604,7 +18456,7 @@ yydefault:
 			jtPath := &JtPathColDef{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion(), JtColExists: yyDollar[4].booleanUnion(), Path: yyDollar[6].exprUnion()}
 			yyLOCAL = &JtColumnDefinition{JtPath: jtPath}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 705:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17615,7 +18467,7 @@ yydefault:
 			jtPath := &JtPathColDef{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion(), JtColExists: yyDollar[4].booleanUnion(), Path: yyDollar[6].exprUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion()}
 			yyLOCAL = &JtColumnDefinition{JtPath: jtPath}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 706:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17626,7 +18478,7 @@ yydefault:
 			jtPath := &JtPathColDef{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion(), JtColExists: yyDollar[4].booleanUnion(), Path: yyDollar[6].exprUnion(), ErrorOnResponse: yyDollar[7].jtOnResponseUnion()}
 			yyLOCAL = &JtColumnDefinition{JtPath: jtPath}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 707:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -17637,7 +18489,7 @@ yydefault:
 			jtPath := &JtPathColDef{Name: yyDollar[1].identifierCIUnion(), Type: yyDollar[2].columnTypeUnion(), JtColExists: yyDollar[4].booleanUnion(), Path: yyDollar[6].exprUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion(), ErrorOnResponse: yyDollar[8].jtOnResponseUnion()}
 			yyLOCAL = &JtColumnDefinition{JtPath: jtPath}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 708:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17647,7 +18499,7 @@ yydefault:
 			jtNestedPath := &JtNestedPathColDef{Path: yyDollar[3].exprUnion(), Columns: yyDollar[4].jtColumnListUnion()}
 			yyLOCAL = &JtColumnDefinition{JtNestedPath: jtNestedPath}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 709:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17656,7 +18508,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 710:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17665,7 +18517,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 711:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17674,7 +18526,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 712:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17683,7 +18535,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 713:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17692,7 +18544,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].jtOnResponseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtOnResponse)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 714:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17701,7 +18553,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].jtOnResponseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtOnResponse)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 715:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17710,7 +18562,7 @@ yydefault:
 		{
 			yyLOCAL = &JtOnResponse{ResponseType: ErrorJSONType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtOnResponse)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 716:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17719,7 +18571,7 @@ yydefault:
 		{
 			yyLOCAL = &JtOnResponse{ResponseType: NullJSONType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtOnResponse)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 717:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -17728,7 +18580,7 @@ yydefault:
 		{
 			yyLOCAL = &JtOnResponse{ResponseType: DefaultJSONType, Expr: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JtOnResponse)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 718:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17737,7 +18589,7 @@ yydefault:
 		{
 			yyLOCAL = RangeType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*PartitionByType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 719:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17746,7 +18598,7 @@ yydefault:
 		{
 			yyLOCAL = ListType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*PartitionByType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 720:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17755,7 +18607,7 @@ yydefault:
 		{
 			yyLOCAL = -1
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 721:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -17764,7 +18616,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 722:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17773,7 +18625,7 @@ yydefault:
 		{
 			yyLOCAL = -1
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 723:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -17782,7 +18634,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 724:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17791,7 +18643,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: AddAction, Definitions: []*PartitionDefinition{yyDollar[4].partDefUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 725:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17800,7 +18652,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: DropAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 726:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17809,7 +18661,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: ReorganizeAction, Names: yyDollar[3].partitionsUnion(), Definitions: yyDollar[6].partDefsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 727:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17818,7 +18670,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: DiscardAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 728:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17827,7 +18679,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: DiscardAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 729:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17836,7 +18688,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: ImportAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 730:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17845,7 +18697,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: ImportAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 731:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17854,7 +18706,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: TruncateAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 732:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17863,7 +18715,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: TruncateAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 733:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17872,7 +18724,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: CoalesceAction, Number: na(yylex).newIntLiteral(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 734:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -17881,7 +18733,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: ExchangeAction, Names: Partitions{yyDollar[3].identifierCIUnion()}, TableName: yyDollar[6].tableNameUnion(), WithoutValidation: yyDollar[7].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 735:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17890,7 +18742,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: AnalyzeAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 736:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17899,7 +18751,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: AnalyzeAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 737:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17908,7 +18760,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: CheckAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 738:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17917,7 +18769,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: CheckAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 739:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17926,7 +18778,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: OptimizeAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 740:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17935,7 +18787,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: OptimizeAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 741:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17944,7 +18796,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: RebuildAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 742:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17953,7 +18805,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: RebuildAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 743:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17962,7 +18814,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: RepairAction, Names: yyDollar[3].partitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 744:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -17971,7 +18823,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: RepairAction, IsAll: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 745:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -17980,7 +18832,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionSpec{Action: UpgradeAction}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionSpec)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 746:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -17989,7 +18841,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 747:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -17998,7 +18850,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 748:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18007,7 +18859,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 749:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -18016,7 +18868,7 @@ yydefault:
 		{
 			yyLOCAL = []*PartitionDefinition{yyDollar[1].partDefUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 750:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18038,7 +18890,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionDefinitionOptions{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 753:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18048,7 +18900,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().ValueRange = yyDollar[2].partitionValueRangeUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 754:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18058,7 +18910,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().Comment = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 755:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18068,7 +18920,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().Engine = yyDollar[2].partitionEngineUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 756:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18078,7 +18930,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().DataDirectory = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 757:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18088,7 +18940,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().IndexDirectory = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 758:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18098,7 +18950,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().MaxRows = ptr.Of(yyDollar[2].integerUnion())
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 759:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18108,7 +18960,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().MinRows = ptr.Of(yyDollar[2].integerUnion())
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 760:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18118,7 +18970,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().TableSpace = yyDollar[2].strUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 761:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18128,7 +18980,7 @@ yydefault:
 			yyDollar[1].partitionDefinitionOptionsUnion().SubPartitionDefinitions = yyDollar[2].subPartitionDefinitionsUnion()
 			yyLOCAL = yyDollar[1].partitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 762:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18137,7 +18989,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].subPartitionDefinitionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SubPartitionDefinitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 763:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -18146,7 +18998,7 @@ yydefault:
 		{
 			yyLOCAL = SubPartitionDefinitions{yyDollar[1].subPartitionDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SubPartitionDefinitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 764:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18162,7 +19014,7 @@ yydefault:
 		{
 			yyLOCAL = &SubPartitionDefinition{Name: yyDollar[2].identifierCIUnion(), Options: yyDollar[3].subPartitionDefinitionOptionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 766:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -18171,7 +19023,7 @@ yydefault:
 		{
 			yyLOCAL = &SubPartitionDefinitionOptions{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 767:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18181,7 +19033,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().Comment = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 768:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18191,7 +19043,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().Engine = yyDollar[2].partitionEngineUnion()
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 769:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18201,7 +19053,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().DataDirectory = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 770:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18211,7 +19063,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().IndexDirectory = yyDollar[2].literalUnion()
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 771:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18221,7 +19073,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().MaxRows = ptr.Of(yyDollar[2].integerUnion())
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 772:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18231,7 +19083,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().MinRows = ptr.Of(yyDollar[2].integerUnion())
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 773:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18241,7 +19093,7 @@ yydefault:
 			yyDollar[1].subPartitionDefinitionOptionsUnion().TableSpace = yyDollar[2].strUnion()
 			yyLOCAL = yyDollar[1].subPartitionDefinitionOptionsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 774:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18253,7 +19105,7 @@ yydefault:
 				Range: yyDollar[4].valTupleUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionValueRange)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 775:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18265,7 +19117,7 @@ yydefault:
 				Maxvalue: true,
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionValueRange)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 776:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18277,7 +19129,7 @@ yydefault:
 				Range: yyDollar[3].valTupleUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionValueRange)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 777:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -18286,7 +19138,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 778:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -18295,7 +19147,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 779:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18304,7 +19156,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionEngine{Storage: yyDollar[1].booleanUnion(), Name: yyDollar[4].identifierCSUnion().String()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionEngine)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 780:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18313,7 +19165,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 781:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18322,7 +19174,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[4].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 782:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18331,7 +19183,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[4].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 783:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18340,7 +19192,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 784:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18349,7 +19201,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 785:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18358,7 +19210,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].identifierCSUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 786:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18367,7 +19219,7 @@ yydefault:
 		{
 			yyLOCAL = &PartitionDefinition{Name: yyDollar[2].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**PartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 787:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -18376,7 +19228,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 788:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18385,7 +19237,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 789:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18394,7 +19246,7 @@ yydefault:
 		{
 			yyLOCAL = &RenameTable{TablePairs: yyDollar[3].renameTablePairsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 790:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18403,7 +19255,7 @@ yydefault:
 		{
 			yyLOCAL = []*RenameTablePair{{FromTable: yyDollar[1].tableNameUnion(), ToTable: yyDollar[3].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*RenameTablePair)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 791:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18419,7 +19271,7 @@ yydefault:
 		{
 			yyLOCAL = &DropTable{FromTables: yyDollar[6].tableNamesUnion(), IfExists: yyDollar[5].booleanUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Temp: yyDollar[3].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 793:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -18433,7 +19285,7 @@ yydefault:
 				yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), FullyParsed: true, Table: yyDollar[6].tableNameUnion(), AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].identifierCIUnion()}}, yyDollar[7].alterOptionsUnion()...)}
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 794:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -18442,7 +19294,7 @@ yydefault:
 		{
 			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), IfExists: yyDollar[4].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 795:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18451,7 +19303,7 @@ yydefault:
 		{
 			yyLOCAL = &DropDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), DBName: yyDollar[5].identifierCSUnion(), IfExists: yyDollar[4].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 796:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18460,7 +19312,7 @@ yydefault:
 		{
 			yyLOCAL = &DropProcedure{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[5].tableNameUnion(), IfExists: yyDollar[4].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 797:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18469,7 +19321,7 @@ yydefault:
 		{
 			yyLOCAL = &TruncateTable{Table: yyDollar[3].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 798:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18478,7 +19330,7 @@ yydefault:
 		{
 			yyLOCAL = &TruncateTable{Table: yyDollar[2].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 799:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18487,7 +19339,7 @@ yydefault:
 		{
 			yyLOCAL = &Analyze{IsLocal: yyDollar[2].booleanUnion(), Table: yyDollar[4].tableNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 800:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18496,7 +19348,7 @@ yydefault:
 		{
 			yyLOCAL = &PurgeBinaryLogs{To: string(yyDollar[5].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 801:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18505,7 +19357,7 @@ yydefault:
 		{
 			yyLOCAL = &PurgeBinaryLogs{Before: string(yyDollar[5].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 802:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18514,7 +19366,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Charset, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 803:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18523,7 +19375,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Collation, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 804:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -18532,7 +19384,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Full: yyDollar[2].booleanUnion(), Command: Column, Tbl: yyDollar[5].tableNameUnion(), DbName: yyDollar[6].identifierCSUnion(), Filter: yyDollar[7].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 805:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18541,7 +19393,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 806:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18550,7 +19402,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 807:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18559,7 +19411,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 808:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18568,7 +19420,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 809:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18577,7 +19429,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Function, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 810:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -18586,7 +19438,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Index, Tbl: yyDollar[5].tableNameUnion(), DbName: yyDollar[6].identifierCSUnion(), Filter: yyDollar[7].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 811:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18595,7 +19447,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: OpenTable, DbName: yyDollar[4].identifierCSUnion(), Filter: yyDollar[5].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 812:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18604,7 +19456,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Privilege}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 813:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18613,7 +19465,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Procedure, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 814:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18622,7 +19474,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: StatusSession, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 815:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18631,7 +19483,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: StatusGlobal, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 816:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18640,7 +19492,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VariableSession, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 817:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18649,7 +19501,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VariableGlobal, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 818:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18658,7 +19510,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: TableStatus, DbName: yyDollar[4].identifierCSUnion(), Filter: yyDollar[5].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 819:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18667,7 +19519,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Table, Full: yyDollar[2].booleanUnion(), DbName: yyDollar[4].identifierCSUnion(), Filter: yyDollar[5].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 820:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18676,7 +19528,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Trigger, DbName: yyDollar[3].identifierCSUnion(), Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 821:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18685,7 +19537,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateDb, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 822:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18694,7 +19546,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateE, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 823:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18703,7 +19555,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateF, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 824:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18712,7 +19564,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateProc, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 825:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18721,7 +19573,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateTbl, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 826:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18730,7 +19582,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateTr, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 827:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18739,7 +19591,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreate{Command: CreateV, Op: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 828:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18748,7 +19600,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Engines}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 829:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18757,7 +19609,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Plugins}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 830:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18766,7 +19618,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: GtidExecGlobal, DbName: yyDollar[4].identifierCSUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 831:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18775,7 +19627,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VGtidExecGlobal, DbName: yyDollar[4].identifierCSUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 832:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18784,7 +19636,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessVariables, Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 833:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18793,7 +19645,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].identifierCSUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 834:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18802,7 +19654,7 @@ yydefault:
 		{
 			yyLOCAL = &ShowMigrationLogs{UUID: string(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 835:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18811,7 +19663,7 @@ yydefault:
 		{
 			yyLOCAL = &ShowThrottledApps{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 836:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18820,7 +19672,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 837:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18829,7 +19681,7 @@ yydefault:
 		{
 			yyLOCAL = &ShowThrottlerStatus{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 838:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18838,7 +19690,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VschemaTables}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 839:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18847,7 +19699,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VschemaKeyspaces}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 840:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18856,7 +19708,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 841:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -18865,7 +19717,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: yyDollar[5].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 842:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18874,7 +19726,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Warnings, Limit: yyDollar[3].limitUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 843:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18883,7 +19735,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessShards, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 844:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18892,7 +19744,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessTablets, Filter: yyDollar[3].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 845:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18901,7 +19753,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: VitessTarget}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 846:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18910,7 +19762,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBinaryLogs{}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 847:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18919,7 +19771,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicationSourceStatus{}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 848:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18928,7 +19780,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicationSourceStatus{Legacy: true}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 849:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -18942,7 +19794,7 @@ yydefault:
 				Limit:      yyDollar[6].limitUnion(),
 			}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 850:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -18957,7 +19809,7 @@ yydefault:
 				Channel:    yyDollar[7].strUnion(),
 			}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 851:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18966,7 +19818,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicationStatus{Channel: yyDollar[4].strUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 852:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18975,7 +19827,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicationStatus{Legacy: true, Channel: yyDollar[4].strUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 853:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18984,7 +19836,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicas{}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 854:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -18993,7 +19845,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowReplicas{Legacy: true}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 855:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19002,7 +19854,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Errors, Limit: yyDollar[3].limitUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 856:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19011,7 +19863,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Events, DbName: yyDollar[3].identifierCSUnion(), Filter: yyDollar[4].showFilterUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 857:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19020,7 +19872,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCIUnion().Lowered(), Action: "status"}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 858:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19029,7 +19881,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCIUnion().Lowered(), Action: "mutex"}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 859:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19038,7 +19890,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: FunctionC, Tbl: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 860:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19047,7 +19899,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: ProcedureC, Tbl: yyDollar[4].tableNameUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 861:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19056,7 +19908,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Full: yyDollar[2].booleanUnion(), Command: ProcessList}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 862:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19065,7 +19917,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Engines}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 863:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19074,7 +19926,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowCreateUser{User: yyDollar[4].userOrRoleUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 864:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19084,7 +19936,7 @@ yydefault:
 			sg := &ShowGrants{User: yyDollar[3].userOrRoleUnion()}
 			yyLOCAL = &Show{sg}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 865:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -19093,7 +19945,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowGrants{User: yyDollar[4].userOrRoleUnion(), UsingRole: yyDollar[6].userOrRolesUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 866:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -19102,7 +19954,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowProfile{Types: yyDollar[3].strsUnion(), ForQuery: yyDollar[4].literalUnion(), Limit: yyDollar[5].limitUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 867:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19111,7 +19963,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowBasic{Command: Profiles}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 868:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -19120,7 +19972,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowTransactionStatus{TransactionID: string(yyDollar[5].strUnion())}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 869:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19129,7 +19981,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowTransactionStatus{}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 870:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -19138,7 +19990,7 @@ yydefault:
 		{
 			yyLOCAL = &Show{&ShowTransactionStatus{Keyspace: yyDollar[5].identifierCSUnion().String()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 871:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19157,7 +20009,7 @@ yydefault:
 		{
 			yyLOCAL = &UserOrRole{Name: string(yyDollar[1].strUnion()), Host: formatUserOrRoleHost(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 874:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19166,7 +20018,7 @@ yydefault:
 		{
 			yyLOCAL = &UserOrRole{Name: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 875:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19175,7 +20027,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 876:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19184,7 +20036,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 877:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19193,7 +20045,7 @@ yydefault:
 		{
 			yyLOCAL = &UserOrRole{Name: yyDollar[1].identifierCIUnion().String(), Host: formatUserOrRoleHost(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 878:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19202,7 +20054,7 @@ yydefault:
 		{
 			yyLOCAL = &UserOrRole{Name: yyDollar[1].identifierCIUnion().String()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 879:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19211,7 +20063,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 880:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19220,7 +20072,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].userOrRoleUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 881:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19231,7 +20083,7 @@ yydefault:
 				yyLOCAL = []UserOrRole{*yyDollar[1].userOrRoleUnion()}
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]UserOrRole)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 882:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19249,7 +20101,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 884:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19258,7 +20110,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 885:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19267,7 +20119,7 @@ yydefault:
 		{
 			yyLOCAL = []string{yyDollar[1].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 886:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19283,7 +20135,7 @@ yydefault:
 		{
 			yyLOCAL = "all"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 888:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19292,7 +20144,7 @@ yydefault:
 		{
 			yyLOCAL = "memory"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 889:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19301,7 +20153,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 890:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19310,7 +20162,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion().String() + " " + yyDollar[2].identifierCIUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 891:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19319,7 +20171,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 892:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19328,7 +20180,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Literal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 893:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19337,7 +20189,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 894:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19346,7 +20198,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 895:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19355,7 +20207,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 896:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19364,7 +20216,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 897:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19373,7 +20225,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 898:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19382,7 +20234,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].identifierCIUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 899:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19391,7 +20243,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 900:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19400,7 +20252,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 901:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19409,7 +20261,7 @@ yydefault:
 		{
 			yyLOCAL = "extended "
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 902:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19418,7 +20270,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 903:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19427,7 +20279,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 904:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19436,7 +20288,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 905:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19445,7 +20297,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 906:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19454,7 +20306,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 907:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19463,7 +20315,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].identifierCSUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 908:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19472,7 +20324,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].identifierCSUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 909:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19481,7 +20333,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ShowFilter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 910:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19490,7 +20342,7 @@ yydefault:
 		{
 			yyLOCAL = &ShowFilter{Like: string(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ShowFilter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 911:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19499,7 +20351,7 @@ yydefault:
 		{
 			yyLOCAL = &ShowFilter{Filter: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ShowFilter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 912:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19508,7 +20360,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ShowFilter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 913:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19517,26 +20369,35 @@ yydefault:
 		{
 			yyLOCAL = &ShowFilter{Like: string(yyDollar[2].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ShowFilter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 914:
 		yyDollar = yyS[yypt-0 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:4960
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 915:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:4964
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 916:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:4968
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 917:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
@@ -19544,7 +20405,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 918:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19553,7 +20414,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 919:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19562,7 +20423,7 @@ yydefault:
 		{
 			yyLOCAL = &Use{DBName: yyDollar[2].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 920:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19571,7 +20432,7 @@ yydefault:
 		{
 			yyLOCAL = &Use{DBName: IdentifierCS{v: ""}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 921:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19580,7 +20441,7 @@ yydefault:
 		{
 			yyLOCAL = &Use{DBName: NewIdentifierCS(yyDollar[2].identifierCSUnion().String() + "@" + string(yyDollar[3].strUnion()))}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 922:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19589,7 +20450,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 923:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19598,7 +20459,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS("@" + string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 924:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19607,7 +20468,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS("@@" + string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 925:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19616,7 +20477,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 926:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19625,7 +20486,7 @@ yydefault:
 		{
 			yyLOCAL = &Begin{Type: BeginStmt}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 927:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19634,7 +20495,7 @@ yydefault:
 		{
 			yyLOCAL = &Begin{Type: StartTransactionStmt, TxAccessModes: yyDollar[3].txAccessModesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 928:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19643,7 +20504,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 929:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19652,7 +20513,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].txAccessModesUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 930:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19661,7 +20522,7 @@ yydefault:
 		{
 			yyLOCAL = []TxAccessMode{yyDollar[1].txAccessModeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 931:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19677,7 +20538,7 @@ yydefault:
 		{
 			yyLOCAL = WithConsistentSnapshot
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 933:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19686,7 +20547,7 @@ yydefault:
 		{
 			yyLOCAL = ReadWrite
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 934:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19695,7 +20556,7 @@ yydefault:
 		{
 			yyLOCAL = ReadOnly
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 935:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19704,7 +20565,7 @@ yydefault:
 		{
 			yyLOCAL = &Commit{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 936:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19713,7 +20574,7 @@ yydefault:
 		{
 			yyLOCAL = &Rollback{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 937:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -19722,32 +20583,44 @@ yydefault:
 		{
 			yyLOCAL = &SRollback{Name: yyDollar[5].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 938:
 		yyDollar = yyS[yypt-0 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5077
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 939:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5079
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 940:
 		yyDollar = yyS[yypt-0 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5082
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 941:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5084
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 942:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
@@ -19755,7 +20628,7 @@ yydefault:
 		{
 			yyLOCAL = &Savepoint{Name: yyDollar[2].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 943:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19764,7 +20637,7 @@ yydefault:
 		{
 			yyLOCAL = &Release{Name: yyDollar[3].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 944:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19773,7 +20646,7 @@ yydefault:
 		{
 			yyLOCAL = EmptyType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 945:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19782,7 +20655,7 @@ yydefault:
 		{
 			yyLOCAL = JSONType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 946:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19791,7 +20664,7 @@ yydefault:
 		{
 			yyLOCAL = TreeType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 947:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19800,7 +20673,7 @@ yydefault:
 		{
 			yyLOCAL = TraditionalType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 948:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19809,7 +20682,7 @@ yydefault:
 		{
 			yyLOCAL = AnalyzeType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 949:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19818,7 +20691,7 @@ yydefault:
 		{
 			yyLOCAL = PlanVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 950:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19827,7 +20700,7 @@ yydefault:
 		{
 			yyLOCAL = PlanVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 951:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19836,7 +20709,7 @@ yydefault:
 		{
 			yyLOCAL = AllVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 952:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19845,7 +20718,7 @@ yydefault:
 		{
 			yyLOCAL = QueriesVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 953:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19854,7 +20727,7 @@ yydefault:
 		{
 			yyLOCAL = TraceVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 954:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19863,7 +20736,7 @@ yydefault:
 		{
 			yyLOCAL = KeysVExplainType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*VExplainType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 955:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19872,7 +20745,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 956:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19881,7 +20754,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 957:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19890,7 +20763,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 958:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19899,7 +20772,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableStmtUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 959:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19908,7 +20781,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].statementUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 960:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19917,7 +20790,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].statementUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 961:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19926,7 +20799,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].statementUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 962:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -19935,7 +20808,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 963:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19944,7 +20817,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion().val
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 964:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19953,7 +20826,7 @@ yydefault:
 		{
 			yyLOCAL = encodeSQLString(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 965:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19962,7 +20835,7 @@ yydefault:
 		{
 			yyLOCAL = &ExplainTab{Table: yyDollar[3].tableNameUnion(), Wild: yyDollar[4].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 966:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19971,7 +20844,7 @@ yydefault:
 		{
 			yyLOCAL = &ExplainStmt{Type: yyDollar[3].explainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 967:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19980,7 +20853,7 @@ yydefault:
 		{
 			yyLOCAL = &VExplainStmt{Type: yyDollar[3].vexplainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 968:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19989,7 +20862,7 @@ yydefault:
 		{
 			yyLOCAL = &OtherAdmin{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 969:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -19998,7 +20871,7 @@ yydefault:
 		{
 			yyLOCAL = &OtherAdmin{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 970:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20007,7 +20880,7 @@ yydefault:
 		{
 			yyLOCAL = &LockTables{Tables: yyDollar[3].tableAndLockTypesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 971:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20016,7 +20889,7 @@ yydefault:
 		{
 			yyLOCAL = TableAndLockTypes{yyDollar[1].tableAndLockTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableAndLockTypes)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 972:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20032,7 +20905,7 @@ yydefault:
 		{
 			yyLOCAL = &TableAndLockType{Table: yyDollar[1].aliasedTableNameUnion(), Lock: yyDollar[2].lockTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**TableAndLockType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 974:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20041,7 +20914,7 @@ yydefault:
 		{
 			yyLOCAL = Read
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LockType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 975:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20050,7 +20923,7 @@ yydefault:
 		{
 			yyLOCAL = ReadLocal
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LockType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 976:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20059,7 +20932,7 @@ yydefault:
 		{
 			yyLOCAL = Write
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LockType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 977:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20068,7 +20941,7 @@ yydefault:
 		{
 			yyLOCAL = LowPriorityWrite
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LockType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 978:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20077,7 +20950,7 @@ yydefault:
 		{
 			yyLOCAL = &UnlockTables{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 979:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20086,7 +20959,7 @@ yydefault:
 		{
 			yyLOCAL = &RevertMigration{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), UUID: string(yyDollar[4].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 980:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20095,7 +20968,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion(), FlushOptions: yyDollar[3].strsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 981:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20104,7 +20977,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 982:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -20113,7 +20986,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion(), WithLock: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 983:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20122,7 +20995,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 984:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -20131,7 +21004,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion(), WithLock: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 985:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -20140,7 +21013,7 @@ yydefault:
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion(), ForExport: true}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 986:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20149,7 +21022,7 @@ yydefault:
 		{
 			yyLOCAL = []string{yyDollar[1].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 987:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20165,7 +21038,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 989:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20174,7 +21047,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 990:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20183,7 +21056,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 991:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20192,7 +21065,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 992:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20201,7 +21074,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 993:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20210,7 +21083,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 994:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20219,7 +21092,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 995:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20228,7 +21101,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion()) + yyDollar[3].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 996:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20237,7 +21110,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 997:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20246,7 +21119,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 998:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20255,7 +21128,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 999:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20264,7 +21137,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1000:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20273,7 +21146,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1001:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20282,7 +21155,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1002:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20291,7 +21164,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1003:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20300,7 +21173,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1004:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20309,7 +21182,7 @@ yydefault:
 		{
 			yyLOCAL = " " + string(yyDollar[1].strUnion()) + " " + string(yyDollar[2].strUnion()) + " " + yyDollar[3].identifierCIUnion().String()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1005:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20325,7 +21198,7 @@ yydefault:
 			yyLOCAL = yyDollar[2].strsUnion()
 			setAllowComments(yylex, false)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1007:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20334,7 +21207,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1008:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20349,7 +21222,7 @@ yydefault:
 				yyLOCAL = append(yyDollar[1].strsUnion(), yyDollar[2].strUnion())
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1009:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20358,7 +21231,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1010:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20367,7 +21240,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1011:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20376,7 +21249,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1012:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20385,7 +21258,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1013:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20394,7 +21267,7 @@ yydefault:
 		{
 			yyLOCAL = SQLNoCacheStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1014:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20403,7 +21276,7 @@ yydefault:
 		{
 			yyLOCAL = SQLCacheStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1015:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20412,7 +21285,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1016:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20421,7 +21294,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1017:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20430,7 +21303,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1018:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -20439,7 +21312,7 @@ yydefault:
 		{
 			yyLOCAL = &PrepareStmt{Name: yyDollar[3].identifierCIUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Statement: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1019:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -20452,7 +21325,7 @@ yydefault:
 				Statement: yyDollar[5].variableUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1020:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20461,7 +21334,7 @@ yydefault:
 		{
 			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].identifierCIUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Arguments: yyDollar[4].variablesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1021:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20470,7 +21343,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1022:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20479,7 +21352,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].variablesUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1023:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20488,7 +21361,7 @@ yydefault:
 		{
 			yyLOCAL = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[4].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1024:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20497,7 +21370,7 @@ yydefault:
 		{
 			yyLOCAL = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[4].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1025:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20506,7 +21379,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1026:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20515,7 +21388,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1027:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20526,7 +21399,7 @@ yydefault:
 			s[0] = yyDollar[1].strUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1028:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20542,7 +21415,7 @@ yydefault:
 		{
 			yyLOCAL = SQLNoCacheStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1030:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20551,7 +21424,7 @@ yydefault:
 		{
 			yyLOCAL = SQLCacheStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1031:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20560,7 +21433,7 @@ yydefault:
 		{
 			yyLOCAL = DistinctStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1032:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20569,7 +21442,7 @@ yydefault:
 		{
 			yyLOCAL = DistinctStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1033:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20578,7 +21451,7 @@ yydefault:
 		{
 			yyLOCAL = HighPriorityStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1034:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20587,7 +21460,7 @@ yydefault:
 		{
 			yyLOCAL = StraightJoinHint
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1035:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20596,7 +21469,7 @@ yydefault:
 		{
 			yyLOCAL = SQLBufferResultStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1036:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20605,7 +21478,7 @@ yydefault:
 		{
 			yyLOCAL = SQLSmallResultStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1037:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20614,7 +21487,7 @@ yydefault:
 		{
 			yyLOCAL = SQLBigResultStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1038:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20623,7 +21496,7 @@ yydefault:
 		{
 			yyLOCAL = SQLCalcFoundRowsStr
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1039:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20632,7 +21505,7 @@ yydefault:
 		{
 			yyLOCAL = AllStr // These are not picked up by NewSelect, and so ALL will be dropped. But this is OK, since it's redundant anyway
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1040:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20645,7 +21518,7 @@ yydefault:
 			se.Exprs = s
 			yyLOCAL = se
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1041:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20660,7 +21533,7 @@ yydefault:
 			res.Exprs = append(res.Exprs, yyDollar[3].selectExprUnion())
 			yyLOCAL = res
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1042:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20669,7 +21542,7 @@ yydefault:
 		{
 			yyLOCAL = &StarExpr{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SelectExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1043:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20681,7 +21554,7 @@ yydefault:
 			node.As = yyDollar[2].identifierCIUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SelectExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1044:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20690,7 +21563,7 @@ yydefault:
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Name: yyDollar[1].identifierCSUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SelectExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1045:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -20699,7 +21572,7 @@ yydefault:
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].identifierCSUnion(), Name: yyDollar[3].identifierCSUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*SelectExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1046:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20708,7 +21581,7 @@ yydefault:
 		{
 			yyLOCAL = IdentifierCI{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1047:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20717,7 +21590,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1048:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20726,7 +21599,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1050:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20735,7 +21608,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1051:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20748,7 +21621,7 @@ yydefault:
 			te[0] = ate
 			yyLOCAL = te
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1052:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20757,7 +21630,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableExprsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1053:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20766,7 +21639,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].tableExprsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1054:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20777,7 +21650,7 @@ yydefault:
 			s[0] = yyDollar[1].tableExprUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1055:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20793,7 +21666,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].aliasedTableNameUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1059:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -20806,7 +21679,7 @@ yydefault:
 			ate.Columns = yyDollar[4].columnsUnion()
 			yyLOCAL = ate
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1060:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20815,7 +21688,7 @@ yydefault:
 		{
 			yyLOCAL = &ParenTableExpr{Exprs: yyDollar[2].tableExprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1061:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20824,7 +21697,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableExprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1062:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20833,7 +21706,7 @@ yydefault:
 		{
 			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[1].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**DerivedTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1063:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20842,7 +21715,7 @@ yydefault:
 		{
 			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[2].tableStmtUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**DerivedTable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1064:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20855,7 +21728,7 @@ yydefault:
 			ate.Hints = yyDollar[3].indexHintsUnion()
 			yyLOCAL = ate
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AliasedTableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1065:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -20869,7 +21742,7 @@ yydefault:
 			ate.Hints = yyDollar[7].indexHintsUnion()
 			yyLOCAL = ate
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**AliasedTableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1066:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20878,7 +21751,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1067:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20887,7 +21760,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].columnsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1068:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -20896,7 +21769,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1069:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20905,7 +21778,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].columnsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1070:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20916,7 +21789,7 @@ yydefault:
 			cols[0] = yyDollar[1].identifierCIUnion()
 			yyLOCAL = cols
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1071:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20934,7 +21807,7 @@ yydefault:
 			s[0] = yyDollar[1].variableUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1073:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20952,7 +21825,7 @@ yydefault:
 			cols[0] = yyDollar[1].identifierCIUnion()
 			yyLOCAL = cols
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1075:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20963,7 +21836,7 @@ yydefault:
 			cols[0] = NewIdentifierCI(string(yyDollar[1].strUnion()))
 			yyLOCAL = cols
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1076:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -20986,7 +21859,7 @@ yydefault:
 		{
 			yyLOCAL = Partitions{yyDollar[1].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Partitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1079:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21007,7 +21880,7 @@ yydefault:
 			jte.Condition = yyDollar[4].joinConditionUnion()
 			yyLOCAL = jte
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1081:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21021,7 +21894,7 @@ yydefault:
 			jte.Condition = yyDollar[4].joinConditionUnion()
 			yyLOCAL = jte
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1082:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21035,7 +21908,7 @@ yydefault:
 			jte.Condition = yyDollar[4].joinConditionUnion()
 			yyLOCAL = jte
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1083:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21048,7 +21921,7 @@ yydefault:
 			jte.RightExpr = yyDollar[3].tableExprUnion()
 			yyLOCAL = jte
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1084:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21057,7 +21930,7 @@ yydefault:
 		{
 			yyLOCAL = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1085:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21066,7 +21939,7 @@ yydefault:
 		{
 			yyLOCAL = &JoinCondition{Using: yyDollar[3].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1086:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -21075,7 +21948,7 @@ yydefault:
 		{
 			yyLOCAL = &JoinCondition{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1087:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21084,7 +21957,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].joinConditionUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1088:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -21093,7 +21966,7 @@ yydefault:
 		{
 			yyLOCAL = &JoinCondition{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1089:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21102,20 +21975,26 @@ yydefault:
 		{
 			yyLOCAL = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**JoinCondition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1090:
 		yyDollar = yyS[yypt-0 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5773
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1091:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:5775
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1092:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCS
@@ -21123,7 +22002,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1093:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21132,7 +22011,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCSUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1094:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21141,7 +22020,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].identifierCSUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1096:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21150,7 +22029,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1097:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21159,7 +22038,7 @@ yydefault:
 		{
 			yyLOCAL = NormalJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1098:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21168,7 +22047,7 @@ yydefault:
 		{
 			yyLOCAL = NormalJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1099:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21177,7 +22056,7 @@ yydefault:
 		{
 			yyLOCAL = NormalJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1100:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21186,7 +22065,7 @@ yydefault:
 		{
 			yyLOCAL = StraightJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1101:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21195,7 +22074,7 @@ yydefault:
 		{
 			yyLOCAL = LeftJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1102:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21204,7 +22083,7 @@ yydefault:
 		{
 			yyLOCAL = LeftJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1103:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21213,7 +22092,7 @@ yydefault:
 		{
 			yyLOCAL = RightJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1104:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21222,7 +22101,7 @@ yydefault:
 		{
 			yyLOCAL = RightJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1105:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21231,7 +22110,7 @@ yydefault:
 		{
 			yyLOCAL = NaturalJoinType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1106:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21244,7 +22123,7 @@ yydefault:
 				yyLOCAL = NaturalRightJoinType
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*JoinType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1107:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21253,7 +22132,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].tableNameUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1108:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21262,7 +22141,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].tableNameUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1109:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21271,7 +22150,7 @@ yydefault:
 		{
 			yyLOCAL = TableName{Name: yyDollar[1].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1110:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21280,7 +22159,7 @@ yydefault:
 		{
 			yyLOCAL = TableName{Qualifier: yyDollar[1].identifierCSUnion(), Name: yyDollar[3].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1111:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21289,7 +22168,7 @@ yydefault:
 		{
 			yyLOCAL = TableName{Name: yyDollar[1].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TableName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1112:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -21298,7 +22177,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHints)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1113:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21307,7 +22186,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].indexHintsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHints)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1114:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21316,7 +22195,7 @@ yydefault:
 		{
 			yyLOCAL = IndexHints{yyDollar[1].indexHintUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHints)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1115:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21332,7 +22211,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1117:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21341,7 +22220,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1118:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -21350,7 +22229,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1119:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -21359,7 +22238,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: ForceOp, ForType: yyDollar[3].indexHintForTypeUnion(), Indexes: yyDollar[5].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1120:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21368,7 +22247,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: UseVindexOp, Indexes: yyDollar[4].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1121:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21377,7 +22256,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreVindexOp, Indexes: yyDollar[4].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexHint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1122:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -21386,7 +22265,7 @@ yydefault:
 		{
 			yyLOCAL = NoForType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHintForType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1123:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21395,7 +22274,7 @@ yydefault:
 		{
 			yyLOCAL = JoinForType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHintForType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1124:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21404,7 +22283,7 @@ yydefault:
 		{
 			yyLOCAL = OrderByForType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHintForType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1125:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21413,7 +22292,7 @@ yydefault:
 		{
 			yyLOCAL = GroupByForType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IndexHintForType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1126:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -21422,7 +22301,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1127:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21431,7 +22310,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1128:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21443,7 +22322,7 @@ yydefault:
 			node.Right = yyDollar[3].exprUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1129:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21455,7 +22334,7 @@ yydefault:
 			node.Right = yyDollar[3].exprUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1130:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21467,7 +22346,7 @@ yydefault:
 			node.Right = yyDollar[3].exprUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1131:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -21478,7 +22357,7 @@ yydefault:
 			node.Expr = yyDollar[2].exprUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1132:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21490,7 +22369,7 @@ yydefault:
 			ie.Right = yyDollar[3].isExprOperatorUnion()
 			yyLOCAL = ie
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1133:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21499,7 +22378,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1134:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21508,7 +22387,7 @@ yydefault:
 		{
 			yyLOCAL = &AssignmentExpr{Left: yyDollar[1].variableUnion(), Right: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1135:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -21517,7 +22396,7 @@ yydefault:
 		{
 			yyLOCAL = &MemberOfExpr{Value: yyDollar[1].exprUnion(), JSONArr: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1136:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21539,7 +22418,7 @@ yydefault:
 			ie.Right = IsNullOp
 			yyLOCAL = ie
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1139:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21551,7 +22430,7 @@ yydefault:
 			ie.Right = IsNotNullOp
 			yyLOCAL = ie
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1140:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21564,7 +22443,7 @@ yydefault:
 			cmp.Right = yyDollar[3].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1141:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21578,7 +22457,7 @@ yydefault:
 			cmp.Right = yyDollar[4].subqueryUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1142:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21592,7 +22471,7 @@ yydefault:
 			cmp.Right = yyDollar[4].subqueryUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1143:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21606,7 +22485,7 @@ yydefault:
 			cmp.Right = yyDollar[4].subqueryUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1144:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21615,7 +22494,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1145:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21628,7 +22507,7 @@ yydefault:
 			cmp.Right = yyDollar[3].colTupleUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1146:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21641,7 +22520,7 @@ yydefault:
 			cmp.Right = yyDollar[4].colTupleUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1147:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21650,7 +22529,7 @@ yydefault:
 		{
 			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), IsBetween: true, From: yyDollar[3].exprUnion(), To: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1148:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -21659,7 +22538,7 @@ yydefault:
 		{
 			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), IsBetween: false, From: yyDollar[4].exprUnion(), To: yyDollar[6].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1149:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21672,7 +22551,7 @@ yydefault:
 			cmp.Right = yyDollar[3].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1150:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21685,7 +22564,7 @@ yydefault:
 			cmp.Right = yyDollar[4].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1151:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21699,7 +22578,7 @@ yydefault:
 			cmp.Escape = yyDollar[5].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1152:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -21713,7 +22592,7 @@ yydefault:
 			cmp.Escape = yyDollar[6].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1153:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21726,7 +22605,7 @@ yydefault:
 			cmp.Right = yyDollar[3].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1154:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -21739,7 +22618,7 @@ yydefault:
 			cmp.Right = yyDollar[4].exprUnion()
 			yyLOCAL = cmp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1155:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21748,7 +22627,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1156:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21771,7 +22650,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1159:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21784,7 +22663,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1160:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21797,7 +22676,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1161:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21810,7 +22689,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1162:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21823,7 +22702,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1163:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21836,7 +22715,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1164:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21845,7 +22724,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1165:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -21854,7 +22733,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1166:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21867,7 +22746,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1167:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21880,7 +22759,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1168:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21893,7 +22772,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1169:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21906,7 +22785,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1170:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21919,7 +22798,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1171:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21932,7 +22811,7 @@ yydefault:
 			be.Right = yyDollar[3].exprUnion()
 			yyLOCAL = be
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1172:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21941,7 +22820,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1173:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21950,7 +22829,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1174:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21959,7 +22838,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1175:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21968,7 +22847,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1176:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21977,7 +22856,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1177:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -21986,7 +22865,7 @@ yydefault:
 		{
 			yyLOCAL = &CollateExpr{Expr: yyDollar[1].exprUnion(), Collation: yyDollar[3].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1178:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21995,7 +22874,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1179:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22004,7 +22883,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1180:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22013,7 +22892,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1181:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22022,7 +22901,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion() // TODO: do we really want to ignore unary '+' before any kind of literals?
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1182:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22034,7 +22913,7 @@ yydefault:
 			ue.Expr = yyDollar[2].exprUnion()
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1183:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22046,7 +22925,7 @@ yydefault:
 			ue.Expr = yyDollar[2].exprUnion()
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1184:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22058,7 +22937,7 @@ yydefault:
 			ue.Expr = yyDollar[2].exprUnion()
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1185:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22067,7 +22946,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].subqueryUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1186:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22076,7 +22955,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1187:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22085,7 +22964,7 @@ yydefault:
 		{
 			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subqueryUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1188:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -22094,7 +22973,7 @@ yydefault:
 		{
 			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNamesUnion(), Expr: yyDollar[5].exprUnion(), Option: yyDollar[6].matchExprOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1189:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -22103,7 +22982,7 @@ yydefault:
 		{
 			yyLOCAL = &CastExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion(), Array: yyDollar[6].booleanUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1190:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22112,7 +22991,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1191:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22121,7 +23000,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertUsingExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1192:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22134,7 +23013,7 @@ yydefault:
 			//    BINARY expr
 			yyLOCAL = &ConvertExpr{Expr: yyDollar[2].exprUnion(), Type: &ConvertType{Type: yyDollar[1].strUnion()}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1193:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22143,7 +23022,7 @@ yydefault:
 		{
 			yyLOCAL = &Default{ColName: yyDollar[2].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1194:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -22152,7 +23031,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: yyDollar[5].exprUnion(), Unit: yyDollar[3].intervalTypeUnion(), Interval: yyDollar[2].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1195:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22161,7 +23040,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalFuncExpr{Expr: yyDollar[3].exprUnion(), Exprs: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1196:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22172,7 +23051,7 @@ yydefault:
 			pathList[0] = yyDollar[3].exprUnion()
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: pathList}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1197:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22183,7 +23062,7 @@ yydefault:
 			pathList[0] = yyDollar[3].exprUnion()
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: pathList}}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1198:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22192,7 +23071,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].colNamesUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1199:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22201,7 +23080,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].colNamesUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1200:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22212,7 +23091,7 @@ yydefault:
 			s[0] = yyDollar[1].colNameUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1201:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22228,7 +23107,7 @@ yydefault:
 		{
 			yyLOCAL = BothTrimType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TrimType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1203:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22237,7 +23116,7 @@ yydefault:
 		{
 			yyLOCAL = LeadingTrimType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TrimType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1204:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22246,7 +23125,7 @@ yydefault:
 		{
 			yyLOCAL = TrailingTrimType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*TrimType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1205:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22255,7 +23134,7 @@ yydefault:
 		{
 			yyLOCAL = FrameRowsType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FrameUnitType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1206:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22264,7 +23143,7 @@ yydefault:
 		{
 			yyLOCAL = FrameRangeType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FrameUnitType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1207:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22273,7 +23152,7 @@ yydefault:
 		{
 			yyLOCAL = CumeDistExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1208:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22282,7 +23161,7 @@ yydefault:
 		{
 			yyLOCAL = DenseRankExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1209:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22291,7 +23170,7 @@ yydefault:
 		{
 			yyLOCAL = PercentRankExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1210:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22300,7 +23179,7 @@ yydefault:
 		{
 			yyLOCAL = RankExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1211:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22309,7 +23188,7 @@ yydefault:
 		{
 			yyLOCAL = RowNumberExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ArgumentLessWindowExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1212:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22318,7 +23197,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: CurrentRowType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1213:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22327,7 +23206,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedPrecedingType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1214:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22336,7 +23215,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedFollowingType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1215:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22345,7 +23224,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[1].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1216:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22354,7 +23233,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1217:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22363,7 +23242,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[1].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1218:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22372,7 +23251,7 @@ yydefault:
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FramePoint)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1219:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22381,7 +23260,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FrameClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1220:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22390,7 +23269,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].frameClauseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FrameClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1221:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22399,7 +23278,7 @@ yydefault:
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[2].framePointUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FrameClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1222:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -22408,7 +23287,7 @@ yydefault:
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[3].framePointUnion(), End: yyDollar[5].framePointUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FrameClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1223:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22417,7 +23296,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1224:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22426,7 +23305,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].exprsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1225:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22435,7 +23314,7 @@ yydefault:
 		{
 			yyLOCAL = IdentifierCI{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1226:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22444,7 +23323,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1227:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22453,7 +23332,7 @@ yydefault:
 		{
 			yyLOCAL = &WindowSpecification{Name: yyDollar[1].identifierCIUnion(), PartitionClause: yyDollar[2].exprsUnion(), OrderClause: yyDollar[3].orderByUnion(), FrameClause: yyDollar[4].frameClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**WindowSpecification)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1228:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22462,7 +23341,7 @@ yydefault:
 		{
 			yyLOCAL = &OverClause{WindowSpec: yyDollar[3].windowSpecificationUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OverClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1229:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22471,7 +23350,7 @@ yydefault:
 		{
 			yyLOCAL = &OverClause{WindowName: yyDollar[2].identifierCIUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OverClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1230:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22480,7 +23359,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].overClauseUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OverClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1231:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22489,7 +23368,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**OverClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1232:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22498,7 +23377,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**NullTreatmentClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1234:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22507,7 +23386,7 @@ yydefault:
 		{
 			yyLOCAL = &NullTreatmentClause{yyDollar[1].nullTreatmentTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**NullTreatmentClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1235:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22516,7 +23395,7 @@ yydefault:
 		{
 			yyLOCAL = RespectNullsType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*NullTreatmentType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1236:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22525,7 +23404,7 @@ yydefault:
 		{
 			yyLOCAL = IgnoreNullsType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*NullTreatmentType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1237:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22534,7 +23413,7 @@ yydefault:
 		{
 			yyLOCAL = FirstValueExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FirstOrLastValueExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1238:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22543,7 +23422,7 @@ yydefault:
 		{
 			yyLOCAL = LastValueExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FirstOrLastValueExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1239:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22552,7 +23431,7 @@ yydefault:
 		{
 			yyLOCAL = FromFirstType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FromFirstLastType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1240:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22561,7 +23440,7 @@ yydefault:
 		{
 			yyLOCAL = FromLastType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*FromFirstLastType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1241:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -22570,7 +23449,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FromFirstLastClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1243:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22579,7 +23458,7 @@ yydefault:
 		{
 			yyLOCAL = &FromFirstLastClause{yyDollar[1].fromFirstLastTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**FromFirstLastClause)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1244:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22588,7 +23467,7 @@ yydefault:
 		{
 			yyLOCAL = LagExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LagLeadExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1245:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22597,7 +23476,7 @@ yydefault:
 		{
 			yyLOCAL = LeadExprType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*LagLeadExprType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1246:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -22606,7 +23485,7 @@ yydefault:
 		{
 			yyLOCAL = &WindowDefinition{Name: yyDollar[1].identifierCIUnion(), WindowSpec: yyDollar[4].windowSpecificationUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**WindowDefinition)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1247:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22615,7 +23494,7 @@ yydefault:
 		{
 			yyLOCAL = WindowDefinitions{yyDollar[1].windowDefinitionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*WindowDefinitions)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1248:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22631,7 +23510,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1250:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22640,7 +23519,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[2].identifierCIUnion().String())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1251:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22649,7 +23528,7 @@ yydefault:
 		{
 			yyLOCAL = BoolVal(true)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*BoolVal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1252:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22658,7 +23537,7 @@ yydefault:
 		{
 			yyLOCAL = BoolVal(false)
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*BoolVal)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1253:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22667,7 +23546,7 @@ yydefault:
 		{
 			yyLOCAL = IsTrueOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IsExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1254:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22676,7 +23555,7 @@ yydefault:
 		{
 			yyLOCAL = IsNotTrueOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IsExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1255:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22685,7 +23564,7 @@ yydefault:
 		{
 			yyLOCAL = IsFalseOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IsExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1256:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22694,7 +23573,7 @@ yydefault:
 		{
 			yyLOCAL = IsNotFalseOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IsExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1257:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22703,7 +23582,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].comparisonExprOperatorUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1258:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22712,7 +23591,7 @@ yydefault:
 		{
 			yyLOCAL = NullSafeEqualOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1259:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22721,7 +23600,7 @@ yydefault:
 		{
 			yyLOCAL = EqualOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1260:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22730,7 +23609,7 @@ yydefault:
 		{
 			yyLOCAL = LessThanOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1261:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22739,7 +23618,7 @@ yydefault:
 		{
 			yyLOCAL = GreaterThanOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1262:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22748,7 +23627,7 @@ yydefault:
 		{
 			yyLOCAL = LessEqualOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1263:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22757,7 +23636,7 @@ yydefault:
 		{
 			yyLOCAL = GreaterEqualOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1264:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22766,7 +23645,7 @@ yydefault:
 		{
 			yyLOCAL = NotEqualOp
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ComparisonExprOperator)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1265:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22775,7 +23654,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1266:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22784,7 +23663,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].subqueryUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1267:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22794,7 +23673,7 @@ yydefault:
 			yyLOCAL = ListArg(yyDollar[1].strUnion()[2:])
 			markBindVariable(yylex, yyDollar[1].strUnion()[2:])
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ColTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1268:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22805,7 +23684,7 @@ yydefault:
 			node.Select = yyDollar[1].tableStmtUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Subquery)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1269:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22816,7 +23695,7 @@ yydefault:
 			e[0] = yyDollar[1].exprUnion()
 			yyLOCAL = e
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1270:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -22835,7 +23714,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1272:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22848,7 +23727,7 @@ yydefault:
 			fe.Exprs = yyDollar[5].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1273:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22860,7 +23739,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1274:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22872,7 +23751,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1275:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -22881,7 +23760,7 @@ yydefault:
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].exprUnion(), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1276:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -22890,7 +23769,7 @@ yydefault:
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].exprUnion(), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1277:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22899,7 +23778,7 @@ yydefault:
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].exprUnion(), From: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1278:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -22908,7 +23787,7 @@ yydefault:
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].exprUnion(), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1279:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -22917,7 +23796,7 @@ yydefault:
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].exprUnion(), From: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1280:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -22926,7 +23805,7 @@ yydefault:
 		{
 			yyLOCAL = &CaseExpr{Expr: yyDollar[2].exprUnion(), Whens: yyDollar[3].whensUnion(), Else: yyDollar[4].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1281:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -22935,7 +23814,7 @@ yydefault:
 		{
 			yyLOCAL = &ValuesFuncExpr{Name: yyDollar[3].colNameUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1282:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -22944,7 +23823,7 @@ yydefault:
 		{
 			yyLOCAL = &InsertExpr{Str: yyDollar[3].exprUnion(), Pos: yyDollar[5].exprUnion(), Len: yyDollar[7].exprUnion(), NewStr: yyDollar[9].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1283:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22955,7 +23834,7 @@ yydefault:
 			fe.Name = NewIdentifierCI(yyDollar[1].strUnion())
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1284:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22966,7 +23845,7 @@ yydefault:
 			fe.Name = NewIdentifierCI("utc_date")
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1285:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22975,7 +23854,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1286:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22986,7 +23865,7 @@ yydefault:
 			fe.Name = NewIdentifierCI("current_date")
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1287:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -22997,7 +23876,7 @@ yydefault:
 			fe.Name = NewIdentifierCI("curdate")
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1288:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -23006,7 +23885,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_time"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1289:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -23015,7 +23894,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curtime"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1290:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -23024,7 +23903,7 @@ yydefault:
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_time"), Fsp: yyDollar[2].integerUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1291:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23033,7 +23912,7 @@ yydefault:
 		{
 			yyLOCAL = &CountStar{OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1292:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23042,7 +23921,7 @@ yydefault:
 		{
 			yyLOCAL = &Count{Distinct: yyDollar[3].booleanUnion(), Args: yyDollar[4].exprsUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1293:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23051,7 +23930,7 @@ yydefault:
 		{
 			yyLOCAL = &Max{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1294:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23060,7 +23939,7 @@ yydefault:
 		{
 			yyLOCAL = &Min{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1295:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23069,7 +23948,7 @@ yydefault:
 		{
 			yyLOCAL = &Sum{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1296:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23078,7 +23957,7 @@ yydefault:
 		{
 			yyLOCAL = &Avg{Distinct: yyDollar[3].booleanUnion(), Arg: yyDollar[4].exprUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1297:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23087,7 +23966,7 @@ yydefault:
 		{
 			yyLOCAL = &BitAnd{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1298:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23096,7 +23975,7 @@ yydefault:
 		{
 			yyLOCAL = &BitOr{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1299:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23105,7 +23984,7 @@ yydefault:
 		{
 			yyLOCAL = &BitXor{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1300:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23114,7 +23993,7 @@ yydefault:
 		{
 			yyLOCAL = &Std{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1301:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23123,7 +24002,7 @@ yydefault:
 		{
 			yyLOCAL = &StdDev{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1302:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23132,7 +24011,7 @@ yydefault:
 		{
 			yyLOCAL = &StdPop{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1303:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23141,7 +24020,7 @@ yydefault:
 		{
 			yyLOCAL = &StdSamp{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1304:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23150,7 +24029,7 @@ yydefault:
 		{
 			yyLOCAL = &VarPop{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1305:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23159,7 +24038,7 @@ yydefault:
 		{
 			yyLOCAL = &VarSamp{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1306:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23168,7 +24047,7 @@ yydefault:
 		{
 			yyLOCAL = &Variance{Arg: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1307:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23177,7 +24056,7 @@ yydefault:
 		{
 			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].strUnion(), Limit: yyDollar[7].limitUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1308:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23186,7 +24065,7 @@ yydefault:
 		{
 			yyLOCAL = &AnyValue{Arg: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1309:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23195,7 +24074,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: yyDollar[7].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: yyDollar[3].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1310:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23204,7 +24083,7 @@ yydefault:
 		{
 			yyLOCAL = &TimestampDiffExpr{Unit: yyDollar[3].intervalTypeUnion(), Expr1: yyDollar[5].exprUnion(), Expr2: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1311:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23213,7 +24092,7 @@ yydefault:
 		{
 			yyLOCAL = &ExtractFuncExpr{IntervalType: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1312:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23222,7 +24101,7 @@ yydefault:
 		{
 			yyLOCAL = &WeightStringFuncExpr{Expr: yyDollar[3].exprUnion(), As: yyDollar[4].convertTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1313:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23231,7 +24110,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONPrettyExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1314:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23240,7 +24119,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONStorageFreeExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1315:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23249,7 +24128,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONStorageSizeExpr{JSONVal: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1316:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -23258,7 +24137,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONArrayAgg{Expr: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1317:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -23267,7 +24146,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONObjectAgg{Key: yyDollar[3].exprUnion(), Value: yyDollar[5].exprUnion(), OverClause: yyDollar[7].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1318:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23276,7 +24155,7 @@ yydefault:
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: LTrimType, Type: LeadingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1319:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23285,7 +24164,7 @@ yydefault:
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: RTrimType, Type: TrailingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1320:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -23294,7 +24173,7 @@ yydefault:
 		{
 			yyLOCAL = &TrimFuncExpr{Type: yyDollar[3].trimTypeUnion(), TrimArg: yyDollar[4].exprUnion(), StringArg: yyDollar[6].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1321:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23303,7 +24182,7 @@ yydefault:
 		{
 			yyLOCAL = &TrimFuncExpr{StringArg: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1322:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23312,7 +24191,7 @@ yydefault:
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1323:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23321,7 +24200,7 @@ yydefault:
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprsUnion(), Charset: yyDollar[5].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1324:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23330,7 +24209,7 @@ yydefault:
 		{
 			yyLOCAL = &TrimFuncExpr{TrimArg: yyDollar[3].exprUnion(), StringArg: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1325:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23339,7 +24218,7 @@ yydefault:
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1326:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23348,7 +24227,7 @@ yydefault:
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion(), Pos: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1327:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23357,7 +24236,7 @@ yydefault:
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].exprUnion(), Str: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1328:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23366,7 +24245,7 @@ yydefault:
 		{
 			yyLOCAL = &LockingFunc{Type: GetLock, Name: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1329:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23375,7 +24254,7 @@ yydefault:
 		{
 			yyLOCAL = &LockingFunc{Type: IsFreeLock, Name: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1330:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23384,7 +24263,7 @@ yydefault:
 		{
 			yyLOCAL = &LockingFunc{Type: IsUsedLock, Name: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1331:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -23393,7 +24272,7 @@ yydefault:
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseAllLocks}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1332:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23402,7 +24281,7 @@ yydefault:
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseLock, Name: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1333:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23411,7 +24290,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONSchemaValidFuncExpr{Schema: yyDollar[3].exprUnion(), Document: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1334:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23420,7 +24299,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONSchemaValidationReportFuncExpr{Schema: yyDollar[3].exprUnion(), Document: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1335:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23429,7 +24308,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONArrayExpr{Params: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1336:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23438,7 +24317,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1337:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23447,7 +24326,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].exprUnion(), AxisOrderOpt: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1338:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23456,7 +24335,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1339:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23465,7 +24344,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].exprUnion(), AxisOrderOpt: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1340:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23474,7 +24353,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsEmpty, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1341:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23483,7 +24362,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsSimple, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1342:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23492,7 +24371,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Dimension, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1343:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23501,7 +24380,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Envelope, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1344:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23510,7 +24389,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: GeometryType, Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1345:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23519,7 +24398,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1346:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23528,7 +24407,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1347:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23537,7 +24416,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1348:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23546,7 +24425,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1349:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23555,7 +24434,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: EndPoint, Linestring: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1350:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23564,7 +24443,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: IsClosed, Linestring: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1351:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23573,7 +24452,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1352:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23582,7 +24461,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1353:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23591,7 +24470,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: NumPoints, Linestring: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1354:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23600,7 +24479,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: PointN, Linestring: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1355:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23609,7 +24488,7 @@ yydefault:
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: StartPoint, Linestring: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1356:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23618,7 +24497,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1357:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23627,7 +24506,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1358:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23636,7 +24515,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1359:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23645,7 +24524,7 @@ yydefault:
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].exprUnion(), ValueToSet: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1360:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23654,7 +24533,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1361:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23663,7 +24542,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1362:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23672,7 +24551,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1363:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23681,7 +24560,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1364:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23690,7 +24569,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1365:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23699,7 +24578,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1366:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23708,7 +24587,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1367:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23717,7 +24596,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1368:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23726,7 +24605,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1369:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23735,7 +24614,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1370:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23744,7 +24623,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1371:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23753,7 +24632,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1372:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23762,7 +24641,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1373:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23771,7 +24650,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1374:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23780,7 +24659,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1375:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23789,7 +24668,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1376:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23798,7 +24677,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1377:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23807,7 +24686,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1378:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23816,7 +24695,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1379:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23825,7 +24704,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1380:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23834,7 +24713,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1381:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23843,7 +24722,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1382:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23852,7 +24731,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1383:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23861,7 +24740,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1384:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23870,7 +24749,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1385:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23879,7 +24758,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1386:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23888,7 +24767,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1387:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23897,7 +24776,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1388:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23906,7 +24785,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1389:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23915,7 +24794,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1390:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23924,7 +24803,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1391:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23933,7 +24812,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1392:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23942,7 +24821,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1393:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23951,7 +24830,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1394:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23960,7 +24839,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1395:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23969,7 +24848,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1396:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -23978,7 +24857,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1397:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -23987,7 +24866,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1398:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -23996,7 +24875,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1399:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24005,7 +24884,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1400:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24014,7 +24893,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1401:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24023,7 +24902,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1402:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24032,7 +24911,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1403:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24041,7 +24920,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1404:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24050,7 +24929,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1405:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24059,7 +24938,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1406:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24068,7 +24947,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1407:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24077,7 +24956,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1408:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24086,7 +24965,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Area, Polygon: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1409:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24095,7 +24974,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Centroid, Polygon: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1410:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24104,7 +24983,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: ExteriorRing, Polygon: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1411:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24113,7 +24992,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: InteriorRingN, Polygon: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1412:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24122,7 +25001,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: NumInteriorRings, Polygon: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1413:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24131,7 +25010,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: GeometryN, GeomColl: yyDollar[3].exprUnion(), PropertyDefArg: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1414:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24140,7 +25019,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: NumGeometries, GeomColl: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1415:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24149,7 +25028,7 @@ yydefault:
 		{
 			yyLOCAL = &GeoHashFromLatLongExpr{Longitude: yyDollar[3].exprUnion(), Latitude: yyDollar[5].exprUnion(), MaxLength: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1416:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24158,7 +25037,7 @@ yydefault:
 		{
 			yyLOCAL = &GeoHashFromPointExpr{Point: yyDollar[3].exprUnion(), MaxLength: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1417:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24167,7 +25046,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LatitudeFromHash, GeoHash: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1418:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24176,7 +25055,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LongitudeFromHash, GeoHash: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1419:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24185,7 +25064,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: PointFromHash, GeoHash: yyDollar[3].exprUnion(), SridOpt: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1420:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24194,7 +25073,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1421:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24203,7 +25082,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion(), HigherDimHandlerOpt: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1422:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24212,7 +25091,7 @@ yydefault:
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].exprUnion(), HigherDimHandlerOpt: yyDollar[5].exprUnion(), Srid: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1423:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24221,7 +25100,7 @@ yydefault:
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1424:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24230,7 +25109,7 @@ yydefault:
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion(), MaxDecimalDigits: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1425:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24239,7 +25118,7 @@ yydefault:
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].exprUnion(), MaxDecimalDigits: yyDollar[5].exprUnion(), Bitmask: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1426:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24248,7 +25127,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONObjectExpr{Params: yyDollar[3].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1427:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24257,7 +25136,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONQuoteExpr{StringArg: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1428:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24266,7 +25145,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONContainsExpr{Target: yyDollar[3].exprUnion(), Candidate: yyDollar[5].exprsUnion()[0], PathList: yyDollar[5].exprsUnion()[1:]}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1429:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24275,7 +25154,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONContainsPathExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), PathList: yyDollar[7].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1430:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24284,7 +25163,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[3].exprUnion(), PathList: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1431:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24293,7 +25172,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1432:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24302,7 +25181,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1433:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24311,7 +25190,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].exprUnion(), JSONDoc2: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1434:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24320,7 +25199,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1435:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -24329,7 +25208,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].exprUnion(), OneOrAll: yyDollar[5].exprUnion(), SearchStr: yyDollar[7].exprUnion(), EscapeChar: yyDollar[9].exprsUnion()[0], PathList: yyDollar[9].exprsUnion()[1:]}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1436:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -24338,7 +25217,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1437:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24347,7 +25226,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1438:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24356,7 +25235,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), ErrorOnResponse: yyDollar[7].jtOnResponseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1439:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -24365,7 +25244,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion(), ReturningType: yyDollar[6].convertTypeUnion(), EmptyOnResponse: yyDollar[7].jtOnResponseUnion(), ErrorOnResponse: yyDollar[8].jtOnResponseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1440:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24374,7 +25253,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1441:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24383,7 +25262,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: ValidAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1442:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24392,7 +25271,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: TypeAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1443:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24401,7 +25280,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1444:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24410,7 +25289,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].exprUnion(), Path: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1445:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24419,7 +25298,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayAppendType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1446:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24428,7 +25307,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1447:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24437,7 +25316,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONInsertType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1448:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24446,7 +25325,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONReplaceType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1449:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24455,7 +25334,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONSetType, JSONDoc: yyDollar[3].exprUnion(), Params: yyDollar[5].jsonObjectParamsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1450:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24464,7 +25343,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1451:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24473,7 +25352,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1452:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24482,7 +25361,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: yyDollar[3].exprUnion(), JSONDocList: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1453:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24491,7 +25370,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONRemoveExpr{JSONDoc: yyDollar[3].exprUnion(), PathList: yyDollar[5].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1454:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24500,7 +25379,7 @@ yydefault:
 		{
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1455:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24509,7 +25388,7 @@ yydefault:
 		{
 			yyLOCAL = &MultiPolygonExpr{PolygonParams: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1456:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24518,7 +25397,7 @@ yydefault:
 		{
 			yyLOCAL = &MultiPointExpr{PointParams: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1457:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24527,7 +25406,7 @@ yydefault:
 		{
 			yyLOCAL = &MultiLinestringExpr{LinestringParams: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1458:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24536,7 +25415,7 @@ yydefault:
 		{
 			yyLOCAL = &PolygonExpr{LinestringParams: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1459:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24545,7 +25424,7 @@ yydefault:
 		{
 			yyLOCAL = &LineStringExpr{PointParams: yyDollar[3].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1460:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24554,7 +25433,7 @@ yydefault:
 		{
 			yyLOCAL = &PointExpr{XCordinate: yyDollar[3].exprUnion(), YCordinate: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1461:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24563,7 +25442,7 @@ yydefault:
 		{
 			yyLOCAL = &ArgumentLessWindowExpr{Type: yyDollar[1].argumentLessWindowExprTypeUnion(), OverClause: yyDollar[4].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1462:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24572,7 +25451,7 @@ yydefault:
 		{
 			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1463:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -24581,7 +25460,7 @@ yydefault:
 		{
 			yyLOCAL = &NtileExpr{N: yyDollar[3].exprUnion(), OverClause: yyDollar[5].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1464:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -24590,7 +25469,7 @@ yydefault:
 		{
 			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), FromFirstLastClause: yyDollar[7].fromFirstLastClauseUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1465:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24599,7 +25478,7 @@ yydefault:
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), NullTreatmentClause: yyDollar[5].nullTreatmentClauseUnion(), OverClause: yyDollar[6].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1466:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -24608,7 +25487,7 @@ yydefault:
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprTypeUnion(), Expr: yyDollar[3].exprUnion(), N: yyDollar[5].exprUnion(), Default: yyDollar[6].exprUnion(), NullTreatmentClause: yyDollar[8].nullTreatmentClauseUnion(), OverClause: yyDollar[9].overClauseUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1467:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24617,7 +25496,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1468:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24626,7 +25505,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1469:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24635,7 +25514,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1470:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24644,7 +25523,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1471:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24653,7 +25532,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1472:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24662,7 +25541,7 @@ yydefault:
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1477:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -24671,7 +25550,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1478:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -24680,7 +25559,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1479:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -24689,7 +25568,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1480:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -24698,7 +25577,7 @@ yydefault:
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].strUnion()[1:])
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1481:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -24707,7 +25586,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1482:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -24716,7 +25595,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1483:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24725,7 +25604,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1484:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24734,7 +25613,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1485:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -24743,7 +25622,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1486:
 		yyDollar = yyS[yypt-12 : yypt+1]
@@ -24752,7 +25631,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), ReturnOption: yyDollar[11].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1487:
 		yyDollar = yyS[yypt-14 : yypt+1]
@@ -24762,7 +25641,7 @@ yydefault:
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), ReturnOption: yyDollar[11].exprUnion(), MatchType: yyDollar[13].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1488:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24771,7 +25650,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1489:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24780,7 +25659,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), MatchType: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1490:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24789,7 +25668,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1491:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -24798,7 +25677,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1492:
 		yyDollar = yyS[yypt-12 : yypt+1]
@@ -24807,7 +25686,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion(), Occurrence: yyDollar[11].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1493:
 		yyDollar = yyS[yypt-14 : yypt+1]
@@ -24817,7 +25696,7 @@ yydefault:
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Repl: yyDollar[7].exprUnion(), Position: yyDollar[9].exprUnion(), Occurrence: yyDollar[11].exprUnion(), MatchType: yyDollar[13].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1494:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24826,7 +25705,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1495:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24835,7 +25714,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1496:
 		yyDollar = yyS[yypt-10 : yypt+1]
@@ -24844,7 +25723,7 @@ yydefault:
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1497:
 		yyDollar = yyS[yypt-12 : yypt+1]
@@ -24854,7 +25733,7 @@ yydefault:
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].exprUnion(), Pattern: yyDollar[5].exprUnion(), Position: yyDollar[7].exprUnion(), Occurrence: yyDollar[9].exprUnion(), MatchType: yyDollar[11].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1498:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24863,7 +25742,7 @@ yydefault:
 		{
 			yyLOCAL = &ExtractValueExpr{Fragment: yyDollar[3].exprUnion(), XPathExpr: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1499:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24872,7 +25751,7 @@ yydefault:
 		{
 			yyLOCAL = &UpdateXMLExpr{Target: yyDollar[3].exprUnion(), XPathExpr: yyDollar[5].exprUnion(), NewXML: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1500:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24881,7 +25760,7 @@ yydefault:
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatBytesType, Argument: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1501:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24890,7 +25769,7 @@ yydefault:
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatPicoTimeType, Argument: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1502:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -24899,7 +25778,7 @@ yydefault:
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsCurrentThreadIDType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1503:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24908,7 +25787,7 @@ yydefault:
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1504:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24917,7 +25796,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubsetType, Set1: yyDollar[3].exprUnion(), Set2: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1505:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24926,7 +25805,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubtractType, Set1: yyDollar[3].exprUnion(), Set2: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1506:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24935,7 +25814,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1507:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24944,7 +25823,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1508:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -24953,7 +25832,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1509:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -24962,7 +25841,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1510:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -24971,7 +25850,7 @@ yydefault:
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].exprUnion(), Timeout: yyDollar[5].exprUnion(), Channel: yyDollar[7].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1511:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -24980,7 +25859,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1512:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -24989,7 +25868,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].convertTypeUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1513:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -24998,7 +25877,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDayHour
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1514:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25007,7 +25886,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDayMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1515:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25016,7 +25895,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDayMinute
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1516:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25025,7 +25904,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDaySecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1517:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25034,7 +25913,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHourMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1518:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25043,7 +25922,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHourMinute
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1519:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25052,7 +25931,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHourSecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1520:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25061,7 +25940,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMinuteMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1521:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25070,7 +25949,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMinuteSecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1522:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25079,7 +25958,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalSecondMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1523:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25088,7 +25967,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalYearMonth
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1524:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25097,7 +25976,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDay
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1525:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25106,7 +25985,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalWeek
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1526:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25115,7 +25994,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHour
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1527:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25124,7 +26003,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMinute
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1528:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25133,7 +26012,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMonth
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1529:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25142,7 +26021,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalQuarter
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1530:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25151,7 +26030,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalSecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1531:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25160,7 +26039,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1532:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25169,7 +26048,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalYear
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1533:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25178,7 +26057,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDay
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1534:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25187,7 +26066,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalWeek
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1535:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25196,7 +26075,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHour
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1536:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25205,7 +26084,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMinute
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1537:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25214,7 +26093,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMonth
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1538:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25223,7 +26102,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalQuarter
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1539:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25232,7 +26111,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalSecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1540:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25241,7 +26120,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1541:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25250,7 +26129,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalYear
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1542:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25259,7 +26138,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalDay
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1543:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25268,7 +26147,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalWeek
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1544:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25277,7 +26156,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalHour
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1545:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25286,7 +26165,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMinute
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1546:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25295,7 +26174,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMonth
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1547:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25304,7 +26183,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalQuarter
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1548:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25313,7 +26192,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalSecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1549:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25322,7 +26201,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1550:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25331,7 +26210,7 @@ yydefault:
 		{
 			yyLOCAL = IntervalYear
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IntervalType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1553:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25340,7 +26219,7 @@ yydefault:
 		{
 			yyLOCAL = 0
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1554:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25349,7 +26228,7 @@ yydefault:
 		{
 			yyLOCAL = 0
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1555:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25358,7 +26237,7 @@ yydefault:
 		{
 			yyLOCAL = convertStringToInt(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*int)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1556:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25370,7 +26249,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1557:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25382,7 +26261,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1558:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25394,7 +26273,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1559:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25406,7 +26285,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1560:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25418,7 +26297,7 @@ yydefault:
 			fe.Exprs = yyDollar[3].exprsUnion()
 			yyLOCAL = fe
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1561:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25427,7 +26306,7 @@ yydefault:
 		{
 			yyLOCAL = NoOption
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchExprOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1562:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25436,7 +26315,7 @@ yydefault:
 		{
 			yyLOCAL = BooleanModeOpt
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchExprOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1563:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25445,7 +26324,7 @@ yydefault:
 		{
 			yyLOCAL = NaturalLanguageModeOpt
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchExprOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1564:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -25454,7 +26333,7 @@ yydefault:
 		{
 			yyLOCAL = NaturalLanguageModeWithQueryExpansionOpt
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchExprOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1565:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25463,7 +26342,7 @@ yydefault:
 		{
 			yyLOCAL = QueryExpansionOpt
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*MatchExprOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1566:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25472,7 +26351,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].identifierCIUnion().String())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1567:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25481,7 +26360,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1568:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25490,7 +26369,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1569:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25499,7 +26378,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1570:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -25508,7 +26387,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].strUnion()), Length: ptr.Of(convertStringToInt(yyDollar[4].strUnion()))}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1571:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -25517,7 +26396,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].strUnion()), Length: ptr.Of(convertStringToInt(yyDollar[4].strUnion()))}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1572:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25526,7 +26405,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1573:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25535,7 +26414,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion(), Charset: yyDollar[3].columnCharsetUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1574:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25544,7 +26423,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1575:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25553,7 +26432,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1576:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25564,7 +26443,7 @@ yydefault:
 			yyLOCAL.Length = yyDollar[2].LengthScaleOptionUnion().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOptionUnion().Scale
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1577:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25573,7 +26452,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1578:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25582,7 +26461,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1579:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25591,7 +26470,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1580:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25600,7 +26479,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1581:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25609,7 +26488,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1582:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25618,7 +26497,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1583:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25627,7 +26506,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1584:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25636,7 +26515,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion()), Length: yyDollar[2].intPtrUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1585:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25645,7 +26524,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1586:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25654,7 +26533,7 @@ yydefault:
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ConvertType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1587:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25663,7 +26542,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1588:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25672,7 +26551,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1589:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25681,7 +26560,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1590:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25690,7 +26569,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1591:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25699,7 +26578,7 @@ yydefault:
 		{
 			yyLOCAL = string("")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1592:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25708,7 +26587,7 @@ yydefault:
 		{
 			yyLOCAL = encodeSQLString(yyDollar[2].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1593:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25719,7 +26598,7 @@ yydefault:
 			s[0] = yyDollar[1].whenUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*When)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1594:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25735,7 +26614,7 @@ yydefault:
 		{
 			yyLOCAL = &When{Cond: yyDollar[2].exprUnion(), Val: yyDollar[4].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**When)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1596:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25744,7 +26623,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1597:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25753,7 +26632,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1598:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25764,7 +26643,7 @@ yydefault:
 			cn.Name = yyDollar[1].identifierCIUnion()
 			yyLOCAL = cn
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1599:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25775,7 +26654,7 @@ yydefault:
 			cn.Name = NewIdentifierCI(string(yyDollar[1].strUnion()))
 			yyLOCAL = cn
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1600:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25787,7 +26666,7 @@ yydefault:
 			cn.Name = yyDollar[3].identifierCIUnion()
 			yyLOCAL = cn
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1601:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -25799,7 +26678,7 @@ yydefault:
 			cn.Name = yyDollar[5].identifierCIUnion()
 			yyLOCAL = cn
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ColName)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1602:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25808,7 +26687,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].colNameUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1603:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25817,7 +26696,7 @@ yydefault:
 		{
 			yyLOCAL = &Offset{V: convertStringToInt(yyDollar[1].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1604:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25831,7 +26710,7 @@ yydefault:
 			}
 			yyLOCAL = na(yylex).newIntLiteral("1")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1605:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25840,7 +26719,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newIntLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1606:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25849,7 +26728,7 @@ yydefault:
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].strUnion()[1:])
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1607:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25858,7 +26737,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**GroupBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1608:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -25870,7 +26749,7 @@ yydefault:
 			node.WithRollup = yyDollar[4].booleanUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**GroupBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1609:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25879,7 +26758,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1610:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25888,7 +26767,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1611:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25897,7 +26776,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1612:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25906,7 +26785,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].exprUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1613:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -25915,7 +26794,7 @@ yydefault:
 		{
 			yyLOCAL = &NamedWindow{yyDollar[2].windowDefinitionsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**NamedWindow)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1614:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25924,7 +26803,7 @@ yydefault:
 		{
 			yyLOCAL = NamedWindows{yyDollar[1].namedWindowUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*NamedWindows)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1615:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25940,7 +26819,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*NamedWindows)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1617:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25949,7 +26828,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].namedWindowsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*NamedWindows)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1618:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -25958,7 +26837,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1619:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25967,7 +26846,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].orderByUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1620:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -25976,7 +26855,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].orderByUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1621:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -25987,7 +26866,7 @@ yydefault:
 			o[0] = yyDollar[1].orderUnion()
 			yyLOCAL = o
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderBy)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1622:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26006,7 +26885,7 @@ yydefault:
 			node.Direction = yyDollar[2].orderDirectionUnion()
 			yyLOCAL = node
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Order)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1624:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26015,7 +26894,7 @@ yydefault:
 		{
 			yyLOCAL = AscOrder
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderDirection)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1625:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26024,7 +26903,7 @@ yydefault:
 		{
 			yyLOCAL = AscOrder
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderDirection)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1626:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26033,7 +26912,7 @@ yydefault:
 		{
 			yyLOCAL = DescOrder
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*OrderDirection)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1627:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26042,7 +26921,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Limit)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1628:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26051,7 +26930,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].limitUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Limit)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1629:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26062,7 +26941,7 @@ yydefault:
 			lim.Rowcount = yyDollar[2].exprUnion()
 			yyLOCAL = lim
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Limit)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1630:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26074,7 +26953,7 @@ yydefault:
 			lim.Rowcount = yyDollar[4].exprUnion()
 			yyLOCAL = lim
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Limit)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1631:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26086,7 +26965,7 @@ yydefault:
 			lim.Rowcount = yyDollar[2].exprUnion()
 			yyLOCAL = lim
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Limit)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1632:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26095,7 +26974,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1633:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26104,7 +26983,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1634:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26113,7 +26992,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1635:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26122,7 +27001,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1636:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26131,7 +27010,7 @@ yydefault:
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1637:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26140,7 +27019,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: DefaultType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1638:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26149,7 +27028,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: NoneType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1639:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26158,7 +27037,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: SharedType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1640:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26167,7 +27046,7 @@ yydefault:
 		{
 			yyLOCAL = &LockOption{Type: ExclusiveType}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1641:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26176,7 +27055,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1642:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26185,7 +27064,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1643:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26194,7 +27073,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1644:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26203,7 +27082,7 @@ yydefault:
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*AlterOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1645:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26212,7 +27091,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1647:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26221,7 +27100,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1648:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26230,7 +27109,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1649:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26239,7 +27118,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1650:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26248,7 +27127,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1651:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26257,7 +27136,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1652:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26266,7 +27145,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1653:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26275,7 +27154,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1654:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26284,7 +27163,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1655:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26293,7 +27172,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1656:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26302,7 +27181,7 @@ yydefault:
 		{
 			yyLOCAL = "cascaded"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1657:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26311,7 +27190,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1658:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26320,7 +27199,7 @@ yydefault:
 		{
 			yyLOCAL = string(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1659:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26329,7 +27208,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ProcParameter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1660:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26338,7 +27217,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].procParamsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ProcParameter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1661:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26347,7 +27226,7 @@ yydefault:
 		{
 			yyLOCAL = []*ProcParameter{yyDollar[1].procParamUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*ProcParameter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1662:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26363,7 +27242,7 @@ yydefault:
 		{
 			yyLOCAL = &ProcParameter{Mode: yyDollar[1].procParamModeUnion(), Name: yyDollar[2].identifierCIUnion(), Type: yyDollar[3].columnTypeUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**ProcParameter)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1664:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26372,7 +27251,7 @@ yydefault:
 		{
 			yyLOCAL = InMode
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ProcParameterMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1665:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26381,7 +27260,7 @@ yydefault:
 		{
 			yyLOCAL = InMode
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ProcParameterMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1666:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26390,7 +27269,7 @@ yydefault:
 		{
 			yyLOCAL = InoutMode
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ProcParameterMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1667:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26399,7 +27278,7 @@ yydefault:
 		{
 			yyLOCAL = OutMode
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ProcParameterMode)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1668:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26408,7 +27287,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Definer)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1670:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26417,7 +27296,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[3].definerUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Definer)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1671:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26428,7 +27307,7 @@ yydefault:
 				Name: string(yyDollar[1].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Definer)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1672:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26439,7 +27318,7 @@ yydefault:
 				Name: string(yyDollar[1].strUnion()),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Definer)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1673:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26451,7 +27330,7 @@ yydefault:
 				Address: yyDollar[2].strUnion(),
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Definer)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1674:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26460,7 +27339,7 @@ yydefault:
 		{
 			yyLOCAL = encodeSQLString(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1675:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26469,7 +27348,7 @@ yydefault:
 		{
 			yyLOCAL = formatIdentifier(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1676:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26478,7 +27357,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1677:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26487,7 +27366,7 @@ yydefault:
 		{
 			yyLOCAL = formatAddress(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1678:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26496,7 +27375,7 @@ yydefault:
 		{
 			yyLOCAL = ForUpdateLock
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1679:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26505,7 +27384,7 @@ yydefault:
 		{
 			yyLOCAL = ForUpdateLockNoWait
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1680:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26514,7 +27393,7 @@ yydefault:
 		{
 			yyLOCAL = ForUpdateLockSkipLocked
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1681:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26523,7 +27402,7 @@ yydefault:
 		{
 			yyLOCAL = ForShareLock
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1682:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26532,7 +27411,7 @@ yydefault:
 		{
 			yyLOCAL = ForShareLockNoWait
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1683:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26541,7 +27420,7 @@ yydefault:
 		{
 			yyLOCAL = ForShareLockSkipLocked
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1684:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26550,7 +27429,7 @@ yydefault:
 		{
 			yyLOCAL = ShareModeLock
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Lock)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1685:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -26559,7 +27438,7 @@ yydefault:
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].strUnion()), Charset: yyDollar[5].columnCharsetUnion(), FormatOption: yyDollar[6].strUnion(), ExportOption: yyDollar[7].strUnion(), Manifest: yyDollar[8].strUnion(), Overwrite: yyDollar[9].strUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectInto)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1686:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26568,7 +27447,7 @@ yydefault:
 		{
 			yyLOCAL = &SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].strUnion()), Charset: ColumnCharset{}, FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectInto)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1687:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -26577,7 +27456,7 @@ yydefault:
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].strUnion()), Charset: yyDollar[4].columnCharsetUnion(), FormatOption: "", ExportOption: yyDollar[5].strUnion(), Manifest: "", Overwrite: ""}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectInto)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1688:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26586,7 +27465,7 @@ yydefault:
 		{
 			yyLOCAL = &SelectInto{Type: IntoVariables, VarList: yyDollar[2].variablesUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**SelectInto)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1689:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26604,7 +27483,7 @@ yydefault:
 			s[0] = yyDollar[1].variableUnion()
 			yyLOCAL = s
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1691:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26613,7 +27492,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].variableUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1692:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26622,7 +27501,7 @@ yydefault:
 		{
 			yyLOCAL = &Variable{Name: createIdentifierCI(yyDollar[1].strUnion()), Scope: NoScope}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Variable)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1693:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26631,7 +27510,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1694:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26640,7 +27519,7 @@ yydefault:
 		{
 			yyLOCAL = " format csv" + yyDollar[3].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1695:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26649,7 +27528,7 @@ yydefault:
 		{
 			yyLOCAL = " format text" + yyDollar[3].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1696:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26658,7 +27537,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1697:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26667,7 +27546,7 @@ yydefault:
 		{
 			yyLOCAL = " header"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1698:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26676,7 +27555,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1699:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26685,7 +27564,7 @@ yydefault:
 		{
 			yyLOCAL = " manifest on"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1700:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26694,7 +27573,7 @@ yydefault:
 		{
 			yyLOCAL = " manifest off"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1701:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26703,7 +27582,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1702:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26712,7 +27591,7 @@ yydefault:
 		{
 			yyLOCAL = " overwrite on"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1703:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26721,7 +27600,7 @@ yydefault:
 		{
 			yyLOCAL = " overwrite off"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1704:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26730,7 +27609,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion() + yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1705:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26739,7 +27618,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1706:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26748,7 +27627,7 @@ yydefault:
 		{
 			yyLOCAL = " lines" + yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1707:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26757,7 +27636,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1708:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26766,7 +27645,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion() + yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1709:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26775,7 +27654,7 @@ yydefault:
 		{
 			yyLOCAL = " starting by " + encodeSQLString(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1710:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26784,7 +27663,7 @@ yydefault:
 		{
 			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1711:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26793,7 +27672,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1712:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26802,7 +27681,7 @@ yydefault:
 		{
 			yyLOCAL = " " + yyDollar[1].strUnion() + yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1713:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26811,7 +27690,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1714:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26820,7 +27699,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion() + yyDollar[2].strUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1715:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26829,7 +27708,7 @@ yydefault:
 		{
 			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1716:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26838,7 +27717,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].strUnion() + " enclosed by " + encodeSQLString(yyDollar[4].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1717:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26847,7 +27726,7 @@ yydefault:
 		{
 			yyLOCAL = " escaped by " + encodeSQLString(yyDollar[3].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1718:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26856,7 +27735,7 @@ yydefault:
 		{
 			yyLOCAL = ""
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1719:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26865,7 +27744,7 @@ yydefault:
 		{
 			yyLOCAL = " optionally"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1720:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26877,7 +27756,7 @@ yydefault:
 			ins.RowAlias = yyDollar[3].rowAliasUnion()
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Insert)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1721:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26888,7 +27767,7 @@ yydefault:
 			ins.Rows = yyDollar[1].tableStmtUnion()
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Insert)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1722:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -26901,7 +27780,7 @@ yydefault:
 			ins.RowAlias = yyDollar[6].rowAliasUnion()
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Insert)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1723:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -26914,7 +27793,7 @@ yydefault:
 			ins.RowAlias = yyDollar[5].rowAliasUnion()
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Insert)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1724:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -26926,7 +27805,7 @@ yydefault:
 			ins.Rows = yyDollar[4].tableStmtUnion()
 			yyLOCAL = ins
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**Insert)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1727:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -26937,7 +27816,7 @@ yydefault:
 			cols[0] = yyDollar[1].identifierCIUnion()
 			yyLOCAL = cols
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1728:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26948,7 +27827,7 @@ yydefault:
 			cols[0] = yyDollar[3].identifierCIUnion()
 			yyLOCAL = cols
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Columns)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1729:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -26971,7 +27850,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**RowAlias)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1732:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -26980,7 +27859,7 @@ yydefault:
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCSUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**RowAlias)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1733:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -26989,7 +27868,7 @@ yydefault:
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCSUnion(), Columns: yyDollar[4].columnsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**RowAlias)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1734:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -26998,7 +27877,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*UpdateExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1735:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -27007,7 +27886,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[5].updateExprsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*UpdateExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1736:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27018,7 +27897,7 @@ yydefault:
 			v[0] = yyDollar[1].valTupleUnion()
 			yyLOCAL = v
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Values)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1737:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27036,7 +27915,7 @@ yydefault:
 			v[0] = yyDollar[1].valTupleUnion()
 			yyLOCAL = v
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Values)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1739:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27052,7 +27931,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1741:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27061,7 +27940,7 @@ yydefault:
 		{
 			yyLOCAL = ValTuple{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1742:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27070,7 +27949,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].valTupleUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1743:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -27079,7 +27958,7 @@ yydefault:
 		{
 			yyLOCAL = ValTuple{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1744:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27088,7 +27967,7 @@ yydefault:
 		{
 			yyLOCAL = ValTuple(yyDollar[2].exprsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1745:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -27097,7 +27976,7 @@ yydefault:
 		{
 			yyLOCAL = ValTuple(yyDollar[3].exprsUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*ValTuple)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1748:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27110,7 +27989,7 @@ yydefault:
 				yyLOCAL = yyDollar[1].valTupleUnion()
 			}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1749:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27121,7 +28000,7 @@ yydefault:
 			ue[0] = yyDollar[1].updateExprUnion()
 			yyLOCAL = ue
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*UpdateExprs)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1750:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27137,7 +28016,7 @@ yydefault:
 		{
 			yyLOCAL = &UpdateExpr{Name: yyDollar[1].colNameUnion(), Expr: yyDollar[3].exprUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**UpdateExpr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1753:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -27146,7 +28025,7 @@ yydefault:
 		{
 			yyLOCAL = "charset"
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*string)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1756:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27155,7 +28034,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[1].identifierCIUnion().String())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1757:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27164,7 +28043,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral(yyDollar[1].strUnion())
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1758:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27173,7 +28052,7 @@ yydefault:
 		{
 			yyLOCAL = na(yylex).newStrLiteral("binary")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1759:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27182,7 +28061,7 @@ yydefault:
 		{
 			yyLOCAL = &Default{}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1762:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27191,7 +28070,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1763:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27200,7 +28079,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1764:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27209,7 +28088,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1765:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -27218,7 +28097,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1766:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27227,7 +28106,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1767:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27236,7 +28115,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*bool)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1768:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27245,7 +28124,7 @@ yydefault:
 		{
 			yyLOCAL = false
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Ignore)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1769:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27254,7 +28133,7 @@ yydefault:
 		{
 			yyLOCAL = true
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Ignore)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1770:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27263,7 +28142,7 @@ yydefault:
 		{
 			yyLOCAL = NoIgnoreOrReplace
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IgnoreOrReplaceType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1771:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27272,7 +28151,7 @@ yydefault:
 		{
 			yyLOCAL = IgnoreType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IgnoreOrReplaceType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1772:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27281,26 +28160,35 @@ yydefault:
 		{
 			yyLOCAL = ReplaceType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IgnoreOrReplaceType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1773:
 		yyDollar = yyS[yypt-0 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:8740
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1774:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:8742
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1775:
 		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL struct{}
 //line sql.y:8744
 		{
-			yyVAL.empty = struct{}{}
+			yyLOCAL = struct{}{}
 		}
+		yyVAL.data = yyZeroData
+		*(*struct{})(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1776:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
@@ -27308,7 +28196,7 @@ yydefault:
 		{
 			yyLOCAL = &CallProc{Name: yyDollar[2].tableNameUnion(), Params: yyDollar[4].exprsUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1777:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27317,7 +28205,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1778:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27326,7 +28214,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].exprsUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1779:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27335,7 +28223,7 @@ yydefault:
 		{
 			yyLOCAL = nil
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1780:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27344,7 +28232,7 @@ yydefault:
 		{
 			yyLOCAL = []*IndexOption{yyDollar[1].indexOptionUnion()}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1781:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -27353,7 +28241,7 @@ yydefault:
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].strUnion()), String: string(yyDollar[2].identifierCIUnion().String())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(**IndexOption)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1782:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27362,7 +28250,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCIUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1783:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27371,7 +28259,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1785:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27380,7 +28268,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCI)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1786:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27389,7 +28277,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1787:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27398,7 +28286,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1788:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27407,7 +28295,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1789:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27416,7 +28304,7 @@ yydefault:
 		{
 			yyLOCAL = yyDollar[1].identifierCSUnion()
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1791:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27425,7 +28313,7 @@ yydefault:
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].strUnion()))
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*IdentifierCS)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1792:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -27434,7 +28322,7 @@ yydefault:
 		{
 			yyLOCAL = &Kill{Type: yyDollar[2].killTypeUnion(), ProcesslistID: convertStringToUInt64(yyDollar[3].strUnion())}
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1793:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -27443,7 +28331,7 @@ yydefault:
 		{
 			yyLOCAL = ConnectionType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*KillType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1794:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27452,7 +28340,7 @@ yydefault:
 		{
 			yyLOCAL = ConnectionType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*KillType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 1795:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -27461,7 +28349,7 @@ yydefault:
 		{
 			yyLOCAL = QueryType
 		}
-		yyVAL.data = [6]__yyunsafe__.Pointer{}
+		yyVAL.data = yyZeroData
 		*(*KillType)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
 	case 2476:
 		yyDollar = yyS[yypt-1 : yypt+1]
