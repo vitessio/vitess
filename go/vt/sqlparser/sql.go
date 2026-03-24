@@ -12364,7 +12364,11 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:1172
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), &SelectExprs{Exprs: []SelectExpr{&Nextval{Expr: yyDollar[5].exprUnion()}}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
+			se := na(yylex).allocSelectExprs()
+			se.Exprs = []SelectExpr{&Nextval{Expr: yyDollar[5].exprUnion()}}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = yyDollar[7].tableName
+			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strs), se, []string{yyDollar[3].str} /*options*/, nil, TableExprs{ate}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
 		}
 		yyVAL.union = yyLOCAL
 	case 126:
@@ -12523,7 +12527,7 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:1271
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[7].exprUnion()), yyDollar[8].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
+			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[7].exprUnion()), yyDollar[8].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
 		}
 		yyVAL.union = yyLOCAL
 	case 145:
@@ -12531,7 +12535,7 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:1275
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), yyDollar[7].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
+			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), yyDollar[7].groupByUnion(), na(yylex).newWhere(HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
 		}
 		yyVAL.union = yyLOCAL
 	case 146:
@@ -12569,7 +12573,16 @@ yydefault:
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: getAliasedTableExprFromTableName(yyDollar[4].tableName), Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
+			ins := na(yylex).allocInsert()
+			ins.Action = yyDollar[1].insertActionUnion()
+			ins.Comments = Comments(yyDollar[2].strs).Parsed()
+			ins.Ignore = yyDollar[3].ignoreUnion()
+			ins.Table = getAliasedTableExprFromTableName(yyDollar[4].tableName)
+			ins.Partitions = yyDollar[5].partitionsUnion()
+			ins.Columns = cols
+			ins.Rows = Values{vals}
+			ins.OnDup = OnDup(yyDollar[8].updateExprsUnion())
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 149:
@@ -12593,7 +12606,16 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1319
 		{
-			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()}
+			upd := na(yylex).allocUpdate()
+			upd.With = yyDollar[1].withUnion()
+			upd.Comments = Comments(yyDollar[3].strs).Parsed()
+			upd.Ignore = yyDollar[4].ignoreUnion()
+			upd.TableExprs = yyDollar[5].tableExprsUnion()
+			upd.Exprs = yyDollar[7].updateExprsUnion()
+			upd.Where = na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())
+			upd.OrderBy = yyDollar[9].orderByUnion()
+			upd.Limit = yyDollar[10].limitUnion()
+			yyLOCAL = upd
 		}
 		yyVAL.union = yyLOCAL
 	case 152:
@@ -12601,7 +12623,19 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1325
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].identifierCS}}, Partitions: yyDollar[8].partitionsUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = yyDollar[6].tableName
+			ate.As = yyDollar[7].identifierCS
+			del := na(yylex).allocDelete()
+			del.With = yyDollar[1].withUnion()
+			del.Comments = Comments(yyDollar[3].strs).Parsed()
+			del.Ignore = yyDollar[4].ignoreUnion()
+			del.TableExprs = TableExprs{ate}
+			del.Partitions = yyDollar[8].partitionsUnion()
+			del.Where = na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion())
+			del.OrderBy = yyDollar[10].orderByUnion()
+			del.Limit = yyDollar[11].limitUnion()
+			yyLOCAL = del
 		}
 		yyVAL.union = yyLOCAL
 	case 153:
@@ -12609,7 +12643,14 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1329
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[6].tableNamesUnion(), TableExprs: yyDollar[8].tableExprsUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion())}
+			del := na(yylex).allocDelete()
+			del.With = yyDollar[1].withUnion()
+			del.Comments = Comments(yyDollar[3].strs).Parsed()
+			del.Ignore = yyDollar[4].ignoreUnion()
+			del.Targets = yyDollar[6].tableNamesUnion()
+			del.TableExprs = yyDollar[8].tableExprsUnion()
+			del.Where = na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion())
+			yyLOCAL = del
 		}
 		yyVAL.union = yyLOCAL
 	case 154:
@@ -12617,7 +12658,14 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1333
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())}
+			del := na(yylex).allocDelete()
+			del.With = yyDollar[1].withUnion()
+			del.Comments = Comments(yyDollar[3].strs).Parsed()
+			del.Ignore = yyDollar[4].ignoreUnion()
+			del.Targets = yyDollar[5].tableNamesUnion()
+			del.TableExprs = yyDollar[7].tableExprsUnion()
+			del.Where = na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())
+			yyLOCAL = del
 		}
 		yyVAL.union = yyLOCAL
 	case 155:
@@ -12625,7 +12673,14 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1337
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())}
+			del := na(yylex).allocDelete()
+			del.With = yyDollar[1].withUnion()
+			del.Comments = Comments(yyDollar[3].strs).Parsed()
+			del.Ignore = yyDollar[4].ignoreUnion()
+			del.Targets = yyDollar[5].tableNamesUnion()
+			del.TableExprs = yyDollar[7].tableExprsUnion()
+			del.Where = na(yylex).newWhere(WhereClause, yyDollar[8].exprUnion())
+			yyLOCAL = del
 		}
 		yyVAL.union = yyLOCAL
 	case 156:
@@ -13759,7 +13814,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2089
 		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
+			ue := na(yylex).allocUnaryExpr()
+			ue.Operator = UMinusOp
+			ue.Expr = yyDollar[2].exprUnion()
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 304:
@@ -14196,7 +14254,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2364
 		{
-			yyLOCAL = &UnaryExpr{Operator: NStringOp, Expr: na(yylex).newStrLiteral(yyDollar[1].str)}
+			ue := na(yylex).allocUnaryExpr()
+			ue.Operator = NStringOp
+			ue.Expr = na(yylex).newStrLiteral(yyDollar[1].str)
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 371:
@@ -19311,7 +19372,9 @@ yydefault:
 		var yyLOCAL *SelectExprs
 //line sql.y:5540
 		{
-			yyLOCAL = &SelectExprs{Exprs: []SelectExpr{yyDollar[1].selectExprUnion()}}
+			se := na(yylex).allocSelectExprs()
+			se.Exprs = []SelectExpr{yyDollar[1].selectExprUnion()}
+			yyLOCAL = se
 		}
 		yyVAL.union = yyLOCAL
 	case 1041:
@@ -19341,7 +19404,10 @@ yydefault:
 		var yyLOCAL SelectExpr
 //line sql.y:5560
 		{
-			yyLOCAL = &AliasedExpr{Expr: yyDollar[1].exprUnion(), As: yyDollar[2].identifierCI}
+			node := na(yylex).allocAliasedExpr()
+			node.Expr = yyDollar[1].exprUnion()
+			node.As = yyDollar[2].identifierCI
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1044:
@@ -19389,7 +19455,9 @@ yydefault:
 		var yyLOCAL TableExprs
 //line sql.y:5593
 		{
-			yyLOCAL = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewIdentifierCS("dual")}}}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = TableName{Name: NewIdentifierCS("dual")}
+			yyLOCAL = TableExprs{ate}
 		}
 		yyVAL.union = yyLOCAL
 	case 1052:
@@ -19436,7 +19504,11 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:5627
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].derivedTableUnion(), As: yyDollar[3].identifierCS, Columns: yyDollar[4].columnsUnion()}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = yyDollar[1].derivedTableUnion()
+			ate.As = yyDollar[3].identifierCS
+			ate.Columns = yyDollar[4].columnsUnion()
+			yyLOCAL = ate
 		}
 		yyVAL.union = yyLOCAL
 	case 1060:
@@ -19476,7 +19548,11 @@ yydefault:
 		var yyLOCAL *AliasedTableExpr
 //line sql.y:5651
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].identifierCS, Hints: yyDollar[3].indexHintsUnion()}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = yyDollar[1].tableName
+			ate.As = yyDollar[2].identifierCS
+			ate.Hints = yyDollar[3].indexHintsUnion()
+			yyLOCAL = ate
 		}
 		yyVAL.union = yyLOCAL
 	case 1065:
@@ -19484,7 +19560,12 @@ yydefault:
 		var yyLOCAL *AliasedTableExpr
 //line sql.y:5655
 		{
-			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitionsUnion(), As: yyDollar[6].identifierCS, Hints: yyDollar[7].indexHintsUnion()}
+			ate := na(yylex).allocAliasedTableExpr()
+			ate.Expr = yyDollar[1].tableName
+			ate.Partitions = yyDollar[4].partitionsUnion()
+			ate.As = yyDollar[6].identifierCS
+			ate.Hints = yyDollar[7].indexHintsUnion()
+			yyLOCAL = ate
 		}
 		yyVAL.union = yyLOCAL
 	case 1066:
@@ -19599,7 +19680,12 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:5734
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			jte := na(yylex).allocJoinTableExpr()
+			jte.LeftExpr = yyDollar[1].tableExprUnion()
+			jte.Join = yyDollar[2].joinTypeUnion()
+			jte.RightExpr = yyDollar[3].tableExprUnion()
+			jte.Condition = yyDollar[4].joinCondition
+			yyLOCAL = jte
 		}
 		yyVAL.union = yyLOCAL
 	case 1081:
@@ -19607,7 +19693,12 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:5738
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			jte := na(yylex).allocJoinTableExpr()
+			jte.LeftExpr = yyDollar[1].tableExprUnion()
+			jte.Join = yyDollar[2].joinTypeUnion()
+			jte.RightExpr = yyDollar[3].tableExprUnion()
+			jte.Condition = yyDollar[4].joinCondition
+			yyLOCAL = jte
 		}
 		yyVAL.union = yyLOCAL
 	case 1082:
@@ -19615,7 +19706,12 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:5742
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
+			jte := na(yylex).allocJoinTableExpr()
+			jte.LeftExpr = yyDollar[1].tableExprUnion()
+			jte.Join = yyDollar[2].joinTypeUnion()
+			jte.RightExpr = yyDollar[3].tableExprUnion()
+			jte.Condition = yyDollar[4].joinCondition
+			yyLOCAL = jte
 		}
 		yyVAL.union = yyLOCAL
 	case 1083:
@@ -19623,7 +19719,11 @@ yydefault:
 		var yyLOCAL TableExpr
 //line sql.y:5746
 		{
-			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion()}
+			jte := na(yylex).allocJoinTableExpr()
+			jte.LeftExpr = yyDollar[1].tableExprUnion()
+			jte.Join = yyDollar[2].joinTypeUnion()
+			jte.RightExpr = yyDollar[3].tableExprUnion()
+			yyLOCAL = jte
 		}
 		yyVAL.union = yyLOCAL
 	case 1084:
@@ -19944,7 +20044,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5946
 		{
-			yyLOCAL = &OrExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			node := na(yylex).allocOrExpr()
+			node.Left = yyDollar[1].exprUnion()
+			node.Right = yyDollar[3].exprUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1129:
@@ -19952,7 +20055,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5950
 		{
-			yyLOCAL = &XorExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			node := na(yylex).allocXorExpr()
+			node.Left = yyDollar[1].exprUnion()
+			node.Right = yyDollar[3].exprUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1130:
@@ -19960,7 +20066,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5954
 		{
-			yyLOCAL = &AndExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
+			node := na(yylex).allocAndExpr()
+			node.Left = yyDollar[1].exprUnion()
+			node.Right = yyDollar[3].exprUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1131:
@@ -19968,7 +20077,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5958
 		{
-			yyLOCAL = &NotExpr{Expr: yyDollar[2].exprUnion()}
+			node := na(yylex).allocNotExpr()
+			node.Expr = yyDollar[2].exprUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1132:
@@ -19976,7 +20087,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5962
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].isExprOperatorUnion()}
+			ie := na(yylex).allocIsExpr()
+			ie.Left = yyDollar[1].exprUnion()
+			ie.Right = yyDollar[3].isExprOperatorUnion()
+			yyLOCAL = ie
 		}
 		yyVAL.union = yyLOCAL
 	case 1133:
@@ -20018,7 +20132,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5988
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNullOp}
+			ie := na(yylex).allocIsExpr()
+			ie.Left = yyDollar[1].exprUnion()
+			ie.Right = IsNullOp
+			yyLOCAL = ie
 		}
 		yyVAL.union = yyLOCAL
 	case 1139:
@@ -20026,7 +20143,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5992
 		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].exprUnion(), Right: IsNotNullOp}
+			ie := na(yylex).allocIsExpr()
+			ie.Left = yyDollar[1].exprUnion()
+			ie.Right = IsNotNullOp
+			yyLOCAL = ie
 		}
 		yyVAL.union = yyLOCAL
 	case 1140:
@@ -20034,7 +20154,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5996
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Right: yyDollar[3].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = yyDollar[2].comparisonExprOperatorUnion()
+			cmp.Right = yyDollar[3].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1141:
@@ -20042,7 +20166,12 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6000
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: Any, Right: yyDollar[4].subqueryUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = yyDollar[2].comparisonExprOperatorUnion()
+			cmp.Modifier = Any
+			cmp.Right = yyDollar[4].subqueryUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1142:
@@ -20050,7 +20179,12 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6004
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: Any, Right: yyDollar[4].subqueryUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = yyDollar[2].comparisonExprOperatorUnion()
+			cmp.Modifier = Any
+			cmp.Right = yyDollar[4].subqueryUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1143:
@@ -20058,7 +20192,12 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6008
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Modifier: All, Right: yyDollar[4].subqueryUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = yyDollar[2].comparisonExprOperatorUnion()
+			cmp.Modifier = All
+			cmp.Right = yyDollar[4].subqueryUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1144:
@@ -20074,7 +20213,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6018
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: InOp, Right: yyDollar[3].colTupleUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = InOp
+			cmp.Right = yyDollar[3].colTupleUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1146:
@@ -20082,7 +20225,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6022
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotInOp, Right: yyDollar[4].colTupleUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = NotInOp
+			cmp.Right = yyDollar[4].colTupleUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1147:
@@ -20106,7 +20253,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6034
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = LikeOp
+			cmp.Right = yyDollar[3].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1150:
@@ -20114,7 +20265,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6038
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = NotLikeOp
+			cmp.Right = yyDollar[4].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1151:
@@ -20122,7 +20277,12 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6042
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion(), Escape: yyDollar[5].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = LikeOp
+			cmp.Right = yyDollar[3].exprUnion()
+			cmp.Escape = yyDollar[5].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1152:
@@ -20130,7 +20290,12 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6046
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion(), Escape: yyDollar[6].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = NotLikeOp
+			cmp.Right = yyDollar[4].exprUnion()
+			cmp.Escape = yyDollar[6].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1153:
@@ -20138,7 +20303,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6050
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: RegexpOp, Right: yyDollar[3].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = RegexpOp
+			cmp.Right = yyDollar[3].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1154:
@@ -20146,7 +20315,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6054
 		{
-			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotRegexpOp, Right: yyDollar[4].exprUnion()}
+			cmp := na(yylex).allocComparisonExpr()
+			cmp.Left = yyDollar[1].exprUnion()
+			cmp.Operator = NotRegexpOp
+			cmp.Right = yyDollar[4].exprUnion()
+			yyLOCAL = cmp
 		}
 		yyVAL.union = yyLOCAL
 	case 1155:
@@ -20172,7 +20345,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6073
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitOrOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = BitOrOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1159:
@@ -20180,7 +20357,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6077
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitAndOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = BitAndOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1160:
@@ -20188,7 +20369,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6081
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftLeftOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = ShiftLeftOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1161:
@@ -20196,7 +20381,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6085
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftRightOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = ShiftRightOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1162:
@@ -20204,7 +20393,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6089
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: PlusOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = PlusOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1163:
@@ -20212,7 +20405,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6093
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MinusOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = MinusOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1164:
@@ -20236,7 +20433,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6105
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MultOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = MultOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1167:
@@ -20244,7 +20445,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6109
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: DivOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = DivOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1168:
@@ -20252,7 +20457,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6113
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = ModOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1169:
@@ -20260,7 +20469,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6117
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = IntDivOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1170:
@@ -20268,7 +20481,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6121
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = ModOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1171:
@@ -20276,7 +20493,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6125
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()}
+			be := na(yylex).allocBinaryExpr()
+			be.Left = yyDollar[1].exprUnion()
+			be.Operator = BitXorOp
+			be.Right = yyDollar[3].exprUnion()
+			yyLOCAL = be
 		}
 		yyVAL.union = yyLOCAL
 	case 1172:
@@ -20364,7 +20585,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6171
 		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
+			ue := na(yylex).allocUnaryExpr()
+			ue.Operator = UMinusOp
+			ue.Expr = yyDollar[2].exprUnion()
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 1183:
@@ -20372,7 +20596,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6175
 		{
-			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].exprUnion()}
+			ue := na(yylex).allocUnaryExpr()
+			ue.Operator = TildaOp
+			ue.Expr = yyDollar[2].exprUnion()
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 1184:
@@ -20380,7 +20607,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6179
 		{
-			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].exprUnion()}
+			ue := na(yylex).allocUnaryExpr()
+			ue.Operator = BangOp
+			ue.Expr = yyDollar[2].exprUnion()
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 1185:
@@ -21031,7 +21261,9 @@ yydefault:
 		var yyLOCAL *Subquery
 //line sql.y:6571
 		{
-			yyLOCAL = &Subquery{yyDollar[1].tableStmtUnion()}
+			node := na(yylex).allocSubquery()
+			node.Select = yyDollar[1].tableStmtUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1269:
@@ -21054,7 +21286,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6591
 		{
-			yyLOCAL = &FuncExpr{Name: yyDollar[1].identifierCI, Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = yyDollar[1].identifierCI
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1272:
@@ -21062,7 +21297,11 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6595
 		{
-			yyLOCAL = &FuncExpr{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCI, Exprs: yyDollar[5].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Qualifier = yyDollar[1].identifierCS
+			fe.Name = yyDollar[3].identifierCI
+			fe.Exprs = yyDollar[5].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1273:
@@ -21070,7 +21309,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6605
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("left")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1274:
@@ -21078,7 +21320,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6609
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("right")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1275:
@@ -21150,7 +21395,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6645
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI(yyDollar[1].str)}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI(yyDollar[1].str)
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1284:
@@ -21158,7 +21405,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6656
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("utc_date")}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("utc_date")
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1285:
@@ -21174,7 +21423,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6666
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("current_date")}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("current_date")
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1287:
@@ -21182,7 +21433,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6670
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("curdate")}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("curdate")
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1288:
@@ -23289,7 +23542,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7759
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("if")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1557:
@@ -23297,7 +23553,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7763
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("database")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1558:
@@ -23305,7 +23564,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7767
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("schema")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1559:
@@ -23313,7 +23575,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7771
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("mod")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1560:
@@ -23321,7 +23586,10 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:7775
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: yyDollar[3].exprsUnion()}
+			fe := na(yylex).allocFuncExpr()
+			fe.Name = NewIdentifierCI("replace")
+			fe.Exprs = yyDollar[3].exprsUnion()
+			yyLOCAL = fe
 		}
 		yyVAL.union = yyLOCAL
 	case 1561:
@@ -23616,7 +23884,9 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:7948
 		{
-			yyLOCAL = &ColName{Name: yyDollar[1].identifierCI}
+			cn := na(yylex).allocColName()
+			cn.Name = yyDollar[1].identifierCI
+			yyLOCAL = cn
 		}
 		yyVAL.union = yyLOCAL
 	case 1599:
@@ -23624,7 +23894,9 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:7952
 		{
-			yyLOCAL = &ColName{Name: NewIdentifierCI(string(yyDollar[1].str))}
+			cn := na(yylex).allocColName()
+			cn.Name = NewIdentifierCI(string(yyDollar[1].str))
+			yyLOCAL = cn
 		}
 		yyVAL.union = yyLOCAL
 	case 1600:
@@ -23632,7 +23904,10 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:7956
 		{
-			yyLOCAL = &ColName{Qualifier: TableName{Name: yyDollar[1].identifierCS}, Name: yyDollar[3].identifierCI}
+			cn := na(yylex).allocColName()
+			cn.Qualifier = TableName{Name: yyDollar[1].identifierCS}
+			cn.Name = yyDollar[3].identifierCI
+			yyLOCAL = cn
 		}
 		yyVAL.union = yyLOCAL
 	case 1601:
@@ -23640,7 +23915,10 @@ yydefault:
 		var yyLOCAL *ColName
 //line sql.y:7960
 		{
-			yyLOCAL = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}, Name: yyDollar[5].identifierCI}
+			cn := na(yylex).allocColName()
+			cn.Qualifier = TableName{Qualifier: yyDollar[1].identifierCS, Name: yyDollar[3].identifierCS}
+			cn.Name = yyDollar[5].identifierCI
+			yyLOCAL = cn
 		}
 		yyVAL.union = yyLOCAL
 	case 1602:
@@ -23701,7 +23979,10 @@ yydefault:
 		var yyLOCAL *GroupBy
 //line sql.y:7998
 		{
-			yyLOCAL = &GroupBy{Exprs: yyDollar[3].exprsUnion(), WithRollup: yyDollar[4].booleanUnion()}
+			node := na(yylex).allocGroupBy()
+			node.Exprs = yyDollar[3].exprsUnion()
+			node.WithRollup = yyDollar[4].booleanUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1609:
@@ -23819,7 +24100,10 @@ yydefault:
 		var yyLOCAL *Order
 //line sql.y:8073
 		{
-			yyLOCAL = &Order{Expr: yyDollar[1].exprUnion(), Direction: yyDollar[2].orderDirectionUnion()}
+			node := na(yylex).allocOrder()
+			node.Expr = yyDollar[1].exprUnion()
+			node.Direction = yyDollar[2].orderDirectionUnion()
+			yyLOCAL = node
 		}
 		yyVAL.union = yyLOCAL
 	case 1624:
@@ -23867,7 +24151,9 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:8101
 		{
-			yyLOCAL = &Limit{Rowcount: yyDollar[2].exprUnion()}
+			lim := na(yylex).allocLimit()
+			lim.Rowcount = yyDollar[2].exprUnion()
+			yyLOCAL = lim
 		}
 		yyVAL.union = yyLOCAL
 	case 1630:
@@ -23875,7 +24161,10 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:8105
 		{
-			yyLOCAL = &Limit{Offset: yyDollar[2].exprUnion(), Rowcount: yyDollar[4].exprUnion()}
+			lim := na(yylex).allocLimit()
+			lim.Offset = yyDollar[2].exprUnion()
+			lim.Rowcount = yyDollar[4].exprUnion()
+			yyLOCAL = lim
 		}
 		yyVAL.union = yyLOCAL
 	case 1631:
@@ -23883,7 +24172,10 @@ yydefault:
 		var yyLOCAL *Limit
 //line sql.y:8109
 		{
-			yyLOCAL = &Limit{Offset: yyDollar[4].exprUnion(), Rowcount: yyDollar[2].exprUnion()}
+			lim := na(yylex).allocLimit()
+			lim.Offset = yyDollar[4].exprUnion()
+			lim.Rowcount = yyDollar[2].exprUnion()
+			yyLOCAL = lim
 		}
 		yyVAL.union = yyLOCAL
 	case 1632:
@@ -24496,7 +24788,10 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:8528
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[2].valuesUnion(), RowAlias: yyDollar[3].rowAliasUnion()}
+			ins := na(yylex).allocInsert()
+			ins.Rows = yyDollar[2].valuesUnion()
+			ins.RowAlias = yyDollar[3].rowAliasUnion()
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 1721:
@@ -24504,7 +24799,9 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:8532
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[1].tableStmtUnion()}
+			ins := na(yylex).allocInsert()
+			ins.Rows = yyDollar[1].tableStmtUnion()
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 1722:
@@ -24512,7 +24809,11 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:8536
 		{
-			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[5].valuesUnion(), RowAlias: yyDollar[6].rowAliasUnion()}
+			ins := na(yylex).allocInsert()
+			ins.Columns = yyDollar[2].columnsUnion()
+			ins.Rows = yyDollar[5].valuesUnion()
+			ins.RowAlias = yyDollar[6].rowAliasUnion()
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 1723:
@@ -24520,7 +24821,11 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:8540
 		{
-			yyLOCAL = &Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].valuesUnion(), RowAlias: yyDollar[5].rowAliasUnion()}
+			ins := na(yylex).allocInsert()
+			ins.Columns = []IdentifierCI{}
+			ins.Rows = yyDollar[4].valuesUnion()
+			ins.RowAlias = yyDollar[5].rowAliasUnion()
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 1724:
@@ -24528,7 +24833,10 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:8544
 		{
-			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].tableStmtUnion()}
+			ins := na(yylex).allocInsert()
+			ins.Columns = yyDollar[2].columnsUnion()
+			ins.Rows = yyDollar[4].tableStmtUnion()
+			yyLOCAL = ins
 		}
 		yyVAL.union = yyLOCAL
 	case 1727:

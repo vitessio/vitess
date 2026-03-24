@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "strings"
+
 const nodeSlabSize = 32
 
 // nodeAllocator batch-allocates AST nodes in slabs to reduce the number of
@@ -343,4 +345,51 @@ func (a *nodeAllocator) newTimeLiteral(val string) *Literal {
 	lit.Type = TimeVal
 	lit.Val = val
 	return lit
+}
+
+func (a *nodeAllocator) newSelect(
+	comments Comments,
+	exprs *SelectExprs,
+	selectOptions []string,
+	into *SelectInto,
+	from TableExprs,
+	where *Where,
+	groupBy *GroupBy,
+	having *Where,
+	windows NamedWindows,
+) *Select {
+	sel := a.allocSelect()
+	sel.Comments = comments.Parsed()
+	sel.SelectExprs = exprs
+	sel.Into = into
+	sel.From = from
+	sel.Where = where
+	sel.GroupBy = groupBy
+	sel.Having = having
+	sel.Windows = windows
+	for _, option := range selectOptions {
+		switch strings.ToLower(option) {
+		case DistinctStr:
+			sel.Distinct = true
+		case SQLCacheStr:
+			truth := true
+			sel.Cache = &truth
+		case SQLNoCacheStr:
+			truth := false
+			sel.Cache = &truth
+		case HighPriorityStr:
+			sel.HighPriority = true
+		case StraightJoinHint:
+			sel.StraightJoinHint = true
+		case SQLSmallResultStr:
+			sel.SQLSmallResult = true
+		case SQLBigResultStr:
+			sel.SQLBigResult = true
+		case SQLBufferResultStr:
+			sel.SQLBufferResult = true
+		case SQLCalcFoundRowsStr:
+			sel.SQLCalcFoundRows = true
+		}
+	}
+	return sel
 }

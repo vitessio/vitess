@@ -1170,7 +1170,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = NewSelect(Comments($2), &SelectExprs{Exprs: []SelectExpr{&Nextval{Expr: $5}}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+    se := na(yylex).allocSelectExprs(); se.Exprs = []SelectExpr{&Nextval{Expr: $5}}; ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $7; $$ = na(yylex).newSelect(Comments($2), se, []string{$3}/*options*/, nil, TableExprs{ate}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -1269,11 +1269,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
   }
 | values_statement
   {
@@ -1301,7 +1301,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: getAliasedTableExprFromTableName($4), Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; ins.Rows = Values{vals}; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:
@@ -1317,25 +1317,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: na(yylex).newWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = Comments($3).Parsed(); upd.Ignore = $4; upd.TableExprs = $5; upd.Exprs = $7; upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = $9; upd.Limit = $10; $$ = upd
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: na(yylex).newWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = TableExprs{ate}; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: na(yylex).newWhere(WhereClause, $9)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $6; del.TableExprs = $8; del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: na(yylex).newWhere(WhereClause, $8)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: na(yylex).newWhere(WhereClause, $8)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 
 from_or_using:
@@ -2087,7 +2087,7 @@ NULL
    }
 | '-' NUM_literal
    {
-    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = UMinusOp; ue.Expr = $2; $$ = ue
    }
 
 literal:
@@ -2362,7 +2362,7 @@ STRING
   }
 | NCHAR_STRING
   {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: na(yylex).newStrLiteral($1)}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = NStringOp; ue.Expr = na(yylex).newStrLiteral($1); $$ = ue
   }
  | underscore_charsets STRING %prec UNARY
    {
@@ -5538,7 +5538,7 @@ select_option:
 select_expression_list:
   select_expression
   {
-    $$ = &SelectExprs{Exprs: []SelectExpr{$1}}
+    se := na(yylex).allocSelectExprs(); se.Exprs = []SelectExpr{$1}; $$ = se
   }
 | select_expression_list ',' select_expression
   {
@@ -5558,7 +5558,7 @@ select_expression:
   }
 | expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    node := na(yylex).allocAliasedExpr(); node.Expr = $1; node.As = $2; $$ = node
   }
 | table_id '.' '*'
   {
@@ -5591,7 +5591,7 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}}}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; $$ = TableExprs{ate}
   }
   | from_clause
   {
@@ -5625,7 +5625,7 @@ table_factor:
   }
 | derived_table as_opt table_id column_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $3; ate.Columns = $4; $$ = ate
   }
 | openb table_references closeb
   {
@@ -5649,11 +5649,11 @@ derived_table:
 aliased_table_name:
 table_name as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $2; ate.Hints = $3; $$ = ate
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.Partitions = $4; ate.As = $6; ate.Hints = $7; $$ = ate
   }
 
 column_list_opt:
@@ -5732,19 +5732,19 @@ partition_list:
 join_table:
   table_reference inner_join table_factor join_condition_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference straight_join table_factor on_expression_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference outer_join table_reference join_condition
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference natural_join table_factor
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; $$ = jte
   }
 
 join_condition:
@@ -5944,23 +5944,23 @@ where_expression_opt:
 expression:
   expression OR expression %prec OR
   {
-    $$ = &OrExpr{Left: $1, Right: $3}
+    node := na(yylex).allocOrExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | expression XOR expression %prec XOR
   {
-    $$ = &XorExpr{Left: $1, Right: $3}
+    node := na(yylex).allocXorExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | expression AND expression %prec AND
   {
-    $$ = &AndExpr{Left: $1, Right: $3}
+    node := na(yylex).allocAndExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | NOT expression %prec NOT
   {
-	    $$ = &NotExpr{Expr: $2}
+	    node := na(yylex).allocNotExpr(); node.Expr = $2; $$ = node
   }
 | bool_pri IS is_suffix %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: $3}
+	 ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = $3; $$ = ie
   }
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
@@ -5986,27 +5986,27 @@ null_or_unknown:
 bool_pri:
 bool_pri IS null_or_unknown %prec IS
   {
-    $$ = &IsExpr{Left: $1, Right: IsNullOp}
+    ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = IsNullOp; $$ = ie
   }
 | bool_pri IS NOT null_or_unknown %prec IS
   {
-    $$ = &IsExpr{Left: $1, Right: IsNotNullOp}
+    ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = IsNotNullOp; $$ = ie
   }
 | bool_pri compare predicate
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Right = $3; $$ = cmp
   }
 | bool_pri any_all_compare ANY subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = Any; cmp.Right = $4; $$ = cmp
   }
 | bool_pri any_all_compare SOME subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = Any; cmp.Right = $4; $$ = cmp
   }
 | bool_pri any_all_compare ALL subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: All, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = All; cmp.Right = $4; $$ = cmp
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
@@ -6016,11 +6016,11 @@ bool_pri IS null_or_unknown %prec IS
 predicate:
 bit_expr IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = InOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotInOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr BETWEEN bit_expr AND predicate
   {
@@ -6032,27 +6032,27 @@ bit_expr IN col_tuple
   }
 | bit_expr LIKE simple_expr
   {
-	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+	    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = LikeOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT LIKE simple_expr
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotLikeOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+	    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = LikeOp; cmp.Right = $3; cmp.Escape = $5; $$ = cmp
   }
 | bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotLikeOp; cmp.Right = $4; cmp.Escape = $6; $$ = cmp
   }
 | bit_expr regexp_symbol bit_expr
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = RegexpOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT regexp_symbol bit_expr
   {
-	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+	 cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotRegexpOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
@@ -6071,27 +6071,27 @@ regexp_symbol:
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitOrOp; be.Right = $3; $$ = be
   }
 | bit_expr '&' bit_expr %prec '&'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitAndOp; be.Right = $3; $$ = be
   }
 | bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ShiftLeftOp; be.Right = $3; $$ = be
   }
 | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ShiftRightOp; be.Right = $3; $$ = be
   }
 | bit_expr '+' bit_expr %prec '+'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = PlusOp; be.Right = $3; $$ = be
   }
 | bit_expr '-' bit_expr %prec '-'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = MinusOp; be.Right = $3; $$ = be
   }
 | bit_expr '+' INTERVAL bit_expr interval %prec '+'
   {
@@ -6103,27 +6103,27 @@ bit_expr '|' bit_expr %prec '|'
   }
 | bit_expr '*' bit_expr %prec '*'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = MultOp; be.Right = $3; $$ = be
   }
 | bit_expr '/' bit_expr %prec '/'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = DivOp; be.Right = $3; $$ = be
   }
 | bit_expr '%' bit_expr %prec '%'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ModOp; be.Right = $3; $$ = be
   }
 | bit_expr DIV bit_expr %prec DIV
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = IntDivOp; be.Right = $3; $$ = be
   }
 | bit_expr MOD bit_expr %prec MOD
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ModOp; be.Right = $3; $$ = be
   }
 | bit_expr '^' bit_expr %prec '^'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitXorOp; be.Right = $3; $$ = be
   }
 | simple_expr %prec EXPRESSION_PREC_SETTER
   {
@@ -6169,15 +6169,15 @@ function_call_keyword
   }
 | '-' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = UMinusOp; ue.Expr = $2; $$ = ue
   }
 | '~' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = TildaOp; ue.Expr = $2; $$ = ue
   }
 | '!' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = BangOp; ue.Expr = $2; $$ = ue
   }
 | subquery
   {
@@ -6569,7 +6569,7 @@ col_tuple:
 subquery:
   query_expression_parens %prec SUBQUERY_AS_EXPR
   {
-    $$ = &Subquery{$1}
+    node := na(yylex).allocSubquery(); node.Select = $1; $$ = node
   }
 
 expression_list:
@@ -6589,11 +6589,11 @@ expression_list:
 function_call_generic:
   sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = $1; fe.Exprs = $3; $$ = fe
   }
 | table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+    fe := na(yylex).allocFuncExpr(); fe.Qualifier = $1; fe.Name = $3; fe.Exprs = $5; $$ = fe
   }
 
 /*
@@ -6603,11 +6603,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("left"); fe.Exprs = $3; $$ = fe
   }
 | RIGHT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("right"); fe.Exprs = $3; $$ = fe
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -6643,7 +6643,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI($1); $$ = fe
   }
 
 /*
@@ -6654,7 +6654,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("utc_date"); $$ = fe
   }
 | now
   {
@@ -6664,11 +6664,11 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("current_date"); $$ = fe
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("curdate"); $$ = fe
   }
 | UTC_TIME func_datetime_precision
   {
@@ -7757,23 +7757,23 @@ func_datetime_precision:
 function_call_conflict:
   IF openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("if"); fe.Exprs = $3; $$ = fe
   }
 | DATABASE openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("database"); fe.Exprs = $3; $$ = fe
   }
 | SCHEMA openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("schema"); fe.Exprs = $3; $$ = fe
   }
 | MOD openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("mod"); fe.Exprs = $3; $$ = fe
   }
 | REPLACE openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("replace"); fe.Exprs = $3; $$ = fe
   }
 
 match_option:
@@ -7946,19 +7946,19 @@ else_expression_opt:
 column_name:
   ci_identifier
   {
-    $$ = &ColName{Name: $1}
+    cn := na(yylex).allocColName(); cn.Name = $1; $$ = cn
   }
 | non_reserved_keyword
   {
-    $$ = &ColName{Name: NewIdentifierCI(string($1))}
+    cn := na(yylex).allocColName(); cn.Name = NewIdentifierCI(string($1)); $$ = cn
   }
 | table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
+    cn := na(yylex).allocColName(); cn.Qualifier = TableName{Name: $1}; cn.Name = $3; $$ = cn
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+    cn := na(yylex).allocColName(); cn.Qualifier = TableName{Qualifier: $1, Name: $3}; cn.Name = $5; $$ = cn
   }
 
 column_name_or_offset:
@@ -7996,7 +7996,7 @@ group_by_opt:
   }
 | GROUP BY expression_list rollup_opt
   {
-    $$ = &GroupBy{Exprs: $3, WithRollup: $4}
+    node := na(yylex).allocGroupBy(); node.Exprs = $3; node.WithRollup = $4; $$ = node
   }
 
 rollup_opt:
@@ -8071,7 +8071,7 @@ order_list:
 order:
   expression asc_desc_opt
   {
-    $$ = &Order{Expr: $1, Direction: $2}
+    node := na(yylex).allocOrder(); node.Expr = $1; node.Direction = $2; $$ = node
   }
 
 asc_desc_opt:
@@ -8099,15 +8099,15 @@ limit_opt:
 limit_clause:
 LIMIT expression
   {
-    $$ = &Limit{Rowcount: $2}
+    lim := na(yylex).allocLimit(); lim.Rowcount = $2; $$ = lim
   }
 | LIMIT expression ',' expression
   {
-    $$ = &Limit{Offset: $2, Rowcount: $4}
+    lim := na(yylex).allocLimit(); lim.Offset = $2; lim.Rowcount = $4; $$ = lim
   }
 | LIMIT expression OFFSET expression
   {
-    $$ = &Limit{Offset: $4, Rowcount: $2}
+    lim := na(yylex).allocLimit(); lim.Offset = $4; lim.Rowcount = $2; $$ = lim
   }
 
 algorithm_lock_opt:
@@ -8526,23 +8526,23 @@ optionally_opt:
 insert_data:
   value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2, RowAlias: $3}
+    ins := na(yylex).allocInsert(); ins.Rows = $2; ins.RowAlias = $3; $$ = ins
   }
 | select_statement
   {
-    $$ = &Insert{Rows: $1}
+    ins := na(yylex).allocInsert(); ins.Rows = $1; $$ = ins
   }
 | openb ins_column_list closeb value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $5; ins.RowAlias = $6; $$ = ins
   }
 | openb closeb value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
+    ins := na(yylex).allocInsert(); ins.Columns = []IdentifierCI{}; ins.Rows = $4; ins.RowAlias = $5; $$ = ins
   }
 | openb ins_column_list closeb select_statement
   {
-    $$ = &Insert{Columns: $2, Rows: $4}
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $4; $$ = ins
   }
 
 value_or_values:
