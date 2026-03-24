@@ -614,7 +614,6 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-
 		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
