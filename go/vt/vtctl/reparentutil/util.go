@@ -406,9 +406,11 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 func rebuildGTIDExecutedTable(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, logger logutil.Logger) error {
 	// We use a 30-second timeout here as the rebuild can take longer than 15 seconds in the
 	// significantly bloated cases. We might eat up most of the PRS's full timeout here,
-	// but in the bloated cases, we spend most of our time compressing the bloated table
-	// anyway during `RESET REPLICA ALL` and `FLUSH BINARY LOGS`. Once the bloat is cleaned
-	// up, those operations should complete much more quickly.
+	// but in the bloated cases, we spend most of our time compressing the table anyway
+	// during `RESET REPLICA ALL` and `FLUSH BINARY LOGS`. Once the bloat is cleaned up,
+	// those operations should complete much more quickly. In the case we spend too much
+	// time here (which also means PRS would've failed anyway), we can always retry now that
+	// the bloat has been cleaned up.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
 	defer cancel()
 
