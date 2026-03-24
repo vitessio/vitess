@@ -140,8 +140,6 @@ func TestHistorian(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp1, tab)
 	gtid2 := gtidPrefix + "1-20"
-	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
-	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY}, []int64{0})
 	tables["t1"] = table
@@ -163,12 +161,29 @@ func TestHistorian(t *testing.T) {
 		},
 		PKColumns: []int64{0},
 	}
+	gtidBeforeEarliest := gtidPrefix + "1-05"
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidBeforeEarliest)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, exp1, tab)
+
+	gtidBetweenSnapshots := gtidPrefix + "1-15"
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidBetweenSnapshots)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, exp1, tab)
+
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp2, tab)
+
+	gtidAfterNewest := gtidPrefix + "1-25"
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidAfterNewest)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, exp2, tab)
+
 	gtid3 := gtidPrefix + "1-30"
-	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
-	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2", "id3"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY, querypb.Type_INT32}, []int64{0})
 	tables["t1"] = table

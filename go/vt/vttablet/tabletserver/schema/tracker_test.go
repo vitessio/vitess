@@ -18,8 +18,11 @@ package schema
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -52,7 +55,8 @@ func TestTracker(t *testing.T) {
 		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
 	))
 	vs := &fakeVstreamer{
-		done: make(chan struct{}),
+		done:             make(chan struct{}),
+		closeDoneOnError: true,
 		events: [][]*binlogdatapb.VEvent{{
 			{
 				Type: binlogdatapb.VEventType_GTID,
@@ -90,8 +94,179 @@ func TestTracker(t *testing.T) {
 	cancel()
 	tracker.Close()
 	final := env.Stats().ErrorCounters.Counts()["INTERNAL"]
-	require.Equal(t, initial+1, final)
+	require.GreaterOrEqual(t, final, initial+1)
 	require.True(t, initialSchemaInserted)
+}
+
+func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const (
+		startupGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+		gtid1       = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
+		gtid2       = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-11"
+		ddl1        = "create table tracker_retry (id int)"
+		ddl2        = "create table tracker_retry_later (id int)"
+	)
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{}, func(query string) {})
+	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	const rejectedInsertPattern = "insert into _vt.schema_version.*1-10.*"
+	db.RejectQueryPattern(rejectedInsertPattern, "save failed")
+
+	var gtid1Saves, gtid2Saves int
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{
+				events: [][]*binlogdatapb.VEvent{
+					{
+						{Type: binlogdatapb.VEventType_GTID, Gtid: gtid1},
+						{Type: binlogdatapb.VEventType_DDL, Statement: ddl1},
+					},
+					{
+						{Type: binlogdatapb.VEventType_GTID, Gtid: gtid2},
+						{Type: binlogdatapb.VEventType_DDL, Statement: ddl2},
+					},
+				},
+			},
+			{
+				before: func() {
+					db.RemoveQueryPattern(rejectedInsertPattern)
+					db.AddQueryPatternWithCallback(rejectedInsertPattern, &sqltypes.Result{}, func(query string) {
+						gtid1Saves++
+					})
+				},
+				events: [][]*binlogdatapb.VEvent{{
+					{Type: binlogdatapb.VEventType_GTID, Gtid: gtid1},
+					{Type: binlogdatapb.VEventType_DDL, Statement: ddl1},
+				}},
+			},
+		},
+	}
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-11.*", &sqltypes.Result{}, func(query string) {
+		gtid2Saves++
+	})
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetryTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.Greater(t, len(startPositions), 1)
+	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, startupGTID, startPositions[1])
+	assert.Equal(t, 1, gtid1Saves)
+	assert.Zero(t, gtid2Saves)
+}
+
+func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const startupGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{})
+	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{err: errors.New("stream failed before gtid")},
+			{},
+		},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetryStartupGTIDTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.Greater(t, len(startPositions), 1)
+	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, startupGTID, startPositions[1])
+}
+
+func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const (
+		startupGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+		gtid1       = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
+		ddl1        = "create table tracker_retry_after_saved_first_ddl (id int)"
+	)
+
+	var startupSchemaInserted bool
+	var gtid1Saves int
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{}, func(query string) {
+		startupSchemaInserted = true
+	})
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-10.*", &sqltypes.Result{}, func(query string) {
+		gtid1Saves++
+	})
+	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{
+				events: [][]*binlogdatapb.VEvent{{
+					{Type: binlogdatapb.VEventType_GTID, Gtid: gtid1},
+					{Type: binlogdatapb.VEventType_DDL, Statement: ddl1},
+				}},
+				errAfterEvents: errors.New("stream failed after saving first ddl"),
+			},
+			{},
+		},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetrySavedFirstDDLTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.Greater(t, len(startPositions), 1)
+	require.True(t, startupSchemaInserted)
+	assert.Equal(t, 1, gtid1Saves)
+	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, gtid1, startPositions[1])
 }
 
 func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
@@ -138,46 +313,104 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 var _ VStreamer = (*fakeVstreamer)(nil)
 
 type fakeVstreamer struct {
-	done        chan struct{}
-	events      [][]*binlogdatapb.VEvent
-	lastOptions *binlogdatapb.VStreamOptions
+	done             chan struct{}
+	events           [][]*binlogdatapb.VEvent
+	streamCalls      []fakeVstreamCall
+	closeDoneOnError bool
+
+	mu             sync.Mutex
+	doneOnce       sync.Once
+	startPositions []string
+	lastOptions    *binlogdatapb.VStreamOptions
+}
+
+type fakeVstreamCall struct {
+	before         func()
+	events         [][]*binlogdatapb.VEvent
+	err            error
+	errAfterEvents error
 }
 
 func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
 	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
 ) error {
+	f.mu.Lock()
+	callIndex := len(f.startPositions)
+	f.startPositions = append(f.startPositions, startPos)
 	f.lastOptions = options
-	for _, events := range f.events {
+	call := fakeVstreamCall{events: f.events}
+	if callIndex < len(f.streamCalls) {
+		call = f.streamCalls[callIndex]
+	}
+	f.mu.Unlock()
+
+	if call.before != nil {
+		call.before()
+	}
+	if call.err != nil {
+		if f.closeDoneOnError {
+			f.doneOnce.Do(func() {
+				close(f.done)
+			})
+		}
+		return call.err
+	}
+	for _, events := range call.events {
 		err := send(events)
 		if err != nil {
+			if f.closeDoneOnError {
+				f.doneOnce.Do(func() {
+					close(f.done)
+				})
+			}
 			return err
 		}
 	}
-	close(f.done)
+	if call.errAfterEvents != nil {
+		if f.closeDoneOnError {
+			f.doneOnce.Do(func() {
+				close(f.done)
+			})
+		}
+		return call.errAfterEvents
+	}
+	f.doneOnce.Do(func() {
+		close(f.done)
+	})
 	<-ctx.Done()
 	return nil
 }
 
+func (f *fakeVstreamer) getStartPositions() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.startPositions...)
+}
+
 func TestMustReloadSchemaOnDDL(t *testing.T) {
 	type testcase struct {
+		name   string
 		query  string
 		dbname string
 		want   bool
 	}
 	db1, db2 := "db1", "db2"
 	testcases := []*testcase{
-		{"create table x(i int);", db1, true},
-		{"bad", db2, false},
-		{"create table db2.x(i int);", db2, true},
-		{"rename table db2.x to db2.y;", db2, true},
-		{"create table db1.x(i int);", db2, false},
-		{"create table _vt.x(i int);", db1, false},
-		{"DROP VIEW IF EXISTS `pseudo_gtid`.`_pseudo_gtid_hint__asc:55B364E3:0000000000056EE2:6DD57B85`", db2, false},
-		{"create database db1;", db1, false},
-		{"create table db1._4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho(i int);", db1, false},
+		{name: "unqualified create table in target db", query: "create table x(i int);", dbname: db1, want: true},
+		{name: "parse failure fails closed", query: "bad", dbname: db2, want: true},
+		{name: "qualified create table in target db", query: "create table db2.x(i int);", dbname: db2, want: true},
+		{name: "drop table in target db", query: "drop table db2.x", dbname: db2, want: true},
+		{name: "drop view in target db", query: "drop view db2.x", dbname: db2, want: true},
+		{name: "rename table within target db", query: "rename table db2.x to db2.y;", dbname: db2, want: true},
+		{name: "multi-table rename with target db table on from side", query: "rename table db2.x to db1.y, db1.a to db1.b;", dbname: db2, want: true},
+		{name: "qualified create table in other db", query: "create table db1.x(i int);", dbname: db2, want: false},
+		{name: "sidecar table is ignored", query: "create table _vt.x(i int);", dbname: db1, want: false},
+		{name: "online ddl artifact in other db is ignored", query: "DROP VIEW IF EXISTS `pseudo_gtid`.`_pseudo_gtid_hint__asc:55B364E3:0000000000056EE2:6DD57B85`", dbname: db2, want: false},
+		{name: "database ddl is ignored", query: "create database db1;", dbname: db1, want: false},
+		{name: "online ddl artifact in target db is ignored", query: "create table db1._4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho(i int);", dbname: db1, want: false},
 	}
 	for _, tc := range testcases {
-		t.Run("", func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, MustReloadSchemaOnDDL(tc.query, tc.dbname, sqlparser.NewTestParser()))
 		})
 	}

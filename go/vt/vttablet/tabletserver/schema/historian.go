@@ -286,8 +286,12 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
-	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s", tableName, pos))
+	if idx == len(h.schemas) {
+		log.Info(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
+		return h.schemas[len(h.schemas)-1].schema[tableName.String()]
+	}
+	if idx == 0 && !pos.Equal(h.schemas[idx].pos) {
+		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s because it is older than the oldest cached schema %s", tableName, pos, h.schemas[idx].pos))
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry

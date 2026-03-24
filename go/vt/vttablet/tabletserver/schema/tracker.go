@@ -117,7 +117,8 @@ func (tr *Tracker) Enable(enabled bool) {
 func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
-	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
+	startupGTID, err := tr.possiblyInsertInitialSchema(ctx)
+	if err != nil {
 		log.Error(fmt.Sprintf("error inserting initial schema: %v", err))
 		return
 	}
@@ -129,9 +130,9 @@ func (tr *Tracker) process(ctx context.Context) {
 	}
 
 	gtid := "current"
-	prevGtid := ""
+	prevGtid := startupGTID
 	restorePreviousGTID := func() {
-		if prevGtid != "" && gtid != "current" {
+		if prevGtid != "" {
 			gtid = prevGtid
 		}
 	}
@@ -146,7 +147,9 @@ func (tr *Tracker) process(ctx context.Context) {
 		err := tr.vs.Stream(ctx, gtid, nil, filter, throttlerapp.SchemaTrackerName, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Type == binlogdatapb.VEventType_GTID {
-					prevGtid = gtid
+					if gtid != "current" {
+						prevGtid = gtid
+					}
 					gtid = event.Gtid
 					continue
 				}
@@ -157,7 +160,9 @@ func (tr *Tracker) process(ctx context.Context) {
 						log.Error(fmt.Sprintf("Error updating schema: %s for ddl %q at pos %s",
 							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid))
 						restorePreviousGTID()
+						return err
 					}
+					prevGtid = gtid
 				}
 			}
 			return nil
@@ -203,29 +208,32 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 
 // possiblyInsertInitialSchema stores the latest schema when a tracker starts and the schema_version table is empty
 // this enables the right schema to be available between the time the tracker starts first and the first DDL is applied
-func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
+func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) (string, error) {
 	var err error
 	needsWarming, err := tr.isSchemaVersionTableEmpty(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !needsWarming { // the schema_version table is not empty, nothing to do here
-		return nil
+		return "", nil
 	}
 	if err = tr.engine.Reload(ctx); err != nil {
-		return err
+		return "", err
 	}
 
 	timestamp := time.Now().UnixNano() / 1e9
 	ddl := ""
 	pos, err := tr.currentPosition(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	gtid := replication.EncodePosition(pos)
 	log.Info("Saving initial schema for gtid " + gtid)
 
-	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
+	if err := tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp); err != nil {
+		return "", err
+	}
+	return gtid, nil
 }
 
 func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
@@ -274,15 +282,13 @@ func encodeString(in string) string {
 func MustReloadSchemaOnDDL(sql string, dbname string, parser *sqlparser.Parser) bool {
 	ast, err := parser.Parse(sql)
 	if err != nil {
-		return false
+		return true
 	}
 	switch stmt := ast.(type) {
 	case sqlparser.DBDDLStatement:
 		return false
 	case sqlparser.DDLStatement:
-		tables := []sqlparser.TableName{stmt.GetTable()}
-		tables = append(tables, stmt.GetToTables()...)
-		for _, table := range tables {
+		for _, table := range stmt.AffectedTables() {
 			if table.IsEmpty() {
 				continue
 			}
