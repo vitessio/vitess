@@ -27,3 +27,11 @@ This is a fix for the following security advisory and associated CVE
 We now prevent a common [Path Traversal attack](https://owasp.org/www-community/attacks/Path_Traversal) that someone with write access to backup storage could use to escape the target restore directory and write files to arbitrary filesystem paths via modifications to the `MANIFEST`.
 
 See [#19470](https://github.com/vitessio/vitess/pull/19470) for details.
+
+### New `--builtinbackup-rebuild-gtid-executed` flag
+
+The builtin backup engine now supports a `--builtinbackup-rebuild-gtid-executed` flag. When set, it runs `ALTER TABLE mysql.gtid_executed ENGINE=InnoDB` just before a full backup (after replication is stopped, before mysqld is shut down). This rebuilds the table from scratch, compacting all fragmented rows into a minimal set of GTID ranges and reclaiming InnoDB page space that accumulates as MySQL repeatedly compresses and deletes GTID rows.
+
+On replicas with `super_read_only=ON`, InnoDB's undo tablespace truncation can get stuck, causing the History List Length to grow unbounded. Under high write concurrency, this leads to lock wait timeouts when MySQL writes to `mysql.gtid_executed`, which can prevent binlog rotation and crash the server. Tablets restored from a backup containing a bloated `mysql.gtid_executed` table immediately inherit the problem. Using this flag ensures backups start clean.
+
+The flag is opt-in (default `false`). If the ALTER fails, the backup is aborted.

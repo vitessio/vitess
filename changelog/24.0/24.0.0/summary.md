@@ -27,6 +27,8 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+    - **[Backups](#minor-changes-backups)**
+        - [New `--builtinbackup-rebuild-gtid-executed` flag](#builtinbackup-rebuild-gtid-executed)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -214,6 +216,16 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
+
+### <a id="minor-changes-backups"/>Backups</a>
+
+#### <a id="builtinbackup-rebuild-gtid-executed"/>New `--builtinbackup-rebuild-gtid-executed` flag</a>
+
+The builtin backup engine now supports a `--builtinbackup-rebuild-gtid-executed` flag. When set, it runs `ALTER TABLE mysql.gtid_executed ENGINE=InnoDB` just before a full backup (after replication is stopped, before mysqld is shut down). This rebuilds the table from scratch, compacting all fragmented rows into a minimal set of GTID ranges and reclaiming InnoDB page space that accumulates as MySQL repeatedly compresses and deletes GTID rows.
+
+On replicas with `super_read_only=ON`, InnoDB's undo tablespace truncation can get stuck, causing the History List Length to grow unbounded. Under high write concurrency, this leads to lock wait timeouts when MySQL writes to `mysql.gtid_executed`, which can prevent binlog rotation and crash the server. Tablets restored from a backup containing a bloated `mysql.gtid_executed` table immediately inherit the problem. Using this flag ensures backups start clean.
+
+The flag is opt-in (default `false`). If the ALTER fails, the backup is aborted.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
