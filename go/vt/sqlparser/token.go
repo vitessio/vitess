@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -90,7 +91,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
-	lval.str = val
+	*(*string)(unsafe.Pointer(&lval.data)) = val
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ

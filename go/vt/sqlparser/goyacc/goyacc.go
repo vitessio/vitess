@@ -681,6 +681,7 @@ outer:
 			}
 			fcode.Write(act.Bytes())
 			if unionType != "" {
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.data = [%d]__yyunsafe__.Pointer{}", prefix, unionDataWords)
 				fmt.Fprintf(fcode, "\n\t\t*(*%s)(__yyunsafe__.Pointer(&%sVAL.data)) = %sLOCAL", unionType, prefix, prefix)
 			}
 
@@ -1124,7 +1125,7 @@ type gotypeinfo struct {
 
 var gotypes = make(map[string]*gotypeinfo)
 
-const unionDataWords = 4 // 32 bytes — fits the largest %union member (StarExpr)
+const unionDataWords = 6 // 48 bytes — fits the largest %union member (VindexParam)
 
 func typeinfo() {
 	if !lflag {
