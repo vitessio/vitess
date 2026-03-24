@@ -11,5 +11,5 @@ done
 
 echo "vtctld is reachable, creating cell $CELL..."
 /vt/bin/vtctldclient --server "vtctld:$GRPC_PORT" AddCellInfo \
-  --root "/vitess/$CELL" --server-address etcd:2379 "$CELL" || true
+  --root "/vitess/$CELL" --server-address etcd:2379 "$CELL"
 echo "Cell $CELL ready"

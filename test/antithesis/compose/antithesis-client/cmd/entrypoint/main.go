@@ -147,7 +147,7 @@ func waitForHealthyShards(ctx context.Context, vtgateAddr string, cell string) e
 		if len(cacheStatuses) == 0 {
 			return false, nil
 		}
-		counts := map[string]*healthCounts{}
+		counts := make(map[string]*healthCounts, len(cacheStatuses))
 		for _, cs := range cacheStatuses {
 			for _, tablet := range cs.TabletsStats {
 				if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
@@ -174,7 +174,7 @@ func waitForHealthyShards(ctx context.Context, vtgateAddr string, cell string) e
 			return false, nil
 		}
 		for _, entry := range counts {
-			// Require 1 primary and 2 replicas for setup complete 
+			// Require 1 primary and 2 replicas for setup complete
 			if entry.primaries < 1 || entry.replicas < 2 {
 				return false, nil
 			}

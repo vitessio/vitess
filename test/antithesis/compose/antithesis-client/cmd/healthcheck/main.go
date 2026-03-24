@@ -107,7 +107,7 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 	if len(cacheStatuses) == 0 {
 		return false, errors.New("health check list is empty")
 	}
-	counts := map[string]*healthCounts{}
+	counts := make(map[string]*healthCounts, len(cacheStatuses))
 	for _, cacheStatus := range cacheStatuses {
 		for _, tablet := range cacheStatus.TabletsStats {
 			if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
