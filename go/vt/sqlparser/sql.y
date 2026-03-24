@@ -172,16 +172,16 @@ func markBindVariable(yylex yyLexer, bvar string) {
   partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
   selectExpr    SelectExpr
-  columns       *Columns
-  partitions    *Partitions
-  tableExprs    *TableExprs
-  tableNames    *TableNames
-  exprs         *[]Expr
-  values        *Values
-  valTuple      *ValTuple
-  orderBy       *OrderBy
-  updateExprs   *UpdateExprs
-  setExprs      *SetExprs
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         []Expr
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
   selectExprs   *SelectExprs
   tableOptions  TableOptions
   starExpr      StarExpr
@@ -786,7 +786,7 @@ compound_statement_without_semicolon:
 | DECLARE column_list column_type column_type_default_opt
   {
     $3.Options = $4
-    $$ = &DeclareVar{VarNames: derefColumns($2), Type: $3}
+    $$ = &DeclareVar{VarNames: $2, Type: $3}
   }
 | DECLARE handler_action HANDLER FOR condition_value_list compound_statement_without_semicolon
   {
@@ -1092,7 +1092,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-    $$ = &CommonTableExpr{ID: $1, Columns: derefColumns($2), Subquery: $4.Select}
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4.Select}
   }
 
 query_expression_parens:
@@ -1129,7 +1129,7 @@ query_expression_parens:
 query_expression:
  query_expression_body order_by_opt limit_opt
   {
-    $1.SetOrderBy(derefOrderBy($2))
+    $1.SetOrderBy($2)
     $1.SetLimit($3)
     $$ = $1
   }
@@ -1140,14 +1140,14 @@ query_expression:
   }
 | query_expression_parens order_by_clause limit_opt
   {
-    $1.SetOrderBy(derefOrderBy($2))
+    $1.SetOrderBy($2)
     $1.SetLimit($3)
     $$ = $1
   }
 | with_clause query_expression_body order_by_opt limit_opt
   {
     $2.SetWith($1)
-    $2.SetOrderBy(derefOrderBy($3))
+    $2.SetOrderBy($3)
     $2.SetLimit($4)
     $$ = $2
   }
@@ -1160,7 +1160,7 @@ query_expression:
 | with_clause query_expression_parens order_by_clause limit_opt
   {
     $2.SetWith($1)
-    $2.SetOrderBy(derefOrderBy($3))
+    $2.SetOrderBy($3)
     $2.SetLimit($4)
     $$ = $2
   }
@@ -1249,7 +1249,7 @@ values_statement:
   }
 | VALUES comment_opt row_tuple_list
   {
-    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: derefValues($3)}
+    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: $3}
   }
 
 stream_statement:
@@ -1269,11 +1269,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, derefTableExprs($6)/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, derefTableExprs($5)/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
   }
 | values_statement
   {
@@ -1289,20 +1289,19 @@ insert_statement:
     ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
     ins.Table = na(yylex).getAliasedTableExprFromTableName($4)
-    ins.Partitions = derefPartitions($5)
-    ins.OnDup = OnDup(derefUpdateExprs($7))
+    ins.Partitions = $5
+    ins.OnDup = OnDup($7)
     $$ = ins
   }
 | insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
   {
-    ue := derefUpdateExprs($7)
-    cols := make(Columns, 0, len(ue))
-    vals := make(ValTuple, 0, len(derefUpdateExprs($8)))
-    for _, updateList := range ue {
+    cols := make(Columns, 0, len($7))
+    vals := make(ValTuple, 0, len($8))
+    for _, updateList := range $7 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = derefPartitions($5); ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup(derefUpdateExprs($8)); $$ = ins
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:
@@ -1318,25 +1317,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = Comments($3).Parsed(); upd.Ignore = $4; upd.TableExprs = derefTableExprs($5); upd.Exprs = derefUpdateExprs($7); upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = derefOrderBy($9); upd.Limit = $10; $$ = upd
+    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = Comments($3).Parsed(); upd.Ignore = $4; upd.TableExprs = $5; upd.Exprs = $7; upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = $9; upd.Limit = $10; $$ = upd
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = te; del.Partitions = derefPartitions($8); del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = derefOrderBy($10); del.Limit = $11; $$ = del
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = te; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = derefTableNames($6); del.TableExprs = derefTableExprs($8); del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $6; del.TableExprs = $8; del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = derefTableNames($5); del.TableExprs = derefTableExprs($7); del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = derefTableNames($5); del.TableExprs = derefTableExprs($7); del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 
 from_or_using:
@@ -1346,34 +1345,31 @@ from_or_using:
 view_name_list:
   table_name
   {
-    $$ = &TableNames{$1}
+    $$ = TableNames{$1}
   }
 | view_name_list ',' table_name
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 table_name_list:
   table_name
   {
-    $$ = &TableNames{$1}
+    $$ = TableNames{$1}
   }
 | table_name_list ',' table_name
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 delete_table_list:
   delete_table_name
   {
-    $$ = &TableNames{$1}
+    $$ = TableNames{$1}
   }
 | delete_table_list ',' delete_table_name
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 opt_partition_clause:
@@ -1388,18 +1384,17 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), derefSetExprs($3))
+    $$ = NewSetStatement(Comments($2).Parsed(), $3)
   }
 
 set_list:
   set_expression
   {
-    se := na(yylex).makeSetExprsPtr(1); (*se)[0] = $1; $$ = se
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | set_list ',' set_expression
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 set_expression:
@@ -1437,22 +1432,21 @@ set_variable:
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope(derefSetExprs($5), $3))
+    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), derefSetExprs($4))
+    $$ = NewSetStatement(Comments($2).Parsed(), $4)
   }
 
 transaction_chars:
   transaction_char
   {
-    se := na(yylex).makeSetExprsPtr(1); (*se)[0] = $1; $$ = se
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | transaction_chars ',' transaction_char
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 transaction_char:
@@ -1545,7 +1539,7 @@ create_statement:
   }
 | create_view_prefix column_list_opt AS select_statement check_option_opt
   {
-    $1.Columns = derefColumns($2)
+    $1.Columns = $2
     $1.Select = $4
     $1.CheckOption = $5
     $$ = $1
@@ -2980,29 +2974,29 @@ check_constraint_definition:
 constraint_info:
   FOREIGN KEY name_opt '(' column_list ')' reference_definition
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewIdentifierCI($3), Source: derefColumns($5), ReferenceDefinition: $7}
+    $$ = &ForeignKeyDefinition{IndexName: NewIdentifierCI($3), Source: $5, ReferenceDefinition: $7}
   }
 
 reference_definition:
   REFERENCES table_name '(' column_list ')' fk_match_opt
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: derefColumns($4), Match: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: derefColumns($4), Match: $6, OnDelete: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: derefColumns($4), Match: $6, OnUpdate: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: derefColumns($4), Match: $6, OnDelete: $7, OnUpdate: $8}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7, OnUpdate: $8}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: derefColumns($4), Match: $6, OnUpdate: $7, OnDelete: $8}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7, OnDelete: $8}
   }
 
 reference_definition_opt:
@@ -3271,7 +3265,7 @@ table_option:
   }
 | UNION equal_opt '(' table_name_list ')'
   {
-    $$ = &TableOption{Name:string($1), Tables: derefTableNames($4)}
+    $$ = &TableOption{Name:string($1), Tables: $4}
   }
 
 storage_opt:
@@ -3374,7 +3368,7 @@ alter_commands_list:
   }
 | alter_options ',' ORDER BY column_list
   {
-    $$ = append($1,&OrderByOption{Cols:derefColumns($5)})
+    $$ = append($1,&OrderByOption{Cols:$5})
   }
 | alter_commands_modifier_list
   {
@@ -3386,7 +3380,7 @@ alter_commands_list:
   }
 | alter_commands_modifier_list ',' alter_options ',' ORDER BY column_list
   {
-    $$ = append(append($1,$3...),&OrderByOption{Cols:derefColumns($7)})
+    $$ = append(append($1,$3...),&OrderByOption{Cols:$7})
   }
 
 alter_options:
@@ -3611,7 +3605,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view_opt definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:derefColumns($8), Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -3673,7 +3667,7 @@ alter_statement:
             Type: $12,
             Params: $13,
         },
-        VindexCols: derefColumns($10),
+        VindexCols: $10,
       }
   }
 | ALTER comment_opt VSCHEMA ON table_name DROP VINDEX sql_id
@@ -3879,7 +3873,7 @@ partitions_options_beginning:
         IsLinear: $1,
         Type: KeyType,
         KeyAlgorithm: $3,
-        ColList: derefColumns($5),
+        ColList: $5,
       }
     }
 | range_or_list '(' expression ')'
@@ -3893,7 +3887,7 @@ partitions_options_beginning:
   {
     $$ = &PartitionOption {
         Type: $1,
-        ColList: derefColumns($4),
+        ColList: $4,
     }
   }
 
@@ -3916,7 +3910,7 @@ subpartition_opt:
       IsLinear: $3,
       Type: KeyType,
       KeyAlgorithm: $5,
-      ColList: derefColumns($7),
+      ColList: $7,
       SubPartitions: $9,
     }
   }
@@ -4084,15 +4078,15 @@ partition_operation:
   }
 | DROP PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:DropAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:DropAction, Names:$3}
   }
 | REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
   {
-    $$ = &PartitionSpec{Action: ReorganizeAction, Names: derefPartitions($3), Definitions: $6}
+    $$ = &PartitionSpec{Action: ReorganizeAction, Names: $3, Definitions: $6}
   }
 | DISCARD PARTITION partition_list TABLESPACE
   {
-    $$ = &PartitionSpec{Action:DiscardAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:DiscardAction, Names:$3}
   }
 | DISCARD PARTITION ALL TABLESPACE
   {
@@ -4100,7 +4094,7 @@ partition_operation:
   }
 | IMPORT PARTITION partition_list TABLESPACE
   {
-    $$ = &PartitionSpec{Action:ImportAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:ImportAction, Names:$3}
   }
 | IMPORT PARTITION ALL TABLESPACE
   {
@@ -4108,7 +4102,7 @@ partition_operation:
   }
 | TRUNCATE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:TruncateAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:TruncateAction, Names:$3}
   }
 | TRUNCATE PARTITION ALL
   {
@@ -4124,7 +4118,7 @@ partition_operation:
   }
 | ANALYZE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:AnalyzeAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:AnalyzeAction, Names:$3}
   }
 | ANALYZE PARTITION ALL
   {
@@ -4132,7 +4126,7 @@ partition_operation:
   }
 | CHECK PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:CheckAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:CheckAction, Names:$3}
   }
 | CHECK PARTITION ALL
   {
@@ -4140,7 +4134,7 @@ partition_operation:
   }
 | OPTIMIZE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:OptimizeAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:OptimizeAction, Names:$3}
   }
 | OPTIMIZE PARTITION ALL
   {
@@ -4148,7 +4142,7 @@ partition_operation:
   }
 | REBUILD PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:RebuildAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:RebuildAction, Names:$3}
   }
 | REBUILD PARTITION ALL
   {
@@ -4156,7 +4150,7 @@ partition_operation:
   }
 | REPAIR PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:RepairAction, Names:derefPartitions($3)}
+    $$ = &PartitionSpec{Action:RepairAction, Names:$3}
   }
 | REPAIR PARTITION ALL
   {
@@ -4312,7 +4306,7 @@ partition_value_range:
   {
     $$ = &PartitionValueRange{
     	Type: LessThanType,
-    	Range: derefValTuple($4),
+    	Range: $4,
     }
   }
 | VALUES LESS THAN maxvalue
@@ -4326,7 +4320,7 @@ partition_value_range:
   {
     $$ = &PartitionValueRange{
     	Type: InType,
-    	Range: derefValTuple($3),
+    	Range: $3,
     }
   }
 
@@ -4416,7 +4410,7 @@ rename_list:
 drop_statement:
   DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: derefTableNames($6), IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
 | DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
@@ -4429,7 +4423,7 @@ drop_statement:
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: derefTableNames($5), Comments: Comments($2).Parsed(), IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: Comments($2).Parsed(), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {
@@ -5285,15 +5279,15 @@ flush_statement:
   }
 | FLUSH local_opt TABLES table_name_list
   {
-    $$ = &Flush{IsLocal: $2, TableNames:derefTableNames($4)}
+    $$ = &Flush{IsLocal: $2, TableNames:$4}
   }
 | FLUSH local_opt TABLES table_name_list WITH READ LOCK
   {
-    $$ = &Flush{IsLocal: $2, TableNames:derefTableNames($4), WithLock:true}
+    $$ = &Flush{IsLocal: $2, TableNames:$4, WithLock:true}
   }
 | FLUSH local_opt TABLES table_name_list FOR EXPORT
   {
-    $$ = &Flush{IsLocal: $2, TableNames:derefTableNames($4), ForExport:true}
+    $$ = &Flush{IsLocal: $2, TableNames:$4, ForExport:true}
   }
 
 flush_option_list:
@@ -5597,7 +5591,7 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; te := na(yylex).makeTableExprSlicePtr(1); (*te)[0] = ate; $$ = te
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; te := na(yylex).makeTableExprSlice(1); te[0] = ate; $$ = te
   }
   | from_clause
   {
@@ -5613,12 +5607,11 @@ FROM table_references
 table_references:
   table_reference
   {
-    s := na(yylex).makeTableExprSlicePtr(1); (*s)[0] = $1; $$ = s
+    s := na(yylex).makeTableExprSlice(1); s[0] = $1; $$ = s
   }
 | table_references ',' table_reference
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 table_reference:
@@ -5632,11 +5625,11 @@ table_factor:
   }
 | derived_table as_opt table_id column_list_opt
   {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $3; ate.Columns = derefColumns($4); $$ = ate
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $3; ate.Columns = $4; $$ = ate
   }
 | openb table_references closeb
   {
-    $$ = &ParenTableExpr{Exprs: derefTableExprs($2)}
+    $$ = &ParenTableExpr{Exprs: $2}
   }
 | json_table_function
   {
@@ -5660,7 +5653,7 @@ table_name as_opt_id index_hint_list_opt
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.Partitions = derefPartitions($4); ate.As = $6; ate.Hints = $7; $$ = ate
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.Partitions = $4; ate.As = $6; ate.Hints = $7; $$ = ate
   }
 
 column_list_opt:
@@ -5684,12 +5677,11 @@ column_list_empty:
 column_list:
   sql_id
   {
-    cols := na(yylex).makeColumnsPtr(1); (*cols)[0] = $1; $$ = cols
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | column_list ',' sql_id
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 at_id_list:
@@ -5705,32 +5697,29 @@ at_id_list:
 index_list:
   sql_id
   {
-    cols := na(yylex).makeColumnsPtr(1); (*cols)[0] = $1; $$ = cols
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | PRIMARY
   {
-    cols := na(yylex).makeColumnsPtr(1); (*cols)[0] = NewIdentifierCI(string($1)); $$ = cols
+    cols := na(yylex).makeColumns(1); cols[0] = NewIdentifierCI(string($1)); $$ = cols
   }
 | index_list ',' sql_id
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 | index_list ',' PRIMARY
   {
-    *$1 = append(*$1, NewIdentifierCI(string($3)))
-    $$ = $1
+    $$ = append($$, NewIdentifierCI(string($3)))
   }
 
 partition_list:
   sql_id
   {
-    $$ = &Partitions{$1}
+    $$ = Partitions{$1}
   }
 | partition_list ',' sql_id
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 
 // There is a grammar conflict here:
@@ -5762,7 +5751,7 @@ join_condition:
   ON expression
   { $$ = &JoinCondition{On: $2} }
 | USING '(' column_list ')'
-  { $$ = &JoinCondition{Using: derefColumns($3)} }
+  { $$ = &JoinCondition{Using: $3} }
 
 join_condition_opt:
 %prec JOIN
@@ -5901,7 +5890,7 @@ index_hint
 index_hint:
   USE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: derefColumns($5)}
+    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: $5}
   }
 | USE index_or_key index_hint_for_opt openb closeb
   {
@@ -5909,19 +5898,19 @@ index_hint:
   }
 | IGNORE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: derefColumns($5)}
+    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5}
   }
 | FORCE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: derefColumns($5)}
+    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
   }
 | USE VINDEX openb index_list closeb
   {
-    $$ = &IndexHint{Type: UseVindexOp, Indexes: derefColumns($4) }
+    $$ = &IndexHint{Type: UseVindexOp, Indexes: $4 }
   }
 | IGNORE VINDEX openb index_list closeb
   {
-    $$ = &IndexHint{Type: IgnoreVindexOp, Indexes: derefColumns($4)}
+    $$ = &IndexHint{Type: IgnoreVindexOp, Indexes: $4}
   }
 
 index_hint_for_opt:
@@ -6236,7 +6225,7 @@ function_call_keyword
   }
 | INTERVAL openb expression ',' expression_list closeb
   {
-    $$ = &IntervalFuncExpr{Expr: $3, Exprs: derefExprs($5)}
+    $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
@@ -6384,7 +6373,7 @@ sql_id_opt:
 window_spec:
 sql_id_opt window_partition_clause_opt order_by_opt frame_clause_opt
   {
-    $$ = &WindowSpecification{ Name: $1, PartitionClause: derefExprs($2), OrderClause: derefOrderBy($3), FrameClause: $4}
+    $$ = &WindowSpecification{ Name: $1, PartitionClause: $2, OrderClause: $3, FrameClause: $4}
   }
 
 over_clause:
@@ -6565,7 +6554,7 @@ any_all_compare:
 col_tuple:
   val_tuple
   {
-    $$ = derefValTuple($1)
+    $$ = $1
   }
 | subquery
   {
@@ -6586,12 +6575,11 @@ subquery:
 expression_list:
   expression
   {
-    e := na(yylex).makeExprSlicePtr(1); (*e)[0] = $1; $$ = e
+    e := na(yylex).makeExprSlice(1); e[0] = $1; $$ = e
   }
 | expression_list ',' expression
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 /*
@@ -6601,11 +6589,11 @@ expression_list:
 function_call_generic:
   sql_id openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = $1; fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = $1; fe.Exprs = $3; $$ = fe
   }
 | table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Qualifier = $1; fe.Name = $3; fe.Exprs = derefExprs($5); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Qualifier = $1; fe.Name = $3; fe.Exprs = $5; $$ = fe
   }
 
 /*
@@ -6615,11 +6603,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("left"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("left"); fe.Exprs = $3; $$ = fe
   }
 | RIGHT openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("right"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("right"); fe.Exprs = $3; $$ = fe
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -6702,7 +6690,7 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb distinct_opt expression_list closeb over_clause_opt
   {
-    $$ = &Count{Distinct:$3, Args:derefExprs($4), OverClause: $6}
+    $$ = &Count{Distinct:$3, Args:$4, OverClause: $6}
   }
 | MAX openb distinct_opt expression closeb over_clause_opt
   {
@@ -6762,7 +6750,7 @@ UTC_DATE func_paren_opt
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: derefExprs($4), OrderBy: derefOrderBy($5), Separator: $6, Limit: $7}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | ANY_VALUE openb expression closeb
   {
@@ -6822,11 +6810,11 @@ UTC_DATE func_paren_opt
   }
 | CHAR openb expression_list closeb
   {
-    $$ = &CharExpr{Exprs: derefExprs($3)}
+    $$ = &CharExpr{Exprs: $3}
   }
 | CHAR openb expression_list USING charset closeb
   {
-    $$ = &CharExpr{Exprs: derefExprs($3), Charset: $5}
+    $$ = &CharExpr{Exprs: $3, Charset: $5}
   }
 | TRIM openb expression FROM expression closeb
   {
@@ -6874,7 +6862,7 @@ UTC_DATE func_paren_opt
   }
 | JSON_ARRAY openb expression_list_opt closeb
   {
-    $$ = &JSONArrayExpr{ Params:derefExprs($3) }
+    $$ = &JSONArrayExpr{ Params:$3 }
   }
 | ST_AsBinary openb expression closeb
   {
@@ -7246,15 +7234,15 @@ UTC_DATE func_paren_opt
   }
 | JSON_CONTAINS openb expression ',' expression_list closeb
   {
-    el := derefExprs($5); $$ = &JSONContainsExpr{Target: $3, Candidate: el[0], PathList: el[1:]}
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5[0], PathList: $5[1:]}
   }
 | JSON_CONTAINS_PATH openb expression ',' expression ',' expression_list closeb
   {
-    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: derefExprs($7)}
+    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
   }
 | JSON_EXTRACT openb expression ',' expression_list closeb
   {
-    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: derefExprs($5)}
+    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
   }
 | JSON_KEYS openb expression closeb
   {
@@ -7274,7 +7262,7 @@ UTC_DATE func_paren_opt
   }
 | JSON_SEARCH openb expression ',' expression ',' expression ',' expression_list closeb
   {
-    el := derefExprs($9); $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: el[0], PathList:el[1:] }
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9[0], PathList:$9[1:] }
   }
 | JSON_VALUE openb expression ',' expression returning_type_opt closeb
   {
@@ -7334,19 +7322,19 @@ UTC_DATE func_paren_opt
   }
 | JSON_MERGE openb expression ',' expression_list closeb
   {
-    $$ = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: $3, JSONDocList: derefExprs($5)}
+    $$ = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: $3, JSONDocList: $5}
   }
 | JSON_MERGE_PATCH openb expression ',' expression_list closeb
   {
-    $$ = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: $3, JSONDocList: derefExprs($5)}
+    $$ = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: $3, JSONDocList: $5}
   }
 | JSON_MERGE_PRESERVE openb expression ',' expression_list closeb
   {
-    $$ = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: $3, JSONDocList: derefExprs($5)}
+    $$ = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: $3, JSONDocList: $5}
   }
 | JSON_REMOVE openb expression ',' expression_list closeb
   {
-    $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: derefExprs($5)}
+    $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: $5}
   }
 | JSON_UNQUOTE openb expression closeb
   {
@@ -7354,23 +7342,23 @@ UTC_DATE func_paren_opt
   }
 | MULTIPOLYGON openb expression_list closeb
   {
-    $$ = &MultiPolygonExpr{ PolygonParams:derefExprs($3) }
+    $$ = &MultiPolygonExpr{ PolygonParams:$3 }
   }
 | MULTIPOINT openb expression_list closeb
   {
-    $$ = &MultiPointExpr{ PointParams:derefExprs($3) }
+    $$ = &MultiPointExpr{ PointParams:$3 }
   }
 | MULTILINESTRING openb expression_list closeb
   {
-    $$ = &MultiLinestringExpr{ LinestringParams:derefExprs($3) }
+    $$ = &MultiLinestringExpr{ LinestringParams:$3 }
   }
 | POLYGON openb expression_list closeb
   {
-    $$ = &PolygonExpr{ LinestringParams:derefExprs($3) }
+    $$ = &PolygonExpr{ LinestringParams:$3 }
   }
 | LINESTRING openb expression_list closeb
   {
-    $$ = &LineStringExpr{ PointParams:derefExprs($3) }
+    $$ = &LineStringExpr{ PointParams:$3 }
   }
 | POINT openb expression ',' expression closeb
   {
@@ -7769,23 +7757,23 @@ func_datetime_precision:
 function_call_conflict:
   IF openb expression_list closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("if"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("if"); fe.Exprs = $3; $$ = fe
   }
 | DATABASE openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("database"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("database"); fe.Exprs = $3; $$ = fe
   }
 | SCHEMA openb expression_list_opt closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("schema"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("schema"); fe.Exprs = $3; $$ = fe
   }
 | MOD openb expression_list closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("mod"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("mod"); fe.Exprs = $3; $$ = fe
   }
 | REPLACE openb expression_list closeb
   {
-    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("replace"); fe.Exprs = derefExprs($3); $$ = fe
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("replace"); fe.Exprs = $3; $$ = fe
   }
 
 match_option:
@@ -8008,7 +7996,7 @@ group_by_opt:
   }
 | GROUP BY expression_list rollup_opt
   {
-    node := na(yylex).allocGroupBy(); node.Exprs = derefExprs($3); node.WithRollup = $4; $$ = node
+    node := na(yylex).allocGroupBy(); node.Exprs = $3; node.WithRollup = $4; $$ = node
   }
 
 rollup_opt:
@@ -8073,12 +8061,11 @@ ORDER BY order_list
 order_list:
   order
   {
-    o := na(yylex).makeOrderByPtr(1); (*o)[0] = $1; $$ = o
+    o := na(yylex).makeOrderSlice(1); o[0] = $1; $$ = o
   }
 | order_list ',' order
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 order:
@@ -8539,7 +8526,7 @@ optionally_opt:
 insert_data:
   value_or_values val_tuple_list row_alias_opt
   {
-    ins := na(yylex).allocInsert(); ins.Rows = derefValues($2); ins.RowAlias = $3; $$ = ins
+    ins := na(yylex).allocInsert(); ins.Rows = $2; ins.RowAlias = $3; $$ = ins
   }
 | select_statement
   {
@@ -8547,15 +8534,15 @@ insert_data:
   }
 | openb ins_column_list closeb value_or_values val_tuple_list row_alias_opt
   {
-    ins := na(yylex).allocInsert(); ins.Columns = derefColumns($2); ins.Rows = derefValues($5); ins.RowAlias = $6; $$ = ins
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $5; ins.RowAlias = $6; $$ = ins
   }
 | openb closeb value_or_values val_tuple_list row_alias_opt
   {
-    ins := na(yylex).allocInsert(); ins.Columns = []IdentifierCI{}; ins.Rows = derefValues($4); ins.RowAlias = $5; $$ = ins
+    ins := na(yylex).allocInsert(); ins.Columns = []IdentifierCI{}; ins.Rows = $4; ins.RowAlias = $5; $$ = ins
   }
 | openb ins_column_list closeb select_statement
   {
-    ins := na(yylex).allocInsert(); ins.Columns = derefColumns($2); ins.Rows = $4; $$ = ins
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $4; $$ = ins
   }
 
 value_or_values:
@@ -8565,21 +8552,19 @@ value_or_values:
 ins_column_list:
   sql_id
   {
-    cols := na(yylex).makeColumnsPtr(1); (*cols)[0] = $1; $$ = cols
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | sql_id '.' sql_id
   {
-    cols := na(yylex).makeColumnsPtr(1); (*cols)[0] = $3; $$ = cols
+    cols := na(yylex).makeColumns(1); cols[0] = $3; $$ = cols
   }
 | ins_column_list ',' sql_id
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($$, $3)
   }
 | ins_column_list ',' sql_id '.' sql_id
   {
-    *$1 = append(*$1, $5)
-    $$ = $1
+    $$ = append($$, $5)
   }
 
 row_alias_opt:
@@ -8592,7 +8577,7 @@ row_alias_opt:
   }
 | AS table_alias openb column_list closeb
   {
-    $$ = &RowAlias{TableName: $2, Columns: derefColumns($4)}
+    $$ = &RowAlias{TableName: $2, Columns: $4}
   }
 
 on_dup_opt:
@@ -8607,23 +8592,21 @@ on_dup_opt:
 row_tuple_list:
   row_tuple_or_empty
   {
-    v := na(yylex).makeValuesSlicePtr(1); (*v)[0] = derefValTuple($1); $$ = v
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | row_tuple_list ',' row_tuple_or_empty
   {
-    *$1 = append(*$1, derefValTuple($3))
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 val_tuple_list:
   val_tuple_or_empty
   {
-    v := na(yylex).makeValuesSlicePtr(1); (*v)[0] = derefValTuple($1); $$ = v
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | val_tuple_list ',' val_tuple_or_empty
   {
-    *$1 = append(*$1, derefValTuple($3))
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 row_tuple_or_empty:
@@ -8633,7 +8616,7 @@ row_tuple_or_empty:
   }
 | ROW openb closeb
   {
-    $$ = &ValTuple{}
+    $$ = ValTuple{}
   }
 
 val_tuple_or_empty:
@@ -8643,19 +8626,19 @@ val_tuple_or_empty:
   }
 | openb closeb
   {
-    $$ = &ValTuple{}
+    $$ = ValTuple{}
   }
 
 val_tuple:
   openb expression_list closeb
   {
-    $$ = (*ValTuple)($2)
+    $$ = ValTuple($2)
   }
 
 row_tuple:
   ROW openb expression_list closeb
   {
-    $$ = (*ValTuple)($3)
+    $$ = ValTuple($3)
   }
 
 val_or_row_tuple:
@@ -8665,23 +8648,21 @@ val_or_row_tuple:
 tuple_expression:
  val_or_row_tuple
   {
-    vt := derefValTuple($1)
-    if len(vt) == 1 {
-    $$ = vt[0]
+    if len($1) == 1 {
+    $$ = $1[0]
     } else {
-    $$ = vt
+    $$ = $1
     }
   }
 
 update_list:
   update_expression
   {
-    ue := na(yylex).makeUpdateExprsPtr(1); (*ue)[0] = $1; $$ = ue
+    ue := na(yylex).makeUpdateExprSlice(1); ue[0] = $1; $$ = ue
   }
 | update_list ',' update_expression
   {
-    *$1 = append(*$1, $3)
-    $$ = $1
+    $$ = append($1, $3)
   }
 
 update_expression:
@@ -8761,7 +8742,7 @@ to_opt:
 call_statement:
   CALL table_name openb expression_list_opt closeb
   {
-    $$ = &CallProc{Name: $2, Params: derefExprs($4)}
+    $$ = &CallProc{Name: $2, Params: $4}
   }
 
 expression_list_opt:
