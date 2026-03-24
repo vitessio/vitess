@@ -692,8 +692,10 @@ outer:
 			fcode.Write(act.Bytes())
 			if usedFastAppend {
 				// After fast-append, the slice data pointer may have changed.
-				// Update ptrs[0] to keep the new backing array alive for GC.
-				fmt.Fprintf(fcode, "\n\t\t%sVAL.ptrs[0] = __yyunsafe__.Pointer(%sVAL.data[0])", prefix, prefix)
+				// Update ptrs[0] by reading the first word of the data array
+				// as unsafe.Pointer. We use &data (not data[0]) to avoid
+				// a uintptr→unsafe.Pointer conversion that checkptr rejects.
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&%sVAL.data))", prefix, prefix)
 			}
 			if unionType != "" {
 				fmt.Fprintf(fcode, "\n\t\t%sVAL.set%s(%sLOCAL)", prefix, unionMember, prefix)
@@ -1186,9 +1188,14 @@ func typeinfo() {
 			fmt.Fprintf(ftable, "\tst.ptrs = %sZeroPtrs\n", prefix)
 		}
 		fmt.Fprintf(ftable, "\t*(*%s)(__yyunsafe__.Pointer(&st.data)) = v\n", tt.typename)
-		// Copy pointer words from data to ptrs for GC keepalive.
-		for i, wordIdx := range tt.ptrWords {
-			fmt.Fprintf(ftable, "\tst.ptrs[%d] = __yyunsafe__.Pointer(st.data[%d])\n", i, wordIdx)
+		// Copy pointer words from the original value v (not from data) to
+		// avoid uintptr→unsafe.Pointer conversion that checkptr rejects.
+		if len(tt.ptrWords) > 0 {
+			maxWord := tt.ptrWords[len(tt.ptrWords)-1]
+			fmt.Fprintf(ftable, "\tvp := (*[%d]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))\n", maxWord+1)
+			for i, wordIdx := range tt.ptrWords {
+				fmt.Fprintf(ftable, "\tst.ptrs[%d] = vp[%d]\n", i, wordIdx)
+			}
 		}
 		fmt.Fprintf(ftable, "}\n")
 	}

@@ -9056,7 +9056,8 @@ func (st *yySymType) setJSONTableExpr(v *JSONTableExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**JSONTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) LengthScaleOption() LengthScaleOption {
@@ -9067,8 +9068,9 @@ func (st *yySymType) setLengthScaleOption(v LengthScaleOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*LengthScaleOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) aliasedTableName() *AliasedTableExpr {
@@ -9079,7 +9081,8 @@ func (st *yySymType) setaliasedTableName(v *AliasedTableExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**AliasedTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) alterDatabase() *AlterDatabase {
@@ -9090,7 +9093,8 @@ func (st *yySymType) setalterDatabase(v *AlterDatabase) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**AlterDatabase)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) alterMigration() *AlterMigration {
@@ -9101,7 +9105,8 @@ func (st *yySymType) setalterMigration(v *AlterMigration) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**AlterMigration)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) alterOption() AlterOption {
@@ -9112,8 +9117,9 @@ func (st *yySymType) setalterOption(v AlterOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*AlterOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) alterOptions() []AlterOption {
@@ -9124,7 +9130,8 @@ func (st *yySymType) setalterOptions(v []AlterOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]AlterOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) alterTable() *AlterTable {
@@ -9135,7 +9142,8 @@ func (st *yySymType) setalterTable(v *AlterTable) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**AlterTable)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) argumentLessWindowExprType() ArgumentLessWindowExprType {
@@ -9182,7 +9190,8 @@ func (st *yySymType) setcolName(v *ColName) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ColName)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) colNames() []*ColName {
@@ -9193,7 +9202,8 @@ func (st *yySymType) setcolNames(v []*ColName) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*ColName)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) colTuple() ColTuple {
@@ -9204,8 +9214,9 @@ func (st *yySymType) setcolTuple(v ColTuple) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*ColTuple)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) columnCharset() ColumnCharset {
@@ -9216,7 +9227,8 @@ func (st *yySymType) setcolumnCharset(v ColumnCharset) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*ColumnCharset)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) columnDefinition() *ColumnDefinition {
@@ -9227,7 +9239,8 @@ func (st *yySymType) setcolumnDefinition(v *ColumnDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) columnDefinitions() []*ColumnDefinition {
@@ -9238,7 +9251,8 @@ func (st *yySymType) setcolumnDefinitions(v []*ColumnDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*ColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) columnFormat() ColumnFormat {
@@ -9267,7 +9281,8 @@ func (st *yySymType) setcolumnType(v *ColumnType) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ColumnType)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) columnTypeOptions() *ColumnTypeOptions {
@@ -9278,7 +9293,8 @@ func (st *yySymType) setcolumnTypeOptions(v *ColumnTypeOptions) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ColumnTypeOptions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) columns() Columns {
@@ -9289,7 +9305,8 @@ func (st *yySymType) setcolumns(v Columns) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Columns)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) comparisonExprOperator() ComparisonExprOperator {
@@ -9309,8 +9326,9 @@ func (st *yySymType) setcompoundStatement(v CompoundStatement) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*CompoundStatement)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) compoundStatements() *CompoundStatements {
@@ -9321,7 +9339,8 @@ func (st *yySymType) setcompoundStatements(v *CompoundStatements) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CompoundStatements)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) constraintDefinition() *ConstraintDefinition {
@@ -9332,7 +9351,8 @@ func (st *yySymType) setconstraintDefinition(v *ConstraintDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ConstraintDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) constraintInfo() ConstraintInfo {
@@ -9343,8 +9363,9 @@ func (st *yySymType) setconstraintInfo(v ConstraintInfo) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*ConstraintInfo)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) convertType() *ConvertType {
@@ -9355,7 +9376,8 @@ func (st *yySymType) setconvertType(v *ConvertType) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ConvertType)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) createDatabase() *CreateDatabase {
@@ -9366,7 +9388,8 @@ func (st *yySymType) setcreateDatabase(v *CreateDatabase) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CreateDatabase)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) createProcedure() *CreateProcedure {
@@ -9377,7 +9400,8 @@ func (st *yySymType) setcreateProcedure(v *CreateProcedure) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CreateProcedure)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) createTable() *CreateTable {
@@ -9388,7 +9412,8 @@ func (st *yySymType) setcreateTable(v *CreateTable) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CreateTable)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) createView() *CreateView {
@@ -9399,7 +9424,8 @@ func (st *yySymType) setcreateView(v *CreateView) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CreateView)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) cte() *CommonTableExpr {
@@ -9410,7 +9436,8 @@ func (st *yySymType) setcte(v *CommonTableExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**CommonTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) ctes() []*CommonTableExpr {
@@ -9421,7 +9448,8 @@ func (st *yySymType) setctes(v []*CommonTableExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*CommonTableExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) databaseOption() DatabaseOption {
@@ -9432,7 +9460,8 @@ func (st *yySymType) setdatabaseOption(v DatabaseOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*DatabaseOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[1]
 }
 
 func (st *yySymType) databaseOptions() []DatabaseOption {
@@ -9443,7 +9472,8 @@ func (st *yySymType) setdatabaseOptions(v []DatabaseOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]DatabaseOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) definer() *Definer {
@@ -9454,7 +9484,8 @@ func (st *yySymType) setdefiner(v *Definer) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Definer)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) derivedTable() *DerivedTable {
@@ -9465,7 +9496,8 @@ func (st *yySymType) setderivedTable(v *DerivedTable) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**DerivedTable)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) elseIf() *ElseIfBlock {
@@ -9476,7 +9508,8 @@ func (st *yySymType) setelseIf(v *ElseIfBlock) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ElseIfBlock)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) elseIfs() []*ElseIfBlock {
@@ -9487,7 +9520,8 @@ func (st *yySymType) setelseIfs(v []*ElseIfBlock) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*ElseIfBlock)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) empty() struct{} {
@@ -9516,8 +9550,9 @@ func (st *yySymType) setexpr(v Expr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Expr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) exprs() []Expr {
@@ -9528,7 +9563,8 @@ func (st *yySymType) setexprs(v []Expr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]Expr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) firstOrLastValueExprType() FirstOrLastValueExprType {
@@ -9548,7 +9584,8 @@ func (st *yySymType) setframeClause(v *FrameClause) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**FrameClause)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) framePoint() *FramePoint {
@@ -9559,7 +9596,8 @@ func (st *yySymType) setframePoint(v *FramePoint) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**FramePoint)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) framePointType() FramePointType {
@@ -9588,7 +9626,8 @@ func (st *yySymType) setfromFirstLastClause(v *FromFirstLastClause) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**FromFirstLastClause)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) fromFirstLastType() FromFirstLastType {
@@ -9608,7 +9647,8 @@ func (st *yySymType) setgroupBy(v *GroupBy) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**GroupBy)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) handlerAction() HandlerAction {
@@ -9628,8 +9668,9 @@ func (st *yySymType) sethandlerCondition(v HandlerCondition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*HandlerCondition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) handlerConditions() []HandlerCondition {
@@ -9640,7 +9681,8 @@ func (st *yySymType) sethandlerConditions(v []HandlerCondition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]HandlerCondition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) identifierCI() IdentifierCI {
@@ -9651,8 +9693,9 @@ func (st *yySymType) setidentifierCI(v IdentifierCI) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*IdentifierCI)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[2])
+	vp := (*[3]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[2]
 }
 
 func (st *yySymType) identifierCS() IdentifierCS {
@@ -9663,7 +9706,8 @@ func (st *yySymType) setidentifierCS(v IdentifierCS) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*IdentifierCS)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) ignore() Ignore {
@@ -9692,7 +9736,8 @@ func (st *yySymType) setindexColumn(v *IndexColumn) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**IndexColumn)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexColumns() []*IndexColumn {
@@ -9703,7 +9748,8 @@ func (st *yySymType) setindexColumns(v []*IndexColumn) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*IndexColumn)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexDefinition() *IndexDefinition {
@@ -9714,7 +9760,8 @@ func (st *yySymType) setindexDefinition(v *IndexDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**IndexDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexHint() *IndexHint {
@@ -9725,7 +9772,8 @@ func (st *yySymType) setindexHint(v *IndexHint) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**IndexHint)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexHintForType() IndexHintForType {
@@ -9745,7 +9793,8 @@ func (st *yySymType) setindexHints(v IndexHints) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*IndexHints)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexInfo() *IndexInfo {
@@ -9756,7 +9805,8 @@ func (st *yySymType) setindexInfo(v *IndexInfo) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**IndexInfo)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexOption() *IndexOption {
@@ -9767,7 +9817,8 @@ func (st *yySymType) setindexOption(v *IndexOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**IndexOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) indexOptions() []*IndexOption {
@@ -9778,7 +9829,8 @@ func (st *yySymType) setindexOptions(v []*IndexOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*IndexOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) ins() *Insert {
@@ -9789,7 +9841,8 @@ func (st *yySymType) setins(v *Insert) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Insert)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) insertAction() InsertAction {
@@ -9809,7 +9862,8 @@ func (st *yySymType) setintPtr(v *int) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**int)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) integer() int {
@@ -9847,7 +9901,8 @@ func (st *yySymType) setjoinCondition(v *JoinCondition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**JoinCondition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) joinType() JoinType {
@@ -9867,7 +9922,8 @@ func (st *yySymType) setjsonObjectParam(v *JSONObjectParam) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**JSONObjectParam)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) jsonObjectParams() []*JSONObjectParam {
@@ -9878,7 +9934,8 @@ func (st *yySymType) setjsonObjectParams(v []*JSONObjectParam) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*JSONObjectParam)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) jtColumnDefinition() *JtColumnDefinition {
@@ -9889,7 +9946,8 @@ func (st *yySymType) setjtColumnDefinition(v *JtColumnDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**JtColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) jtColumnList() []*JtColumnDefinition {
@@ -9900,7 +9958,8 @@ func (st *yySymType) setjtColumnList(v []*JtColumnDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) jtOnResponse() *JtOnResponse {
@@ -9911,7 +9970,8 @@ func (st *yySymType) setjtOnResponse(v *JtOnResponse) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**JtOnResponse)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) killType() KillType {
@@ -9940,7 +10000,8 @@ func (st *yySymType) setlimit(v *Limit) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Limit)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) literal() *Literal {
@@ -9951,7 +10012,8 @@ func (st *yySymType) setliteral(v *Literal) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Literal)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) lock() Lock {
@@ -9998,7 +10060,8 @@ func (st *yySymType) setnamedWindow(v *NamedWindow) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**NamedWindow)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) namedWindows() NamedWindows {
@@ -10009,7 +10072,8 @@ func (st *yySymType) setnamedWindows(v NamedWindows) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*NamedWindows)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) nullTreatmentClause() *NullTreatmentClause {
@@ -10020,7 +10084,8 @@ func (st *yySymType) setnullTreatmentClause(v *NullTreatmentClause) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**NullTreatmentClause)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) nullTreatmentType() NullTreatmentType {
@@ -10040,7 +10105,8 @@ func (st *yySymType) setoptLike(v *OptLike) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**OptLike)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) optVal() Expr {
@@ -10051,8 +10117,9 @@ func (st *yySymType) setoptVal(v Expr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Expr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) order() *Order {
@@ -10063,7 +10130,8 @@ func (st *yySymType) setorder(v *Order) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Order)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) orderBy() OrderBy {
@@ -10074,7 +10142,8 @@ func (st *yySymType) setorderBy(v OrderBy) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*OrderBy)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) orderDirection() OrderDirection {
@@ -10094,7 +10163,8 @@ func (st *yySymType) setoverClause(v *OverClause) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**OverClause)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partDef() *PartitionDefinition {
@@ -10105,7 +10175,8 @@ func (st *yySymType) setpartDef(v *PartitionDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partDefs() []*PartitionDefinition {
@@ -10116,7 +10187,8 @@ func (st *yySymType) setpartDefs(v []*PartitionDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*PartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partSpec() *PartitionSpec {
@@ -10127,7 +10199,8 @@ func (st *yySymType) setpartSpec(v *PartitionSpec) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionSpec)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partSpecs() []*PartitionSpec {
@@ -10138,7 +10211,8 @@ func (st *yySymType) setpartSpecs(v []*PartitionSpec) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*PartitionSpec)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partitionByType() PartitionByType {
@@ -10158,7 +10232,8 @@ func (st *yySymType) setpartitionDefinitionOptions(v *PartitionDefinitionOptions
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partitionEngine() *PartitionEngine {
@@ -10169,7 +10244,8 @@ func (st *yySymType) setpartitionEngine(v *PartitionEngine) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionEngine)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partitionOption() *PartitionOption {
@@ -10180,7 +10256,8 @@ func (st *yySymType) setpartitionOption(v *PartitionOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partitionValueRange() *PartitionValueRange {
@@ -10191,7 +10268,8 @@ func (st *yySymType) setpartitionValueRange(v *PartitionValueRange) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**PartitionValueRange)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) partitions() Partitions {
@@ -10202,7 +10280,8 @@ func (st *yySymType) setpartitions(v Partitions) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Partitions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) procParam() *ProcParameter {
@@ -10213,7 +10292,8 @@ func (st *yySymType) setprocParam(v *ProcParameter) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ProcParameter)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) procParamMode() ProcParameterMode {
@@ -10233,7 +10313,8 @@ func (st *yySymType) setprocParams(v []*ProcParameter) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*ProcParameter)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) referenceAction() ReferenceAction {
@@ -10253,7 +10334,8 @@ func (st *yySymType) setreferenceDefinition(v *ReferenceDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ReferenceDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) renameTablePairs() []*RenameTablePair {
@@ -10264,7 +10346,8 @@ func (st *yySymType) setrenameTablePairs(v []*RenameTablePair) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*RenameTablePair)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) revertMigration() *RevertMigration {
@@ -10275,7 +10358,8 @@ func (st *yySymType) setrevertMigration(v *RevertMigration) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**RevertMigration)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) rowAlias() *RowAlias {
@@ -10286,7 +10370,8 @@ func (st *yySymType) setrowAlias(v *RowAlias) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**RowAlias)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) scope() Scope {
@@ -10306,8 +10391,9 @@ func (st *yySymType) setselStmt(v SelectStatement) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*SelectStatement)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) selectExpr() SelectExpr {
@@ -10318,8 +10404,9 @@ func (st *yySymType) setselectExpr(v SelectExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*SelectExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) selectExprs() *SelectExprs {
@@ -10330,7 +10417,8 @@ func (st *yySymType) setselectExprs(v *SelectExprs) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SelectExprs)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) selectInto() *SelectInto {
@@ -10341,7 +10429,8 @@ func (st *yySymType) setselectInto(v *SelectInto) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SelectInto)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) setExpr() *SetExpr {
@@ -10352,7 +10441,8 @@ func (st *yySymType) setsetExpr(v *SetExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SetExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) setExprs() SetExprs {
@@ -10363,7 +10453,8 @@ func (st *yySymType) setsetExprs(v SetExprs) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*SetExprs)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) showFilter() *ShowFilter {
@@ -10374,7 +10465,8 @@ func (st *yySymType) setshowFilter(v *ShowFilter) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**ShowFilter)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) signalConditionName() SignalConditionName {
@@ -10394,7 +10486,8 @@ func (st *yySymType) setsignalSet(v *SignalSet) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SignalSet)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) signalSets() []*SignalSet {
@@ -10405,7 +10498,8 @@ func (st *yySymType) setsignalSets(v []*SignalSet) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*SignalSet)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) starExpr() StarExpr {
@@ -10416,8 +10510,9 @@ func (st *yySymType) setstarExpr(v StarExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*StarExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[2])
+	vp := (*[3]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[2]
 }
 
 func (st *yySymType) statement() Statement {
@@ -10428,8 +10523,9 @@ func (st *yySymType) setstatement(v Statement) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Statement)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) statements() []Statement {
@@ -10440,7 +10536,8 @@ func (st *yySymType) setstatements(v []Statement) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]Statement)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) str() string {
@@ -10451,7 +10548,8 @@ func (st *yySymType) setstr(v string) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*string)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) strs() []string {
@@ -10462,7 +10560,8 @@ func (st *yySymType) setstrs(v []string) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]string)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) subPartition() *SubPartition {
@@ -10473,7 +10572,8 @@ func (st *yySymType) setsubPartition(v *SubPartition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SubPartition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) subPartitionDefinition() *SubPartitionDefinition {
@@ -10484,7 +10584,8 @@ func (st *yySymType) setsubPartitionDefinition(v *SubPartitionDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SubPartitionDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) subPartitionDefinitionOptions() *SubPartitionDefinitionOptions {
@@ -10495,7 +10596,8 @@ func (st *yySymType) setsubPartitionDefinitionOptions(v *SubPartitionDefinitionO
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**SubPartitionDefinitionOptions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) subPartitionDefinitions() SubPartitionDefinitions {
@@ -10506,7 +10608,8 @@ func (st *yySymType) setsubPartitionDefinitions(v SubPartitionDefinitions) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*SubPartitionDefinitions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) subquery() *Subquery {
@@ -10517,7 +10620,8 @@ func (st *yySymType) setsubquery(v *Subquery) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Subquery)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableAndLockType() *TableAndLockType {
@@ -10528,7 +10632,8 @@ func (st *yySymType) settableAndLockType(v *TableAndLockType) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**TableAndLockType)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableAndLockTypes() TableAndLockTypes {
@@ -10539,7 +10644,8 @@ func (st *yySymType) settableAndLockTypes(v TableAndLockTypes) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableAndLockTypes)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableExpr() TableExpr {
@@ -10550,8 +10656,9 @@ func (st *yySymType) settableExpr(v TableExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) tableExprs() TableExprs {
@@ -10562,7 +10669,8 @@ func (st *yySymType) settableExprs(v TableExprs) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableExprs)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableName() TableName {
@@ -10573,8 +10681,9 @@ func (st *yySymType) settableName(v TableName) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableName)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[2])
+	vp := (*[3]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[2]
 }
 
 func (st *yySymType) tableNames() TableNames {
@@ -10585,7 +10694,8 @@ func (st *yySymType) settableNames(v TableNames) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableNames)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableOption() *TableOption {
@@ -10596,7 +10706,8 @@ func (st *yySymType) settableOption(v *TableOption) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**TableOption)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableOptions() TableOptions {
@@ -10607,7 +10718,8 @@ func (st *yySymType) settableOptions(v TableOptions) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableOptions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableSpec() *TableSpec {
@@ -10618,7 +10730,8 @@ func (st *yySymType) settableSpec(v *TableSpec) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**TableSpec)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) tableStmt() TableStatement {
@@ -10629,8 +10742,9 @@ func (st *yySymType) settableStmt(v TableStatement) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*TableStatement)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[1])
+	vp := (*[2]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[1]
 }
 
 func (st *yySymType) trimType() TrimType {
@@ -10659,7 +10773,8 @@ func (st *yySymType) settxAccessModes(v []TxAccessMode) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]TxAccessMode)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) updateExpr() *UpdateExpr {
@@ -10670,7 +10785,8 @@ func (st *yySymType) setupdateExpr(v *UpdateExpr) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**UpdateExpr)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) updateExprs() UpdateExprs {
@@ -10681,7 +10797,8 @@ func (st *yySymType) setupdateExprs(v UpdateExprs) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*UpdateExprs)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) userOrRole() *UserOrRole {
@@ -10692,7 +10809,8 @@ func (st *yySymType) setuserOrRole(v *UserOrRole) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**UserOrRole)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) userOrRoles() []UserOrRole {
@@ -10703,7 +10821,8 @@ func (st *yySymType) setuserOrRoles(v []UserOrRole) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]UserOrRole)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) valTuple() ValTuple {
@@ -10714,7 +10833,8 @@ func (st *yySymType) setvalTuple(v ValTuple) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*ValTuple)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) values() Values {
@@ -10725,7 +10845,8 @@ func (st *yySymType) setvalues(v Values) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*Values)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) variable() *Variable {
@@ -10736,7 +10857,8 @@ func (st *yySymType) setvariable(v *Variable) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**Variable)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) variables() []*Variable {
@@ -10747,7 +10869,8 @@ func (st *yySymType) setvariables(v []*Variable) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*Variable)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) vexplainType() VExplainType {
@@ -10767,9 +10890,10 @@ func (st *yySymType) setvindexParam(v VindexParam) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*VindexParam)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
-	st.ptrs[1] = __yyunsafe__.Pointer(st.data[2])
-	st.ptrs[2] = __yyunsafe__.Pointer(st.data[4])
+	vp := (*[5]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
+	st.ptrs[1] = vp[2]
+	st.ptrs[2] = vp[4]
 }
 
 func (st *yySymType) vindexParams() []VindexParam {
@@ -10780,7 +10904,8 @@ func (st *yySymType) setvindexParams(v []VindexParam) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]VindexParam)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) when() *When {
@@ -10791,7 +10916,8 @@ func (st *yySymType) setwhen(v *When) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**When)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) whens() []*When {
@@ -10802,7 +10928,8 @@ func (st *yySymType) setwhens(v []*When) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*[]*When)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) windowDefinition() *WindowDefinition {
@@ -10813,7 +10940,8 @@ func (st *yySymType) setwindowDefinition(v *WindowDefinition) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**WindowDefinition)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) windowDefinitions() WindowDefinitions {
@@ -10824,7 +10952,8 @@ func (st *yySymType) setwindowDefinitions(v WindowDefinitions) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(*WindowDefinitions)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) windowSpecification() *WindowSpecification {
@@ -10835,7 +10964,8 @@ func (st *yySymType) setwindowSpecification(v *WindowSpecification) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**WindowSpecification)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 func (st *yySymType) with() *With {
@@ -10846,7 +10976,8 @@ func (st *yySymType) setwith(v *With) {
 	st.data = yyZeroData
 	st.ptrs = yyZeroPtrs
 	*(**With)(__yyunsafe__.Pointer(&st.data)) = v
-	st.ptrs[0] = __yyunsafe__.Pointer(st.data[0])
+	vp := (*[1]__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&v))
+	st.ptrs[0] = vp[0]
 }
 
 var yyR1 = [...]int16{
@@ -12718,7 +12849,7 @@ yydefault:
 			*yySLICE = append(*yySLICE, yyDollar[3].statement())
 			resetTokenizer(yylex)
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 4:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
@@ -12830,7 +12961,7 @@ yydefault:
 			yySLICE := (*[]*SignalSet)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].signalSet())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 53:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []*SignalSet
@@ -12974,7 +13105,7 @@ yydefault:
 			yySLICE := (*[]HandlerCondition)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].handlerCondition())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 71:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []HandlerCondition
@@ -13164,7 +13295,7 @@ yydefault:
 			yySLICE := (*[]*ElseIfBlock)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].elseIf())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 100:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ElseIfBlock
@@ -13268,7 +13399,7 @@ yydefault:
 			yySLICE := (*[]*CommonTableExpr)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].cte())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 113:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*CommonTableExpr
@@ -13736,7 +13867,7 @@ yydefault:
 			yySLICE := (*TableNames)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableName())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 160:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableNames
@@ -13752,7 +13883,7 @@ yydefault:
 			yySLICE := (*TableNames)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableName())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 162:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableNames
@@ -13768,7 +13899,7 @@ yydefault:
 			yySLICE := (*TableNames)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableName())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 164:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Partitions
@@ -13810,7 +13941,7 @@ yydefault:
 			yySLICE := (*SetExprs)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].setExpr())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 169:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SetExpr
@@ -13900,7 +14031,7 @@ yydefault:
 			yySLICE := (*SetExprs)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].setExpr())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 180:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SetExpr
@@ -14132,7 +14263,7 @@ yydefault:
 			yySLICE := (*[]VindexParam)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].vindexParam())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 206:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL VindexParam
@@ -14172,7 +14303,7 @@ yydefault:
 			yySLICE := (*[]*JSONObjectParam)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].jsonObjectParam())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 211:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *JSONObjectParam
@@ -14342,7 +14473,7 @@ yydefault:
 			yySLICE := (*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].databaseOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 233:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1743
@@ -14350,7 +14481,7 @@ yydefault:
 			yySLICE := (*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].databaseOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 234:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1747
@@ -14358,7 +14489,7 @@ yydefault:
 			yySLICE := (*[]DatabaseOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].databaseOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 235:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
@@ -14454,7 +14585,7 @@ yydefault:
 			yySLICE := (*[]*ColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].columnDefinition())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 247:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *TableSpec
@@ -15904,7 +16035,7 @@ yydefault:
 			yySLICE := (*[]string)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, encodeSQLString(yyDollar[3].str()))
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 432:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *int
@@ -16183,7 +16314,7 @@ yydefault:
 			yySLICE := (*[]*IndexOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].indexOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 465:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *IndexOption
@@ -16424,7 +16555,7 @@ yydefault:
 			yySLICE := (*[]*IndexColumn)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].indexColumn())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 495:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *IndexColumn
@@ -16736,7 +16867,7 @@ yydefault:
 			yySLICE := (*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 534:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3128
@@ -16744,7 +16875,7 @@ yydefault:
 			yySLICE := (*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].tableOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 535:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableOptions
@@ -16760,7 +16891,7 @@ yydefault:
 			yySLICE := (*TableOptions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].tableOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 537:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *TableOption
@@ -17168,7 +17299,7 @@ yydefault:
 			yySLICE := (*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, &OrderByOption{Cols: yyDollar[5].columns()})
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 598:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []AlterOption
@@ -17184,7 +17315,7 @@ yydefault:
 			yySLICE := (*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].alterOptions()...)
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 600:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL []AlterOption
@@ -17208,7 +17339,7 @@ yydefault:
 			yySLICE := (*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].alterOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 603:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3393
@@ -17216,7 +17347,7 @@ yydefault:
 			yySLICE := (*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].alterOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 604:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL AlterOption
@@ -17480,7 +17611,7 @@ yydefault:
 			yySLICE := (*[]AlterOption)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].alterOption())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 637:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
@@ -18152,7 +18283,7 @@ yydefault:
 			yySLICE := (*[]*JtColumnDefinition)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].jtColumnDefinition())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 703:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *JtColumnDefinition
@@ -18545,7 +18676,7 @@ yydefault:
 			yySLICE := (*[]*PartitionDefinition)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].partDef())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 751:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:4186
@@ -18664,7 +18795,7 @@ yydefault:
 			yySLICE := (*SubPartitionDefinitions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].subPartitionDefinition())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 765:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SubPartitionDefinition
@@ -18896,7 +19027,7 @@ yydefault:
 			yySLICE := (*[]*RenameTablePair)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, &RenameTablePair{FromTable: yyDollar[3].tableName(), ToTable: yyDollar[5].tableName()})
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 792:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Statement
@@ -19639,7 +19770,7 @@ yydefault:
 				*yySLICE = append(*yySLICE, *yyDollar[3].userOrRole())
 			}
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 883:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []string
@@ -19671,7 +19802,7 @@ yydefault:
 			yySLICE := (*[]string)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].str())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 887:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
@@ -20031,7 +20162,7 @@ yydefault:
 			yySLICE := (*[]TxAccessMode)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].txAccessMode())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 932:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TxAccessMode
@@ -20359,7 +20490,7 @@ yydefault:
 			yySLICE := (*TableAndLockTypes)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableAndLockType())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 973:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *TableAndLockType
@@ -20479,7 +20610,7 @@ yydefault:
 			yySLICE := (*[]string)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].str())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 988:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
@@ -20818,7 +20949,7 @@ yydefault:
 			yySLICE := (*[]string)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].str())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1029:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
@@ -21045,7 +21176,7 @@ yydefault:
 			yySLICE := (*TableExprs)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].tableExpr())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1058:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExpr
@@ -21172,7 +21303,7 @@ yydefault:
 			yySLICE := (*Columns)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1072:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
@@ -21190,7 +21321,7 @@ yydefault:
 			yySLICE := (*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].variable())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1074:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
@@ -21218,7 +21349,7 @@ yydefault:
 			yySLICE := (*Columns)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1077:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:5712
@@ -21226,7 +21357,7 @@ yydefault:
 			yySLICE := (*Columns)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, NewIdentifierCI(string(yyDollar[3].str())))
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1078:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Partitions
@@ -21242,7 +21373,7 @@ yydefault:
 			yySLICE := (*Partitions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1080:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
@@ -21545,7 +21676,7 @@ yydefault:
 			yySLICE := (*IndexHints)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].indexHint())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1116:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
@@ -22361,7 +22492,7 @@ yydefault:
 			yySLICE := (*[]*ColName)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].colName())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1202:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
@@ -22721,7 +22852,7 @@ yydefault:
 			yySLICE := (*WindowDefinitions)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].windowDefinition())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1249:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
@@ -22902,7 +23033,7 @@ yydefault:
 			yySLICE := (*[]Expr)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].expr())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1271:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
@@ -25489,7 +25620,7 @@ yydefault:
 			yySLICE := (*[]*When)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[2].when())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1595:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *When
@@ -25675,7 +25806,7 @@ yydefault:
 			yySLICE := (*NamedWindows)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].namedWindow())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1616:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL NamedWindows
@@ -25733,7 +25864,7 @@ yydefault:
 			yySLICE := (*OrderBy)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].order())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1623:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Order
@@ -26056,7 +26187,7 @@ yydefault:
 			yySLICE := (*[]*ProcParameter)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].procParam())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1663:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ProcParameter
@@ -26271,7 +26402,7 @@ yydefault:
 			yySLICE := (*[]*Variable)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].variable())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1690:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
@@ -26597,7 +26728,7 @@ yydefault:
 			yySLICE := (*Columns)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].identifierCI())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1730:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:8567
@@ -26605,7 +26736,7 @@ yydefault:
 			yySLICE := (*Columns)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[5].identifierCI())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1731:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *RowAlias
@@ -26663,7 +26794,7 @@ yydefault:
 			yySLICE := (*Values)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].valTuple())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1738:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Values
@@ -26681,7 +26812,7 @@ yydefault:
 			yySLICE := (*Values)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].valTuple())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1740:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ValTuple
@@ -26759,7 +26890,7 @@ yydefault:
 			yySLICE := (*UpdateExprs)(__yyunsafe__.Pointer(&yyVAL.data))
 			*yySLICE = append(*yySLICE, yyDollar[3].updateExpr())
 		}
-		yyVAL.ptrs[0] = __yyunsafe__.Pointer(yyVAL.data[0])
+		yyVAL.ptrs[0] = *(*__yyunsafe__.Pointer)(__yyunsafe__.Pointer(&yyVAL.data))
 	case 1751:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *UpdateExpr
