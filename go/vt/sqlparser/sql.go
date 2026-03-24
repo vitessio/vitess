@@ -12365,10 +12365,14 @@ yydefault:
 //line sql.y:1172
 		{
 			se := na(yylex).allocSelectExprs()
-			se.Exprs = []SelectExpr{&Nextval{Expr: yyDollar[5].exprUnion()}}
+			ses := na(yylex).makeSelectExprSlice(1)
+			ses[0] = &Nextval{Expr: yyDollar[5].exprUnion()}
+			se.Exprs = ses
 			ate := na(yylex).allocAliasedTableExpr()
 			ate.Expr = yyDollar[7].tableName
-			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strs), se, []string{yyDollar[3].str} /*options*/, nil, TableExprs{ate}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
+			te := na(yylex).makeTableExprSlice(1)
+			te[0] = ate
+			yyLOCAL = na(yylex).newSelect(Comments(yyDollar[2].strs), se, []string{yyDollar[3].str} /*options*/, nil, te, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
 		}
 		yyVAL.union = yyLOCAL
 	case 126:
@@ -12580,7 +12584,9 @@ yydefault:
 			ins.Table = na(yylex).getAliasedTableExprFromTableName(yyDollar[4].tableName)
 			ins.Partitions = yyDollar[5].partitionsUnion()
 			ins.Columns = cols
-			ins.Rows = Values{vals}
+			vv := na(yylex).makeValuesSlice(1)
+			vv[0] = vals
+			ins.Rows = vv
 			ins.OnDup = OnDup(yyDollar[8].updateExprsUnion())
 			yyLOCAL = ins
 		}
@@ -12626,11 +12632,13 @@ yydefault:
 			ate := na(yylex).allocAliasedTableExpr()
 			ate.Expr = yyDollar[6].tableName
 			ate.As = yyDollar[7].identifierCS
+			te := na(yylex).makeTableExprSlice(1)
+			te[0] = ate
 			del := na(yylex).allocDelete()
 			del.With = yyDollar[1].withUnion()
 			del.Comments = Comments(yyDollar[3].strs).Parsed()
 			del.Ignore = yyDollar[4].ignoreUnion()
-			del.TableExprs = TableExprs{ate}
+			del.TableExprs = te
 			del.Partitions = yyDollar[8].partitionsUnion()
 			del.Where = na(yylex).newWhere(WhereClause, yyDollar[9].exprUnion())
 			del.OrderBy = yyDollar[10].orderByUnion()
@@ -12767,7 +12775,9 @@ yydefault:
 		var yyLOCAL SetExprs
 //line sql.y:1392
 		{
-			yyLOCAL = SetExprs{yyDollar[1].setExprUnion()}
+			se := na(yylex).makeSetExprSlice(1)
+			se[0] = yyDollar[1].setExprUnion()
+			yyLOCAL = se
 		}
 		yyVAL.union = yyLOCAL
 	case 168:
@@ -12854,7 +12864,9 @@ yydefault:
 		var yyLOCAL SetExprs
 //line sql.y:1444
 		{
-			yyLOCAL = SetExprs{yyDollar[1].setExprUnion()}
+			se := na(yylex).makeSetExprSlice(1)
+			se[0] = yyDollar[1].setExprUnion()
+			yyLOCAL = se
 		}
 		yyVAL.union = yyLOCAL
 	case 179:
@@ -19373,7 +19385,9 @@ yydefault:
 //line sql.y:5540
 		{
 			se := na(yylex).allocSelectExprs()
-			se.Exprs = []SelectExpr{yyDollar[1].selectExprUnion()}
+			s := na(yylex).makeSelectExprSlice(1)
+			s[0] = yyDollar[1].selectExprUnion()
+			se.Exprs = s
 			yyLOCAL = se
 		}
 		yyVAL.union = yyLOCAL
@@ -19457,7 +19471,9 @@ yydefault:
 		{
 			ate := na(yylex).allocAliasedTableExpr()
 			ate.Expr = TableName{Name: NewIdentifierCS("dual")}
-			yyLOCAL = TableExprs{ate}
+			te := na(yylex).makeTableExprSlice(1)
+			te[0] = ate
+			yyLOCAL = te
 		}
 		yyVAL.union = yyLOCAL
 	case 1052:
@@ -19481,7 +19497,9 @@ yydefault:
 		var yyLOCAL TableExprs
 //line sql.y:5609
 		{
-			yyLOCAL = TableExprs{yyDollar[1].tableExprUnion()}
+			s := na(yylex).makeTableExprSlice(1)
+			s[0] = yyDollar[1].tableExprUnion()
+			yyLOCAL = s
 		}
 		yyVAL.union = yyLOCAL
 	case 1055:
@@ -19605,7 +19623,9 @@ yydefault:
 		var yyLOCAL Columns
 //line sql.y:5679
 		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI}
+			cols := na(yylex).makeColumns(1)
+			cols[0] = yyDollar[1].identifierCI
+			yyLOCAL = cols
 		}
 		yyVAL.union = yyLOCAL
 	case 1071:
@@ -19635,7 +19655,9 @@ yydefault:
 		var yyLOCAL Columns
 //line sql.y:5699
 		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI}
+			cols := na(yylex).makeColumns(1)
+			cols[0] = yyDollar[1].identifierCI
+			yyLOCAL = cols
 		}
 		yyVAL.union = yyLOCAL
 	case 1075:
@@ -19643,7 +19665,9 @@ yydefault:
 		var yyLOCAL Columns
 //line sql.y:5703
 		{
-			yyLOCAL = Columns{NewIdentifierCI(string(yyDollar[1].str))}
+			cols := na(yylex).makeColumns(1)
+			cols[0] = NewIdentifierCI(string(yyDollar[1].str))
+			yyLOCAL = cols
 		}
 		yyVAL.union = yyLOCAL
 	case 1076:
@@ -20710,7 +20734,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6231
 		{
-			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: []Expr{yyDollar[3].exprUnion()}}
+			pathList := na(yylex).makeExprSlice(1)
+			pathList[0] = yyDollar[3].exprUnion()
+			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: pathList}
 		}
 		yyVAL.union = yyLOCAL
 	case 1197:
@@ -20718,7 +20744,9 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6235
 		{
-			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: []Expr{yyDollar[3].exprUnion()}}}
+			pathList := na(yylex).makeExprSlice(1)
+			pathList[0] = yyDollar[3].exprUnion()
+			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: pathList}}
 		}
 		yyVAL.union = yyLOCAL
 	case 1198:
@@ -21271,7 +21299,9 @@ yydefault:
 		var yyLOCAL []Expr
 //line sql.y:6577
 		{
-			yyLOCAL = []Expr{yyDollar[1].exprUnion()}
+			e := na(yylex).makeExprSlice(1)
+			e[0] = yyDollar[1].exprUnion()
+			yyLOCAL = e
 		}
 		yyVAL.union = yyLOCAL
 	case 1270:
@@ -24085,7 +24115,9 @@ yydefault:
 		var yyLOCAL OrderBy
 //line sql.y:8063
 		{
-			yyLOCAL = OrderBy{yyDollar[1].orderUnion()}
+			o := na(yylex).makeOrderSlice(1)
+			o[0] = yyDollar[1].orderUnion()
+			yyLOCAL = o
 		}
 		yyVAL.union = yyLOCAL
 	case 1622:
@@ -24844,7 +24876,9 @@ yydefault:
 		var yyLOCAL Columns
 //line sql.y:8554
 		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI}
+			cols := na(yylex).makeColumns(1)
+			cols[0] = yyDollar[1].identifierCI
+			yyLOCAL = cols
 		}
 		yyVAL.union = yyLOCAL
 	case 1728:
@@ -24852,7 +24886,9 @@ yydefault:
 		var yyLOCAL Columns
 //line sql.y:8558
 		{
-			yyLOCAL = Columns{yyDollar[3].identifierCI}
+			cols := na(yylex).makeColumns(1)
+			cols[0] = yyDollar[3].identifierCI
+			yyLOCAL = cols
 		}
 		yyVAL.union = yyLOCAL
 	case 1729:
@@ -24914,7 +24950,9 @@ yydefault:
 		var yyLOCAL Values
 //line sql.y:8594
 		{
-			yyLOCAL = Values{yyDollar[1].valTupleUnion()}
+			v := na(yylex).makeValuesSlice(1)
+			v[0] = yyDollar[1].valTupleUnion()
+			yyLOCAL = v
 		}
 		yyVAL.union = yyLOCAL
 	case 1737:
@@ -24929,7 +24967,9 @@ yydefault:
 		var yyLOCAL Values
 //line sql.y:8604
 		{
-			yyLOCAL = Values{yyDollar[1].valTupleUnion()}
+			v := na(yylex).makeValuesSlice(1)
+			v[0] = yyDollar[1].valTupleUnion()
+			yyLOCAL = v
 		}
 		yyVAL.union = yyLOCAL
 	case 1739:
@@ -25004,7 +25044,9 @@ yydefault:
 		var yyLOCAL UpdateExprs
 //line sql.y:8660
 		{
-			yyLOCAL = UpdateExprs{yyDollar[1].updateExprUnion()}
+			ue := na(yylex).makeUpdateExprSlice(1)
+			ue[0] = yyDollar[1].updateExprUnion()
+			yyLOCAL = ue
 		}
 		yyVAL.union = yyLOCAL
 	case 1750:

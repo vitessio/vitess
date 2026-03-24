@@ -48,6 +48,16 @@ type nodeAllocator struct {
 	subquerySlab       []Subquery
 	groupBySlab        []GroupBy
 	selectExprsSlab    []SelectExprs
+
+	// Slice backing array slabs
+	selectExprSliceSlab []SelectExpr
+	exprSliceSlab       []Expr
+	tableExprSliceSlab  []TableExpr
+	identifierCISlab    []IdentifierCI
+	orderPtrSlab        []*Order
+	updateExprPtrSlab   []*UpdateExpr
+	setExprPtrSlab      []*SetExpr
+	valTupleSlab        []ValTuple
 }
 
 // na extracts the nodeAllocator from the lexer for use in grammar actions.
@@ -398,4 +408,81 @@ func (a *nodeAllocator) getAliasedTableExprFromTableName(tblName TableName) *Ali
 	ate := a.allocAliasedTableExpr()
 	ate.Expr = tblName
 	return ate
+}
+
+// Slice slab methods: return slices backed by slab memory.
+// When append grows beyond the slab-backed capacity, Go allocates
+// a new backing array as normal. The savings come from avoiding the
+// initial heap allocation for short lists (the common case in SQL).
+
+func (a *nodeAllocator) makeSelectExprSlice(n int) []SelectExpr {
+	if len(a.selectExprSliceSlab) < n {
+		a.selectExprSliceSlab = make([]SelectExpr, max(nodeSlabSize, n))
+	}
+	s := a.selectExprSliceSlab[:n:n]
+	a.selectExprSliceSlab = a.selectExprSliceSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeExprSlice(n int) []Expr {
+	if len(a.exprSliceSlab) < n {
+		a.exprSliceSlab = make([]Expr, max(nodeSlabSize, n))
+	}
+	s := a.exprSliceSlab[:n:n]
+	a.exprSliceSlab = a.exprSliceSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeTableExprSlice(n int) TableExprs {
+	if len(a.tableExprSliceSlab) < n {
+		a.tableExprSliceSlab = make([]TableExpr, max(nodeSlabSize, n))
+	}
+	s := a.tableExprSliceSlab[:n:n]
+	a.tableExprSliceSlab = a.tableExprSliceSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeColumns(n int) Columns {
+	if len(a.identifierCISlab) < n {
+		a.identifierCISlab = make([]IdentifierCI, max(nodeSlabSize, n))
+	}
+	s := a.identifierCISlab[:n:n]
+	a.identifierCISlab = a.identifierCISlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeOrderSlice(n int) OrderBy {
+	if len(a.orderPtrSlab) < n {
+		a.orderPtrSlab = make([]*Order, max(nodeSlabSize, n))
+	}
+	s := a.orderPtrSlab[:n:n]
+	a.orderPtrSlab = a.orderPtrSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeUpdateExprSlice(n int) UpdateExprs {
+	if len(a.updateExprPtrSlab) < n {
+		a.updateExprPtrSlab = make([]*UpdateExpr, max(nodeSlabSize, n))
+	}
+	s := a.updateExprPtrSlab[:n:n]
+	a.updateExprPtrSlab = a.updateExprPtrSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeSetExprSlice(n int) SetExprs {
+	if len(a.setExprPtrSlab) < n {
+		a.setExprPtrSlab = make([]*SetExpr, max(nodeSlabSize, n))
+	}
+	s := a.setExprPtrSlab[:n:n]
+	a.setExprPtrSlab = a.setExprPtrSlab[n:]
+	return s
+}
+
+func (a *nodeAllocator) makeValuesSlice(n int) Values {
+	if len(a.valTupleSlab) < n {
+		a.valTupleSlab = make([]ValTuple, max(nodeSlabSize, n))
+	}
+	s := a.valTupleSlab[:n:n]
+	a.valTupleSlab = a.valTupleSlab[n:]
+	return s
 }

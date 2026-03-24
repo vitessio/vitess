@@ -1170,7 +1170,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    se := na(yylex).allocSelectExprs(); se.Exprs = []SelectExpr{&Nextval{Expr: $5}}; ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $7; $$ = na(yylex).newSelect(Comments($2), se, []string{$3}/*options*/, nil, TableExprs{ate}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+    se := na(yylex).allocSelectExprs(); ses := na(yylex).makeSelectExprSlice(1); ses[0] = &Nextval{Expr: $5}; se.Exprs = ses; ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; $$ = na(yylex).newSelect(Comments($2), se, []string{$3}/*options*/, nil, te, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -1301,7 +1301,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; ins.Rows = Values{vals}; ins.OnDup = OnDup($8); $$ = ins
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:
@@ -1323,7 +1323,7 @@ update_statement:
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = TableExprs{ate}; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = te; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -1390,7 +1390,7 @@ set_statement:
 set_list:
   set_expression
   {
-    $$ = SetExprs{$1}
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | set_list ',' set_expression
   {
@@ -1442,7 +1442,7 @@ set_transaction_statement:
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | transaction_chars ',' transaction_char
   {
@@ -5538,7 +5538,7 @@ select_option:
 select_expression_list:
   select_expression
   {
-    se := na(yylex).allocSelectExprs(); se.Exprs = []SelectExpr{$1}; $$ = se
+    se := na(yylex).allocSelectExprs(); s := na(yylex).makeSelectExprSlice(1); s[0] = $1; se.Exprs = s; $$ = se
   }
 | select_expression_list ',' select_expression
   {
@@ -5591,7 +5591,7 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; $$ = TableExprs{ate}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; te := na(yylex).makeTableExprSlice(1); te[0] = ate; $$ = te
   }
   | from_clause
   {
@@ -5607,7 +5607,7 @@ FROM table_references
 table_references:
   table_reference
   {
-    $$ = TableExprs{$1}
+    s := na(yylex).makeTableExprSlice(1); s[0] = $1; $$ = s
   }
 | table_references ',' table_reference
   {
@@ -5677,7 +5677,7 @@ column_list_empty:
 column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | column_list ',' sql_id
   {
@@ -5697,11 +5697,11 @@ at_id_list:
 index_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | PRIMARY
   {
-    $$ = Columns{NewIdentifierCI(string($1))}
+    cols := na(yylex).makeColumns(1); cols[0] = NewIdentifierCI(string($1)); $$ = cols
   }
 | index_list ',' sql_id
   {
@@ -6229,11 +6229,11 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}
+    pathList := na(yylex).makeExprSlice(1); pathList[0] = $3; $$ = &JSONExtractExpr{JSONDoc: $1, PathList: pathList}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}}
+    pathList := na(yylex).makeExprSlice(1); pathList[0] = $3; $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: pathList}}
   }
 
 column_names_opt_paren:
@@ -6575,7 +6575,7 @@ subquery:
 expression_list:
   expression
   {
-    $$ = []Expr{$1}
+    e := na(yylex).makeExprSlice(1); e[0] = $1; $$ = e
   }
 | expression_list ',' expression
   {
@@ -8061,7 +8061,7 @@ ORDER BY order_list
 order_list:
   order
   {
-    $$ = OrderBy{$1}
+    o := na(yylex).makeOrderSlice(1); o[0] = $1; $$ = o
   }
 | order_list ',' order
   {
@@ -8552,11 +8552,11 @@ value_or_values:
 ins_column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | sql_id '.' sql_id
   {
-    $$ = Columns{$3}
+    cols := na(yylex).makeColumns(1); cols[0] = $3; $$ = cols
   }
 | ins_column_list ',' sql_id
   {
@@ -8592,7 +8592,7 @@ on_dup_opt:
 row_tuple_list:
   row_tuple_or_empty
   {
-    $$ = Values{$1}
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | row_tuple_list ',' row_tuple_or_empty
   {
@@ -8602,7 +8602,7 @@ row_tuple_list:
 val_tuple_list:
   val_tuple_or_empty
   {
-    $$ = Values{$1}
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | val_tuple_list ',' val_tuple_or_empty
   {
@@ -8658,7 +8658,7 @@ tuple_expression:
 update_list:
   update_expression
   {
-    $$ = UpdateExprs{$1}
+    ue := na(yylex).makeUpdateExprSlice(1); ue[0] = $1; $$ = ue
   }
 | update_list ',' update_expression
   {
