@@ -5,30 +5,34 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"golang.org/x/tools/go/packages"
 )
 
-// inferUnionDataWords loads the package containing the grammar, looks up
-// each type declared in %struct and %union, and returns the number of
-// pointer-sized words needed to hold the largest one.
-//
-// This allows goyacc to automatically size the data array without a
-// manual --union-data-words flag.
-func inferUnionDataWords() (int, error) {
-	// Collect all type names from the grammar's %struct/%union declarations.
+// unionTypeInfo holds the inferred size and pointer layout of a union member.
+type unionTypeInfo struct {
+	words    int   // total size in pointer-sized words
+	ptrWords []int // which word offsets contain pointers (sorted)
+}
+
+// inferUnionLayout loads the package containing the grammar, inspects
+// each type declared in %union, and returns:
+//   - dataWords: number of uintptr words needed to hold the largest member
+//   - maxPtrs: maximum number of pointer words across all members
+//   - typeLayouts: per-member-name layout info (pointer word offsets)
+func inferUnionLayout() (dataWords int, maxPtrs int, typeLayouts map[string]*unionTypeInfo, err error) {
 	var typeNames []string
 	for _, gt := range gotypes {
 		typeNames = append(typeNames, gt.typename)
 	}
 	if len(typeNames) == 0 {
-		return 0, nil
+		return 0, 0, nil, nil
 	}
 
-	// Determine the package path from the output file location.
 	absOutput, err := filepath.Abs(oflag)
 	if err != nil {
-		return 0, fmt.Errorf("inferUnionDataWords: %w", err)
+		return 0, 0, nil, fmt.Errorf("inferUnionLayout: %w", err)
 	}
 	pkgDir := filepath.Dir(absOutput)
 
@@ -37,55 +41,138 @@ func inferUnionDataWords() (int, error) {
 		Dir:  pkgDir,
 	}, ".")
 	if err != nil {
-		return 0, fmt.Errorf("inferUnionDataWords: failed to load package: %w", err)
+		return 0, 0, nil, fmt.Errorf("inferUnionLayout: failed to load package: %w", err)
 	}
-	// Ignore errors — the package may not fully compile (gram.go is being regenerated).
 	if len(loaded) == 0 {
-		return 0, fmt.Errorf("inferUnionDataWords: %s", "no packages loaded")
+		return 0, 0, nil, fmt.Errorf("inferUnionLayout: %s", "no packages loaded")
 	}
 	pkg := loaded[0]
 	if pkg.Types == nil {
-		return 0, fmt.Errorf("inferUnionDataWords: %s", "package types not available (package may have errors)")
+		return 0, 0, nil, fmt.Errorf("inferUnionLayout: %s", "package types not available")
 	}
 
 	sizes := pkg.TypesSizes
-	scope := pkg.Types.Scope()
 	ptrSize := sizes.Sizeof(types.Typ[types.UnsafePointer])
 
-	var maxSize int64
-	for _, name := range typeNames {
-		obj := scope.Lookup(name)
-		if obj == nil {
-			// Might be a built-in (string, bool, int) or a pointer/slice type.
-			t, err := evalType(pkg.Types, name)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "inferUnionDataWords: cannot resolve type %q: %v\n", name, err)
-				continue
-			}
-			s := sizes.Sizeof(t)
-			if s > maxSize {
-				maxSize = s
-			}
+	typeLayouts = make(map[string]*unionTypeInfo)
+
+	for member, gt := range gotypes {
+		t := resolveType(pkg.Types.Scope(), pkg.Types, gt.typename)
+		if t == nil {
+			fmt.Fprintf(os.Stderr, "inferUnionLayout: cannot resolve type %q\n", gt.typename)
 			continue
 		}
-		s := sizes.Sizeof(obj.Type())
-		if s > maxSize {
-			maxSize = s
+
+		sz := sizes.Sizeof(t)
+		words := int((sz + ptrSize - 1) / ptrSize)
+		if words > dataWords {
+			dataWords = words
+		}
+
+		ptrs := pointerWords(t, sizes, 0)
+		sort.Ints(ptrs)
+		if len(ptrs) > maxPtrs {
+			maxPtrs = len(ptrs)
+		}
+
+		typeLayouts[member] = &unionTypeInfo{
+			words:    words,
+			ptrWords: ptrs,
 		}
 	}
 
-	if maxSize == 0 {
-		return 0, fmt.Errorf("inferUnionDataWords: %s", "could not determine any type sizes")
+	if dataWords == 0 {
+		return 0, 0, nil, fmt.Errorf("inferUnionLayout: %s", "could not determine any type sizes")
 	}
 
-	words := (maxSize + ptrSize - 1) / ptrSize
-	return int(words), nil
+	return dataWords, maxPtrs, typeLayouts, nil
+}
+
+// resolveType looks up a type name in the package scope, handling
+// built-in types, pointers, and slices.
+func resolveType(scope *types.Scope, pkg *types.Package, expr string) types.Type {
+	t, err := evalType(pkg, expr)
+	if err != nil {
+		return nil
+	}
+	return t
+}
+
+// pointerWords returns the word offsets (at ptrSize granularity) that
+// contain pointer values for the given type. This is used to determine
+// which words from the uintptr data array need to be copied to the
+// unsafe.Pointer keepalive array.
+func pointerWords(t types.Type, sizes types.Sizes, baseOffset int64) []int {
+	ptrSize := sizes.Sizeof(types.Typ[types.UnsafePointer])
+
+	switch t := t.Underlying().(type) {
+	case *types.Pointer:
+		// A pointer is one word, always a pointer.
+		return []int{int(baseOffset / ptrSize)}
+
+	case *types.Interface:
+		// An interface is two words: type pointer + data pointer.
+		return []int{
+			int(baseOffset / ptrSize),
+			int(baseOffset/ptrSize) + 1,
+		}
+
+	case *types.Slice:
+		// A slice is three words: data pointer, len, cap.
+		// Only the first word is a pointer.
+		return []int{int(baseOffset / ptrSize)}
+
+	case *types.Basic:
+		switch t.Kind() {
+		case types.String:
+			// String is two words: data pointer + length.
+			// Only the first word is a pointer.
+			return []int{int(baseOffset / ptrSize)}
+		case types.UnsafePointer:
+			return []int{int(baseOffset / ptrSize)}
+		default:
+			// Numeric, bool, etc. — no pointers.
+			return nil
+		}
+
+	case *types.Map, *types.Chan, *types.Signature:
+		// Maps, channels, and function values are single pointers.
+		return []int{int(baseOffset / ptrSize)}
+
+	case *types.Struct:
+		var ptrs []int
+		for i := range t.NumFields() {
+			field := t.Field(i)
+			fieldOffsets := sizes.Offsetsof(structFields(t))
+			ptrs = append(ptrs, pointerWords(field.Type(), sizes, baseOffset+fieldOffsets[i])...)
+		}
+		return ptrs
+
+	case *types.Array:
+		elemSize := sizes.Sizeof(t.Elem())
+		var ptrs []int
+		for i := range t.Len() {
+			ptrs = append(ptrs, pointerWords(t.Elem(), sizes, baseOffset+int64(i)*elemSize)...)
+		}
+		return ptrs
+
+	default:
+		return nil
+	}
+}
+
+// structFields extracts the field list from a struct type for use with Offsetsof.
+func structFields(s *types.Struct) []*types.Var {
+	fields := make([]*types.Var, s.NumFields())
+	for i := range s.NumFields() {
+		fields[i] = s.Field(i)
+	}
+	return fields
 }
 
 // evalType parses a Go type expression like "*String", "[]Expr", "bool"
 // in the context of the given package.
 func evalType(pkg *types.Package, expr string) (types.Type, error) {
-	// Handle pointer types
 	if len(expr) > 0 && expr[0] == '*' {
 		inner, err := evalType(pkg, expr[1:])
 		if err != nil {
@@ -94,7 +181,6 @@ func evalType(pkg *types.Package, expr string) (types.Type, error) {
 		return types.NewPointer(inner), nil
 	}
 
-	// Handle slice types
 	if len(expr) > 2 && expr[0] == '[' && expr[1] == ']' {
 		inner, err := evalType(pkg, expr[2:])
 		if err != nil {
@@ -103,7 +189,6 @@ func evalType(pkg *types.Package, expr string) (types.Type, error) {
 		return types.NewSlice(inner), nil
 	}
 
-	// Built-in types
 	switch expr {
 	case "string":
 		return types.Typ[types.String], nil
@@ -119,7 +204,6 @@ func evalType(pkg *types.Package, expr string) (types.Type, error) {
 		return types.NewStruct(nil, nil), nil
 	}
 
-	// Look up in package scope
 	obj := pkg.Scope().Lookup(expr)
 	if obj == nil {
 		return nil, fmt.Errorf("type %q not found in package %s", expr, pkg.Name())

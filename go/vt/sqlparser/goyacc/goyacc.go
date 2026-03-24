@@ -393,13 +393,19 @@ const EOF = -1
 func main() {
 	setup() // initialize and read productions
 
-	// Infer the data array size for the discriminated union from Go type sizes.
+	// Infer the data array size and pointer layout for the discriminated union.
 	if len(gotypes) > 0 {
-		words, err := inferUnionDataWords()
+		dataWords, maxPtrs, layouts, err := inferUnionLayout()
 		if err != nil {
-			errorf("failed to infer union data size: %v", err)
+			errorf("failed to infer union layout: %v", err)
 		}
-		unionDataSize = words
+		unionDataSize = dataWords
+		unionPtrSize = maxPtrs
+		for member, layout := range layouts {
+			if gt, ok := gotypes[member]; ok {
+				gt.ptrWords = layout.ptrWords
+			}
+		}
 	}
 
 	tbitset = (ntokens + 32) / 32
@@ -676,16 +682,21 @@ outer:
 			fmt.Fprintf(fcode, "\n\t\t%sDollar = %sS[%spt-%v:%spt+1]", prefix, prefix, prefix, mem-1, prefix)
 
 			var act bytes.Buffer
-			var unionType string
-			cpyact(&act, curprod, mem, &unionType)
+			var unionType, unionMember string
+			var usedFastAppend bool
+			cpyact(&act, curprod, mem, &unionType, &unionMember, &usedFastAppend)
 
 			if unionType != "" {
 				fmt.Fprintf(fcode, "\n\t\tvar %sLOCAL %s", prefix, unionType)
 			}
 			fcode.Write(act.Bytes())
+			if usedFastAppend {
+				// After fast-append, the slice data pointer may have changed.
+				// Update ptrs[0] to keep the new backing array alive for GC.
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.ptrs[0] = __yyunsafe__.Pointer(%sVAL.data[0])", prefix, prefix)
+			}
 			if unionType != "" {
-				fmt.Fprintf(fcode, "\n\t\t%sVAL.data = %sZeroData", prefix, prefix)
-				fmt.Fprintf(fcode, "\n\t\t*(*%s)(__yyunsafe__.Pointer(&%sVAL.data)) = %sLOCAL", unionType, prefix, prefix)
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.set%s(%sLOCAL)", prefix, unionMember, prefix)
 			}
 
 			// action within rule...
@@ -1123,21 +1134,33 @@ const (
 
 type gotypeinfo struct {
 	typename string
+	ptrWords []int // word offsets containing pointers (populated by inferUnionLayout)
 }
 
 var gotypes = make(map[string]*gotypeinfo)
 
-var unionDataSize int // inferred from Go type sizes after setup()
+var (
+	unionDataSize int // number of uintptr words for raw data
+	unionPtrSize  int // number of unsafe.Pointer words for GC keepalive
+)
 
 func typeinfo() {
 	if !lflag {
 		fmt.Fprintf(ftable, "\n//line %v:%v\n", infile, lineno)
 	}
-	fmt.Fprintf(ftable, "type %sData = [%d]__yyunsafe__.Pointer\n", prefix, unionDataSize)
-	fmt.Fprintf(ftable, "var %sZeroData %sData\n\n", prefix, prefix)
+	fmt.Fprintf(ftable, "type %sData = [%d]uintptr\n", prefix, unionDataSize)
+	fmt.Fprintf(ftable, "var %sZeroData %sData\n", prefix, prefix)
+	if unionPtrSize > 0 {
+		fmt.Fprintf(ftable, "type %sPtrs = [%d]__yyunsafe__.Pointer\n", prefix, unionPtrSize)
+		fmt.Fprintf(ftable, "var %sZeroPtrs %sPtrs\n", prefix, prefix)
+	}
+	fmt.Fprint(ftable, "\n")
 
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
 	fmt.Fprintf(ftable, "\n\tdata %sData", prefix)
+	if unionPtrSize > 0 {
+		fmt.Fprintf(ftable, "\n\tptrs %sPtrs // GC keepalive for pointers in data", prefix)
+	}
 	fmt.Fprintf(ftable, "\n\tyys int")
 	fmt.Fprintf(ftable, "\n}\n\n")
 
@@ -1150,13 +1173,23 @@ func typeinfo() {
 
 	for _, member := range sortedTypes {
 		tt := gotypes[member]
+
+		// Getter: read from uintptr data via unsafe cast.
 		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %s() %s {\n", prefix, member, tt.typename)
 		fmt.Fprintf(ftable, "\treturn *(*%s)(__yyunsafe__.Pointer(&st.data))\n", tt.typename)
 		fmt.Fprintf(ftable, "}\n")
 
+		// Setter: write to uintptr data, then copy pointer words to ptrs for GC.
 		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) set%s(v %s) {\n", prefix, member, tt.typename)
 		fmt.Fprintf(ftable, "\tst.data = %sZeroData\n", prefix)
+		if len(tt.ptrWords) > 0 {
+			fmt.Fprintf(ftable, "\tst.ptrs = %sZeroPtrs\n", prefix)
+		}
 		fmt.Fprintf(ftable, "\t*(*%s)(__yyunsafe__.Pointer(&st.data)) = v\n", tt.typename)
+		// Copy pointer words from data to ptrs for GC keepalive.
+		for i, wordIdx := range tt.ptrWords {
+			fmt.Fprintf(ftable, "\tst.ptrs[%d] = __yyunsafe__.Pointer(st.data[%d])\n", i, wordIdx)
+		}
 		fmt.Fprintf(ftable, "}\n")
 	}
 }
@@ -1388,7 +1421,7 @@ l1:
 
 var fastAppendRe = regexp.MustCompile(`\s+append\(\$[$1],`)
 
-func cpyyvalaccess(fcode *bytes.Buffer, curprod []int, tok int, unionType *string) {
+func cpyyvalaccess(fcode *bytes.Buffer, curprod []int, tok int, unionType *string, unionMember *string, usedFastAppend *bool) {
 	if ntypes == 0 {
 		fmt.Fprintf(fcode, "%sVAL", prefix)
 		return
@@ -1444,9 +1477,15 @@ loop:
 	if fastAppend {
 		fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(__yyunsafe__.Pointer(&%sVAL.data))\n", prefix, ti.typename, prefix)
 		fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
+		if usedFastAppend != nil {
+			*usedFastAppend = true
+		}
 	} else if lvalue {
 		fmt.Fprintf(fcode, "%sLOCAL", prefix)
 		*unionType = ti.typename
+		if unionMember != nil {
+			*unionMember = typeset[tok]
+		}
 	} else if *unionType == "" {
 		fmt.Fprintf(fcode, "%sVAL.%s()", prefix, typeset[tok])
 	} else {
@@ -1456,7 +1495,7 @@ loop:
 }
 
 // copy action to the next ; or closing }
-func cpyact(fcode *bytes.Buffer, curprod []int, max int, unionType *string) {
+func cpyact(fcode *bytes.Buffer, curprod []int, max int, unionType *string, unionMember *string, usedFastAppend *bool) {
 	if !lflag {
 		fmt.Fprintf(fcode, "\n//line %v:%v", infile, lineno)
 	}
@@ -1495,7 +1534,7 @@ loop:
 				c = getrune(finput)
 			}
 			if c == '$' {
-				cpyyvalaccess(fcode, curprod, tok, unionType)
+				cpyyvalaccess(fcode, curprod, tok, unionType, unionMember, usedFastAppend)
 				continue loop
 			}
 			if c == '-' {
