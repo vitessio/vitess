@@ -1288,7 +1288,7 @@ insert_statement:
     ins.Action = $1
     ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
-    ins.Table = getAliasedTableExprFromTableName($4)
+    ins.Table = na(yylex).getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
     ins.OnDup = OnDup($7)
     $$ = ins
@@ -1301,7 +1301,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; ins.Rows = Values{vals}; ins.OnDup = OnDup($8); $$ = ins
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; ins.Rows = Values{vals}; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:

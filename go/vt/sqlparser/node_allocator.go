@@ -393,3 +393,9 @@ func (a *nodeAllocator) newSelect(
 	}
 	return sel
 }
+
+func (a *nodeAllocator) getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
+	ate := a.allocAliasedTableExpr()
+	ate.Expr = tblName
+	return ate
+}

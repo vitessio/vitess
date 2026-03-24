@@ -12556,7 +12556,7 @@ yydefault:
 			ins.Action = yyDollar[1].insertActionUnion()
 			ins.Comments = Comments(yyDollar[2].strs).Parsed()
 			ins.Ignore = yyDollar[3].ignoreUnion()
-			ins.Table = getAliasedTableExprFromTableName(yyDollar[4].tableName)
+			ins.Table = na(yylex).getAliasedTableExprFromTableName(yyDollar[4].tableName)
 			ins.Partitions = yyDollar[5].partitionsUnion()
 			ins.OnDup = OnDup(yyDollar[7].updateExprsUnion())
 			yyLOCAL = ins
@@ -12577,7 +12577,7 @@ yydefault:
 			ins.Action = yyDollar[1].insertActionUnion()
 			ins.Comments = Comments(yyDollar[2].strs).Parsed()
 			ins.Ignore = yyDollar[3].ignoreUnion()
-			ins.Table = getAliasedTableExprFromTableName(yyDollar[4].tableName)
+			ins.Table = na(yylex).getAliasedTableExprFromTableName(yyDollar[4].tableName)
 			ins.Partitions = yyDollar[5].partitionsUnion()
 			ins.Columns = cols
 			ins.Rows = Values{vals}
