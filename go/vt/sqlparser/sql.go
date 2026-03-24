@@ -12393,19 +12393,8 @@ type yyParser interface {
 
 type yyParserImpl struct {
 	lval  yySymType
-	val   yySymType
 	stack [yyInitialStackSize]yySymType
 	char  int
-}
-
-// newyySymType returns a heap-allocated yySymType. The data array contains
-// unsafe.Pointer slots that may hold non-pointer values (e.g. string lengths),
-// so the struct must not live on the goroutine stack where the stack copier
-// would reject those values during stack growth.
-//
-//go:noinline
-func newyySymType() *yySymType {
-	return &yySymType{}
 }
 
 func (p *yyParserImpl) Lookahead() int {
@@ -12537,7 +12526,7 @@ func yyParse(yylex yyLexer) int {
 
 func (yyrcvr *yyParserImpl) Parse(yylex yyLexer) int {
 	var yyn int
-	yyVAL := &yyrcvr.val
+	var yyVAL yySymType
 	var yyDollar []yySymType
 	_ = yyDollar // silence set and not used
 	yyS := yyrcvr.stack[:]
@@ -12574,7 +12563,7 @@ yystack:
 		copy(nyys, yyS)
 		yyS = nyys
 	}
-	yyS[yyp] = *yyVAL
+	yyS[yyp] = yyVAL
 	yyS[yyp].yys = yystate
 
 yynewstate:
@@ -12593,7 +12582,7 @@ yynewstate:
 	if int(yyChk[yyn]) == yytoken { /* valid shift */
 		yyrcvr.char = -1
 		yytoken = -1
-		*yyVAL = yyrcvr.lval
+		yyVAL = yyrcvr.lval
 		yystate = yyn
 		if Errflag > 0 {
 			Errflag--
@@ -12686,7 +12675,7 @@ yydefault:
 		copy(nyys, yyS)
 		yyS = nyys
 	}
-	*yyVAL = yyS[yyp+1]
+	yyVAL = yyS[yyp+1]
 
 	/* consult goto table to find next state */
 	yyn = int(yyR1[yyn])

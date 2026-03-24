@@ -3508,19 +3508,8 @@ type $$Parser interface {
 
 type $$ParserImpl struct {
 	lval  $$SymType
-	val   $$SymType
 	stack [$$InitialStackSize]$$SymType
 	char  int
-}
-
-// new$$SymType returns a heap-allocated $$SymType. The data array contains
-// unsafe.Pointer slots that may hold non-pointer values (e.g. string lengths),
-// so the struct must not live on the goroutine stack where the stack copier
-// would reject those values during stack growth.
-//
-//go:noinline
-func new$$SymType() *$$SymType {
-	return &$$SymType{}
 }
 
 func (p *$$ParserImpl) Lookahead() int {
@@ -3652,7 +3641,7 @@ func $$Parse($$lex $$Lexer) int {
 
 func ($$rcvr *$$ParserImpl) Parse($$lex $$Lexer) int {
 	var $$n int
-	$$VAL := &$$rcvr.val
+	var $$VAL $$SymType
 	var $$Dollar []$$SymType
 	_ = $$Dollar // silence set and not used
 	$$S := $$rcvr.stack[:]
@@ -3689,7 +3678,7 @@ $$stack:
 		copy(nyys, $$S)
 		$$S = nyys
 	}
-	$$S[$$p] = *$$VAL
+	$$S[$$p] = $$VAL
 	$$S[$$p].yys = $$state
 
 $$newstate:
@@ -3708,7 +3697,7 @@ $$newstate:
 	if int($$Chk[$$n]) == $$token { /* valid shift */
 		$$rcvr.char = -1
 		$$token = -1
-		*$$VAL = $$rcvr.lval
+		$$VAL = $$rcvr.lval
 		$$state = $$n
 		if Errflag > 0 {
 			Errflag--
@@ -3801,7 +3790,7 @@ $$default:
 		copy(nyys, $$S)
 		$$S = nyys
 	}
-	*$$VAL = $$S[$$p+1]
+	$$VAL = $$S[$$p+1]
 
 	/* consult goto table to find next state */
 	$$n = int($$R1[$$n])
