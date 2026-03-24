@@ -3469,6 +3469,7 @@ type $$Parser interface {
 
 type $$ParserImpl struct {
 	lval  $$SymType
+	val   $$SymType
 	stack [$$InitialStackSize]$$SymType
 	char  int
 }
@@ -3602,7 +3603,7 @@ func $$Parse($$lex $$Lexer) int {
 
 func ($$rcvr *$$ParserImpl) Parse($$lex $$Lexer) int {
 	var $$n int
-	var $$VAL $$SymType
+	$$VAL := &$$rcvr.val
 	var $$Dollar []$$SymType
 	_ = $$Dollar // silence set and not used
 	$$S := $$rcvr.stack[:]
@@ -3639,7 +3640,7 @@ $$stack:
 		copy(nyys, $$S)
 		$$S = nyys
 	}
-	$$S[$$p] = $$VAL
+	$$S[$$p] = *$$VAL
 	$$S[$$p].yys = $$state
 
 $$newstate:
@@ -3658,7 +3659,7 @@ $$newstate:
 	if int($$Chk[$$n]) == $$token { /* valid shift */
 		$$rcvr.char = -1
 		$$token = -1
-		$$VAL = $$rcvr.lval
+		*$$VAL = $$rcvr.lval
 		$$state = $$n
 		if Errflag > 0 {
 			Errflag--
@@ -3751,7 +3752,7 @@ $$default:
 		copy(nyys, $$S)
 		$$S = nyys
 	}
-	$$VAL = $$S[$$p+1]
+	*$$VAL = $$S[$$p+1]
 
 	/* consult goto table to find next state */
 	$$n = int($$R1[$$n])

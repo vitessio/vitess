@@ -12108,6 +12108,7 @@ type yyParser interface {
 
 type yyParserImpl struct {
 	lval  yySymType
+	val   yySymType
 	stack [yyInitialStackSize]yySymType
 	char  int
 }
@@ -12241,7 +12242,7 @@ func yyParse(yylex yyLexer) int {
 
 func (yyrcvr *yyParserImpl) Parse(yylex yyLexer) int {
 	var yyn int
-	var yyVAL yySymType
+	yyVAL := &yyrcvr.val
 	var yyDollar []yySymType
 	_ = yyDollar // silence set and not used
 	yyS := yyrcvr.stack[:]
@@ -12278,7 +12279,7 @@ yystack:
 		copy(nyys, yyS)
 		yyS = nyys
 	}
-	yyS[yyp] = yyVAL
+	yyS[yyp] = *yyVAL
 	yyS[yyp].yys = yystate
 
 yynewstate:
@@ -12297,7 +12298,7 @@ yynewstate:
 	if int(yyChk[yyn]) == yytoken { /* valid shift */
 		yyrcvr.char = -1
 		yytoken = -1
-		yyVAL = yyrcvr.lval
+		*yyVAL = yyrcvr.lval
 		yystate = yyn
 		if Errflag > 0 {
 			Errflag--
@@ -12390,7 +12391,7 @@ yydefault:
 		copy(nyys, yyS)
 		yyS = nyys
 	}
-	yyVAL = yyS[yyp+1]
+	*yyVAL = yyS[yyp+1]
 
 	/* consult goto table to find next state */
 	yyn = int(yyR1[yyn])
