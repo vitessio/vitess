@@ -126,7 +126,6 @@ const (
 	START
 	TYPEDEF
 	TYPENAME
-	STRUCT
 	UNION
 	ERROR
 )
@@ -159,7 +158,6 @@ var (
 	stderr  *bufio.Writer
 	ftable  *bufio.Writer     // y.go file
 	fcode   = &bytes.Buffer{} // saved code
-	ftypes  = &bytes.Buffer{} // saved type definitions
 	foutput *bufio.Writer     // y.output file
 )
 
@@ -363,7 +361,6 @@ var resrv = []Resrv{
 	{"token", TERM},
 	{"type", TYPEDEF},
 	{"union", UNION},
-	{"struct", STRUCT},
 	{"error", ERROR},
 }
 
@@ -534,7 +531,7 @@ outer:
 			}
 			continue
 
-		case UNION, STRUCT:
+		case UNION:
 			parsetypes()
 
 		case LEFT, BINARY, RIGHT, TERM:
