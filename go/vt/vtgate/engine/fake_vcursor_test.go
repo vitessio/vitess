@@ -120,7 +120,11 @@ func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context, context.CancelFunc) {
+func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
+func (t *noopVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	panic("implement me")
 }
 
@@ -595,8 +599,12 @@ func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
 	return make(chan bool)
 }
 
-func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context, context.CancelFunc) {
-	return f, ctx, func() {}
+func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	return f
+}
+
+func (f *loggingVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return ctx, func() {}
 }
 
 func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {

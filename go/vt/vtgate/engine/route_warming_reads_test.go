@@ -49,7 +49,7 @@ func (vc *warmingReadsVCursor) GetWarmingReadsChannel() chan bool {
 	return vc.warmingReadsChannel
 }
 
-func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) (VCursor, context.Context, context.CancelFunc) {
+func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	clone := &warmingReadsVCursor{
 		loggingVCursor:          vc.loggingVCursor,
 		warmingReadsPercent:     vc.warmingReadsPercent,
@@ -58,8 +58,11 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) (VCur
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
-	warmingCtx, cancel := context.WithTimeout(context.Background(), vc.warmingReadsTimeout)
-	return clone, warmingCtx, cancel
+	return clone
+}
+
+func (vc *warmingReadsVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), vc.warmingReadsTimeout)
 }
 
 func TestWarmingReadsSkipsForUpdate(t *testing.T) {

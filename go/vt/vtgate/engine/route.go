@@ -530,8 +530,9 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	select {
 	// if there's no more room in the channel, drop the warming read
 	case warmingReadsChannel <- true:
+		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 		go func() {
-			replicaVCursor, warmingCtx, cancel := vcursor.CloneForReplicaWarming(ctx)
+			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
 			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
