@@ -50,11 +50,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
-%struct {
-  empty         struct{}
-}
-
 %union {
+  empty         struct{}
   LengthScaleOption LengthScaleOption
   tableName     TableName
   identifierCS    IdentifierCS

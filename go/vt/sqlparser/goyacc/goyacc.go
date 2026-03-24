@@ -534,11 +534,8 @@ outer:
 			}
 			continue
 
-		case UNION:
-			parsetypes(true)
-
-		case STRUCT:
-			parsetypes(false)
+		case UNION, STRUCT:
+			parsetypes()
 
 		case LEFT, BINARY, RIGHT, TERM:
 			// nonzero means new prec. and assoc.
@@ -1129,7 +1126,6 @@ const (
 
 type gotypeinfo struct {
 	typename string
-	union    bool
 }
 
 var gotypes = make(map[string]*gotypeinfo)
@@ -1157,7 +1153,7 @@ func typeinfo() {
 
 	for _, member := range sortedTypes {
 		tt := gotypes[member]
-		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
+		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %s() %s {\n", prefix, member, tt.typename)
 		fmt.Fprintf(ftable, "\treturn *(*%s)(__yyunsafe__.Pointer(&st.data))\n", tt.typename)
 		fmt.Fprintf(ftable, "}\n")
 
@@ -1169,7 +1165,7 @@ func typeinfo() {
 }
 
 // copy the union declaration to the output, and the define file if present
-func parsetypes(union bool) {
+func parsetypes() {
 	var member, typ bytes.Buffer
 	state := startUnion
 
@@ -1185,7 +1181,6 @@ out:
 			if state == readingType {
 				gotypes[member.String()] = &gotypeinfo{
 					typename: typ.String(),
-					union:    true,
 				}
 				member.Reset()
 				typ.Reset()
@@ -1409,11 +1404,6 @@ func cpyyvalaccess(fcode *bytes.Buffer, curprod []int, tok int, unionType *strin
 	if !ok {
 		errorf("missing Go type information for %s", typeset[tok])
 	}
-	if !ti.union {
-		fmt.Fprintf(fcode, "%sVAL.%s", prefix, typeset[tok])
-		return
-	}
-
 	var buf bytes.Buffer
 	lvalue := false
 	fastAppend := false
@@ -1461,7 +1451,7 @@ loop:
 		fmt.Fprintf(fcode, "%sLOCAL", prefix)
 		*unionType = ti.typename
 	} else if *unionType == "" {
-		fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
+		fmt.Fprintf(fcode, "%sVAL.%s()", prefix, typeset[tok])
 	} else {
 		fmt.Fprintf(fcode, "%sLOCAL", prefix)
 	}
@@ -1571,15 +1561,10 @@ loop:
 				if tok < 0 {
 					tok, _ = fdtype(curprod[j])
 				}
-				ti, ok := gotypes[typeset[tok]]
-				if !ok {
+				if _, ok := gotypes[typeset[tok]]; !ok {
 					errorf("missing Go type information for %s", typeset[tok])
 				}
-				if ti.union {
-					fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
-				} else {
-					fmt.Fprintf(fcode, ".%s", typeset[tok])
-				}
+				fmt.Fprintf(fcode, ".%s()", typeset[tok])
 			}
 			continue loop
 
@@ -3465,16 +3450,6 @@ func exit(status int) {
 	}
 	os.Exit(status)
 }
-
-const fastAppendHelperText = `
-func $$Iaddr(v any) __yyunsafe__.Pointer {
-	type h struct {
-		t __yyunsafe__.Pointer
-		p __yyunsafe__.Pointer
-	}
-	return (*h)(__yyunsafe__.Pointer(&v)).p
-}
-`
 
 var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
 const yaccpartext = `
