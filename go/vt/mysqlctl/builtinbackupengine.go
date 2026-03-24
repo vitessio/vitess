@@ -95,6 +95,10 @@ var (
 	// The path should exist.
 	// When empty, the default OS temp dir is assumed.
 	builtinIncrementalRestorePath = ""
+
+	// builtinBackupRebuildGTIDExecuted controls whether to run ALTER TABLE mysql.gtid_executed ENGINE=InnoDB
+	// before taking a full backup, to consolidate bloated GTID rows and reduce backup size.
+	builtinBackupRebuildGTIDExecuted = false
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -179,6 +183,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
+	fs.BoolVar(&builtinBackupRebuildGTIDExecuted, "builtinbackup-rebuild-gtid-executed", builtinBackupRebuildGTIDExecuted, "if set, run ALTER TABLE mysql.gtid_executed ENGINE=InnoDB before a full backup to reclaim fragmented InnoDB page space from deleted GTID rows.")
 }
 
 // fullPath returns the full path of the entry, based on its type.
@@ -491,6 +496,13 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
+	}
+
+	if builtinBackupRebuildGTIDExecuted {
+		params.Logger.Infof("Rebuilding mysql.gtid_executed table to consolidate GTID rows")
+		if _, err := params.Mysqld.FetchSuperQuery(ctx, "ALTER TABLE mysql.gtid_executed ENGINE=InnoDB"); err != nil {
+			return BackupUnusable, vterrors.Wrap(err, "failed to rebuild mysql.gtid_executed")
+		}
 	}
 
 	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
