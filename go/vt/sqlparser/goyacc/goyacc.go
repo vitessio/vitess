@@ -681,7 +681,7 @@ outer:
 			}
 			fcode.Write(act.Bytes())
 			if unionType != "" {
-				fmt.Fprintf(fcode, "\n\t\t%sVAL.union = %sLOCAL", prefix, prefix)
+				fmt.Fprintf(fcode, "\n\t\t*(*%s)(__yyunsafe__.Pointer(&%sVAL.data)) = %sLOCAL", unionType, prefix, prefix)
 			}
 
 			// action within rule...
@@ -1124,16 +1124,22 @@ type gotypeinfo struct {
 
 var gotypes = make(map[string]*gotypeinfo)
 
+const unionDataWords = 4 // 32 bytes — fits the largest %union member (StarExpr)
+
 func typeinfo() {
 	if !lflag {
 		fmt.Fprintf(ftable, "\n//line %v:%v\n", infile, lineno)
 	}
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
+	hasUnion := false
 	for _, tt := range gotypes {
 		if tt.union {
-			fmt.Fprintf(ftable, "\n\tunion any")
+			hasUnion = true
 			break
 		}
+	}
+	if hasUnion {
+		fmt.Fprintf(ftable, "\n\tdata [%d]__yyunsafe__.Pointer", unionDataWords)
 	}
 	ftable.Write(ftypes.Bytes())
 	fmt.Fprintf(ftable, "\n\tyys int")
@@ -1150,8 +1156,7 @@ func typeinfo() {
 	for _, member := range sortedTypes {
 		tt := gotypes[member]
 		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
-		fmt.Fprintf(ftable, "\tv, _ := st.union.(%s)\n", tt.typename)
-		fmt.Fprintf(ftable, "\treturn v\n")
+		fmt.Fprintf(ftable, "\treturn *(*%s)(__yyunsafe__.Pointer(&st.data))\n", tt.typename)
 		fmt.Fprintf(ftable, "}\n")
 	}
 }
@@ -1446,7 +1451,7 @@ loop:
 	}
 
 	if fastAppend {
-		fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.union))\n", prefix, ti.typename, prefix, prefix)
+		fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(__yyunsafe__.Pointer(&%sVAL.data))\n", prefix, ti.typename, prefix)
 		fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
 	} else if lvalue {
 		fmt.Fprintf(fcode, "%sLOCAL", prefix)
@@ -3140,10 +3145,8 @@ func others() {
 		ch = getrune(finput)
 	}
 
-	if allowFastAppend {
-		fastAppendHelper := strings.ReplaceAll(fastAppendHelperText, "$$", prefix)
-		fmt.Fprint(ftable, fastAppendHelper)
-	}
+	// yyIaddr is no longer needed — the discriminated union uses
+	// unsafe.Pointer(&yyVAL.data) directly for fast-append.
 
 	// copy yaccpar
 	if !lflag {
