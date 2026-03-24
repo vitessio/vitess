@@ -3474,6 +3474,16 @@ type $$ParserImpl struct {
 	char  int
 }
 
+// new$$SymType returns a heap-allocated $$SymType. The data array contains
+// unsafe.Pointer slots that may hold non-pointer values (e.g. string lengths),
+// so the struct must not live on the goroutine stack where the stack copier
+// would reject those values during stack growth.
+//
+//go:noinline
+func new$$SymType() *$$SymType {
+	return &$$SymType{}
+}
+
 func (p *$$ParserImpl) Lookahead() int {
 	return p.char
 }

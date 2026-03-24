@@ -12113,6 +12113,16 @@ type yyParserImpl struct {
 	char  int
 }
 
+// newyySymType returns a heap-allocated yySymType. The data array contains
+// unsafe.Pointer slots that may hold non-pointer values (e.g. string lengths),
+// so the struct must not live on the goroutine stack where the stack copier
+// would reject those values during stack growth.
+//
+//go:noinline
+func newyySymType() *yySymType {
+	return &yySymType{}
+}
+
 func (p *yyParserImpl) Lookahead() int {
 	return p.char
 }
