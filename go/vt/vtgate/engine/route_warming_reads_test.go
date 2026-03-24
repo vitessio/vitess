@@ -50,8 +50,12 @@ func (vc *warmingReadsVCursor) GetWarmingReadsChannel() chan bool {
 }
 
 func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	clonedLogging := &loggingVCursor{
+		shards:  vc.shards,
+		results: vc.results,
+	}
 	clone := &warmingReadsVCursor{
-		loggingVCursor:          vc.loggingVCursor,
+		loggingVCursor:          clonedLogging,
 		warmingReadsPercent:     vc.warmingReadsPercent,
 		warmingReadsChannel:     vc.warmingReadsChannel,
 		warmingReadsTimeout:     vc.warmingReadsTimeout,
@@ -135,7 +139,11 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 
 			var warmingReadExecuted atomic.Bool
 			var capturedQuery string
-			var capturedCtx atomic.Pointer[context.Context]
+			var capturedCtxHasDeadline atomic.Bool
+			var capturedCtxErr atomic.Pointer[error]
+			// done is closed by the test to unblock the warming read goroutine
+			// after context assertions have been made.
+			done := make(chan struct{})
 			vc := &warmingReadsVCursor{
 				loggingVCursor: &loggingVCursor{
 					shards:  []string{"-20", "20-"},
@@ -149,22 +157,38 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				if len(queries) > 0 {
 					capturedQuery = queries[0].Sql
 				}
-				capturedCtx.Store(&ctx)
+				_, hasDeadline := ctx.Deadline()
+				capturedCtxHasDeadline.Store(hasDeadline)
+				ctxErr := ctx.Err()
+				capturedCtxErr.Store(&ctxErr)
 				warmingReadExecuted.Store(true)
+				// Block until the test has checked our context assertions,
+				// preventing defer cancel() from running.
+				<-done
 			}
 
-			_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			// Use a cancelable parent context to verify the warming read
+			// context is independent of the parent request context.
+			parentCtx, parentCancel := context.WithCancel(t.Context())
+			_, err := route.TryExecute(parentCtx, vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
+
+			// Cancel the parent context to simulate the primary request completing.
+			parentCancel()
 
 			require.Eventually(t, func() bool {
 				return warmingReadExecuted.Load()
 			}, time.Second, 10*time.Millisecond, "warming read should be executed")
 
 			require.Equal(t, tc.expectedWarmingQuery, capturedQuery, "warming read query should match expected")
+			require.True(t, capturedCtxHasDeadline.Load(), "warming read context should have a deadline from the timeout")
 
-			ctx := *capturedCtx.Load()
-			_, hasDeadline := ctx.Deadline()
-			require.True(t, hasDeadline, "warming read context should have a deadline from the timeout")
+			// The warming read context should still be active even though the
+			// parent request context was canceled.
+			require.NoError(t, *capturedCtxErr.Load(), "warming read context should not be canceled when parent context is canceled")
+
+			// Unblock the warming read goroutine.
+			close(done)
 		})
 	}
 }

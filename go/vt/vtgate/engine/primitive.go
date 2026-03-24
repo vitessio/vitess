@@ -130,6 +130,9 @@ type (
 		GetWarmingReadsChannel() chan bool
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas.
+		// The clone must be created before launching the warming goroutine to avoid
+		// concurrent access to the original VCursor. Use WarmingReadsContext on the
+		// clone to obtain a timeout-bounded context for the warming query.
 		CloneForReplicaWarming(ctx context.Context) VCursor
 
 		// WarmingReadsContext returns a timeout-bounded context for a warming query
