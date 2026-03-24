@@ -57,7 +57,7 @@ func inferUnionLayout() (dataWords int, maxPtrs int, typeLayouts map[string]*uni
 	typeLayouts = make(map[string]*unionTypeInfo)
 
 	for member, gt := range gotypes {
-		t := resolveType(pkg.Types.Scope(), pkg.Types, gt.typename)
+		t := resolveType(pkg.Types, gt.typename)
 		if t == nil {
 			fmt.Fprintf(os.Stderr, "inferUnionLayout: cannot resolve type %q\n", gt.typename)
 			continue
@@ -90,7 +90,7 @@ func inferUnionLayout() (dataWords int, maxPtrs int, typeLayouts map[string]*uni
 
 // resolveType looks up a type name in the package scope, handling
 // built-in types, pointers, and slices.
-func resolveType(scope *types.Scope, pkg *types.Package, expr string) types.Type {
+func resolveType(pkg *types.Package, expr string) types.Type {
 	t, err := evalType(pkg, expr)
 	if err != nil {
 		return nil
@@ -140,11 +140,10 @@ func pointerWords(t types.Type, sizes types.Sizes, baseOffset int64) []int {
 		return []int{int(baseOffset / ptrSize)}
 
 	case *types.Struct:
+		fieldOffsets := sizes.Offsetsof(structFields(t))
 		var ptrs []int
 		for i := range t.NumFields() {
-			field := t.Field(i)
-			fieldOffsets := sizes.Offsetsof(structFields(t))
-			ptrs = append(ptrs, pointerWords(field.Type(), sizes, baseOffset+fieldOffsets[i])...)
+			ptrs = append(ptrs, pointerWords(t.Field(i).Type(), sizes, baseOffset+fieldOffsets[i])...)
 		}
 		return ptrs
 

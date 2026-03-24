@@ -860,6 +860,11 @@ func buildCaseInsensitiveTable(kws []keyword) *caseInsensitiveTable {
 	return table
 }
 
+// LookupString returns the keyword token ID for name, using hash-only matching
+// without string verification. This is safe because buildCaseInsensitiveTable
+// guarantees all keywords have distinct 64-bit FNV-1a hashes at init time, and
+// the probability of a non-keyword colliding with any keyword hash is ~N/2^64
+// (where N ≈ 756 keywords), which is effectively zero.
 func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
 	h := fnv1aIstr(offset64, name)
 	for idx := h & cit.mask; ; idx = (idx + 1) & cit.mask {

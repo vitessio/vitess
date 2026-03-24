@@ -168,7 +168,6 @@ var (
 	vflag           string // -v [y.output]	- y.output file
 	lflag           bool   // -l			- disable line directives
 	prefix          string // name prefix for identifiers, default yy
-	allowFastAppend bool
 )
 
 func init() {
@@ -176,7 +175,6 @@ func init() {
 	pflag.StringVarP(&prefix, "prefix", "p", "yy", "name prefix to use in generated code")
 	pflag.StringVarP(&vflag, "verbose-output", "v", "y.output", "create parsing tables")
 	pflag.BoolVarP(&lflag, "disable-line-directives", "l", false, "disable line directives")
-	pflag.BoolVarP(&allowFastAppend, "fast-append", "f", false, "enable fast-append optimization")
 }
 
 var initialstacksize = 16
@@ -1184,9 +1182,9 @@ func typeinfo() {
 		// Setter: write to uintptr data, then copy pointer words to ptrs for GC.
 		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) set%s(v %s) {\n", prefix, member, tt.typename)
 		fmt.Fprintf(ftable, "\tst.data = %sZeroData\n", prefix)
-		if len(tt.ptrWords) > 0 {
-			fmt.Fprintf(ftable, "\tst.ptrs = %sZeroPtrs\n", prefix)
-		}
+		// Always zero ptrs to clear stale GC roots from a previous type
+		// that may have been stored in this same yySymType slot.
+		fmt.Fprintf(ftable, "\tst.ptrs = %sZeroPtrs\n", prefix)
 		fmt.Fprintf(ftable, "\t*(*%s)(__yyunsafe__.Pointer(&st.data)) = v\n", tt.typename)
 		// Copy pointer words from the original value v (not from data) to
 		// avoid uintptr→unsafe.Pointer conversion that checkptr rejects.
@@ -1296,9 +1294,7 @@ func emitcode(code []rune, lineno int) {
 		if !writtenImports && isPackageClause(line) {
 			fmt.Fprintln(ftable, `import (`)
 			fmt.Fprintln(ftable, `__yyfmt__ "fmt"`)
-			if allowFastAppend {
-				fmt.Fprintln(ftable, `__yyunsafe__ "unsafe"`)
-			}
+			fmt.Fprintln(ftable, `__yyunsafe__ "unsafe"`)
 			fmt.Fprintln(ftable, `)`)
 			if !lflag {
 				fmt.Fprintf(ftable, "//line %v:%v\n\t\t", infile, lineno+i)
@@ -1455,7 +1451,7 @@ loop:
 
 		case '=':
 			lvalue = true
-			if allowFastAppend && *unionType == "" {
+			if *unionType == "" {
 				peek, err := finput.Peek(16)
 				if err != nil {
 					errorf("failed to scan forward: %v", err)
@@ -3139,7 +3135,7 @@ func others() {
 		ftable.WriteRune('\n')
 		fmt.Fprintf(ftable, "const %sTok3Base = %d\n", prefix, tok3Min)
 		typ := minType(tok3, tok3Size)
-		fmt.Fprintf(ftable, "var %sTok3 = [...]%s{", prefix+"", typ)
+		fmt.Fprintf(ftable, "var %sTok3 = [...]%s{", prefix, typ)
 		for i = range tok3Size {
 			if i%10 == 0 {
 				fmt.Fprintf(ftable, "\n\t")
