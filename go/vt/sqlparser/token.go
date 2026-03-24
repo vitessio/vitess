@@ -114,12 +114,11 @@ func (p PositionedErr) Error() string {
 
 // GetInputExpression extracts the original input text between start and end positions.
 // The lexer's skipBlank ensures start/end already exclude leading/trailing whitespace.
-// The returned string is copied so it does not pin the entire input buffer in memory.
 func (tkn *Tokenizer) GetInputExpression(start, end int) string {
 	if start < 0 || end < 0 || start >= end || end > len(tkn.buf) {
 		return ""
 	}
-	return strings.Clone(tkn.buf[start:end])
+	return tkn.buf[start:end]
 }
 
 // Error is called by go yacc if there's a parsing error.
