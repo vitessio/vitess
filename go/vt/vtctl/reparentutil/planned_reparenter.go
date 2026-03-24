@@ -554,7 +554,6 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
-
 	reparentJournalPos := ""
 	// promoteReplicaRequired is a boolean that is used to store whether we need to call
 	// `PromoteReplica` when we reparent the tablets. This is required to be done when we are doing
