@@ -159,6 +159,7 @@ func TestSchemaVersioning(t *testing.T) {
 		},
 	}
 	eventCh := make(chan []*binlogdatapb.VEvent)
+	currentErrCh := make(chan error, 1)
 	var startPos string
 	send := func(events []*binlogdatapb.VEvent) error {
 		var evs []*binlogdatapb.VEvent
@@ -185,8 +186,10 @@ func TestSchemaVersioning(t *testing.T) {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
+			select {
+			case currentErrCh <- err:
+			default:
+			}
 		}
 	})
 	log.Info("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
@@ -202,15 +205,12 @@ func TestSchemaVersioning(t *testing.T) {
 				`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
 			},
 		}, {
-			query: "insert into vitess_version values(4, 40, 'FFF', 'GGGG' )",
-			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
-				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
-				`gtid`,
-			},
+			query:  "insert into vitess_version values(4, 40, 'FFF', 'GGGG' )",
+			output: nil,
 		},
 	}
 	runCases(ctx, t, cases, eventCh)
+	expectNoVisibleEvents(ctx, t, cases[1].query, eventCh, currentErrCh)
 	cancel()
 	wg.Wait()
 
@@ -218,6 +218,7 @@ func TestSchemaVersioning(t *testing.T) {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
+	errCh := make(chan error, 1)
 	send = func(events []*binlogdatapb.VEvent) error {
 		var evs []*binlogdatapb.VEvent
 		for _, event := range events {
@@ -245,8 +246,10 @@ func TestSchemaVersioning(t *testing.T) {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
+			select {
+			case errCh <- err:
+			default:
+			}
 		}
 	})
 
@@ -277,12 +280,17 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
-		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
-		`gtid`,
 	)
 
 	expectLogs(ctx, t, "Past stream", eventCh, output)
+	select {
+	case err := <-errCh:
+		if !strings.Contains(err.Error(), "cannot determine table columns for vitess_version") {
+			t.Fatalf("past stream returned unexpected error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for past stream failure after untracked schema change")
+	}
 
 	cancel()
 	wg.Wait()
@@ -489,6 +497,50 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			if got := fmt.Sprintf("%v", evs[i]); got != want {
 				t.Fatalf("%v (%d): event:\n%q, want\n%q", query, i, got, want)
 			}
+		}
+	}
+}
+
+func expectNoVisibleEvents(ctx context.Context, t *testing.T, query string, eventCh chan []*binlogdatapb.VEvent, errCh chan error) {
+	t.Helper()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+
+	for {
+		select {
+		case err := <-errCh:
+			t.Fatalf("%s: unexpected stream error: %v", query, err)
+		case allevs, ok := <-eventCh:
+			if !ok {
+				t.Fatalf("%s: stream ended early", query)
+			}
+			if len(allevs) == 0 {
+				continue
+			}
+			if len(allevs) == 3 &&
+				allevs[0].Type == binlogdatapb.VEventType_BEGIN &&
+				allevs[1].Type == binlogdatapb.VEventType_GTID &&
+				allevs[2].Type == binlogdatapb.VEventType_COMMIT {
+				continue
+			}
+
+			var evs []*binlogdatapb.VEvent
+			for _, ev := range allevs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT || ev.Throttled {
+					continue
+				}
+				if ev.Type == binlogdatapb.VEventType_BEGIN || ev.Type == binlogdatapb.VEventType_COMMIT {
+					continue
+				}
+				evs = append(evs, ev)
+			}
+			if len(evs) > 0 {
+				t.Fatalf("%s: got unexpected events: %v", query, evs)
+			}
+		case <-ctx.Done():
+			t.Fatalf("%s: context done while waiting for stream to stay quiet", query)
+		case <-timer.C:
+			return
 		}
 	}
 }
