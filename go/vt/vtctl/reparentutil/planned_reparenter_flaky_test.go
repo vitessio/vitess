@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -178,6 +179,18 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		{
 			name: "success - new primary not provided",
 			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
 					Error    error
@@ -2523,6 +2536,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
 			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
@@ -2706,6 +2731,18 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success: graceful promotion", // "Case (3)"
 			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
@@ -3345,6 +3382,79 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			},
 			shouldErr:        true,
 			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
+			expectedEvent:    nil,
+		},
+		{
+			name: "fail fast when gtid_executed optimization fails",
+			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Error: errors.New("optimize table failed"),
+					},
+				},
+				// Deferred super_read_only restore.
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds:     1000,
+						Nanoseconds: 500,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr:        true,
+			errShouldContain: "optimize table failed",
 			expectedEvent:    nil,
 		},
 	}

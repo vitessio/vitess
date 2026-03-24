@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -396,4 +397,51 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 		}
 	}
 	return res
+}
+
+// rebuildGTIDExecutedTable rebuilds the `mysql.gtid_executed` table by running a no-op migration
+// (`ALTER TABLE mysql.gtid_executed ENGINE=InnoDB`). This is to help reduce bloat left by compression/purging
+// that can accumulate over time, having an adverse impact on operations that interact with the table
+// such as `RESET REPLICA ALL` (among many other internal systems' operations).
+func rebuildGTIDExecutedTable(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, logger logutil.Logger) error {
+	// We use a 30-second timeout here as the rebuild can take longer than 15 seconds in the
+	// significantly bloated cases. We might eat up most of the PRS's full timeout here,
+	// but in the bloated cases, we spend most of our time compressing the bloated table
+	// anyway during `RESET REPLICA ALL` and `FLUSH BINARY LOGS`. Once the bloat is cleaned
+	// up, those operations should complete much more quickly.
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
+	defer cancel()
+
+	alias := topoproto.TabletAliasString(tablet.Alias)
+	logger.Infof("optimizing mysql.gtid_executed table on %v", alias)
+
+	// We need to disable `super_read_only` in order to run the DDL.
+	sql := []byte("SET GLOBAL super_read_only=0; ALTER TABLE mysql.gtid_executed ENGINE=InnoDB; SET GLOBAL super_read_only=1")
+
+	// We'll keep track of whether the RPC succeeded and restore super_read_only in the case we can't guarantee it
+	// was restored successfully.
+	succeeded := false
+	defer func() {
+		if succeeded {
+			return
+		}
+
+		// Use context.Background() to ensure we're not interrupted by the initial PRS's context timeout or cancel.
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+
+		req := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{Query: []byte("SET GLOBAL super_read_only=1")}
+		if _, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, req); err != nil {
+			logger.Warningf("failed to restore super_read_only on %v: %v", alias, err)
+		}
+	}()
+
+	req := &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{Sql: sql, DisableBinlogs: true}
+	if _, err := tmc.ExecuteMultiFetchAsDba(ctx, tablet, false, req); err != nil {
+		return vterrors.Wrapf(err, "failed to optimize mysql.gtid_executed on %v", alias)
+	}
+
+	succeeded = true
+	logger.Infof("successfully optimized mysql.gtid_executed table on %v", alias)
+	return nil
 }

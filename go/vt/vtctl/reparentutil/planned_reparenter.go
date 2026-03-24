@@ -554,6 +554,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
+
 	reparentJournalPos := ""
 	// promoteReplicaRequired is a boolean that is used to store whether we need to call
 	// `PromoteReplica` when we reparent the tablets. This is required to be done when we are doing
@@ -599,6 +600,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// In all cases, we will retrieve the reparent journal position that was
 	// inserted in the new primary's journal, so we can use it below to check
 	// that all the replicas have attached to new primary successfully.
+	//
+	// We'll also conditionally rebuild the `mysql.gtid_executed` table beforehand
+	// in the graceful promotion case (case 4). A bloated `mysql.gtid_executed` table
+	// can increase the time it takes to promote a replica, as the `RESET REPLICA ALL`
+	// and `FLUSH BINARY LOGS` steps need to compress the table.
+
 	switch {
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
@@ -608,6 +615,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
+
 		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
@@ -618,6 +626,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	default:
 		// Case (4): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
+
+		// Rebuild the `mysql.gtid_executed` table before demoting.
+		event.DispatchUpdate(ev, "optimizing mysql.gtid_executed on primary-elect")
+		if err := rebuildGTIDExecutedTable(ctx, pr.tmc, ev.NewPrimary, pr.logger); err != nil {
+			return err
+		}
+
 		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, opts)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true

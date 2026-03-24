@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -2116,4 +2118,56 @@ func TestGetBackupCandidates(t *testing.T) {
 			require.EqualValues(t, tt.expected, res)
 		})
 	}
+}
+
+func TestRebuildGTIDExecutedTable(t *testing.T) {
+	t.Parallel()
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		ctrl := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(ctrl)
+
+		// Batch succeeds, so deferred restore is skipped.
+		tmc.EXPECT().
+			ExecuteMultiFetchAsDba(gomock.Any(), gomock.Eq(tablet), false, gomock.Any()).
+			Return(nil, nil).
+			Times(1)
+
+		logger := logutil.NewMemoryLogger()
+		err := rebuildGTIDExecutedTable(t.Context(), tmc, tablet, logger)
+		require.NoError(t, err)
+	})
+
+	t.Run("failure restores super_read_only", func(t *testing.T) {
+		t.Parallel()
+
+		ctrl := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(ctrl)
+
+		// Batch fails.
+		tmc.EXPECT().
+			ExecuteMultiFetchAsDba(gomock.Any(), gomock.Eq(tablet), false, gomock.Any()).
+			Return(nil, errors.New("connection refused")).
+			Times(1)
+
+		// Deferred restore runs because succeeded == false.
+		tmc.EXPECT().
+			ExecuteFetchAsDba(gomock.Any(), gomock.Eq(tablet), false, gomock.Any()).
+			Return(nil, nil).
+			Times(1)
+
+		logger := logutil.NewMemoryLogger()
+		err := rebuildGTIDExecutedTable(t.Context(), tmc, tablet, logger)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "connection refused")
+	})
 }
