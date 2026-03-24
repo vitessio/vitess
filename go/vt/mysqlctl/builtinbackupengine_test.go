@@ -18,13 +18,25 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/fileutil"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	sqltypes "vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
@@ -166,4 +178,136 @@ func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "auto"}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL56/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
+}
+
+// nopWriteCloser wraps io.Discard as a WriteCloser, used in backup tests.
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }
+
+// setupRebuildGTIDMysqld creates a FakeMysqlDaemon configured for the primary
+// path of executeFullBackup (no replication, super_read_only already on).
+func setupRebuildGTIDMysqld(t *testing.T) *FakeMysqlDaemon {
+	t.Helper()
+	sqldb := fakesqldb.New(t)
+	t.Cleanup(sqldb.Close)
+	mysqld := NewFakeMysqlDaemon(sqldb)
+	mysqld.ReplicationStatusError = mysql.ErrNotReplica
+	mysqld.SuperReadOnly.Store(true)
+	return mysqld
+}
+
+// setupRebuildGTIDCnf creates a temp directory structure for the backup cnf.
+func setupRebuildGTIDCnf(t *testing.T) *Mycnf {
+	t.Helper()
+	root := t.TempDir()
+	for _, d := range []string{"innodb_data", "innodb_log", "data"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(root, d), os.ModePerm))
+	}
+	return &Mycnf{
+		InnodbDataHomeDir:     filepath.Join(root, "innodb_data"),
+		InnodbLogGroupHomeDir: filepath.Join(root, "innodb_log"),
+		DataDir:               filepath.Join(root, "data"),
+	}
+}
+
+func TestExecuteFullBackupRebuildGTIDExecuted(t *testing.T) {
+	origFlag := builtinBackupRebuildGTIDExecuted
+	origProgress := builtinBackupProgress
+	t.Cleanup(func() {
+		builtinBackupRebuildGTIDExecuted = origFlag
+		builtinBackupProgress = origProgress
+	})
+	builtinBackupProgress = 1 * time.Millisecond
+
+	const alterQuery = "ALTER TABLE mysql.gtid_executed ENGINE=InnoDB"
+
+	be := &BuiltinBackupEngine{}
+
+	makeParams := func(mysqld *FakeMysqlDaemon, cnf *Mycnf) BackupParams {
+		return BackupParams{
+			Cnf:                  cnf,
+			Logger:               logutil.NewMemoryLogger(),
+			Mysqld:               mysqld,
+			Concurrency:          1,
+			HookExtraEnv:         map[string]string{},
+			BackupTime:           time.Now(),
+			Stats:                backupstats.NoStats(),
+			MysqlShutdownTimeout: 10 * time.Second,
+		}
+	}
+
+	makeBH := func() *FakeBackupHandle {
+		return &FakeBackupHandle{
+			AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+				return FakeBackupHandleAddFileReturn{WriteCloser: nopWriteCloser{io.Discard}}
+			},
+		}
+	}
+
+	t.Run("flag disabled - ALTER TABLE not called", func(t *testing.T) {
+		builtinBackupRebuildGTIDExecuted = false
+		mysqld := setupRebuildGTIDMysqld(t)
+		alterCalled := false
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			if query == alterQuery {
+				alterCalled = true
+			}
+			return &sqltypes.Result{}, nil
+		}
+
+		params := makeParams(mysqld, setupRebuildGTIDCnf(t))
+		be.executeFullBackup(context.Background(), params, makeBH()) //nolint:errcheck
+		assert.False(t, alterCalled, "ALTER TABLE should not be called when flag is disabled")
+	})
+
+	t.Run("flag enabled - ALTER TABLE called", func(t *testing.T) {
+		builtinBackupRebuildGTIDExecuted = true
+		mysqld := setupRebuildGTIDMysqld(t)
+		alterCalled := false
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			if query == alterQuery {
+				alterCalled = true
+			}
+			return &sqltypes.Result{}, nil
+		}
+
+		params := makeParams(mysqld, setupRebuildGTIDCnf(t))
+		be.executeFullBackup(context.Background(), params, makeBH()) //nolint:errcheck
+		assert.True(t, alterCalled, "ALTER TABLE should be called when flag is enabled")
+	})
+
+	t.Run("flag enabled - ALTER TABLE failure aborts backup", func(t *testing.T) {
+		builtinBackupRebuildGTIDExecuted = true
+		mysqld := setupRebuildGTIDMysqld(t)
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			if query == alterQuery {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "disk full")
+			}
+			return &sqltypes.Result{}, nil
+		}
+
+		params := makeParams(mysqld, setupRebuildGTIDCnf(t))
+		result, err := be.executeFullBackup(context.Background(), params, &FakeBackupHandle{})
+		require.Error(t, err)
+		assert.Equal(t, BackupUnusable, result)
+		assert.ErrorContains(t, err, "failed to rebuild mysql.gtid_executed")
+	})
+
+	// Ensure the backup handle is not used (i.e. backup was aborted before backupFiles).
+	t.Run("flag enabled - ALTER TABLE failure does not write any files", func(t *testing.T) {
+		builtinBackupRebuildGTIDExecuted = true
+		mysqld := setupRebuildGTIDMysqld(t)
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			if query == alterQuery {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "disk full")
+			}
+			return &sqltypes.Result{}, nil
+		}
+
+		bh := &FakeBackupHandle{}
+		params := makeParams(mysqld, setupRebuildGTIDCnf(t))
+		be.executeFullBackup(context.Background(), params, bh) //nolint:errcheck
+		assert.Empty(t, bh.AddFileCalls, "no files should be written when ALTER TABLE fails")
+	})
 }
