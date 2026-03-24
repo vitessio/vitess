@@ -19,7 +19,7 @@ if ! cd go/vt/sqlparser/; then
 fi
 
 mv $CUR $TMP
-output=$(go run ./goyacc -fo $CUR sql.y)
+output=$(go run github.com/vitessio/goyacc -fo $CUR sql.y)
 expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
@@ -28,6 +28,7 @@ if [[ "$output" != "$expectedOutput" ]]; then
 	exit 1
 fi
 
+goimports -local "vitess.io/vitess" -w $CUR
 go tool gofumpt -w $CUR
 
 if ! diff -q $CUR $TMP >/dev/null; then
