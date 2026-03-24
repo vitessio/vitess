@@ -59,6 +59,12 @@ type nodeAllocator struct {
 	updateExprPtrSlab   []*UpdateExpr
 	setExprPtrSlab      []*SetExpr
 	valTupleSlab        []ValTuple
+	whenPtrSlab         []*When
+	colNamePtrSlab      []*ColName
+	ctePtrSlab          []*CommonTableExpr
+	variablePtrSlab     []*Variable
+	statementSlab       []Statement
+	stringSlab          []string
 }
 
 // na extracts the nodeAllocator from the lexer for use in grammar actions.
@@ -517,5 +523,65 @@ func (a *nodeAllocator) makeValuesSlice(n int) Values {
 	c := sliceCapacity(n, len(a.valTupleSlab))
 	s := a.valTupleSlab[:n:c]
 	a.valTupleSlab = a.valTupleSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeWhenPtrSlice(n int) []*When {
+	if len(a.whenPtrSlab) < n {
+		a.whenPtrSlab = make([]*When, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.whenPtrSlab))
+	s := a.whenPtrSlab[:n:c]
+	a.whenPtrSlab = a.whenPtrSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeColNamePtrSlice(n int) []*ColName {
+	if len(a.colNamePtrSlab) < n {
+		a.colNamePtrSlab = make([]*ColName, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.colNamePtrSlab))
+	s := a.colNamePtrSlab[:n:c]
+	a.colNamePtrSlab = a.colNamePtrSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeCTEPtrSlice(n int) []*CommonTableExpr {
+	if len(a.ctePtrSlab) < n {
+		a.ctePtrSlab = make([]*CommonTableExpr, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.ctePtrSlab))
+	s := a.ctePtrSlab[:n:c]
+	a.ctePtrSlab = a.ctePtrSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeVariablePtrSlice(n int) []*Variable {
+	if len(a.variablePtrSlab) < n {
+		a.variablePtrSlab = make([]*Variable, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.variablePtrSlab))
+	s := a.variablePtrSlab[:n:c]
+	a.variablePtrSlab = a.variablePtrSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeStatementSlice(n int) []Statement {
+	if len(a.statementSlab) < n {
+		a.statementSlab = make([]Statement, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.statementSlab))
+	s := a.statementSlab[:n:c]
+	a.statementSlab = a.statementSlab[c:]
+	return s
+}
+
+func (a *nodeAllocator) makeStringSlice(n int) []string {
+	if len(a.stringSlab) < n {
+		a.stringSlab = make([]string, max(nodeSlabSize, n))
+	}
+	c := sliceCapacity(n, len(a.stringSlab))
+	s := a.stringSlab[:n:c]
+	a.stringSlab = a.stringSlab[c:]
 	return s
 }

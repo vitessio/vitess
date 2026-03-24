@@ -697,7 +697,7 @@ parse:
 multiple_commands:
   comment_command_opt
   {
-    $$ = []Statement{$1}
+    s := na(yylex).makeStatementSlice(1); s[0] = $1; $$ = s
     resetTokenizer(yylex)
   }
 |  multiple_commands ';' comment_command_opt
@@ -1086,7 +1086,7 @@ with_list:
   }
 | common_table_expr
   {
-    $$ = []*CommonTableExpr{$1}
+    s := na(yylex).makeCTEPtrSlice(1); s[0] = $1; $$ = s
   }
 
 common_table_expr:
@@ -5388,7 +5388,11 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($1, $2)
+    if $1 == nil {
+      s := na(yylex).makeStringSlice(1); s[0] = $2; $$ = s
+    } else {
+      $$ = append($1, $2)
+    }
   }
 
 union_op:
@@ -5482,7 +5486,7 @@ select_options_opt:
 select_options:
 select_option
   {
-    $$ = []string{$1}
+    s := na(yylex).makeStringSlice(1); s[0] = $1; $$ = s
   }
 | select_options select_option
   {
@@ -5687,7 +5691,7 @@ column_list:
 at_id_list:
   user_defined_variable
   {
-    $$ = []*Variable{$1}
+    s := na(yylex).makeVariablePtrSlice(1); s[0] = $1; $$ = s
   }
 | at_id_list ',' user_defined_variable
   {
@@ -6249,7 +6253,7 @@ column_names_opt_paren:
 column_names:
   column_name
   {
-    $$ = []*ColName{$1}
+    s := na(yylex).makeColNamePtrSlice(1); s[0] = $1; $$ = s
   }
 | column_names ',' column_name
   {
@@ -7921,7 +7925,7 @@ separator_opt:
 when_expression_list:
   when_expression
   {
-    $$ = []*When{$1}
+    s := na(yylex).makeWhenPtrSlice(1); s[0] = $1; $$ = s
   }
 | when_expression_list when_expression
   {
@@ -8378,7 +8382,7 @@ into_var_list:
   }
 | into_var
   {
-    $$ = []*Variable{$1}
+    s := na(yylex).makeVariablePtrSlice(1); s[0] = $1; $$ = s
   }
 
 into_var:
