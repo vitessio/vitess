@@ -1245,23 +1245,23 @@ select_stmt_with_into:
 values_statement:
   VALUES comment_opt LIST_ARG
   {
-    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), ListArg: ListArg($3[2:])}
+    $$ = &ValuesStatement{Comments: na(yylex).parsedComments(Comments($2)), ListArg: ListArg($3[2:])}
   }
 | VALUES comment_opt row_tuple_list
   {
-    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: $3}
+    $$ = &ValuesStatement{Comments: na(yylex).parsedComments(Comments($2)), Rows: $3}
   }
 
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
-    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5}
+    $$ = &Stream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: na(yylex).newWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5, Where: na(yylex).newWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -1286,7 +1286,7 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
     ins.Action = $1
-    ins.Comments = Comments($2).Parsed()
+    ins.Comments = na(yylex).parsedComments(Comments($2))
     ins.Ignore = $3
     ins.Table = na(yylex).getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
@@ -1301,7 +1301,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = Comments($2).Parsed(); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup($8); $$ = ins
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = na(yylex).parsedComments(Comments($2)); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:
@@ -1317,25 +1317,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = Comments($3).Parsed(); upd.Ignore = $4; upd.TableExprs = $5; upd.Exprs = $7; upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = $9; upd.Limit = $10; $$ = upd
+    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = na(yylex).parsedComments(Comments($3)); upd.Ignore = $4; upd.TableExprs = $5; upd.Exprs = $7; upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = $9; upd.Limit = $10; $$ = upd
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.TableExprs = te; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.TableExprs = te; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $6; del.TableExprs = $8; del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $6; del.TableExprs = $8; del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    del := na(yylex).allocDelete(); del.With = $1; del.Comments = Comments($3).Parsed(); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 
 from_or_using:
@@ -1384,7 +1384,7 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), $3)
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), $3)
   }
 
 set_list:
@@ -1432,11 +1432,11 @@ set_variable:
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), $4)
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), $4)
   }
 
 transaction_chars:
@@ -1627,13 +1627,13 @@ json_object_param:
 create_procedure:
   CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_name openb proc_params_list_opt closeb compound_statement
   {
-    $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
+    $$ = &CreateProcedure{Comments: na(yylex).parsedComments(Comments($2)), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
   }
 
 create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
+    $$ = &CreateTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
@@ -1649,58 +1649,58 @@ create_table_prefix:
 create_view_prefix:
   CREATE comment_opt definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $6, Comments: Comments($2).Parsed(), Definer: $3 ,Security:$4}
+    $$ = &CreateView{ViewName: $6, Comments: na(yylex).parsedComments(Comments($2)), Definer: $3 ,Security:$4}
   }
 | CREATE comment_opt replace algorithm_view_opt definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
+    $$ = &CreateView{ViewName: $8, Comments: na(yylex).parsedComments(Comments($2)), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
   }
 | CREATE comment_opt algorithm_view definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5}
+    $$ = &CreateView{ViewName: $7, Comments: na(yylex).parsedComments(Comments($2)), Algorithm:$3, Definer: $4 ,Security:$5}
   }
 
 
 alter_table_prefix:
   ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $4}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $4}
     setDDL(yylex, $$)
   }
 
 create_index_prefix:
   CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
 create_database_prefix:
   CREATE comment_opt database_or_schema not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfNotExists: $4}
+    $$ = &CreateDatabase{Comments: na(yylex).parsedComments(Comments($2)), DBName: $5, IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
 alter_database_prefix:
   ALTER comment_opt database_or_schema
   {
-    $$ = &AlterDatabase{Comments: Comments($2).Parsed()}
+    $$ = &AlterDatabase{Comments: na(yylex).parsedComments(Comments($2))}
     setDDL(yylex,$$)
   }
 
@@ -3605,7 +3605,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view_opt definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7, Comments: na(yylex).parsedComments(Comments($2)), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -4410,28 +4410,28 @@ rename_list:
 drop_statement:
   DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: na(yylex).parsedComments(Comments($2)), Temp: $3}
   }
 | DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $5, Comments: Comments($2).Parsed(), IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: na(yylex).parsedComments(Comments($2)), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfExists: $4}
+    $$ = &DropDatabase{Comments: na(yylex).parsedComments(Comments($2)), DBName: $5, IfExists: $4}
   }
 | DROP comment_opt PROCEDURE exists_opt table_name
   {
-    $$ = &DropProcedure{Comments: Comments($2).Parsed(), Name: $5, IfExists: $4}
+    $$ = &DropProcedure{Comments: na(yylex).parsedComments(Comments($2)), Name: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -5193,13 +5193,13 @@ explain_statement:
   }
 | explain_synonyms comment_opt explain_format_opt explainable_statement
   {
-    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: na(yylex).parsedComments(Comments($2))}
   }
 
 vexplain_statement:
   VEXPLAIN comment_opt vexplain_type_opt explainable_statement
   {
-    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: na(yylex).parsedComments(Comments($2))}
   }
 
 other_statement:
@@ -5261,7 +5261,7 @@ unlock_statement:
 revert_statement:
   REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{Comments: Comments($2).Parsed(), UUID: string($4)}
+    $$ = &RevertMigration{Comments: na(yylex).parsedComments(Comments($2)), UUID: string($4)}
   }
 
 flush_statement:
@@ -5434,13 +5434,13 @@ distinct_opt:
 prepare_statement:
   PREPARE comment_opt sql_id FROM text_literal_or_arg
   {
-    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
+    $$ = &PrepareStmt{Name:$3, Comments: na(yylex).parsedComments(Comments($2)), Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM user_defined_variable
   {
     $$ = &PrepareStmt{
     	Name:$3,
-    	Comments: Comments($2).Parsed(),
+    	Comments: na(yylex).parsedComments(Comments($2)),
     	Statement: $5,
     }
   }
@@ -5448,7 +5448,7 @@ prepare_statement:
 execute_statement:
   EXECUTE comment_opt sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$3, Comments: Comments($2).Parsed(), Arguments: $4}
+    $$ = &ExecuteStmt{Name:$3, Comments: na(yylex).parsedComments(Comments($2)), Arguments: $4}
   }
 
 execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
@@ -5463,11 +5463,11 @@ execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name:$4}
+    $$ = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments($2)), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
+    $$ = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments($2)), Name: $4}
   }
 
 select_options_opt:

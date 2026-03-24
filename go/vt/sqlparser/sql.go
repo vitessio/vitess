@@ -12463,7 +12463,7 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:1247
 		{
-			yyLOCAL = &ValuesStatement{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), ListArg: ListArg(yyDollar[3].strUnion()[2:])}
+			yyLOCAL = &ValuesStatement{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), ListArg: ListArg(yyDollar[3].strUnion()[2:])}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12472,7 +12472,7 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:1251
 		{
-			yyLOCAL = &ValuesStatement{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Rows: yyDollar[3].valuesUnion()}
+			yyLOCAL = &ValuesStatement{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Rows: yyDollar[3].valuesUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*TableStatement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12481,7 +12481,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1257
 		{
-			yyLOCAL = &Stream{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion()}
+			yyLOCAL = &Stream{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12490,7 +12490,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1263
 		{
-			yyLOCAL = &VStream{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = &VStream{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableNameUnion(), Where: na(yylex).newWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12529,7 +12529,7 @@ yydefault:
 			// insert_data returns a *Insert pre-filled with Columns & Values
 			ins := yyDollar[6].insUnion()
 			ins.Action = yyDollar[1].insertActionUnion()
-			ins.Comments = Comments(yyDollar[2].strsUnion()).Parsed()
+			ins.Comments = na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))
 			ins.Ignore = yyDollar[3].ignoreUnion()
 			ins.Table = na(yylex).getAliasedTableExprFromTableName(yyDollar[4].tableNameUnion())
 			ins.Partitions = yyDollar[5].partitionsUnion()
@@ -12551,7 +12551,7 @@ yydefault:
 			}
 			ins := na(yylex).allocInsert()
 			ins.Action = yyDollar[1].insertActionUnion()
-			ins.Comments = Comments(yyDollar[2].strsUnion()).Parsed()
+			ins.Comments = na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))
 			ins.Ignore = yyDollar[3].ignoreUnion()
 			ins.Table = na(yylex).getAliasedTableExprFromTableName(yyDollar[4].tableNameUnion())
 			ins.Partitions = yyDollar[5].partitionsUnion()
@@ -12589,7 +12589,7 @@ yydefault:
 		{
 			upd := na(yylex).allocUpdate()
 			upd.With = yyDollar[1].withUnion()
-			upd.Comments = Comments(yyDollar[3].strsUnion()).Parsed()
+			upd.Comments = na(yylex).parsedComments(Comments(yyDollar[3].strsUnion()))
 			upd.Ignore = yyDollar[4].ignoreUnion()
 			upd.TableExprs = yyDollar[5].tableExprsUnion()
 			upd.Exprs = yyDollar[7].updateExprsUnion()
@@ -12612,7 +12612,7 @@ yydefault:
 			te[0] = ate
 			del := na(yylex).allocDelete()
 			del.With = yyDollar[1].withUnion()
-			del.Comments = Comments(yyDollar[3].strsUnion()).Parsed()
+			del.Comments = na(yylex).parsedComments(Comments(yyDollar[3].strsUnion()))
 			del.Ignore = yyDollar[4].ignoreUnion()
 			del.TableExprs = te
 			del.Partitions = yyDollar[8].partitionsUnion()
@@ -12630,7 +12630,7 @@ yydefault:
 		{
 			del := na(yylex).allocDelete()
 			del.With = yyDollar[1].withUnion()
-			del.Comments = Comments(yyDollar[3].strsUnion()).Parsed()
+			del.Comments = na(yylex).parsedComments(Comments(yyDollar[3].strsUnion()))
 			del.Ignore = yyDollar[4].ignoreUnion()
 			del.Targets = yyDollar[6].tableNamesUnion()
 			del.TableExprs = yyDollar[8].tableExprsUnion()
@@ -12646,7 +12646,7 @@ yydefault:
 		{
 			del := na(yylex).allocDelete()
 			del.With = yyDollar[1].withUnion()
-			del.Comments = Comments(yyDollar[3].strsUnion()).Parsed()
+			del.Comments = na(yylex).parsedComments(Comments(yyDollar[3].strsUnion()))
 			del.Ignore = yyDollar[4].ignoreUnion()
 			del.Targets = yyDollar[5].tableNamesUnion()
 			del.TableExprs = yyDollar[7].tableExprsUnion()
@@ -12662,7 +12662,7 @@ yydefault:
 		{
 			del := na(yylex).allocDelete()
 			del.With = yyDollar[1].withUnion()
-			del.Comments = Comments(yyDollar[3].strsUnion()).Parsed()
+			del.Comments = na(yylex).parsedComments(Comments(yyDollar[3].strsUnion()))
 			del.Ignore = yyDollar[4].ignoreUnion()
 			del.Targets = yyDollar[5].tableNamesUnion()
 			del.TableExprs = yyDollar[7].tableExprsUnion()
@@ -12752,7 +12752,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1386
 		{
-			yyLOCAL = NewSetStatement(Comments(yyDollar[2].strsUnion()).Parsed(), yyDollar[3].setExprsUnion())
+			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), yyDollar[3].setExprsUnion())
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12842,7 +12842,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1434
 		{
-			yyLOCAL = NewSetStatement(Comments(yyDollar[2].strsUnion()).Parsed(), UpdateSetExprsScope(yyDollar[5].setExprsUnion(), yyDollar[3].scopeUnion()))
+			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), UpdateSetExprsScope(yyDollar[5].setExprsUnion(), yyDollar[3].scopeUnion()))
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -12851,7 +12851,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1438
 		{
-			yyLOCAL = NewSetStatement(Comments(yyDollar[2].strsUnion()).Parsed(), yyDollar[4].setExprsUnion())
+			yyLOCAL = NewSetStatement(na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), yyDollar[4].setExprsUnion())
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -13186,7 +13186,7 @@ yydefault:
 		var yyLOCAL *CreateProcedure
 //line sql.y:1629
 		{
-			yyLOCAL = &CreateProcedure{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Name: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Definer: yyDollar[3].definerUnion(), Params: yyDollar[8].procParamsUnion(), Body: yyDollar[10].compoundStatementUnion()}
+			yyLOCAL = &CreateProcedure{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Definer: yyDollar[3].definerUnion(), Params: yyDollar[8].procParamsUnion(), Body: yyDollar[10].compoundStatementUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(**CreateProcedure)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -13195,7 +13195,7 @@ yydefault:
 		var yyLOCAL *CreateTable
 //line sql.y:1635
 		{
-			yyLOCAL = &CreateTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Temp: yyDollar[3].booleanUnion()}
+			yyLOCAL = &CreateTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[6].tableNameUnion(), IfNotExists: yyDollar[5].booleanUnion(), Temp: yyDollar[3].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13205,7 +13205,7 @@ yydefault:
 		var yyLOCAL *CreateView
 //line sql.y:1651
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[6].tableNameUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Definer: yyDollar[3].definerUnion(), Security: yyDollar[4].strUnion()}
+			yyLOCAL = &CreateView{ViewName: yyDollar[6].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Definer: yyDollar[3].definerUnion(), Security: yyDollar[4].strUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -13214,7 +13214,7 @@ yydefault:
 		var yyLOCAL *CreateView
 //line sql.y:1655
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableNameUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].strUnion(), Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].strUnion()}
+			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].strUnion(), Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].strUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -13223,7 +13223,7 @@ yydefault:
 		var yyLOCAL *CreateView
 //line sql.y:1659
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[7].tableNameUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion()}
+			yyLOCAL = &CreateView{ViewName: yyDollar[7].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(**CreateView)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -13232,7 +13232,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1666
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[4].tableNameUnion()}
+			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[4].tableNameUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13242,7 +13242,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1673
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[7].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCIUnion()}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[7].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCIUnion()}, Options: yyDollar[5].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13252,7 +13252,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1678
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13262,7 +13262,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1683
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13272,7 +13272,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1688
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Table: yyDollar[8].tableNameUnion(), AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCIUnion(), Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13282,7 +13282,7 @@ yydefault:
 		var yyLOCAL *CreateDatabase
 //line sql.y:1695
 		{
-			yyLOCAL = &CreateDatabase{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), DBName: yyDollar[5].identifierCSUnion(), IfNotExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &CreateDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), DBName: yyDollar[5].identifierCSUnion(), IfNotExists: yyDollar[4].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -13292,7 +13292,7 @@ yydefault:
 		var yyLOCAL *AlterDatabase
 //line sql.y:1702
 		{
-			yyLOCAL = &AlterDatabase{Comments: Comments(yyDollar[2].strsUnion()).Parsed()}
+			yyLOCAL = &AlterDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -16988,7 +16988,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3607
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableNameUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion(), Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].tableStmtUnion(), CheckOption: yyDollar[11].strUnion()}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableNameUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Algorithm: yyDollar[3].strUnion(), Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].strUnion(), Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].tableStmtUnion(), CheckOption: yyDollar[11].strUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -18413,7 +18413,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4412
 		{
-			yyLOCAL = &DropTable{FromTables: yyDollar[6].tableNamesUnion(), IfExists: yyDollar[5].booleanUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Temp: yyDollar[3].booleanUnion()}
+			yyLOCAL = &DropTable{FromTables: yyDollar[6].tableNamesUnion(), IfExists: yyDollar[5].booleanUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Temp: yyDollar[3].booleanUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -18424,9 +18424,9 @@ yydefault:
 		{
 			// Change this to an alter statement
 			if yyDollar[4].identifierCIUnion().Lowered() == "primary" {
-				yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), FullyParsed: true, Table: yyDollar[6].tableNameUnion(), AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[7].alterOptionsUnion()...)}
+				yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), FullyParsed: true, Table: yyDollar[6].tableNameUnion(), AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[7].alterOptionsUnion()...)}
 			} else {
-				yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), FullyParsed: true, Table: yyDollar[6].tableNameUnion(), AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].identifierCIUnion()}}, yyDollar[7].alterOptionsUnion()...)}
+				yyLOCAL = &AlterTable{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), FullyParsed: true, Table: yyDollar[6].tableNameUnion(), AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].identifierCIUnion()}}, yyDollar[7].alterOptionsUnion()...)}
 			}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
@@ -18436,7 +18436,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4425
 		{
-			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -18445,7 +18445,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4429
 		{
-			yyLOCAL = &DropDatabase{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), DBName: yyDollar[5].identifierCSUnion(), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropDatabase{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), DBName: yyDollar[5].identifierCSUnion(), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -18454,7 +18454,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4433
 		{
-			yyLOCAL = &DropProcedure{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Name: yyDollar[5].tableNameUnion(), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropProcedure{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[5].tableNameUnion(), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -19965,7 +19965,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5195
 		{
-			yyLOCAL = &ExplainStmt{Type: yyDollar[3].explainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed()}
+			yyLOCAL = &ExplainStmt{Type: yyDollar[3].explainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -19974,7 +19974,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5201
 		{
-			yyLOCAL = &VExplainStmt{Type: yyDollar[3].vexplainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed()}
+			yyLOCAL = &VExplainStmt{Type: yyDollar[3].vexplainTypeUnion(), Statement: yyDollar[4].statementUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion()))}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -20080,7 +20080,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5263
 		{
-			yyLOCAL = &RevertMigration{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), UUID: string(yyDollar[4].strUnion())}
+			yyLOCAL = &RevertMigration{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), UUID: string(yyDollar[4].strUnion())}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -20425,7 +20425,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5436
 		{
-			yyLOCAL = &PrepareStmt{Name: yyDollar[3].identifierCIUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Statement: yyDollar[5].exprUnion()}
+			yyLOCAL = &PrepareStmt{Name: yyDollar[3].identifierCIUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Statement: yyDollar[5].exprUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -20436,7 +20436,7 @@ yydefault:
 		{
 			yyLOCAL = &PrepareStmt{
 				Name:      yyDollar[3].identifierCIUnion(),
-				Comments:  Comments(yyDollar[2].strsUnion()).Parsed(),
+				Comments:  na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())),
 				Statement: yyDollar[5].variableUnion(),
 			}
 		}
@@ -20447,7 +20447,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5450
 		{
-			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].identifierCIUnion(), Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Arguments: yyDollar[4].variablesUnion()}
+			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].identifierCIUnion(), Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Arguments: yyDollar[4].variablesUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -20474,7 +20474,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5465
 		{
-			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Name: yyDollar[4].identifierCIUnion()}
+			yyLOCAL = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[4].identifierCIUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL
@@ -20483,7 +20483,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:5469
 		{
-			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strsUnion()).Parsed(), Name: yyDollar[4].identifierCIUnion()}
+			yyLOCAL = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments(yyDollar[2].strsUnion())), Name: yyDollar[4].identifierCIUnion()}
 		}
 		yyVAL.data = [6]__yyunsafe__.Pointer{}
 		*(*Statement)(__yyunsafe__.Pointer(&yyVAL.data)) = yyLOCAL

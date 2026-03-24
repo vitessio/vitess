@@ -47,6 +47,7 @@ type nodeAllocator struct {
 	limitSlab          []Limit
 	subquerySlab       []Subquery
 	groupBySlab        []GroupBy
+	parsedCommentsSlab []ParsedComments
 	selectExprsSlab    []SelectExprs
 
 	// Slice backing array slabs
@@ -369,7 +370,7 @@ func (a *nodeAllocator) newSelect(
 	windows NamedWindows,
 ) *Select {
 	sel := a.allocSelect()
-	sel.Comments = comments.Parsed()
+	sel.Comments = a.parsedComments(comments)
 	sel.SelectExprs = exprs
 	sel.Into = into
 	sel.From = from
@@ -402,6 +403,19 @@ func (a *nodeAllocator) newSelect(
 		}
 	}
 	return sel
+}
+
+func (a *nodeAllocator) parsedComments(c Comments) *ParsedComments {
+	if len(c) == 0 {
+		return nil
+	}
+	if len(a.parsedCommentsSlab) == 0 {
+		a.parsedCommentsSlab = make([]ParsedComments, nodeSlabSize)
+	}
+	p := &a.parsedCommentsSlab[0]
+	a.parsedCommentsSlab = a.parsedCommentsSlab[1:]
+	p.comments = c
+	return p
 }
 
 func (a *nodeAllocator) getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
