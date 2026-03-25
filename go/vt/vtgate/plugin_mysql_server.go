@@ -590,15 +590,13 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
-	// File/position-based resumption is only valid when targeting a specific
-	// tablet. When routing via health check, vtgate may pick a different
-	// replica each time, and binlog filenames/positions differ across replicas.
-	// GTIDs are consistent across replicas and can always be used.
-	hasFilePosition := logFile != "" || logPos > 4
-	if hasFilePosition && tabletAlias == nil {
+	// Binlog filenames differ across replicas, so filename-based resumption
+	// is only valid when targeting a specific tablet. Position is always
+	// passed through to MySQL regardless of routing mode.
+	if logFile != "" && tabletAlias == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (e.g., 'commerce:0@primary|zone1-100'); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+			"binlog filename can only be used with tablet targeting (e.g., 'commerce:0@primary|zone1-100'); "+
+				"use GTIDs for shard-level targeting, as binlog filenames differ across replicas")
 	}
 
 	// Build the BinlogDumpGTID request

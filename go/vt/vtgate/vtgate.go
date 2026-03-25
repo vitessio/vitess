@@ -800,11 +800,10 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 		tabletType = topodatapb.TabletType_PRIMARY
 	}
 
-	hasFilePosition := req.BinlogFilename != "" || req.BinlogPosition > 4
-	if hasFilePosition && req.TabletAlias == nil {
+	if req.BinlogFilename != "" && topoproto.TabletAliasIsZero(req.TabletAlias) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (set tablet_alias); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+			"binlog filename can only be used with tablet targeting (set tablet_alias); "+
+				"use GTIDs for shard-level targeting, as binlog filenames differ across replicas")
 	}
 
 	target := &querypb.Target{
@@ -827,7 +826,7 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 		})
 	}
 
-	if req.TabletAlias != nil {
+	if !topoproto.TabletAliasIsZero(req.TabletAlias) {
 		qs, err := vtg.gw.QueryServiceByAlias(ctx, req.TabletAlias, target)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get connection to tablet %s",
