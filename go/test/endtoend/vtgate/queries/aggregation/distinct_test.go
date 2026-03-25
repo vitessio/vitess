@@ -91,6 +91,7 @@ func TestDistinctWindowLimitShardTruncation(t *testing.T) {
 				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv
 			FROM emp
 			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
 			LIMIT 3
 		) AS dt
 	)

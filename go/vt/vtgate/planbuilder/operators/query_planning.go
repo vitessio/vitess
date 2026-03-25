@@ -582,6 +582,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
 	var result *ApplyResult
+	var orderToPush []OrderBy
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
 		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
@@ -592,9 +593,17 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				// we can't push limits down if we have a group by
 				return SkipChildren
 			}
+		case *Ordering:
+			// collect ordering so we can push it under the route together with the limit.
+			// a limit without an order by on the shard can miss correct rows.
+			orderToPush = op.Order
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
-			op.Source = newLimit(op.Source, ast, false)
+			src := op.Source
+			if len(orderToPush) > 0 {
+				src = newOrdering(src, orderToPush)
+			}
+			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		}

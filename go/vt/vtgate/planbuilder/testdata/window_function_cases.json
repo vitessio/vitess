@@ -1429,35 +1429,46 @@
     }
   },
   {
-    "comment": "IN clause - FirstValue with DISTINCT and LIMIT",
-    "query": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+    "comment": "IN clause - FirstValue with DISTINCT, ORDER BY, and LIMIT",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from user where Id in (1, 2, 3) order by Id limit 5",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from user where Id in (1, 2, 3) order by Id limit 5",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "5",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select first_value(col) over (partition by Id order by col desc) from `user` where 1 != 1",
-                "Query": "select distinct first_value(col) over (partition by Id order by col desc) from `user` where Id in ::__vals limit :__upper_limit",
-                "Values": [
-                  "(1, 2, 3)"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:3)",
+                  "(1:2)",
+                  "2"
                 ],
-                "Vindex": "user_index"
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "OrderBy": "(1|4) ASC",
+                    "Query": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where Id in ::__vals order by `user`.Id asc limit :__upper_limit) as dt(c0, c1)",
+                    "Values": [
+                      "(1, 2, 3)"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
               }
             ]
           }
@@ -1469,35 +1480,46 @@
     }
   },
   {
-    "comment": "IN clause - Lead with DISTINCT and LIMIT",
-    "query": "select distinct lead(col, 1) over (partition by Id order by col) as next_col from user where Id in (1, 2, 3) limit 3",
+    "comment": "IN clause - Lead with DISTINCT, ORDER BY, and LIMIT",
+    "query": "select distinct lead(col, 1) over (partition by Id order by col) as next_col, Id from user where Id in (1, 2, 3) order by Id limit 3",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select distinct lead(col, 1) over (partition by Id order by col) as next_col from user where Id in (1, 2, 3) limit 3",
+      "Original": "select distinct lead(col, 1) over (partition by Id order by col) as next_col, Id from user where Id in (1, 2, 3) order by Id limit 3",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "3",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select lead(col, 1) over (partition by Id order by col asc) as next_col from `user` where 1 != 1",
-                "Query": "select distinct lead(col, 1) over (partition by Id order by col asc) as next_col from `user` where Id in ::__vals limit :__upper_limit",
-                "Values": [
-                  "(1, 2, 3)"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:3)",
+                  "(1:2)",
+                  "2"
                 ],
-                "Vindex": "user_index"
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as next_col, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select lead(col, 1) over (partition by Id order by col asc) as next_col, Id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "OrderBy": "(1|4) ASC",
+                    "Query": "select dt.c0 as next_col, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select distinct lead(col, 1) over (partition by Id order by col asc) as next_col, Id from `user` where Id in ::__vals order by `user`.Id asc limit :__upper_limit) as dt(c0, c1)",
+                    "Values": [
+                      "(1, 2, 3)"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
               }
             ]
           }
@@ -1601,32 +1623,40 @@
     }
   },
   {
-    "comment": "Scatter - Rank with DISTINCT and LIMIT",
-    "query": "select distinct rank() over (partition by Id order by col) as r, col from user limit 10",
+    "comment": "Scatter - Rank with DISTINCT, ORDER BY, and LIMIT",
+    "query": "select distinct rank() over (partition by Id order by col) as r, col from user order by col limit 10",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select distinct rank() over (partition by Id order by col) as r, col from user limit 10",
+      "Original": "select distinct rank() over (partition by Id order by col) as r, col from user order by col limit 10",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "10",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0",
-              "1"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select rank() over (partition by Id order by col asc) as r, col from `user` where 1 != 1",
-                "Query": "select distinct rank() over (partition by Id order by col asc) as r, col from `user` limit :__upper_limit"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0",
+                  "1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select rank() over (partition by Id order by col asc) as r, col from `user` where 1 != 1",
+                    "OrderBy": "1 ASC",
+                    "Query": "select distinct rank() over (partition by Id order by col asc) as r, col from `user` order by `user`.col asc limit :__upper_limit"
+                  }
+                ]
               }
             ]
           }
@@ -1638,31 +1668,42 @@
     }
   },
   {
-    "comment": "Scatter - Count window with DISTINCT and LIMIT",
-    "query": "select distinct count(intcol) over (partition by Id) as cnt from user limit 7",
+    "comment": "Scatter - Count window with DISTINCT, ORDER BY, and LIMIT",
+    "query": "select distinct count(intcol) over (partition by Id) as cnt, Id from user order by Id limit 7",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select distinct count(intcol) over (partition by Id) as cnt from user limit 7",
+      "Original": "select distinct count(intcol) over (partition by Id) as cnt, Id from user order by Id limit 7",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "7",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(intcol) over (partition by Id) as cnt from `user` where 1 != 1",
-                "Query": "select distinct count(intcol) over (partition by Id) as cnt from `user` limit :__upper_limit"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:3)",
+                  "(1:2)",
+                  "2"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as cnt, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select count(intcol) over (partition by Id) as cnt, Id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "OrderBy": "(1|4) ASC",
+                    "Query": "select dt.c0 as cnt, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select distinct count(intcol) over (partition by Id) as cnt, Id from `user` order by `user`.Id asc limit :__upper_limit) as dt(c0, c1)"
+                  }
+                ]
               }
             ]
           }

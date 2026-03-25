@@ -6577,35 +6577,46 @@
     }
   },
   {
-    "comment": "DISTINCT with window function and LIMIT - multi-shard IN clause",
-    "query": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+    "comment": "DISTINCT with window function, ORDER BY, and LIMIT - multi-shard IN clause",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from user where Id in (1, 2, 3) order by Id limit 5",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select distinct first_value(col) over (partition by Id order by col desc) from user where Id in (1, 2, 3) limit 5",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from user where Id in (1, 2, 3) order by Id limit 5",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "5",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select first_value(col) over (partition by Id order by col desc) from `user` where 1 != 1",
-                "Query": "select distinct first_value(col) over (partition by Id order by col desc) from `user` where Id in ::__vals limit :__upper_limit",
-                "Values": [
-                  "(1, 2, 3)"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:3)",
+                  "(1:2)",
+                  "2"
                 ],
-                "Vindex": "user_index"
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "OrderBy": "(1|4) ASC",
+                    "Query": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where Id in ::__vals order by `user`.Id asc limit :__upper_limit) as dt(c0, c1)",
+                    "Values": [
+                      "(1, 2, 3)"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
               }
             ]
           }
