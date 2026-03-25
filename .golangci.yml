@@ -43,10 +43,9 @@ linters:
           list-mode: lax
           files:
             - "**/go/vt/sqlparser/**"
-            - "!**/go/vt/sqlparser/goyacc/**"
           deny:
             - pkg: github.com/spf13/pflag
-              desc: "sqlparser package should not depend on pflag except in goyacc subpackage - this component should be usable as a library with explicit configuration, not global flags"
+              desc: "sqlparser package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
             - pkg: vitess.io/vitess/go/vt/servenv
               desc: "sqlparser should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
         schemadiff_package_restrictions:
@@ -163,9 +162,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/sqlparser/(ast_format|ast_format_fast).go
-      - linters:
-          - errcheck
-        path: ^go/vt/sqlparser/goyacc
       - linters:
           - errcheck
         path: ^go/vt/throttler/.*_test.go
