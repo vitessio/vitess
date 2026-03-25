@@ -84,7 +84,7 @@ func TestDistinctWindowLimitShardTruncation(t *testing.T) {
 		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
 		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5)`)
 
-	mcmp.Exec(`SELECT empno, ename, job, hiredate, deptno FROM emp
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
 	WHERE empno IN (
 		SELECT fv FROM (
 			SELECT DISTINCT
@@ -97,5 +97,6 @@ func TestDistinctWindowLimitShardTruncation(t *testing.T) {
 	)
 	AND deptno IN (5, 10, 20)
 	ORDER BY deptno ASC
-	LIMIT 3`)
+	LIMIT 3`,
+		`[[INT64(503) DATE("2024-03-03") INT64(5)] [INT64(103) DATE("2024-01-03") INT64(10)] [INT64(203) DATE("2024-02-03") INT64(20)]]`)
 }
