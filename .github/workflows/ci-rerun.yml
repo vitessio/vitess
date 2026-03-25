@@ -41,17 +41,17 @@ jobs:
             const MAX_WORKFLOW_ATTEMPTS = 4;
             const MAX_ALLOWED_FAILURES = 10;
             const MAX_PRS_TO_PROCESS = 20;
+            const DEFAULT_IGNORE = ['check pull request labels'];
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const inputPR = ${{ inputs.pr || 0 }};
             const inputBranch = '${{ inputs.branch || 'main' }}';
-            const defaultIgnore = ['check pull request labels'];
             const inputIgnore = '${{ inputs.ignore || '' }}'
               .split(',')
               .map(s => s.trim().toLowerCase())
               .filter(Boolean);
-            const ignorePatterns = [...defaultIgnore, ...inputIgnore];
+            const ignorePatterns = [...DEFAULT_IGNORE, ...inputIgnore];
 
             // Get PRs to process.
             let prs = [];
