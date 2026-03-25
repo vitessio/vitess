@@ -167,7 +167,7 @@ func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
 
 	startPositions := vs.getStartPositions()
 	require.Greater(t, len(startPositions), 1)
-	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, startupGTID, startPositions[0])
 	require.Equal(t, startupGTID, startPositions[1])
 	assert.Equal(t, 1, gtid1Saves)
 	assert.Zero(t, gtid2Saves)
@@ -207,7 +207,7 @@ func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.
 
 	startPositions := vs.getStartPositions()
 	require.Greater(t, len(startPositions), 1)
-	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, startupGTID, startPositions[0])
 	require.Equal(t, startupGTID, startPositions[1])
 }
 
@@ -265,7 +265,7 @@ func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
 	require.Greater(t, len(startPositions), 1)
 	require.True(t, startupSchemaInserted)
 	assert.Equal(t, 1, gtid1Saves)
-	require.Equal(t, "current", startPositions[0])
+	require.Equal(t, startupGTID, startPositions[0])
 	require.Equal(t, gtid1, startPositions[1])
 }
 

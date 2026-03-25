@@ -136,6 +136,7 @@ func (tr *Tracker) process(ctx context.Context) {
 			gtid = prevGtid
 		}
 	}
+	restorePreviousGTID()
 	options := &binlogdatapb.VStreamOptions{
 		// We only want GTID and DDL events streamed to us.
 		EventTypes: []binlogdatapb.VEventType{
