@@ -558,7 +558,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	if resetFunc != nil {
 		defer func() {
 			if err := resetFunc(); err != nil {
-				log.Error(fmt.Sprintf("Failed to reset super_read_only after init SQL queries: %v", err))
+				params.Logger.Errorf("Failed to reset super_read_only after init SQL queries: %v", err)
 			}
 		}()
 	}
