@@ -287,7 +287,7 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx == len(h.schemas) {
-		log.Info(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
+		log.V(2).Info(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
 		return h.schemas[len(h.schemas)-1].schema[tableName.String()]
 	}
 	if idx == 0 && !pos.Equal(h.schemas[idx].pos) {

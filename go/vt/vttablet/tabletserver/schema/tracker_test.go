@@ -21,6 +21,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -160,6 +161,7 @@ func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
 	cfg.TrackSchemaVersions = true
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetryTest")
 	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
 
 	tracker.Open()
 	<-vs.done
@@ -200,6 +202,7 @@ func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.
 	cfg.TrackSchemaVersions = true
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetryStartupGTIDTest")
 	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
 
 	tracker.Open()
 	<-vs.done
@@ -256,6 +259,7 @@ func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
 	cfg.TrackSchemaVersions = true
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerRetrySavedFirstDDLTest")
 	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
 
 	tracker.Open()
 	<-vs.done
@@ -446,4 +450,22 @@ func TestTrackerRequestsOnlyGTIDAndDDL(t *testing.T) {
 		binlogdatapb.VEventType_GTID,
 		binlogdatapb.VEventType_DDL,
 	}, vs.lastOptions.EventTypes)
+}
+
+func TestWaitWithContextStopsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan bool, 1)
+
+	go func() {
+		done <- waitWithContext(ctx, time.Minute)
+	}()
+
+	cancel()
+
+	select {
+	case waited := <-done:
+		require.False(t, waited)
+	case <-time.After(time.Second):
+		require.FailNow(t, "waitWithContext did not stop after context cancellation")
+	}
 }

@@ -55,6 +55,7 @@ type Tracker struct {
 	env    tabletenv.Env
 	vs     VStreamer
 	engine *Engine
+	wait   func(context.Context, time.Duration) bool
 }
 
 // NewTracker creates a Tracker, needs an Open SchemaEngine (which implements the trackerEngine interface)
@@ -64,6 +65,7 @@ func NewTracker(env tabletenv.Env, vs VStreamer, engine *Engine) *Tracker {
 		env:     env,
 		vs:      vs,
 		engine:  engine,
+		wait:    waitWithContext,
 	}
 }
 
@@ -176,8 +178,22 @@ func (tr *Tracker) process(ctx context.Context) {
 				restorePreviousGTID()
 			}
 			log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended (error: %v), retrying in 5 seconds...", err))
-			time.Sleep(5 * time.Second)
+			if !tr.wait(ctx, 5*time.Second) {
+				return
+			}
 		}
+	}
+}
+
+func waitWithContext(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -279,7 +295,9 @@ func encodeString(in string) string {
 	return sqltypes.EncodeStringSQL(in)
 }
 
-// MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
+// MustReloadSchemaOnDDL returns true when the tracker should reload schema for a DDL.
+// It fail-closes on parse errors and otherwise reloads only for statements that affect
+// the tracked database and are not online DDL artifacts.
 func MustReloadSchemaOnDDL(sql string, dbname string, parser *sqlparser.Parser) bool {
 	ast, err := parser.Parse(sql)
 	if err != nil {
