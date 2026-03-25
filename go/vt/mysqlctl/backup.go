@@ -549,6 +549,19 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	}
 	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
 	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
+	// Disable super_read_only before executing init SQL queries, because MySQL
+	// may have been started with super-read-only enabled via my.cnf.
+	resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+	}
+	if resetFunc != nil {
+		defer func() {
+			if err := resetFunc(); err != nil {
+				log.Error(fmt.Sprintf("Failed to reset super_read_only after init SQL queries: %v", err))
+			}
+		}()
+	}
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 	if err := params.Mysqld.ExecuteSuperQueryList(initCtx, params.InitSQL.Queries); err != nil {

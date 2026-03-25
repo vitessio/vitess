@@ -517,11 +517,6 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		}
 	}
 
-	// Perform any requested pre backup initialization queries.
-	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
-		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
-	}
-
 	// We have restored a backup. Now start replication.
 	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
@@ -640,6 +635,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	}
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
+
+	// Perform any requested pre backup initialization queries.
+	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
+	}
 
 	// Re-enable redo logging.
 	if disabledRedoLog {

@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -928,7 +929,76 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			wantErrString: "no timeout provided",
 			wantNoLogMsg:  true,
 		},
+		{
+			name: "SetSuperReadOnly failure",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+			},
+			wantErr:       true,
+			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
 	}
+
+	// Test that super_read_only is disabled before query execution and reset after.
+	t.Run("super_read_only disabled and reset after queries", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(context.Background(), params)
+		require.NoError(t, err)
+		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
+	})
+
+	// Test that super_read_only is not reset when it was already off.
+	t.Run("super_read_only already off no reset needed", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(false)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(context.Background(), params)
+		require.NoError(t, err)
+		assert.False(t, mysqld.SuperReadOnly.Load(), "super_read_only should remain false")
+	})
 
 	// Test case for context cancellation during query execution.
 	t.Run("parent context canceled with query failure", func(t *testing.T) {
