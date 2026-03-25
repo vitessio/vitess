@@ -1846,9 +1846,13 @@ type BinlogDumpGTIDRequest struct {
 	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 	// binlog_filename is the optional binlog filename to start from.
 	// Only valid when tablet_alias is set, since filenames differ across replicas.
+	// When empty, the server finds the correct starting file from the GTID set.
 	BinlogFilename string `protobuf:"bytes,6,opt,name=binlog_filename,json=binlogFilename,proto3" json:"binlog_filename,omitempty"`
-	// binlog_position is the position within the binlog file.
-	// Only valid when tablet_alias is set, since positions differ across replicas.
+	// binlog_position is the byte offset within the binlog file.
+	// MySQL requires this to be >= 4 (BIN_LOG_HEADER_SIZE); values below 4
+	// cause a fatal error. Conventionally, clients send 4 to start from the
+	// beginning of the file. This field is always validated and used by MySQL,
+	// even when binlog_filename is empty and the file is auto-selected via GTIDs.
 	BinlogPosition uint64 `protobuf:"varint,7,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
 	// gtid_set is the GTID set in string format (e.g., "uuid:1-5,uuid2:1-3").
 	GtidSet string `protobuf:"bytes,8,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
@@ -1958,8 +1962,10 @@ func (x *BinlogDumpGTIDRequest) GetFlags() uint32 {
 // BinlogDumpResponse is streamed by BinlogDumpGTID.
 type BinlogDumpResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Raw MySQL response stream containing one or more full packets,
-	// including MySQL headers.
+	// Raw MySQL response stream including MySQL packet headers.
+	// A single MySQL packet may be split across multiple BinlogDumpResponse
+	// messages (while preserving packet header boundaries), as documented in
+	// binlogdata.proto. gRPC clients must reassemble packets that span responses.
 	Raw           []byte `protobuf:"bytes,1,opt,name=raw,proto3" json:"raw,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
