@@ -46,7 +46,8 @@ jobs:
             const repo = context.repo.repo;
             const inputPR = ${{ inputs.pr || 0 }};
             const inputBranch = '${{ inputs.branch || 'main' }}';
-            const inputIgnore = '${{ inputs.ignore || '' }}';
+            const defaultIgnore = 'Check Pull Request labels';
+            const inputIgnore = '${{ inputs.ignore || '' }}' || defaultIgnore;
             const ignorePatterns = inputIgnore
               .split(',')
               .map(s => s.trim().toLowerCase())
