@@ -356,8 +356,18 @@ func (a *binlogDumpGTIDAdapter) Recv() (*vtgatepb.BinlogDumpResponse, error) {
 	return r, nil
 }
 
-func (conn *vtgateConn) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest) (vtgateconn.BinlogDumpGTIDReader, error) {
-	req.CallerId = callerid.EffectiveCallerIDFromContext(ctx)
+func (conn *vtgateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
+	req := &vtgatepb.BinlogDumpGTIDRequest{
+		CallerId:       callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace:       keyspace,
+		Shard:          shard,
+		TabletType:     tabletType,
+		TabletAlias:    tabletAlias,
+		BinlogFilename: binlogFilename,
+		BinlogPosition: binlogPosition,
+		GtidSet:        gtidSet,
+		Flags:          flags,
+	}
 	stream, err := conn.c.BinlogDumpGTID(ctx, req)
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)

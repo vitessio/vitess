@@ -145,15 +145,14 @@ func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
 		assert.Contains(t, err.Error(), "tablet targeting")
 	})
 
-	t.Run("non-default position without alias", func(t *testing.T) {
+	t.Run("non-default position without alias is allowed", func(t *testing.T) {
 		req := &vtgatepb.BinlogDumpGTIDRequest{
 			Keyspace:       KsTestSharded,
 			Shard:          "-20",
 			BinlogPosition: 1234,
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		require.NoError(t, err)
 	})
 
 	t.Run("default position without alias is allowed", func(t *testing.T) {

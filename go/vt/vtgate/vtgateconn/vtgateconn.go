@@ -116,8 +116,8 @@ type BinlogDumpGTIDReader interface {
 }
 
 // BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
-func (conn *VTGateConn) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest) (BinlogDumpGTIDReader, error) {
-	return conn.impl.BinlogDumpGTID(ctx, req)
+func (conn *VTGateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error) {
+	return conn.impl.BinlogDumpGTID(ctx, keyspace, shard, tabletType, tabletAlias, binlogFilename, binlogPosition, gtidSet, flags)
 }
 
 // VTGateSession exposes the Vitess Execution API to the clients.
@@ -222,7 +222,7 @@ type Impl interface {
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error)
 
 	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
-	BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest) (BinlogDumpGTIDReader, error)
+	BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error)
 
 	// Close must be called for releasing resources.
 	Close()

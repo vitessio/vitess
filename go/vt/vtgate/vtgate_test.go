@@ -986,6 +986,16 @@ func TestBinlogDumpGTID(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("flags exceeding uint16 rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace: "TestExecutor",
+			Shard:    "-20",
+			Flags:    0x10000,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds the 2-byte MySQL protocol field")
+	})
+
 	t.Run("zero-value tablet alias routes via gateway", func(t *testing.T) {
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 

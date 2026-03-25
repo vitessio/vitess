@@ -800,6 +800,11 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 		tabletType = topodatapb.TabletType_PRIMARY
 	}
 
+	if req.Flags > 0xFFFF {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)
+	}
+
 	if req.BinlogFilename != "" && topoproto.TabletAliasIsZero(req.TabletAlias) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"binlog filename can only be used with tablet targeting (set tablet_alias); "+
