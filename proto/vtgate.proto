@@ -483,7 +483,9 @@ message BinlogDumpGTIDRequest {
 
 // BinlogDumpResponse is streamed by BinlogDumpGTID.
 message BinlogDumpResponse {
-  // Raw MySQL response stream containing one or more full packets,
-  // including MySQL headers.
+  // Raw MySQL response stream including MySQL packet headers.
+  // A single MySQL packet may be split across multiple BinlogDumpResponse
+  // messages (while preserving packet header boundaries), as documented in
+  // binlogdata.proto. gRPC clients must reassemble packets that span responses.
   bytes raw = 1;
 }
