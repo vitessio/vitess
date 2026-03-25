@@ -28,7 +28,7 @@ if [[ "$output" != "$expectedOutput" ]]; then
 	exit 1
 fi
 
-goimports -local "vitess.io/vitess" -w $CUR
+go run golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 -local "vitess.io/vitess" -w $CUR
 go tool gofumpt -w $CUR
 
 if ! diff -q $CUR $TMP >/dev/null; then
