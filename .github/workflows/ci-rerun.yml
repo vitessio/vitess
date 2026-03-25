@@ -80,7 +80,8 @@ jobs:
             let totalRestarted = 0;
             for (const pr of prs) {
               const sha = pr.head.sha;
-              core.info(`Processing PR #${pr.number} (${sha.slice(0, 8)})`);
+              const title = pr.title.length > 60 ? pr.title.slice(0, 60) + '...' : pr.title;
+              core.info(`Processing PR #${pr.number}: ${title} (${sha.slice(0, 8)})`);
 
               // Get workflow runs for this PR's HEAD SHA.
               const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({
