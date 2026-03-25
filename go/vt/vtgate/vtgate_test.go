@@ -924,11 +924,17 @@ func TestRebuildTopoGraphs(t *testing.T) {
 }
 
 func TestBinlogDumpGTID(t *testing.T) {
+	origEnableBinlogDump := enableBinlogDump.Get()
 	enableBinlogDump.Set(true)
-	defer enableBinlogDump.Set(false)
+	t.Cleanup(func() {
+		enableBinlogDump.Set(origEnableBinlogDump)
+	})
 
+	origAuthorizedBinlogUsers := binlogacl.AuthorizedBinlogUsers.Get()
 	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
-	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+	t.Cleanup(func() {
+		binlogacl.AuthorizedBinlogUsers.Set(origAuthorizedBinlogUsers)
+	})
 
 	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
