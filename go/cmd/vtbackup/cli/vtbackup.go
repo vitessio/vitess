@@ -636,7 +636,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
-	// Perform any requested pre backup initialization queries.
+	// Perform any requested backup initialization queries after catch-up replication.
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
 		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
