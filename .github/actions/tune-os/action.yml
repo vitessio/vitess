@@ -4,7 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Tune the OS
-      shell: bash
+      shell: bash -e {0}
       run: |
         # Install eatmydata and ensure it's used for every operation
         sudo apt-get update && sudo apt-get install -y eatmydata
