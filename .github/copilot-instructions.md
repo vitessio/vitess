@@ -1,7 +1,7 @@
 # Code Review Instructions
 
 ## Priority
-Only comment on issues that affect correctness, security, or significant performance.
+Only comment on issues that affect correctness, security, or performance.
 Do NOT comment on: style preferences, minor naming conventions, formatting, or 
 issues already enforced by our linter/CI pipeline.
 
