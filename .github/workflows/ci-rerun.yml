@@ -19,6 +19,9 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: ci-rerun
+
 permissions:
   actions: write
   pull-requests: read
