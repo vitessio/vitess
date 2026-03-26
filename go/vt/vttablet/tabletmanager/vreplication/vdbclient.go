@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -107,7 +108,7 @@ func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	if _, err := vc.ExecuteFetchMulti(queries, -1); err != nil {
-		log.Error(fmt.Sprintf("vreplication ExecuteFetchMulti failed: %v; query: %s", err, queries))
+		log.Error("vreplication ExecuteFetchMulti failed", slog.Any("error", err), slog.String("query", queries))
 		return err
 	}
 	vc.InTransaction = false
@@ -142,7 +143,7 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	qr, err := vc.DBClient.ExecuteFetch(query, maxrows)
 	if err != nil {
 		id := vc.vreplicationID
-		log.Error(fmt.Sprintf("vreplication ExecuteFetch failed: stream=%d err=%v; query: %s", id, err, query))
+		log.Error("vreplication ExecuteFetch failed", slog.Int("stream", int(id)), slog.Any("error", err), slog.String("query", query))
 	}
 	return qr, err
 }
@@ -176,7 +177,7 @@ func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	qrs, err := vc.ExecuteFetchMulti(queries, -1)
 	if err != nil {
-		log.Error(fmt.Sprintf("vreplication ExecuteFetchMulti failed: %v; query: %s", err, queries))
+		log.Error("vreplication ExecuteFetchMulti failed", slog.Any("error", err), slog.String("query", queries))
 		return nil, err
 	}
 	vc.stats.TrxQueryBatchCount.Add("without_commit", 1)

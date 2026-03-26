@@ -18,7 +18,7 @@ package vreplication
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -98,10 +98,10 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 		maxBatchSize := int64(vr.workflowConfig.RelayLogMaxSize)
 		res, err := conns[0].ExecuteFetch(SqlMaxAllowedPacket, 1)
 		if err != nil {
-			log.Error(fmt.Sprintf("Worker: error getting max_allowed_packet, will use relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+			log.Error("Worker: error getting max_allowed_packet, will use relay-log-max-size value", slog.Int64("bytes", int64(vr.workflowConfig.RelayLogMaxSize)), slog.Any("error", err))
 		} else {
 			if pkt, err := res.Rows[0][0].ToInt64(); err != nil {
-				log.Error(fmt.Sprintf("Worker: error getting max_allowed_packet, will use relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+				log.Error("Worker: error getting max_allowed_packet, will use relay-log-max-size value", slog.Int64("bytes", int64(vr.workflowConfig.RelayLogMaxSize)), slog.Any("error", err))
 			} else {
 				maxBatchSize = pkt
 			}

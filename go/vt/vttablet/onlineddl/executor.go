@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -1019,7 +1020,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err := waitForPos(s, preBufferPos, onlineDDL.CutOverThreshold); err != nil {
 		return vterrors.Wrapf(err, "failed waiting for vreplication to catch up before buffering")
 	}
-	go log.Info(fmt.Sprintf("cutOverVReplMigration %v: pre-buffer waitForPos reached %v", s.workflow, replication.EncodePosition(preBufferPos)))
+	go log.Info("cutOverVReplMigration: pre-buffer waitForPos reached", slog.String("workflow", s.workflow), slog.String("position", replication.EncodePosition(preBufferPos)))
 
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "buffering queries")
 	// stop writes on source:

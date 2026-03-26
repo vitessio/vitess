@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"time"
@@ -281,7 +282,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return nil
 	}, vstreamOptions)
 	if serr != nil {
-		log.Info(fmt.Sprintf("VStreamTables failed: %v", serr))
+		log.Info("VStreamTables failed", slog.Any("error", serr))
 		return serr
 	}
 	// A context expiration was probably caused by a PlannedReparentShard or an

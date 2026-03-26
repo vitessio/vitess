@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -164,7 +165,7 @@ func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	results := make([]*sqltypes.Result, 0)
 	mqr, more, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
 	if err != nil {
-		log.Error(fmt.Sprintf("ExecuteFetchMulti failed: %v; query: %s", err, query))
+		log.Error("ExecuteFetchMulti failed", slog.Any("error", err), slog.String("query", query))
 		dc.handleError(err)
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	for more {
 		mqr, more, _, err = dc.dbConn.ReadQueryResult(maxrows, false)
 		if err != nil {
-			log.Error(fmt.Sprintf("ExecuteFetchMulti read failed: %v; query: %s", err, query))
+			log.Error("ExecuteFetchMulti read failed", slog.Any("error", err), slog.String("query", query))
 			dc.handleError(err)
 			return nil, err
 		}

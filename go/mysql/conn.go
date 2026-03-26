@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -990,7 +991,7 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Any("conn", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
@@ -1021,7 +1022,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 
 	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
-		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
+		log.Error("parseComBinlogDumpGTID failed", slog.Any("conn", c.ID()), slog.Any("error", err))
 		return false
 	}
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {

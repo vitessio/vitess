@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
@@ -183,17 +184,17 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		// Non-fatal: if we can't read FK info, parallel apply still works
 		// but may hit FK violations (which will cause a retry with
 		// forceGlobal serialization).
-		log.Error(fmt.Sprintf("Parallel apply: failed to query FK refs for db %q: %v", vp.vr.dbClient.DBName(), err))
+		log.Error("Parallel apply: failed to query FK refs", slog.String("db", vp.vr.dbClient.DBName()), slog.Any("error", err))
 		fkRefs = nil
 	}
 	if len(fkRefs) > 0 {
 		for table, refs := range fkRefs {
 			for _, ref := range refs {
-				log.Info(fmt.Sprintf("Parallel apply: FK ref: child=%s parent=%s cols=%v", table, ref.ParentTable, ref.ChildColumnNames))
+				log.Info("Parallel apply: FK ref", slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("cols", ref.ChildColumnNames))
 			}
 		}
 	} else {
-		log.Info(fmt.Sprintf("Parallel apply: no FK refs found for db %q", vp.vr.dbClient.DBName()))
+		log.Info("Parallel apply: no FK refs found", slog.String("db", vp.vr.dbClient.DBName()))
 	}
 	vp.fkRefs = fkRefs
 
