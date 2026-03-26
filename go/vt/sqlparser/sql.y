@@ -5565,9 +5565,17 @@ select_expression:
   {
     ae := &AliasedExpr{Expr: $1, As: $2}
     if !$2.NotEmpty() {
-      switch $1.(type) {
-      case *ColName, *Literal:
-        // ColName and Literal already have deterministic ColumnName() output
+      switch expr := $1.(type) {
+      case *ColName:
+        // ColName already has deterministic ColumnName() output
+      case *Literal:
+        switch expr.Type {
+        case DateVal, TimeVal, TimestampVal, HexVal, BitNum:
+          // These literal types need InputExpression because the formatter
+          // doesn't preserve the original input form (e.g. DATE '2022-08-06',
+          // x'48' vs X'48', b'1010' vs 0b1010)
+          ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+        }
       default:
         ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
       }

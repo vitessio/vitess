@@ -329,8 +329,34 @@ func TestAliasedExprColumnName(t *testing.T) {
 		{"SELECT 1.5e2 FROM t", "1.5e2"},
 		// Hex number literal
 		{"SELECT 0x1A FROM t", "0x1A"},
-		// Hex string literal
+		// Hex string literal — case preserved
 		{"SELECT X'1A' FROM t", "X'1A'"},
+		{"SELECT x'1A' FROM t", "x'1A'"},
+		// Bit literals — notation and case preserved
+		{"SELECT 0b1010 FROM t", "0b1010"},
+		{"SELECT b'1010' FROM t", "b'1010'"},
+		{"SELECT B'1010' FROM t", "B'1010'"},
+		// Date literal — keyword case and spacing preserved
+		{"SELECT DATE '2022-08-06' FROM t", "DATE '2022-08-06'"},
+		{"SELECT date '2022-08-06' FROM t", "date '2022-08-06'"},
+		// Time literal
+		{"SELECT TIME '12:00:00' FROM t", "TIME '12:00:00'"},
+		// Timestamp literal
+		{"SELECT TIMESTAMP '2022-08-06 12:00:00' FROM t", "TIMESTAMP '2022-08-06 12:00:00'"},
+		// Boolean literals — case preserved
+		{"SELECT TRUE FROM t", "TRUE"},
+		{"SELECT true FROM t", "true"},
+		{"SELECT FALSE FROM t", "FALSE"},
+		// NULL literal
+		{"SELECT NULL FROM t", "NULL"},
+		// Introducer with string literal — MySQL strips the introducer
+		{"SELECT _utf8 'hello' FROM t", "hello"},
+		{"SELECT _binary 'hello' FROM t", "hello"},
+		// Introducer with non-string literal — preserves full expression
+		{"SELECT _latin1 x'48' FROM t", "_latin1 x'48'"},
+		{"SELECT _utf8 0x48656C6C6F FROM t", "_utf8 0x48656C6C6F"},
+		// Negative number literal
+		{"SELECT -1 FROM t", "-1"},
 		// Trailing comment should not be included in implicit alias
 		{"SELECT COUNT(*) /* a comment */ FROM t", "COUNT(*)"},
 		{"SELECT a + b /* trailing */ FROM t", "a + b"},
