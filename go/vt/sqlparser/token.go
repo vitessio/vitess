@@ -62,7 +62,7 @@ type location struct {
 // productions (n > 0), it spans from the first RHS symbol's start to
 // the last RHS symbol's end. For empty productions (n == 0), it
 // creates a zero-width span at the predecessor's end position.
-var yyLocDefault = func(cur *location, rhs []yySymType, n int) {
+func yyLocDefault(cur *location, rhs []yySymType, n int) {
 	if n > 0 {
 		cur.start = rhs[1].yyloc.start
 		cur.end = rhs[n].yyloc.end
