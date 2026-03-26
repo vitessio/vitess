@@ -74,17 +74,17 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var (
-	// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
-	// https://github.com/vitessio/vitess/issues/13927
-	// The fix is in release-18.0
-	// TODO: remove in release-19.0
-	fixCompletedTimestampDone bool
-)
+// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
+// https://github.com/vitessio/vitess/issues/13927
+// The fix is in release-18.0
+// TODO: remove in release-19.0
+var fixCompletedTimestampDone bool
 
-var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
-var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
+var (
+	emptyResult                           = &sqltypes.Result{}
+	acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
+	copyAlgorithm                         = sqlparser.AlgorithmValue(sqlparser.CopyStr)
+)
 
 var (
 	migrationCheckInterval  = 1 * time.Minute
@@ -498,7 +498,6 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
 	}
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
-
 	if err != nil {
 		// let's see if this error is actually acceptable
 		if merr, ok := err.(*sqlerror.SQLError); ok {
@@ -889,10 +888,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if _, err := lockConn.Conn.Exec(unlockCtx, sqlUnlockTables, 1, false); err != nil {
-			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+			log.Warningf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
-			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+			log.Warningf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 	}()
 
@@ -1240,8 +1239,6 @@ func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connp
 	return deferFunc, nil
 }
 
-<<<<<<< HEAD
-=======
 // initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function.
 func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
 	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
@@ -1265,7 +1262,6 @@ func (e *Executor) initDBConnectionLockWaitTimeout(conn *dbconnpool.DBConnection
 	return deferFunc, nil
 }
 
->>>>>>> 39079bbffb (OnlineDDL: always close lock connection (#19586))
 // createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
 // This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
 // if any, such that they are deterministic across shards, as well as preserve original names where possible.
@@ -1520,7 +1516,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 }
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlSelectMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -2157,7 +2152,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
-
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
@@ -3751,7 +3745,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes []string) error {
+	revertibleNotes []string,
+) error {
 	notes := strings.Join(revertibleNotes, "\n")
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
@@ -4474,7 +4469,6 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
-
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -4543,7 +4537,8 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string,
+) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
