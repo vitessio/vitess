@@ -260,7 +260,7 @@ func TestReadProblemInstances(t *testing.T) {
 
 			instances, err := ReadProblemInstances("ks", "0")
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
@@ -344,7 +344,7 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 
 			instances, err := ReadInstancesWithErrantGTIds(tt.keyspace, tt.shard)
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
@@ -532,7 +532,7 @@ func TestReadOutdatedInstances(t *testing.T) {
 		{
 			name:              "No problems",
 			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
-			instancesRequired: nil,
+			instancesRequired: []string{},
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
@@ -598,7 +598,7 @@ from database_instance`, func(rowMap sqlutils.RowMap) error {
 			})
 			require.NoError(t, errInDataCollection)
 			require.NoError(t, err)
-			var tabletAliasStrings []string
+			tabletAliasStrings := make([]string, 0, len(tabletAliases))
 			for _, tabletAlias := range tabletAliases {
 				tabletAliasStrings = append(tabletAliasStrings, topoproto.TabletAliasString(tabletAlias))
 			}
@@ -776,7 +776,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 
 			instances, err := readInstancesByCondition("1=1", nil, "")
 			require.NoError(t, err)
-			var tabletAliases []*topodatapb.TabletAlias
+			tabletAliases := make([]*topodatapb.TabletAlias, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, instance.InstanceAlias)
 			}
