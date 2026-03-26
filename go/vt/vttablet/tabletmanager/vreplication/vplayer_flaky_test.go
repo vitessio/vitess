@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +44,21 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+var testGTIDCounter atomic.Uint64
+
+func uniqueTestGTID() string {
+	now := uint64(time.Now().UnixNano())
+	seq := testGTIDCounter.Add(1)
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x:%d",
+		uint32(now>>32),
+		uint16(now>>16),
+		uint16(now),
+		uint16(seq>>16),
+		seq&0xffffffffffff,
+		100+seq,
+	)
+}
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
@@ -618,7 +634,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
+	gtid := uniqueTestGTID()
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
 		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
