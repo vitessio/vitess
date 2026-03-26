@@ -35,6 +35,10 @@ jobs:
 
       - name: Rerun failed jobs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          INPUT_IGNORE: ${{ inputs.ignore }}
         with:
           script: |
             const MAX_PR_AGE_DAYS = 5;
@@ -45,9 +49,9 @@ jobs:
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const inputPR = ${{ inputs.pr || 0 }};
-            const inputBranch = '${{ inputs.branch || 'main' }}';
-            const inputIgnore = '${{ inputs.ignore || '' }}'
+            const inputPR = Number(process.env.INPUT_PR) || 0;
+            const inputBranch = process.env.INPUT_BRANCH || 'main';
+            const inputIgnore = (process.env.INPUT_IGNORE || '')
               .split(',')
               .map(s => s.trim().toLowerCase())
               .filter(Boolean);
