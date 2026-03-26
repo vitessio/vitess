@@ -622,7 +622,8 @@ func findOrderingInSourceChain(op Operator) []OrderBy {
 	for {
 		switch src := op.(type) {
 		case *Ordering:
-			order = src.Order
+			// Clone the slice to avoid aliasing with src.Order, which may be rewritten later.
+			order = append([]OrderBy(nil), src.Order...)
 		case *Window:
 			return order
 		case *Route:
