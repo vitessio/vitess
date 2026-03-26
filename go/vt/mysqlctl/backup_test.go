@@ -961,6 +961,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			},
 			setupMysqld: func(fmd *FakeMysqlDaemon) {
 				fmd.SetSuperReadOnlyError = errors.New("access denied")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
 			},
 			wantErr:    false,
 			wantLogMsg: "Failed to disable super_read_only for init SQL queries",

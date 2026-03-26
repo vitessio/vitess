@@ -558,8 +558,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		if params.InitSQL.FailOnError {
 			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
 		}
-		params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Continuing with backup as fail-on-error is false", err)
-		return nil
+		params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
 	}
 	if resetFunc != nil {
 		defer func() {
