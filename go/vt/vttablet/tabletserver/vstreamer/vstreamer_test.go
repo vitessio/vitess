@@ -1517,6 +1517,77 @@ func TestUnsentDDL(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
+func TestVStreamFilteredTerminalEventsFlushBufferedState(t *testing.T) {
+	execStatement(t, "create table filtered_terminal_flush(id int, val varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table filtered_terminal_flush")
+
+	pos := primaryPosition(t)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "filtered_terminal_flush",
+			Filter: "select * from filtered_terminal_flush",
+		}},
+	}
+	options := &binlogdatapb.VStreamOptions{
+		EventTypes: []binlogdatapb.VEventType{
+			binlogdatapb.VEventType_GTID,
+			binlogdatapb.VEventType_DDL,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var (
+		mu      sync.Mutex
+		batches [][]binlogdatapb.VEventType
+		wg      sync.WaitGroup
+	)
+	wg.Go(func() {
+		_ = engine.Stream(ctx, pos, nil, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
+			var batch []binlogdatapb.VEventType
+			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				batch = append(batch, ev.Type)
+			}
+			if len(batch) == 0 {
+				return nil
+			}
+			mu.Lock()
+			batches = append(batches, batch)
+			count := len(batches)
+			mu.Unlock()
+			if count == 2 {
+				return io.EOF
+			}
+			return nil
+		}, options)
+	})
+
+	execStatements(t, []string{
+		"insert into filtered_terminal_flush values (1, 'aaa')",
+		"insert into filtered_terminal_flush values (2, 'bbb')",
+	})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(batches) == 2
+	}, 3*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, [][]binlogdatapb.VEventType{
+		{binlogdatapb.VEventType_GTID},
+		{binlogdatapb.VEventType_GTID},
+	}, batches)
+
+	cancel()
+	wg.Wait()
+}
+
 func TestBuffering(t *testing.T) {
 	reset := AdjustPacketSize(10)
 	defer reset()

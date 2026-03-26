@@ -138,13 +138,15 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 var _ VStreamer = (*fakeVstreamer)(nil)
 
 type fakeVstreamer struct {
-	done   chan struct{}
-	events [][]*binlogdatapb.VEvent
+	done        chan struct{}
+	events      [][]*binlogdatapb.VEvent
+	lastOptions *binlogdatapb.VStreamOptions
 }
 
 func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
 	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
 ) error {
+	f.lastOptions = options
 	for _, events := range f.events {
 		err := send(events)
 		if err != nil {
@@ -179,4 +181,36 @@ func TestMustReloadSchemaOnDDL(t *testing.T) {
 			require.Equal(t, tc.want, MustReloadSchemaOnDDL(tc.query, tc.dbname, sqlparser.NewTestParser()))
 		})
 	}
+}
+
+func TestTrackerRequestsOnlyGTIDAndDDL(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	db.AddQuery("select id from _vt.schema_version limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int"),
+		"1",
+	))
+
+	vs := &fakeVstreamer{
+		done:   make(chan struct{}),
+		events: [][]*binlogdatapb.VEvent{{}},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	cancel()
+	tracker.Close()
+
+	require.NotNil(t, vs.lastOptions)
+	require.Equal(t, []binlogdatapb.VEventType{
+		binlogdatapb.VEventType_GTID,
+		binlogdatapb.VEventType_DDL,
+	}, vs.lastOptions.EventTypes)
 }

@@ -327,6 +327,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+	v.SafeSession.GetOrCreateOptions().NoResult = true
 
 	return v
 }
