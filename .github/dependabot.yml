@@ -32,6 +32,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
+      vtadmin-npm:
         patterns:
           - "*"
 
