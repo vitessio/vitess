@@ -24,7 +24,7 @@ run_bench() {
 	echo ""
 
 	# Teardown any previous state
-	./501_teardown.sh 2>/dev/null
+	(cd "$SCRIPT_DIR/../local" && ./501_teardown.sh) 2>/dev/null
 
 	# Setup cluster with specified worker count
 	PARALLEL_WORKERS=$workers ./bench_setup.sh || { echo "FAILED: setup for $label"; return 1; }
@@ -42,7 +42,7 @@ run_bench 1 "Serial (1 worker)" || exit 1
 
 # Teardown between runs
 echo "Tearing down between runs..."
-./501_teardown.sh 2>/dev/null
+(cd "$SCRIPT_DIR/../local" && ./501_teardown.sh) 2>/dev/null
 sleep 3
 
 # Run 2: Parallel (4 workers)
@@ -50,7 +50,7 @@ run_bench 4 "Parallel (4 workers)" || exit 1
 
 # Teardown after
 echo "Tearing down after benchmark..."
-./501_teardown.sh 2>/dev/null
+(cd "$SCRIPT_DIR/../local" && ./501_teardown.sh) 2>/dev/null
 
 # Compare results
 echo ""

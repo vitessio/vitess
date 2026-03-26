@@ -3,6 +3,8 @@
 # Bring up commerce keyspace + customer keyspace tablets with configurable
 # parallel replication workers for benchmarking VReplication throughput.
 
+BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 source ../common/env.sh
 
 PARALLEL_WORKERS=${PARALLEL_WORKERS:-1}
@@ -13,12 +15,13 @@ VREPL_FLAGS=${VREPL_FLAGS:-13}
 
 echo "=== Bench Setup (parallel_workers=$PARALLEL_WORKERS) ==="
 
-# Step 1: Bring up the commerce keyspace (topo, vtctld, commerce tablets, vtorc, vtgate)
-./101_initial_cluster.sh || fail "Failed to bring up initial cluster"
+# Step 1: Bring up the commerce keyspace (topo, vtctld, commerce tablets, vtorc, vtgate).
+# The local scripts must run from examples/local/ because they use relative paths.
+(cd "$BENCH_DIR/../local" && ./101_initial_cluster.sh) || fail "Failed to bring up initial cluster"
 
-# Step 2: Apply bench schema and vschema to commerce
-vtctldclient ApplySchema --sql-file create_bench_schema.sql commerce || fail "Failed to apply bench schema"
-vtctldclient ApplyVSchema --vschema-file vschema_bench.json commerce || fail "Failed to apply bench vschema"
+# Step 2: Apply bench schema and vschema to commerce.
+vtctldclient ApplySchema --sql-file "$BENCH_DIR/create_bench_schema.sql" commerce || fail "Failed to apply bench schema"
+vtctldclient ApplyVSchema --vschema-file "$BENCH_DIR/vschema_bench.json" commerce || fail "Failed to apply bench vschema"
 
 echo "Bench schema and vschema applied to commerce keyspace."
 
