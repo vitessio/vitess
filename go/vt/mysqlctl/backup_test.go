@@ -976,6 +976,10 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 
 		mysqld.SuperReadOnly.Store(true)
 		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+		var superReadOnlyDuringQueries bool
+		mysqld.ExecuteSuperQueryListCallback = func() {
+			superReadOnlyDuringQueries = mysqld.SuperReadOnly.Load()
+		}
 
 		params := &BackupParams{
 			TabletType: topodatapb.TabletType_PRIMARY,
@@ -990,6 +994,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 
 		err := ExecuteBackupInitSQL(context.Background(), params)
 		require.NoError(t, err)
+		assert.False(t, superReadOnlyDuringQueries, "super_read_only should be disabled during query execution")
 		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
 	})
 
