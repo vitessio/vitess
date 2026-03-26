@@ -581,8 +581,10 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
+
+	orderToPush := findOrderingInSourceChain(in.Source)
+
 	var result *ApplyResult
-	var orderToPush []OrderBy
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
 		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
@@ -593,10 +595,6 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				// we can't push limits down if we have a group by
 				return SkipChildren
 			}
-		case *Ordering:
-			// collect ordering so we can push it under the route together with the limit.
-			// a limit without an order by on the shard can miss correct rows.
-			orderToPush = op.Order
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
@@ -613,6 +611,29 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	TopDown(in.Source, TableID, visitor, shouldVisit)
 
 	return in, result
+}
+
+// findOrderingInSourceChain walks down unary operators for an Ordering above a
+// Window, so it can be pushed into the route with the limit. Window queries need
+// this because DISTINCT stays (not converted to GROUP BY), leaving Ordering unpushed.
+// Resolved upfront to avoid leaking across branches during the TopDown walk.
+func findOrderingInSourceChain(op Operator) []OrderBy {
+	var order []OrderBy
+	for {
+		switch src := op.(type) {
+		case *Ordering:
+			order = src.Order
+		case *Window:
+			return order
+		case *Route:
+			return nil
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			return nil
+		}
+		op = inputs[0]
+	}
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {
