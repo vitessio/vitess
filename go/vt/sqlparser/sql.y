@@ -50,7 +50,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
-%struct {
+%union {
   empty         struct{}
   LengthScaleOption LengthScaleOption
   tableName     TableName
@@ -64,9 +64,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
-}
 
-%union {
   statement       Statement
   statements      []Statement
   selStmt         SelectStatement

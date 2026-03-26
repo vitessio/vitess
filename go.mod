@@ -163,7 +163,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
-	github.com/vitessio/goyacc v0.0.0-20260326111416-5bbb9e1aafa3 // indirect
+	github.com/vitessio/goyacc v0.0.0-20260326133112-bdd5fa865df7 // indirect
 	go.opentelemetry.io/collector/component v1.42.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.136.0 // indirect

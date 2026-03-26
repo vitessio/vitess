@@ -19,7 +19,7 @@ if ! cd go/vt/sqlparser/; then
 fi
 
 mv $CUR $TMP
-output=$(go run github.com/vitessio/goyacc -fo $CUR sql.y)
+output=$(go run github.com/vitessio/goyacc -o $CUR sql.y)
 expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
