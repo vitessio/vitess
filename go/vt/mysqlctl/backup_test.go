@@ -977,7 +977,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 
 		mysqld.SuperReadOnly.Store(true)
 		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
-		var superReadOnlyDuringQueries bool
+		superReadOnlyDuringQueries := true
 		mysqld.ExecuteSuperQueryListCallback = func() {
 			superReadOnlyDuringQueries = mysqld.SuperReadOnly.Load()
 		}
