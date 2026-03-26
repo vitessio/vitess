@@ -554,11 +554,6 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 
 	log.Info("takeBackup: primary position is: " + primaryPos.String())
 
-	// Remember the time when we fetched the primary position, not when we caught
-	// up to it, so the timestamp on our backup is honest (assuming we make it
-	// to the goal position).
-	backupParams.BackupTime = time.Now()
-
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
 	defer phase.Set(phaseNameCatchupReplication, int64(0))
@@ -640,6 +635,10 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
 		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
+
+	// Set BackupTime after catch-up and init SQL, so the timestamp on the
+	// backup postdates any changes made by init SQL queries.
+	backupParams.BackupTime = time.Now()
 
 	// Re-enable redo logging.
 	if disabledRedoLog {
