@@ -89,7 +89,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
-	lval.str = val
+	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ

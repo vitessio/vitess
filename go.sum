@@ -616,8 +616,8 @@ github.com/uber/jaeger-lib v2.4.1+incompatible h1:td4jdvLcExb4cBISKIpHuGoVXh+dVK
 github.com/uber/jaeger-lib v2.4.1+incompatible/go.mod h1:ComeNDZlWwrWnDv8aPp0Ba6+uUTzImX/AauajbLI56U=
 github.com/vbatts/tar-split v0.12.2 h1:w/Y6tjxpeiFMR47yzZPlPj/FcPLpXbTUi/9H7d3CPa4=
 github.com/vbatts/tar-split v0.12.2/go.mod h1:eF6B6i6ftWQcDqEn3/iGFRFRo8cBIMSJVOpnNdfTMFA=
-github.com/vitessio/goyacc v0.0.0-20260324145439-055d41417f4e h1:Pq1r4srNEsHShNMe/lMSSJYae8rWWtg9QEBLSIb1Np0=
-github.com/vitessio/goyacc v0.0.0-20260324145439-055d41417f4e/go.mod h1:w29qJNNyzpk4XIcE7g1WwTiv2uCBVaQPFoE5p6mZG+0=
+github.com/vitessio/goyacc v0.0.0-20260326152919-70251155af1a h1:SwKtdjdkHsUR0sfJX7IDMpYD2UIGo8AcVU16U4BBdJ8=
+github.com/vitessio/goyacc v0.0.0-20260326152919-70251155af1a/go.mod h1:DCqHWerHm+co1vHHWoePsfBOAvW3mRwE8W21xNlg0F4=
 github.com/vmihailenco/msgpack/v4 v4.3.13 h1:A2wsiTbvp63ilDaWmsk2wjx6xZdxQOvpiNlKBGKKXKI=
 github.com/vmihailenco/msgpack/v4 v4.3.13/go.mod h1:gborTTJjAo/GWTqqRjrLCn9pgNN+NXzzngzBKDPIqw4=
 github.com/vmihailenco/tagparser v0.1.2 h1:gnjoVuB/kljJ5wICEEOpx98oXMWPLj22G67Vbd1qPqc=
