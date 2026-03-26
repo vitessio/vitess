@@ -104,7 +104,7 @@ jobs:
               const failedRuns = runsData.workflow_runs.filter(
                 run => run.status === 'completed' &&
                        (run.conclusion === 'failure' ||
-                        run.conclusion === 'timed_out' ||
+                        run.conclusion === 'cancelled' ||
                         run.conclusion === 'startup_failure')
               );
 
