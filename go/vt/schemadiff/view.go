@@ -17,8 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -324,11 +322,11 @@ func NewCreateViewEntityFromSQL(env *Environment, sql string) (*CreateViewEntity
 
 func (c *CreateViewEntity) normalize() {
 	// Drop the default algorithm
-	if strings.EqualFold(c.Algorithm, "undefined") {
+	if c.Algorithm == "undefined" {
 		c.Algorithm = ""
 	}
 	// Drop the default security model
-	if strings.EqualFold(c.Security, "definer") {
+	if c.Security == "definer" {
 		c.Security = ""
 	}
 }

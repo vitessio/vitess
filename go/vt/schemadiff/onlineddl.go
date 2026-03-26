@@ -283,7 +283,7 @@ func OnlineDDLAlterTableAnalysis(alterTable *sqlparser.AlterTable) *AlterTableAn
 			}
 		case sqlparser.TableOptions:
 			for _, tableOption := range opt {
-				if strings.ToUpper(tableOption.Name) == "AUTO_INCREMENT" {
+				if tableOption.Name == "auto_increment" {
 					analysis.IsAutoIncrementChangeRequested = true
 				}
 			}

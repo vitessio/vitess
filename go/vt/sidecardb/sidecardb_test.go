@@ -229,7 +229,7 @@ func TestAlterTableAlgorithm(t *testing.T) {
 		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
 	}
 
-	copyAlgo := sqlparser.AlgorithmValue("COPY")
+	copyAlgo := sqlparser.AlgorithmValue("copy")
 
 	newSchemaInit := func(t *testing.T, envVersion, serverVersion string) *schemaInit {
 		t.Helper()

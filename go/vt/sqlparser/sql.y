@@ -2422,81 +2422,81 @@ numeric_type:
 int_type:
   BIT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "bit"}
   }
 | BOOL
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "bool"}
   }
 | BOOLEAN
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "boolean"}
   }
 | TINYINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "tinyint"}
   }
 | SMALLINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "smallint"}
   }
 | MEDIUMINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "mediumint"}
   }
 | INT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "int"}
   }
 | INTEGER
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "integer"}
   }
 | BIGINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "bigint"}
   }
 
 decimal_type:
 REAL double_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "real"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | DOUBLE double_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "double"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT8_TYPE double_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "float8"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "float"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT4_TYPE float_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "float4"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | DECIMAL_TYPE decimal_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "decimal"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | NUMERIC decimal_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "numeric"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
@@ -2504,29 +2504,29 @@ REAL double_length_opt
 time_type:
   DATE
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "date"}
   }
 | TIME length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "time", Length: $2}
   }
 | TIMESTAMP length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "timestamp", Length: $2}
   }
 | DATETIME length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "datetime", Length: $2}
   }
 | YEAR length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "year", Length: $2}
   }
 
 char_type:
   CHAR length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: "char", Length: $2, Charset: $3}
   }
 | CHAR length_opt BYTE
   {
@@ -2536,98 +2536,98 @@ char_type:
   }
 | VARCHAR length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: "varchar", Length: $2, Charset: $3}
   }
 | BINARY length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "binary", Length: $2}
   }
 | VARBINARY length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "varbinary", Length: $2}
   }
 | TEXT length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: "text", Length: $2, Charset: $3}
   }
 | TINYTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: "tinytext", Charset: $2}
   }
 | MEDIUMTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: "mediumtext", Charset: $2}
   }
 | LONGTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: "longtext", Charset: $2}
   }
 | BLOB length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "blob", Length: $2}
   }
 | TINYBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "tinyblob"}
   }
 | MEDIUMBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "mediumblob"}
   }
 | LONGBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "longblob"}
   }
 | JSON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "json"}
   }
 | ENUM '(' enum_values ')' charset_opt
   {
-    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: "enum", EnumValues: $3, Charset: $5}
   }
 | VECTOR length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: "vector", Length: $2}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
-    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: "set", EnumValues: $3, Charset: $5}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "geometry"}
   }
 | POINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "point"}
   }
 | LINESTRING
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "linestring"}
   }
 | POLYGON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "polygon"}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "geometrycollection"}
   }
 | MULTIPOINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "multipoint"}
   }
 | MULTILINESTRING
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "multilinestring"}
   }
 | MULTIPOLYGON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: "multipolygon"}
   }
 
 enum_values:
@@ -2728,7 +2728,7 @@ charset_opt:
   }
 | charset_or_character_set BINARY
   {
-    $$ = ColumnCharset{Name: string($2)}
+    $$ = ColumnCharset{Name: "binary"}
   }
 | ASCII binary_opt
   {
@@ -2811,31 +2811,31 @@ index_option:
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
     // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &IndexOption{Name: "key_block_size", Value: NewIntLiteral($3)}
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
+    $$ = &IndexOption{Name: "comment", Value: NewStrLiteral($2)}
   }
 | VISIBLE
   {
-    $$ = &IndexOption{Name: string($1) }
+    $$ = &IndexOption{Name: "visible" }
   }
 | INVISIBLE
   {
-    $$ = &IndexOption{Name: string($1) }
+    $$ = &IndexOption{Name: "invisible" }
   }
 | WITH PARSER ci_identifier
   {
-    $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
+    $$ = &IndexOption{Name: "with parser", String: $3.String()}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: "engine_attribute", Value: NewStrLiteral($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: "secondary_engine_attribute", Value: NewStrLiteral($3)}
   }
 
 equal_opt:
@@ -2882,25 +2882,25 @@ constraint_name_opt:
 index_symbols:
   INDEX
   {
-    $$ = string($1)
+    $$ = "index"
   }
 | KEYS
   {
-    $$ = string($1)
+    $$ = "keys"
   }
 | INDEXES
   {
-    $$ = string($1)
+    $$ = "indexes"
   }
 
 from_or_in:
   FROM
   {
-    $$ = string($1)
+    $$ = "from"
   }
 | IN
   {
-    $$ = string($1)
+    $$ = "in"
   }
 
 index_or_key_opt:
@@ -2915,11 +2915,11 @@ index_or_key_opt:
 index_or_key:
   INDEX
   {
-    $$ = string($1)
+    $$ = "index"
   }
   | KEY
   {
-    $$ = string($1)
+    $$ = "key"
   }
 
 name_opt:
@@ -3083,11 +3083,11 @@ restrict_or_cascade_opt:
   }
 | RESTRICT
   {
-    $$ = string($1)
+    $$ = "restrict"
   }
 | CASCADE
   {
-    $$ = string($1)
+    $$ = "cascade"
   }
 
 enforced:
@@ -3145,127 +3145,127 @@ space_separated_table_option_list:
 table_option:
   AUTO_INCREMENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"auto_increment", Value:NewIntLiteral($3)}
   }
 | AUTOEXTEND_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &TableOption{Name: "autoextend_size", Value: NewIntLiteral($3)}
   }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"avg_row_length", Value:NewIntLiteral($3)}
   }
 | default_optional charset_or_character_set equal_opt charset
   {
-    $$ = &TableOption{Name:(string($2)), String:$4, CaseSensitive: true}
+    $$ = &TableOption{Name:$2, String:$4, CaseSensitive: true}
   }
 | default_optional COLLATE equal_opt charset
   {
-    $$ = &TableOption{Name:string($2), String:$4, CaseSensitive: true}
+    $$ = &TableOption{Name:"collate", String:$4, CaseSensitive: true}
   }
 | CHECKSUM equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"checksum", Value:NewIntLiteral($3)}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:"comment", Value:NewStrLiteral($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:"compression", Value:NewStrLiteral($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:"connection", Value:NewStrLiteral($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:"data directory", Value:NewStrLiteral($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:"index directory", Value:NewStrLiteral($4)}
   }
 | DELAY_KEY_WRITE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"delay_key_write", Value:NewIntLiteral($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:"encryption", Value:NewStrLiteral($3)}
   }
 | ENGINE equal_opt table_alias
   {
-    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
+    $$ = &TableOption{Name:"engine", String:$3.String(), CaseSensitive: true}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: "engine_attribute", Value: NewStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:"insert_method", String:$3}
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"key_block_size", Value:NewIntLiteral($3)}
   }
 | MAX_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"max_rows", Value:NewIntLiteral($3)}
   }
 | MIN_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"min_rows", Value:NewIntLiteral($3)}
   }
 | PACK_KEYS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"pack_keys", Value:NewIntLiteral($3)}
   }
 | PACK_KEYS equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:"pack_keys", String:"default"}
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:"password", Value:NewStrLiteral($3)}
   }
 | ROW_FORMAT equal_opt row_format_options
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:"row_format", String:$3}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: "secondary_engine_attribute", Value: NewStrLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"stats_auto_recalc", Value:NewIntLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:"stats_auto_recalc", String:"default"}
   }
 | STATS_PERSISTENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"stats_persistent", Value:NewIntLiteral($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:"stats_persistent", String:"default"}
   }
 | STATS_SAMPLE_PAGES equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:"stats_sample_pages", Value:NewIntLiteral($3)}
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
+    $$ = &TableOption{Name:"tablespace", String: ($3.String() + $4), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
-    $$ = &TableOption{Name:string($1), Tables: $4}
+    $$ = &TableOption{Name:"union", Tables: $4}
   }
 
 storage_opt:
@@ -3274,25 +3274,52 @@ storage_opt:
   }
 | STORAGE DISK
   {
-    $$ = " " + string($1) + " " + string($2)
+    $$ = " storage disk"
   }
 | STORAGE MEMORY
   {
-    $$ = " " + string($1) + " " + string($2)
+    $$ = " storage memory"
   }
 
 row_format_options:
   DEFAULT
+  {
+    $$ = "default"
+  }
 | DYNAMIC
+  {
+    $$ = "dynamic"
+  }
 | FIXED
+  {
+    $$ = "fixed"
+  }
 | COMPRESSED
+  {
+    $$ = "compressed"
+  }
 | REDUNDANT
+  {
+    $$ = "redundant"
+  }
 | COMPACT
+  {
+    $$ = "compact"
+  }
 
 insert_method_options:
   NO
+  {
+    $$ = "no"
+  }
 | FIRST
+  {
+    $$ = "first"
+  }
 | LAST
+  {
+    $$ = "last"
+  }
 
 table_opt_value:
   table_id '.' reserved_table_id
@@ -3536,19 +3563,19 @@ alter_commands_modifier_list:
 alter_commands_modifier:
   ALGORITHM equal_opt DEFAULT
     {
-    $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue("default")
     }
   | ALGORITHM equal_opt INPLACE
     {
-    $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue("inplace")
     }
   | ALGORITHM equal_opt COPY
     {
-    $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue("copy")
     }
   | ALGORITHM equal_opt INSTANT
     {
-    $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue("instant")
     }
   | LOCK equal_opt DEFAULT
     {
@@ -4910,11 +4937,11 @@ full_opt:
 columns_or_fields:
   COLUMNS
   {
-    $$ = string($1)
+    $$ = "columns"
   }
 | FIELDS
   {
-    $$ = string($1)
+    $$ = "fields"
   }
 
 from_database_opt:
@@ -4972,11 +4999,11 @@ session_or_local_opt:
 from_or_on:
   FROM
   {
-    $$ = string($1)
+    $$ = "from"
   }
 | ON
   {
-    $$ = string($1)
+    $$ = "on"
   }
 
 use_statement:
@@ -5303,51 +5330,51 @@ flush_option_list:
 flush_option:
   BINARY LOGS
   {
-    $$ = string($1) + " " + string($2)
+    $$ = "binary logs"
   }
 | ENGINE LOGS
   {
-    $$ = string($1) + " " + string($2)
+    $$ = "engine logs"
   }
 | ERROR LOGS
   {
-    $$ = string($1) + " " + string($2)
+    $$ = "error logs"
   }
 | GENERAL LOGS
   {
-    $$ = string($1) + " " + string($2)
+    $$ = "general logs"
   }
 | HOSTS
   {
-    $$ = string($1)
+    $$ = "hosts"
   }
 | LOGS
   {
-    $$ = string($1)
+    $$ = "logs"
   }
 | PRIVILEGES
   {
-    $$ = string($1)
+    $$ = "privileges"
   }
 | RELAY LOGS for_channel_opt
   {
-    $$ = string($1) + " " + string($2) + $3
+    $$ = "relay logs" + $3
   }
 | SLOW LOGS
   {
-    $$ = string($1) + " " + string($2)
+    $$ = "slow logs"
   }
 | OPTIMIZER_COSTS
   {
-    $$ = string($1)
+    $$ = "optimizer_costs"
   }
 | STATUS
   {
-    $$ = string($1)
+    $$ = "status"
   }
 | USER_RESOURCES
   {
-    $$ = string($1)
+    $$ = "user_resources"
   }
 
 local_opt:
@@ -5369,7 +5396,7 @@ for_channel_opt:
   }
 | FOR CHANNEL ci_identifier
   {
-    $$ = " " + string($1) + " " + string($2) + " " + $3.String()
+    $$ = " for channel " + $3.String()
   }
 
 comment_opt:
@@ -5701,7 +5728,7 @@ index_list:
   }
 | PRIMARY
   {
-    $$ = Columns{NewIdentifierCI(string($1))}
+    $$ = Columns{NewIdentifierCI("primary")}
   }
 | index_list ',' sql_id
   {
@@ -5709,7 +5736,7 @@ index_list:
   }
 | index_list ',' PRIMARY
   {
-    $$ = append($$, NewIdentifierCI(string($3)))
+    $$ = append($$, NewIdentifierCI("primary"))
   }
 
 partition_list:
@@ -7809,7 +7836,7 @@ charset:
   }
 | BINARY
   {
-    $$ = string($1)
+    $$ = "binary"
   }
 
 convert_type_weight_string:
@@ -7819,75 +7846,75 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
+    $$ = &ConvertType{Type: "binary", Length: ptr.Of(convertStringToInt($4))}
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
+    $$ = &ConvertType{Type: "char", Length: ptr.Of(convertStringToInt($4))}
   }
 
 convert_type:
   BINARY length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "binary", Length: $2}
   }
 | CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ConvertType{Type: "char", Length: $2, Charset: $3}
   }
 | DATE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "date"}
   }
 | DATETIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "datetime", Length: $2}
   }
 | DECIMAL_TYPE decimal_length_opt
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "decimal"}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | JSON
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "json"}
   }
 | NCHAR length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "nchar", Length: $2}
   }
 | SIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "signed"}
   }
 | SIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "signed"}
   }
 | TIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "time", Length: $2}
   }
 | UNSIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "unsigned"}
   }
 | UNSIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "unsigned"}
   }
 | FLOAT_TYPE length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "float", Length: $2}
   }
 | DOUBLE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "double"}
   }
 | REAL
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "real"}
   }
 
 array_opt:
@@ -8177,15 +8204,15 @@ algorithm_view_opt:
 algorithm_view:
   ALGORITHM '=' UNDEFINED
   {
-    $$ = string($3)
+    $$ = "undefined"
   }
 | ALGORITHM '=' MERGE
   {
-    $$ = string($3)
+    $$ = "merge"
   }
 | ALGORITHM '=' TEMPTABLE
   {
-    $$ = string($3)
+    $$ = "temptable"
   }
 
 security_view_opt:
@@ -8200,11 +8227,11 @@ security_view_opt:
 security_view:
   DEFINER
   {
-    $$ = string($1)
+    $$ = "definer"
   }
 | INVOKER
   {
-    $$ = string($1)
+    $$ = "invoker"
   }
 
 check_option_opt:
@@ -8222,11 +8249,11 @@ cascade_or_local_opt:
   }
 | CASCADED
   {
-    $$ = string($1)
+    $$ = "cascaded"
   }
 | LOCAL
   {
-    $$ = string($1)
+    $$ = "local"
   }
 
 proc_params_list_opt:
@@ -8287,13 +8314,13 @@ user:
 CURRENT_USER
   {
     $$ = &Definer{
-    	Name: string($1),
+    	Name: "current_user",
     }
   }
 | CURRENT_USER '(' ')'
   {
     $$ = &Definer{
-        Name: string($1),
+        Name: "current_user",
     }
   }
 | user_username address_opt
@@ -8673,6 +8700,9 @@ update_expression:
 
 charset_or_character_set:
   CHARSET
+  {
+    $$ = "charset"
+  }
 | CHARACTER SET
   {
     $$ = "charset"
@@ -8681,6 +8711,9 @@ charset_or_character_set:
 charset_or_character_set_or_names:
   charset_or_character_set
 | NAMES
+  {
+    $$ = "names"
+  }
 
 charset_value:
   sql_id
@@ -8762,7 +8795,7 @@ using_opt:
 using_index_type:
   USING sql_id
   {
-    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+    $$ = &IndexOption{Name: "using", String: $2.String()}
   }
 
 sql_id:

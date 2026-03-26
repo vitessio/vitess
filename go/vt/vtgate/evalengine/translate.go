@@ -421,7 +421,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (IR, erro
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.NStringOp:
-		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8mb3ID, CollationEnv: ast.cfg.Environment.CollationEnv()}, nil
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "nchar", Collation: collations.CollationUtf8mb3ID, CollationEnv: ast.cfg.Environment.CollationEnv()}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}

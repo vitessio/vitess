@@ -83,10 +83,6 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		if strippedCol.Type.Options.Null != nil && *strippedCol.Type.Options.Null {
 			strippedCol.Type.Options.Null = nil
 		}
-		// Normalize the type name to lowercase. The CanonicalString formatter uses %#s for the
-		// column type name which writes it as-is (case-sensitive), so "enum" and "ENUM" would
-		// produce different canonical strings without this normalization.
-		strippedCol.Type.Type = strings.ToLower(strippedCol.Type.Type)
 		// Strip charset and collation: SHOW CREATE TABLE adds the column's collation explicitly
 		// when it is inherited from a table-level COLLATE clause. User ALTER statements typically
 		// omit the collation. Stripping both sides allows a semantic comparison.
@@ -153,7 +149,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			}
 			// we know the new column definition is identical to, or extends, the old definition.
 			// Now validate storage:
-			if strings.EqualFold(col.Type.Type, "enum") {
+			if col.Type.Type == "enum" {
 				if len(col.Type.EnumValues) <= 255 && len(newCol.Type.EnumValues) > 255 {
 					// this increases the ENUM storage size (1 byte for up to 255 values, 2 bytes beyond)
 					log.Info("ALTER is not eligible for INSTANT DDL because we would be crossing the 255 enum value count, which increases the storage size from 1 to 2 bytes",
@@ -161,7 +157,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					return false, nil
 				}
 			}
-			if strings.EqualFold(col.Type.Type, "set") {
+			if col.Type.Type == "set" {
 				if (len(col.Type.EnumValues)+7)/8 != (len(newCol.Type.EnumValues)+7)/8 {
 					// this increases the SET storage size (1 byte for up to 8 values, 2 bytes for 8-15, etc.)
 					log.Info("ALTER is not eligible for INSTANT DDL because we would be crossing the 8 SET value count, which increases the storage size from 1 to 2 bytes.",
@@ -223,7 +219,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					slog.String("alter", sqlparser.CanonicalString(alterOption)))
 				return false, nil
 			}
-			if strings.EqualFold(column.Type.Type, "datetime") {
+			if column.Type.Type == "datetime" {
 				e := &ColumnDefinitionEntity{ColumnDefinition: column}
 				if !e.IsNullable() && !e.HasDefault() {
 					// DATETIME columns must have a default value
@@ -354,7 +350,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		return false, nil
 	case sqlparser.AlgorithmValue:
 		// We accept an explicit ALGORITHM=INSTANT option.
-		return strings.EqualFold(string(opt), sqlparser.InstantStr), nil
+		return string(opt) == sqlparser.InstantStr, nil
 	default:
 		return false, nil
 	}

@@ -2826,8 +2826,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 
 			hasErr: false,
 		},
@@ -2850,8 +2850,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 	}
 
@@ -2895,8 +2895,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 
 			hasErr: false,
 		},
@@ -2918,8 +2918,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 		{
 			desc: "bad ddl has error",

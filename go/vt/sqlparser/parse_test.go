@@ -46,7 +46,7 @@ var validSQL = []struct {
 	input: "select * from foo limit 5 + 5",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
 	output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
@@ -79,7 +79,7 @@ var validSQL = []struct {
 	output: "select 1 from t1 where exists (select 1 from dual) = 1",
 }, {
 	input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation GEOMETRY default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation geometry default (point(7.0, 3.0))\n)",
 }, {
 	input:  "select 1",
 	output: "select 1 from dual",
@@ -100,121 +100,121 @@ var validSQL = []struct {
 	output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
 }, {
 	input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-	output: "create table t2 (\n\tb BLOB default 'abc'\n)",
+	output: "create table t2 (\n\tb blob default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
 	output: "create table t2 (\n\tb blob default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	output: "create table t2 (\n\tb blob default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
-	output: "create table t2 (\n\tb TINYBLOB default 'abc'\n)",
+	output: "create table t2 (\n\tb tinyblob default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	output: "create table t2 (\n\tb tinyblob default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
-	output: "create table t2 (\n\tb MEDIUMBLOB default 'abc'\n)",
+	output: "create table t2 (\n\tb mediumblob default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	output: "create table t2 (\n\tb mediumblob default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
-	output: "create table t2 (\n\tb LONGBLOB default 'abc'\n)",
+	output: "create table t2 (\n\tb longblob default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	output: "create table t2 (\n\tb longblob default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
-	output: "create table t2 (\n\tb TEXT default 'abc'\n)",
+	output: "create table t2 (\n\tb text default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	output: "create table t2 (\n\tb text default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
-	output: "create table t2 (\n\tb TINYTEXT default 'abc'\n)",
+	output: "create table t2 (\n\tb tinytext default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	output: "create table t2 (\n\tb tinytext default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
-	output: "create table t2 (\n\tb MEDIUMTEXT default 'abc'\n)",
+	output: "create table t2 (\n\tb mediumtext default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	output: "create table t2 (\n\tb mediumtext default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
-	output: "create table t2 (\n\tb LONGTEXT default 'abc'\n)",
+	output: "create table t2 (\n\tb longtext default 'abc'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
-	output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	output: "create table t2 (\n\tb longtext default ('abc')\n)",
 }, {
 	input:  "CREATE TABLE t2 (b JSON DEFAULT null)",
-	output: "create table t2 (\n\tb JSON default null\n)",
+	output: "create table t2 (\n\tb json default null\n)",
 }, {
 	input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
-	output: "create table t2 (\n\tb JSON default (null)\n)",
+	output: "create table t2 (\n\tb json default (null)\n)",
 }, {
 	input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
-	output: "create table t2 (\n\tb JSON default '{name:abc}'\n)",
+	output: "create table t2 (\n\tb json default '{name:abc}'\n)",
 }, {
 	input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
-	output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	output: "create table t2 (\n\tb json default ('{name:abc}')\n)",
 }, {
 	input:  "create table x(location POINT DEFAULT 7.0)",
-	output: "create table x (\n\tlocation POINT default 7.0\n)",
+	output: "create table x (\n\tlocation point default 7.0\n)",
 }, {
 	input:  "create table x(location POINT DEFAULT (7.0))",
-	output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	output: "create table x (\n\tlocation point default (7.0)\n)",
 }, {
 	input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation LINESTRING default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation linestring default (point(7.0, 3.0))\n)",
 }, {
 	input:  "select linestring(pt1, pt2) from geom",
 	output: "select linestring(pt1, pt2) from geom",
 }, {
 	input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation POLYGON default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation polygon default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation MULTIPOINT default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation multipoint default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation MULTILINESTRING default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation multilinestring default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation MULTIPOLYGON default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation multipolygon default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(7.0, 3.0))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(7.0, 3.0)))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (linestring(point(7.0, 3.0)))\n)",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POLYGON(LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9)))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (polygon(linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9))))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (polygon(linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9))))\n)",
 }, {
 	input:  "select ST_ASTEXT(POLYGON(linestrings)) from linestringTable",
 	output: "select st_astext(polygon(linestrings)) from linestringTable",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOINT(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipoint(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (multipoint(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
 }, {
 	input:  "select ST_ASTEXT(MULTIPOINT(points)) from pointsTable",
 	output: "select st_astext(multipoint(points)) from pointsTable",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTILINESTRING(LINESTRING(POINT(8,9), POINT(8,9)))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multilinestring(linestring(point(8, 9), point(8, 9))))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (multilinestring(linestring(point(8, 9), point(8, 9))))\n)",
 }, {
 	input:  "select ST_ASTEXT(MULTILINESTRING(linestrings)) from linestringsTable",
 	output: "select st_astext(multilinestring(linestrings)) from linestringsTable",
 }, {
 	input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOLYGON(POINT(7.0, 3.0), POINT(7.0, 3.0))))",
-	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipolygon(point(7.0, 3.0), point(7.0, 3.0)))\n)",
+	output: "create table x (\n\tlocation geometrycollection default (multipolygon(point(7.0, 3.0), point(7.0, 3.0)))\n)",
 }, {
 	input:  "select ST_ASTEXT(MULTIPOLYGON(polygons)) from polygonTable",
 	output: "select st_astext(multipolygon(polygons)) from polygonTable",
@@ -1613,7 +1613,8 @@ var validSQL = []struct {
 }, {
 	input: "alter table `By` add column foo int, algorithm = inplace",
 }, {
-	input: "alter table `By` add column foo int, algorithm = INPLACE",
+	input:  "alter table `By` add column foo int, algorithm = INPLACE",
+	output: "alter table `By` add column foo int, algorithm = inplace",
 }, {
 	input: "alter table `By` add column foo int, algorithm = instant",
 }, {
@@ -1904,10 +1905,10 @@ var validSQL = []struct {
 	input: "create temporary table a (\n\tid bigint\n)",
 }, {
 	input:  "CREATE TABLE pkai (id INT PRIMARY KEY AUTO_INCREMENT);",
-	output: "create table pkai (\n\tid INT auto_increment primary key\n)",
+	output: "create table pkai (\n\tid int auto_increment primary key\n)",
 }, {
 	input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
-	output: "create table aipk (\n\tid INT auto_increment primary key\n)",
+	output: "create table aipk (\n\tid int auto_increment primary key\n)",
 }, {
 	// This test case is added because MySQL supports this behaviour.
 	// It allows the user to specify null and not null multiple times.
@@ -2140,19 +2141,20 @@ var validSQL = []struct {
 	input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 	output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 }, {
-	input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	input:  "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	output: "create procedure p1 (in country char(3), out cities int) begin select count(*) from x where d = e; end;",
 }, {
 	input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
-	output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	output: "create procedure p1 (in country char(3), out cities int) begin select count(*) from x where d = e; end;",
 }, {
 	input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e;`,
-	output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e;",
+	output: "create procedure p1 (in a char(3), out b int) select count(*) from x where d = e;",
 }, {
 	input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
-	output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
+	output: "create procedure p1 (in country char(3), out cities int) begin create table t1 (\n\ta int\n); begin end; end;",
 }, {
 	input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END;`,
-	output: `create procedure compare (in n INT, in m INT, inout s VARCHAR(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
+	output: `create procedure compare (in n int, in m int, inout s varchar(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
 }, {
 	input:  "create procedure SimpleProcedure() begin select 'Hello, World!'; end;",
 	output: "create procedure SimpleProcedure () begin select 'Hello, World!' from dual; end;",
@@ -2229,7 +2231,8 @@ var validSQL = []struct {
 	input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 	output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 }, {
-	input: "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+	input:  "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+	output: "create procedure t1 (in x bigint) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
 }, {
 	input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 }, {
@@ -2923,7 +2926,7 @@ var validSQL = []struct {
 	input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 }, {
 	input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
-	output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	output: "select id from blog_posts use index (`primary`) where id = 10",
 }, {
 	input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
 }, {
@@ -3319,59 +3322,59 @@ var validSQL = []struct {
 }, {
 	input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
 	output: `select * from json_table('[ {"c1": null} ]', '$[*]' columns(
-	c1 INT path '$.c1' error on error 
+	c1 int path '$.c1' error on error 
 	)
 ) as jt`,
 }, {
 	input: `SELECT * FROM  JSON_TABLE(    '[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$'))) AS jt`,
 	output: `select * from json_table('[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' columns(
-	a INT path '$.a' ,
+	a int path '$.a' ,
 	nested path '$.b[*]' columns(
-	b1 INT path '$' 
+	b1 int path '$' 
 ),
 	nested path '$.b[*]' columns(
-	b2 INT path '$' 
+	b2 int path '$' 
 )
 	)
 ) as jt`,
 }, {
 	input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
 	output: `select * from json_table('[ {"c1": null} ]', '$[*]' columns(
-	c1 INT path '$.c1' error on error 
+	c1 int path '$.c1' error on error 
 	)
 ) as jt`,
 }, {
 	input: `SELECT * FROM JSON_TABLE('[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":[1,2]}]', "$[*]" COLUMNS(rowid FOR ORDINALITY, ac VARCHAR(100) PATH "$.a" DEFAULT '111' ON EMPTY DEFAULT '999' ON ERROR,  aj JSON PATH "$.a" DEFAULT '{"x": 333}' ON EMPTY, bx INT EXISTS PATH "$.b" ) ) AS tt`,
 	output: `select * from json_table('[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":[1,2]}]', '$[*]' columns(
 	rowid for ordinality,
-	ac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,
-	aj JSON path '$.a' default '{"x": 333}' on empty ,
-	bx INT exists path '$.b' 
+	ac varchar(100) path '$.a' default '111' on empty default '999' on error ,
+	aj json path '$.a' default '{"x": 333}' on empty ,
+	bx int exists path '$.b' 
 	)
 ) as tt`,
 }, {
 	input: `SELECT * FROM  JSON_TABLE(    '[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]',    '$[*]' COLUMNS(            a INT PATH '$.a',            NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$')           )   ) AS jt WHERE b IS NOT NULL`,
 	output: `select * from json_table('[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' columns(
-	a INT path '$.a' ,
+	a int path '$.a' ,
 	nested path '$.b[*]' columns(
-	b INT path '$' 
+	b int path '$' 
 )
 	)
 ) as jt where b is not null`,
 }, {
 	input: `SELECT * FROM  JSON_TABLE(    '[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]',    "$[1]" COLUMNS(      xval VARCHAR(100) PATH "$.x",      yval VARCHAR(100) PATH "$.y"    )  ) AS  jt1`,
 	output: `select * from json_table('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', '$[1]' columns(
-	xval VARCHAR(100) path '$.x' ,
-	yval VARCHAR(100) path '$.y' 
+	xval varchar(100) path '$.x' ,
+	yval varchar(100) path '$.y' 
 	)
 ) as jt1`,
 }, {
 	input: `SELECT * FROM  JSON_TABLE(    '[{"a": "a_val","b": [{"c": "c_val", "l": [1,2]}]},{"a": "a_val", "b": [{"c": "c_val","l": [11]}, {"c": "c_val", "l": [22]}]}]',    '$[*]' COLUMNS(      top_ord FOR ORDINALITY,      apath VARCHAR(10) PATH '$.a',      NESTED PATH '$.b[*]' COLUMNS (        bpath VARCHAR(10) PATH '$.c',        ord FOR ORDINALITY,        NESTED PATH '$.l[*]' COLUMNS (lpath varchar(10) PATH '$')        )    )) as jt`,
 	output: `select * from json_table('[{"a": "a_val","b": [{"c": "c_val", "l": [1,2]}]},{"a": "a_val", "b": [{"c": "c_val","l": [11]}, {"c": "c_val", "l": [22]}]}]', '$[*]' columns(
 	top_ord for ordinality,
-	apath VARCHAR(10) path '$.a' ,
+	apath varchar(10) path '$.a' ,
 	nested path '$.b[*]' columns(
-	bpath VARCHAR(10) path '$.c' ,
+	bpath varchar(10) path '$.c' ,
 	ord for ordinality,
 	nested path '$.l[*]' columns(
 	lpath varchar(10) path '$' 
@@ -3382,8 +3385,8 @@ var validSQL = []struct {
 }, {
 	input: `SELECT * FROM JSON_TABLE('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', "$[1]" COLUMNS( xval VARCHAR(100) PATH "$.x", yval VARCHAR(100) PATH "$.y")) AS  jt1;`,
 	output: `select * from json_table('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', '$[1]' columns(
-	xval VARCHAR(100) path '$.x' ,
-	yval VARCHAR(100) path '$.y' 
+	xval varchar(100) path '$.x' ,
+	yval varchar(100) path '$.y' 
 	)
 ) as jt1`,
 }, {
@@ -3529,10 +3532,10 @@ var validSQL = []struct {
 	output: `select json_value(@j, @k) from dual`,
 }, {
 	input:  `select json_value(@j, @k RETURNING FLOAT) from dual`,
-	output: `select json_value(@j, @k returning FLOAT) from dual`,
+	output: `select json_value(@j, @k returning float) from dual`,
 }, {
 	input:  `select json_value(@j, @k RETURNING DECIMAL(4,2)) from dual`,
-	output: `select json_value(@j, @k returning DECIMAL(4, 2)) from dual`,
+	output: `select json_value(@j, @k returning decimal(4, 2)) from dual`,
 }, {
 	input:  `SELECT JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) Charset utf8mb4 error on error)`,
 	output: `select json_value('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) character set utf8mb4 error on error) from dual`,
@@ -3547,7 +3550,7 @@ var validSQL = []struct {
 	output: `select json_value('{"item": "shoes", "price": "49.95"}', '$.price' null on empty error on error) from dual`,
 }, {
 	input:  `select json_value(@j, @k RETURNING FLOAT NULL ON EMPTY ERROR ON ERROR) from dual`,
-	output: `select json_value(@j, @k returning FLOAT null on empty error on error) from dual`,
+	output: `select json_value(@j, @k returning float null on empty error on error) from dual`,
 }, {
 	input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
 	output: `select 17 member of ('[23, "abc", 17, "ab", 10]') from dual`,
@@ -3778,7 +3781,7 @@ var validSQL = []struct {
 	output: "select json_unquote(@j) from dual",
 }, {
 	input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
-	output: "create table ts (\n\tid INT,\n\tpurchased DATE\n)\npartition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))\n(partition p0 values less than (1990) (subpartition s0, subpartition s1),\n partition p1 values less than (2000),\n partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
+	output: "create table ts (\n\tid int,\n\tpurchased date\n)\npartition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))\n(partition p0 values less than (1990) (subpartition s0, subpartition s1),\n partition p1 values less than (2000),\n partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
 }, {
 	input:  "SELECT REGEXP_INSTR('dog cat dog', 'dog')",
 	output: "select regexp_instr('dog cat dog', 'dog') from dual",
@@ -5324,8 +5327,8 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment,
 	col_geometrycollection1 geometrycollection,
 	col_geometrycollection2 geometrycollection not null,
-	col_geometrycollection3 geomcollection,
-	col_geometrycollection4 geomcollection not null,
+	col_geometrycollection3 geometrycollection,
+	col_geometrycollection4 geometrycollection not null,
 	primary key (id)
 )`,
 		},
@@ -5414,7 +5417,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id),
 	unique key post_user_unique (user_id),
 	constraint ` + "`" + `Post With Space_ibfk_1` + "`" + ` foreign key (user_id) references ` + "`" + `User` + "`" + ` (id)
-) ENGINE Innodb`,
+) engine Innodb`,
 		},
 		// table options
 		{
@@ -5682,19 +5685,19 @@ func TestCreateTable(t *testing.T) {
 			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEMORY`,
 			output: `create table non_reserved_keyword (
 	id int(11)
-) ENGINE MEMORY`,
+) engine MEMORY`,
 		},
 		{
 			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
 			output: `create table non_reserved_keyword (
 	id int(11)
-) ENGINE MEDIUMTEXT`,
+) engine MEDIUMTEXT`,
 		},
 		{
 			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,
 			output: `create table t1 (
 	id int(11)
-) ENGINE FOOBAR`,
+) engine FOOBAR`,
 		},
 		// partitions
 		{
@@ -5715,13 +5718,13 @@ PARTITION BY RANGE (store_id) (
     PARTITION p3 VALUES LESS THAN (21)
 )`,
 			output: `create table employees (
-	id INT not null,
-	fname VARCHAR(30),
-	lname VARCHAR(30),
-	hired DATE not null default '1970-01-01',
-	separated DATE not null default '9999-12-31',
-	job_code INT not null,
-	store_id INT not null
+	id int not null,
+	fname varchar(30),
+	lname varchar(30),
+	hired date not null default '1970-01-01',
+	separated date not null default '9999-12-31',
+	job_code int not null,
+	store_id int not null
 )
 partition by range (store_id)
 (partition p0 values less than (6),
@@ -5746,13 +5749,13 @@ PARTITION BY RANGE (store_id) (
     PARTITION p3 VALUES LESS THAN MAXVALUE
 )`,
 			output: `create table employees (
-	id INT not null,
-	fname VARCHAR(30),
-	lname VARCHAR(30),
-	hired DATE not null default '1970-01-01',
-	separated DATE not null default '9999-12-31',
-	job_code INT not null,
-	store_id INT not null
+	id int not null,
+	fname varchar(30),
+	lname varchar(30),
+	hired date not null default '1970-01-01',
+	separated date not null default '9999-12-31',
+	job_code int not null,
+	store_id int not null
 )
 partition by range (store_id)
 (partition p0 values less than (6),
@@ -5776,13 +5779,13 @@ PARTITION BY RANGE (job_code) (
     PARTITION p2 VALUES LESS THAN (10000)
 )`,
 			output: `create table employees (
-	id INT not null,
-	fname VARCHAR(30),
-	lname VARCHAR(30),
-	hired DATE not null default '1970-01-01',
-	separated DATE not null default '9999-12-31',
-	job_code INT not null,
-	store_id INT not null
+	id int not null,
+	fname varchar(30),
+	lname varchar(30),
+	hired date not null default '1970-01-01',
+	separated date not null default '9999-12-31',
+	job_code int not null,
+	store_id int not null
 )
 partition by range (job_code)
 (partition p0 values less than (100),
@@ -5797,7 +5800,7 @@ partition by range (job_code)
     hired DATE NOT NULL DEFAULT '1970-01-01',
     separated DATE NOT NULL DEFAULT '9999-12-31',
     job_code INT,
-    store_id INT
+    store_id int
 )
 PARTITION BY RANGE ( YEAR(separated) ) (
     PARTITION p0 VALUES LESS THAN (1991),
@@ -5806,13 +5809,13 @@ PARTITION BY RANGE ( YEAR(separated) ) (
     PARTITION p3 VALUES LESS THAN MAXVALUE
 )`,
 			output: `create table employees (
-	id INT not null,
-	fname VARCHAR(30),
-	lname VARCHAR(30),
-	hired DATE not null default '1970-01-01',
-	separated DATE not null default '9999-12-31',
-	job_code INT,
-	store_id INT
+	id int not null,
+	fname varchar(30),
+	lname varchar(30),
+	hired date not null default '1970-01-01',
+	separated date not null default '9999-12-31',
+	job_code int,
+	store_id int
 )
 partition by range (YEAR(separated))
 (partition p0 values less than (1991),
@@ -5839,9 +5842,9 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
     PARTITION p9 VALUES LESS THAN (MAXVALUE)
 )`,
 			output: `create table quarterly_report_status (
-	report_id INT not null,
-	report_status VARCHAR(20) not null,
-	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+	report_id int not null,
+	report_status varchar(20) not null,
+	report_updated timestamp not null default current_timestamp() on update current_timestamp()
 )
 partition by range (UNIX_TIMESTAMP(report_updated))
 (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
@@ -5874,9 +5877,9 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
     PARTITION p9 VALUES LESS THAN (MAXVALUE)
 )`,
 			output: `create table quarterly_report_status (
-	report_id INT not null,
-	report_status VARCHAR(20) not null,
-	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+	report_id int not null,
+	report_status varchar(20) not null,
+	report_updated timestamp not null default current_timestamp() on update current_timestamp()
 )
 partition by range (UNIX_TIMESTAMP(report_updated))
 (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
@@ -5906,11 +5909,11 @@ PARTITION BY RANGE COLUMNS(joined) (
     PARTITION p4 VALUES LESS THAN MAXVALUE
 )`,
 			output: `create table members (
-	firstname VARCHAR(25) not null,
-	lastname VARCHAR(25) not null,
-	username VARCHAR(16) not null,
-	email VARCHAR(35),
-	joined DATE not null
+	firstname varchar(25) not null,
+	lastname varchar(25) not null,
+	username varchar(16) not null,
+	email varchar(35),
+	joined date not null
 )
 partition by range columns (joined)
 (partition p0 values less than ('1960-01-01'),
@@ -5925,10 +5928,10 @@ partition by range columns (joined)
     PARTITION BY HASH( MONTH(tr_date) )
     PARTITIONS 6`,
 			output: `create table ti (
-	id INT,
-	amount DECIMAL(7,2),
-	tr_date DATE
-) ENGINE INNODB
+	id int,
+	amount decimal(7,2),
+	tr_date date
+) engine INNODB
 partition by hash (MONTH(tr_date)) partitions 6`,
 		},
 		{
@@ -5942,11 +5945,11 @@ partition by hash (MONTH(tr_date)) partitions 6`,
 PARTITION BY KEY(joined)
 PARTITIONS 6`,
 			output: `create table members (
-	firstname VARCHAR(25) not null,
-	lastname VARCHAR(25) not null,
-	username VARCHAR(16) not null,
-	email VARCHAR(35),
-	joined DATE not null
+	firstname varchar(25) not null,
+	lastname varchar(25) not null,
+	username varchar(16) not null,
+	email varchar(35),
+	joined date not null
 )
 partition by key (joined) partitions 6`,
 		},
@@ -5957,7 +5960,7 @@ partition by key (joined) partitions 6`,
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5),
@@ -5970,7 +5973,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) storage engine FOOBAR,
@@ -5983,7 +5986,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) engine FOOBAR,
@@ -5996,7 +5999,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) storage engine FOOBAR,
@@ -6009,7 +6012,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test',
@@ -6022,7 +6025,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test',
@@ -6035,7 +6038,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) INDEX DIRECTORY 'test2'
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) index directory 'test',
@@ -6057,7 +6060,7 @@ partition by list (id)
 	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test',
@@ -6070,7 +6073,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) MAX_ROWS 10
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) max_rows 4,
@@ -6083,7 +6086,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) MIN_ROWS 10
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) min_rows 4,
@@ -6096,7 +6099,7 @@ partition by list (val)
 	PARTITION MyPart VALUES IN (2,4,6) TABLESPACE innodb_system
 )`,
 			output: `create table t2 (
-	val INT
+	val int
 )
 partition by list (val)
 (partition mypart values in (1, 3, 5) tablespace innodb_system,
@@ -6135,18 +6138,18 @@ partition by list (val)
 	unique key namespaced_name (namespace, place),
 	unique key unique_uid (uid),
 	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_bin`,
+) engine InnoDB,
+  charset utf8mb4,
+  collate utf8mb4_bin`,
 		},
 		{
 			input: `CREATE TABLE t1(
-    j JSON,
+    j json,
     INDEX i1 ( (JSON_VALUE(j, '$.id' RETURNING UNSIGNED)) )
 )`,
 			output: `create table t1 (
-	j JSON,
-	key i1 ((json_value(j, '$.id' returning UNSIGNED)))
+	j json,
+	key i1 ((json_value(j, '$.id' returning unsigned)))
 )`,
 		},
 		{
@@ -6177,9 +6180,9 @@ partition by list (val)
 	unique key namespaced_employee (namespace, employee),
 	unique key unique_uid (uid),
 	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_bin`,
+) engine InnoDB,
+  charset utf8mb4,
+  collate utf8mb4_bin`,
 		},
 		{
 			// Subpartitions
@@ -6200,8 +6203,8 @@ partition by list (val)
         )
     )`,
 			output: `create table ts (
-	id INT,
-	purchased DATE
+	id int,
+	purchased date
 )
 partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 (partition p0 values less than (1990) (subpartition s0, subpartition s1),
@@ -6226,8 +6229,8 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
         )
     )`,
 			output: `create table ts (
-	id INT,
-	purchased DATE
+	id int,
+	purchased date
 )
 partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'),
@@ -6244,7 +6247,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(json_extract(info, '$.field') as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo json,\n\tkey zips ((cast(json_extract(info, '$.field') as unsigned array)))\n)",
 		},
 		{
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
@@ -6252,25 +6255,25 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, vec VECTOR(4))",
-			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
+			output: "create table t (\n\tid int,\n\tvec vector(4)\n)",
 		},
 		{
 			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
-			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) engine InnoDB,\n  charset utf8mb4,\n  collate utf8mb4_0900_ai_ci",
 		},
 		// test TEXT column with length parameter
 		{
 			input:  "CREATE TABLE t (col TEXT(1024))",
-			output: "create table t (\n\tcol TEXT(1024)\n)",
+			output: "create table t (\n\tcol text(1024)\n)",
 		},
 		{
 			input:  "CREATE TABLE t (col TEXT(1024) CHARACTER SET utf8mb4)",
-			output: "create table t (\n\tcol TEXT(1024) character set utf8mb4\n)",
+			output: "create table t (\n\tcol text(1024) character set utf8mb4\n)",
 		},
 		// test BLOB column with length parameter
 		{
 			input:  "CREATE TABLE t (col BLOB(1024))",
-			output: "create table t (\n\tcol BLOB(1024)\n)",
+			output: "create table t (\n\tcol blob(1024)\n)",
 		},
 	}
 	parser := NewTestParser()
@@ -6742,22 +6745,22 @@ func TestParseVersionedComments(t *testing.T) {
 			mysqlVersion: "5.4.1",
 			output: `create table table1 (
 	id int
-) ENGINE InnoDB,
-  CHARSET utf8mb4`,
+) engine InnoDB,
+  charset utf8mb4`,
 		}, {
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
 			mysqlVersion: "8.0.1",
 			output: `create table table1 (
 	id int
-) ENGINE InnoDB,
-  CHARSET utf8mb4
+) engine InnoDB,
+  charset utf8mb4
 partition by range (id)
 (partition x values less than (5) engine InnoDB,
  partition t values less than (20) engine InnoDB)`,
 		}, {
 			input:        "CREATE TABLE `TABLE_NAME` (\n  `col1` longblob /*!50633 COLUMN_FORMAT COMPRESSED */,\n  `id` bigint unsigned NOT NULL,\n  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=COMPRESSED",
 			mysqlVersion: "8.0.1",
-			output:       "create table `TABLE_NAME` (\n\tcol1 longblob column_format compressed,\n\tid bigint unsigned not null,\n\tprimary key (id)\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_bin,\n  ROW_FORMAT COMPRESSED",
+			output:       "create table `TABLE_NAME` (\n\tcol1 longblob column_format compressed,\n\tid bigint unsigned not null,\n\tprimary key (id)\n) engine InnoDB,\n  charset utf8mb4,\n  collate utf8mb4_bin,\n  row_format compressed",
 		},
 	}
 

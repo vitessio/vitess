@@ -320,7 +320,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as char)))"
           },
           {
             "InputName": "Parent",
@@ -665,7 +665,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as char)))"
               },
               {
                 "InputName": "Parent",
@@ -696,7 +696,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as char))) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -720,7 +720,7 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))"
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as char)))"
               }
             ]
           },
@@ -763,8 +763,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as CHAR) where 1 != 1",
-            "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as CHAR) where parent.col1 is null and cast(child.col1 + 'bar' as CHAR) is not null and not (child.col2) <=> (cast(child.col1 + 'bar' as CHAR)) and child.id = 1 limit 1 for share"
+            "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as char) where 1 != 1",
+            "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as char) where parent.col1 is null and cast(child.col1 + 'bar' as char) is not null and not (child.col2) <=> (cast(child.col1 + 'bar' as char)) and child.id = 1 limit 1 for share"
           },
           {
             "InputName": "PostVerify",
@@ -778,8 +778,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update"
+                "FieldQuery": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as char), cast(col1 + 'bar' as char) from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as char), cast(col1 + 'bar' as char) from u_tbl2 where id = 1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -841,8 +841,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update"
+            "FieldQuery": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as char), cast(x + 'bar' as char) from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as char), cast(x + 'bar' as char) from u_tbl1 where id = 1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -882,7 +882,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:fkc_upd as CHAR) is null or (col3) not in ((cast(:fkc_upd as CHAR))))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:fkc_upd as char) is null or (col3) not in ((cast(:fkc_upd as char))))"
               },
               {
                 "InputName": "Parent",
@@ -1002,7 +1002,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))"
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as char)))"
           },
           {
             "InputName": "Parent",
@@ -1074,7 +1074,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(2 as CHAR)))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(2 as char)))"
               },
               {
                 "InputName": "Parent",
@@ -1105,7 +1105,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as char))) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1129,7 +1129,7 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))"
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as char)))"
               }
             ]
           },
@@ -1422,8 +1422,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as char) where 1 != 1",
+                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as char) where parent.col9 is null and not (child.col8) <=> (cast('foo' as char)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",
@@ -1493,8 +1493,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as CHAR) where parent.col3 is null and not (child.col4) <=> (cast('foo' as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as char) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as char) where parent.col3 is null and not (child.col4) <=> (cast('foo' as char)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1505,7 +1505,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
-                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (child.col9) not in ((cast('foo' as CHAR))) limit 1 for share"
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (child.col9) not in ((cast('foo' as char))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -1576,8 +1576,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as CHAR) where parent.col3 is null and cast(:v1 as CHAR) is not null and not (child.col4) <=> (cast(:v1 as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as char) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as char) where parent.col3 is null and cast(:v1 as char) is not null and not (child.col4) <=> (cast(:v1 as char)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1588,7 +1588,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
-                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (child.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share"
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:v1 as char) is null or (child.col9) not in ((cast(:v1 as char)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -1689,7 +1689,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(5 as CHAR)))"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(5 as char)))"
                   },
                   {
                     "InputName": "Parent",
@@ -1720,7 +1720,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as char))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -1744,7 +1744,7 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR)))"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as char)))"
                   }
                 ]
               },
@@ -2173,8 +2173,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where 1 != 1",
-            "Query": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update"
+            "FieldQuery": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as char), cast(baz + 1 + col7 as char) from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as char), cast(baz + 1 + col7 as char) from u_tbl7 where bar = 42 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -2199,8 +2199,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as CHAR) where parent.col3 is null and cast(:fkc_upd as CHAR) is not null and not (child.col4) <=> (cast(:fkc_upd as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as char) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as char) where parent.col3 is null and cast(:fkc_upd as char) is not null and not (child.col4) <=> (cast(:fkc_upd as char)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -2211,7 +2211,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
-                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (child.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share"
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:fkc_upd as char) is null or (child.col9) not in ((cast(:fkc_upd as char)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -2635,7 +2635,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(3 as CHAR)))"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(3 as char)))"
                   },
                   {
                     "InputName": "Parent",
@@ -2666,7 +2666,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR))) for update nowait"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as char))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -2690,7 +2690,7 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR)))"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as char)))"
                   }
                 ]
               },
@@ -2765,7 +2765,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (cast(:v2 as CHAR) is null or (col3) not in ((cast(:v2 as CHAR))))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (cast(:v2 as char) is null or (col3) not in ((cast(:v2 as char))))"
               },
               {
                 "InputName": "Parent",
@@ -2817,7 +2817,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:v4 as CHAR) is null or (col3) not in ((cast(:v4 as CHAR))))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:v4 as char) is null or (col3) not in ((cast(:v4 as char))))"
               },
               {
                 "InputName": "Parent",
@@ -2869,7 +2869,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals2 and (cast(:v6 as CHAR) is null or (col3) not in ((cast(:v6 as CHAR))))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals2 and (cast(:v6 as char) is null or (col3) not in ((cast(:v6 as char))))"
               },
               {
                 "InputName": "Parent",
@@ -3397,8 +3397,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
-                "Query": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as SIGNED) where parent.col14 is null and cast(:__sq1 as SIGNED) is not null and not (child.col41) <=> (cast(:__sq1 as SIGNED)) and child.col4 = 3 limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as signed) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as signed) where parent.col14 is null and cast(:__sq1 as signed) is not null and not (child.col41) <=> (cast(:__sq1 as signed)) and child.col4 = 3 limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -3491,7 +3491,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as char) is null or (col3) not in ((cast(:__sq1 as char))))"
                   },
                   {
                     "InputName": "Parent",
@@ -3522,7 +3522,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) for update nowait"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as char) is null or (col9) not in ((cast(:__sq1 as char)))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3546,7 +3546,7 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as char) is null or (col9) not in ((cast(:__sq1 as char))))"
                   }
                 ]
               },
@@ -3775,7 +3775,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as char)))"
               },
               {
                 "InputName": "Parent",
@@ -3831,8 +3831,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as CHAR) where parent.col1 is null and cast(child.id + 1 as CHAR) is not null and not (child.col2) <=> (cast(child.id + 1 as CHAR)) and child.id in ::dml_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as char) where 1 != 1",
+                "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as char) where parent.col1 is null and cast(child.id + 1 as char) is not null and not (child.col2) <=> (cast(child.id + 1 as char)) and child.id in ::dml_vals limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -3846,8 +3846,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select u_tbl2.col2, col2 <=> cast(id + 1 as CHAR), cast(id + 1 as CHAR) from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2, col2 <=> cast(id + 1 as CHAR), cast(id + 1 as CHAR) from u_tbl2 where u_tbl2.id in ::dml_vals order by id asc for update"
+                    "FieldQuery": "select u_tbl2.col2, col2 <=> cast(id + 1 as char), cast(id + 1 as char) from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2, col2 <=> cast(id + 1 as char), cast(id + 1 as char) from u_tbl2 where u_tbl2.id in ::dml_vals order by id asc for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3930,8 +3930,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as char) where 1 != 1",
+                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as char) where parent.col9 is null and not (child.col8) <=> (cast('foo' as char)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",
@@ -4034,7 +4034,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as char)))"
                   },
                   {
                     "InputName": "Parent",
@@ -4065,7 +4065,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as char))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -4089,7 +4089,7 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as char)))"
                   }
                 ]
               },

@@ -74,9 +74,9 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 
 	convert.Length = convertType.Length
 	convert.Scale = convertType.Scale
-	convert.Type = strings.ToUpper(convertType.Type)
+	convert.Type = convertType.Type
 	switch convert.Type {
-	case "DECIMAL":
+	case "decimal":
 		if convert.Length != nil {
 			if *convert.Length > decimal.MyMaxPrecision {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
@@ -97,14 +97,14 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 				}
 			}
 		}
-	case "NCHAR":
+	case "nchar":
 		convert.Collation = collations.CollationUtf8mb3ID
-	case "CHAR":
+	case "char":
 		convert.Collation, err = ast.translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary)
 		if err != nil {
 			return nil, err
 		}
-	case "BINARY", "DOUBLE", "REAL", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER", "JSON", "TIME", "DATETIME", "DATE":
+	case "binary", "double", "real", "signed", "signed integer", "unsigned", "unsigned integer", "json", "time", "datetime", "date":
 		// Supported types for conv expression
 	default:
 		// For unsupported types, we should return an error on translation instead of returning an error on runtime.

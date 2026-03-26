@@ -17,8 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -266,7 +264,7 @@ func (c *ColumnDefinitionEntity) Type() string {
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToLower(c.Type())]
+	return charsetTypes[c.Type()]
 }
 
 // IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)

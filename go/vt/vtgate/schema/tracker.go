@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -427,7 +426,7 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 	}
 	collate := sqlparser.KeywordString(sqlparser.COLLATE)
 	for _, option := range tblSpec.Options {
-		if strings.EqualFold(option.Name, collate) {
+		if option.Name == collate {
 			return option.String
 		}
 	}
@@ -436,7 +435,7 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 
 func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
 	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		switch strings.ToLower(column.Type.Type) {
+		switch column.Type.Type {
 		case "enum", "set", "text", "tinytext", "mediumtext", "longtext", "varchar", "char":
 			return defaultCollation
 		case "json":

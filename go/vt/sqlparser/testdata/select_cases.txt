@@ -776,7 +776,7 @@ INPUT
 select * from t1 where word= 0xe4 or word=CAST(0xe4 as CHAR);
 END
 OUTPUT
-select * from t1 where word = 0xe4 or word = cast(0xe4 as CHAR)
+select * from t1 where word = 0xe4 or word = cast(0xe4 as char)
 END
 INPUT
 select * from t1 left join t2 on t1.a=t2.a having not (t2.a <=> t1.a);
@@ -998,7 +998,7 @@ INPUT
 select cast("1:2:3" as TIME);
 END
 OUTPUT
-select cast('1:2:3' as TIME) from dual
+select cast('1:2:3' as time) from dual
 END
 INPUT
 select soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB);
@@ -1406,7 +1406,7 @@ INPUT
 select cast("2001-1-1" as DATE), cast("2001-1-1" as DATETIME);
 END
 OUTPUT
-select cast('2001-1-1' as DATE), cast('2001-1-1' as DATETIME) from dual
+select cast('2001-1-1' as date), cast('2001-1-1' as datetime) from dual
 END
 INPUT
 select case when s1 = 0xfffd then 1 else 0 end from t1;
@@ -2978,7 +2978,7 @@ INPUT
 select cast(1000 as CHAR(3));
 END
 OUTPUT
-select cast(1000 as CHAR(3)) from dual
+select cast(1000 as char(3)) from dual
 END
 INPUT
 select Fld1, max(Fld2) from t1 group by Fld1 having avg(Fld2) is not null;
@@ -4514,7 +4514,7 @@ INPUT
 select CAST(1-2 AS UNSIGNED);
 END
 OUTPUT
-select cast(1 - 2 as UNSIGNED) from dual
+select cast(1 - 2 as unsigned) from dual
 END
 INPUT
 select (with recursive dt as (select t1.a as a union all select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
@@ -6818,7 +6818,7 @@ INPUT
 select * from t1 where CAST(field as DATE) < '2006-11-06 04:08:36.0';
 END
 OUTPUT
-select * from t1 where cast(field as DATE) < '2006-11-06 04:08:36.0'
+select * from t1 where cast(field as date) < '2006-11-06 04:08:36.0'
 END
 INPUT
 select interval(55,10,20,30,40,50,60,70,80,90,100),interval(3,1,1+1,1+1+1+1),field("IBM","NCA","ICL","SUN","IBM","DIGITAL"),field("A","B","C"),elt(2,"ONE","TWO","THREE"),interval(0,1,2,3,4),elt(1,1,2,3)|0,elt(1,1.1,1.2,1.3)+0;
@@ -6854,7 +6854,7 @@ INPUT
 select CAST(TIMESTAMP "2004-01-22 21:45:33" AS BINARY(4));
 END
 OUTPUT
-select cast(timestamp'2004-01-22 21:45:33' as BINARY(4)) from dual
+select cast(timestamp'2004-01-22 21:45:33' as binary(4)) from dual
 END
 INPUT
 select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -7454,7 +7454,7 @@ INPUT
 select cast("A" as binary) = "a", cast(BINARY "a" as CHAR) = "A";
 END
 OUTPUT
-select cast('A' as binary) = 'a', cast(convert('a', BINARY) as CHAR) = 'A' from dual
+select cast('A' as binary) = 'a', cast(convert('a', BINARY) as char) = 'A' from dual
 END
 INPUT
 select * from `information_schema`.`TRIGGERS` where `EVENT_OBJECT_SCHEMA` = NULL;
@@ -8828,7 +8828,7 @@ INPUT
 select isnull(date(NULL)), isnull(cast(NULL as DATE));
 END
 OUTPUT
-select isnull(date(null)), isnull(cast(null as DATE)) from dual
+select isnull(date(null)), isnull(cast(null as date)) from dual
 END
 INPUT
 select * from t1 ignore index (primary) where tt like 'Aa%';
@@ -10142,7 +10142,7 @@ INPUT
 select * from t1 where CAST(field as DATETIME) < '2006-11-06 04:08:36.0';
 END
 OUTPUT
-select * from t1 where cast(field as DATETIME) < '2006-11-06 04:08:36.0'
+select * from t1 where cast(field as datetime) < '2006-11-06 04:08:36.0'
 END
 INPUT
 select hex(char(2557));
@@ -11030,7 +11030,7 @@ INPUT
 select word, word=cast(0xdf AS CHAR) as t from t1 having t > 0;
 END
 OUTPUT
-select word, word = cast(0xdf as CHAR) as t from t1 having t > 0
+select word, word = cast(0xdf as char) as t from t1 having t > 0
 END
 INPUT
 select max(t2.a1) from t1 left outer join t2 on t1.a2=t2.a1 and 1=0 where t2.a1='AAA';
@@ -11330,7 +11330,7 @@ INPUT
 select cast("1:2:3" as TIME) = "1:02:03";
 END
 OUTPUT
-select cast('1:2:3' as TIME) = '1:02:03' from dual
+select cast('1:2:3' as time) = '1:02:03' from dual
 END
 INPUT
 select left('hello', -18446744073709551616);
@@ -13418,7 +13418,7 @@ INPUT
 select CAST(CAST(1-2 AS UNSIGNED) AS SIGNED INTEGER);
 END
 OUTPUT
-select cast(cast(1 - 2 as UNSIGNED) as SIGNED) from dual
+select cast(cast(1 - 2 as unsigned) as signed) from dual
 END
 INPUT
 select a1,a2,b,max(c),min(c) from t3 where (a2 = 'a') and (b = 'b') group by a1;
@@ -13796,7 +13796,7 @@ INPUT
 select cast(NULL as DATE);
 END
 OUTPUT
-select cast(null as DATE) from dual
+select cast(null as date) from dual
 END
 INPUT
 select substring('hello', 1, -18446744073709551615);
@@ -14624,7 +14624,7 @@ INPUT
 select * from t1 where word=CAST(0xDF as CHAR);
 END
 OUTPUT
-select * from t1 where word = cast(0xDF as CHAR)
+select * from t1 where word = cast(0xDF as char)
 END
 INPUT
 select datediff("1997-12-31 23:59:59.000001","1997-12-30");
@@ -16364,7 +16364,7 @@ INPUT
 select CONVERT("2004-01-22 21:45:33",DATE);
 END
 OUTPUT
-select convert('2004-01-22 21:45:33', DATE) from dual
+select convert('2004-01-22 21:45:33', date) from dual
 END
 INPUT
 select a as gci1 from t1 where a like 'さしすせそかきくけこあいうえお%';
@@ -20018,7 +20018,7 @@ INPUT
 select cast(NULL as BINARY);
 END
 OUTPUT
-select cast(null as BINARY) from dual
+select cast(null as binary) from dual
 END
 INPUT
 select * from v_bug25347;
@@ -20168,7 +20168,7 @@ INPUT
 select * from t1 where word between CAST(0xDF AS CHAR) and CAST(0xDF AS CHAR);
 END
 OUTPUT
-select * from t1 where word between cast(0xDF as CHAR) and cast(0xDF as CHAR)
+select * from t1 where word between cast(0xDF as char) and cast(0xDF as char)
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_unicode_ci;
@@ -20450,7 +20450,7 @@ INPUT
 select * from t1 where word like CAST(0xDF as CHAR);
 END
 OUTPUT
-select * from t1 where word like cast(0xDF as CHAR)
+select * from t1 where word like cast(0xDF as char)
 END
 INPUT
 select * from information_schema.schema_privileges where grantee like '%user%' and table_schema !='performance_schema' order by grantee;
@@ -21050,7 +21050,7 @@ INPUT
 select * from t1 where word2=CAST(0xDF as CHAR);
 END
 OUTPUT
-select * from t1 where word2 = cast(0xDF as CHAR)
+select * from t1 where word2 = cast(0xDF as char)
 END
 INPUT
 select * from t1 where MATCH(a,b) AGAINST ("collections" WITH QUERY EXPANSION);

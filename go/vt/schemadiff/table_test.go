@@ -1890,7 +1890,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 1",
 			from:  "create table t1 (id int primary key) row_format=compressed",
 			to:    "create table t1 (id int primary key) ",
-			diff:  "alter table t1 row_format DEFAULT",
+			diff:  "alter table t1 row_format default",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT DEFAULT",
 			textdiffs: []string{
 				"-) ROW_FORMAT COMPRESSED",

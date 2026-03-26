@@ -91,8 +91,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 
 			hasErr: false,
 		},
@@ -115,8 +115,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 	}
 
@@ -160,8 +160,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 
 			hasErr: false,
 		},
@@ -183,8 +183,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tprimary key (id),\n" +
 				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tkey fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 		{
 			desc: "bad ddl has error",
@@ -234,8 +234,8 @@ func TestStripAutoIncrement(t *testing.T) {
 				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 		{
 			desc: "has no auto increment",
@@ -248,8 +248,8 @@ func TestStripAutoIncrement(t *testing.T) {
 				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 		{
 			desc: "has auto increment with secondary key",
@@ -266,8 +266,8 @@ func TestStripAutoIncrement(t *testing.T) {
 				"\tc2 varchar(128),\n" +
 				"\tunique key c1 (c1),\n" +
 				"\tprimary key (id)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 		{
 			desc: "has auto increment with multi-col PK",
@@ -282,8 +282,8 @@ func TestStripAutoIncrement(t *testing.T) {
 				"\tc1 varchar(128) not null,\n" +
 				"\tc2 varchar(128),\n" +
 				"\tprimary key (id, c2)\n" +
-				") ENGINE InnoDB,\n" +
-				"  CHARSET latin1",
+				") engine InnoDB,\n" +
+				"  charset latin1",
 		},
 	}
 

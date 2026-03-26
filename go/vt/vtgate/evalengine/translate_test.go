@@ -97,10 +97,10 @@ func TestTranslateSimplification(t *testing.T) {
 		{"weight_string('foobar' as char(12))", ok(`weight_string('foobar' as char(12))`), ok("_binary'\x1c\xe5\x1d\xdd\x1d\xdd\x1c`\x1cG\x1e3'")},
 		{"case when 1 = 1 then 2 else 3 end", ok("case when 1 = 1 then 2 else 3"), ok("2")},
 		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`case when null then 2 when 12 = 4 then 'ohnoes' else 42`), ok(`'42'`)},
-		{"convert('a', char(2) character set utf8mb4)", ok(`convert('a', CHAR(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
-		{"convert('a', char(2) character set latin1 binary)", ok(`convert('a', CHAR(2) character set latin1_bin)`), ok(`'a'`)},
-		{"cast('a' as char(2) character set utf8mb4)", ok(`convert('a', CHAR(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
-		{"cast('a' as char(2) character set latin1 binary)", ok(`convert('a', CHAR(2) character set latin1_bin)`), ok(`'a'`)},
+		{"convert('a', char(2) character set utf8mb4)", ok(`convert('a', char(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
+		{"convert('a', char(2) character set latin1 binary)", ok(`convert('a', char(2) character set latin1_bin)`), ok(`'a'`)},
+		{"cast('a' as char(2) character set utf8mb4)", ok(`convert('a', char(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
+		{"cast('a' as char(2) character set latin1 binary)", ok(`convert('a', char(2) character set latin1_bin)`), ok(`'a'`)},
 		{"date'2022-10-03'", ok(`'2022-10-03'`), ok(`'2022-10-03'`)},
 		{"time'12:34:45'", ok(`'12:34:45'`), ok(`'12:34:45'`)},
 		{"timestamp'2022-10-03 12:34:45'", ok(`'2022-10-03 12:34:45'`), ok(`'2022-10-03 12:34:45'`)},
@@ -403,10 +403,10 @@ func TestTranslationFailures(t *testing.T) {
 	}{
 		{
 			expression:  "cast('3.4' as FLOAT)",
-			expectedErr: "Unsupported type conversion: FLOAT",
+			expectedErr: "Unsupported type conversion: float",
 		}, {
 			expression:  "cast('3.4' as FLOAT(3))",
-			expectedErr: "Unsupported type conversion: FLOAT(3)",
+			expectedErr: "Unsupported type conversion: float(3)",
 		},
 	}
 
