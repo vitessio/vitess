@@ -73,9 +73,12 @@ jobs:
               });
 
               const cutoff = new Date(Date.now() - MAX_PR_AGE_DAYS * 24 * 60 * 60 * 1000);
+              const isScheduled = !process.env.INPUT_BRANCH;
               prs = allPRs
                 .filter(pr => new Date(pr.updated_at) > cutoff)
-                .filter(pr => pr.base.ref === inputBranch || pr.base.ref.startsWith('release-'))
+                .filter(pr => isScheduled
+                  ? pr.base.ref === 'main' || pr.base.ref.startsWith('release-')
+                  : pr.base.ref === inputBranch)
                 .slice(0, MAX_PRS_TO_PROCESS);
             }
 
