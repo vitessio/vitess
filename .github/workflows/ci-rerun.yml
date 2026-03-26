@@ -21,6 +21,7 @@ on:
 
 concurrency:
   group: ci-rerun
+  cancel-in-progress: true
 
 permissions:
   actions: write
