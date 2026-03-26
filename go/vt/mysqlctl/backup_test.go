@@ -930,13 +930,14 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			wantNoLogMsg:  true,
 		},
 		{
-			name: "SetSuperReadOnly failure",
+			name: "SetSuperReadOnly failure with FailOnError true",
 			params: &BackupParams{
 				TabletType: topodatapb.TabletType_PRIMARY,
 				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
 					Queries:     []string{"OPTIMIZE TABLE foo"},
 					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
 				},
 				Logger: logutil.NewMemoryLogger(),
 			},
@@ -945,6 +946,24 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			},
 			wantErr:       true,
 			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError false",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: false,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+			},
+			wantErr:    false,
+			wantLogMsg: "Failed to disable super_read_only for init SQL queries",
 		},
 	}
 

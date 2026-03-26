@@ -555,7 +555,11 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	// may have been started with super-read-only enabled via my.cnf.
 	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
 	if err != nil {
-		return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		if params.InitSQL.FailOnError {
+			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		}
+		params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Continuing with backup as fail-on-error is false", err)
+		return nil
 	}
 	if resetFunc != nil {
 		defer func() {
