@@ -467,14 +467,19 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (Rese
 		return nil, fmd.SetSuperReadOnlyError
 	}
 	prev := fmd.SuperReadOnly.Load()
+	prevReadOnly := fmd.ReadOnly
 	fmd.SuperReadOnly.Store(on)
-	fmd.ReadOnly = on
+	// In real MySQL, enabling super_read_only implies read_only = ON,
+	// but disabling super_read_only does not change read_only.
+	if on {
+		fmd.ReadOnly = true
+	}
 	if prev == on {
 		return nil, nil
 	}
 	return func() error {
 		fmd.SuperReadOnly.Store(prev)
-		fmd.ReadOnly = prev
+		fmd.ReadOnly = prevReadOnly
 		return nil
 	}, nil
 }
