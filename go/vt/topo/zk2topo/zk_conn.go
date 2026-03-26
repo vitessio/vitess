@@ -258,6 +258,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 
 	for i := range maxAttempts {
 		if i > 0 {
+			zkConnAcquisitionRetry.Add(1)
 			// Add a bit of backoff time before retrying:
 			// 1 second base + up to 5 seconds.
 			time.Sleep(1*time.Second + time.Duration(rand.Int64N(5e9)))
