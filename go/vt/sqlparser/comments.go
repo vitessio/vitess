@@ -202,23 +202,36 @@ func hasCommentPrefix(sql string) bool {
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
 // such as /*!50708 sql here */
 func ExtractMysqlComment(sql string) (string, string) {
-	sql = sql[3 : len(sql)-2]
+	version, innerSQL, _ := extractMysqlComment(sql)
+	return version, innerSQL
+}
+
+// extractMysqlComment extracts the version and inner SQL from a MySQL
+// versioned comment (e.g. /*!80102 UPPER(a) */), and also returns the
+// byte offset of the inner SQL within the original comment string.
+func extractMysqlComment(sql string) (string, string, int) {
+	body := sql[3 : len(sql)-2] // strip /*! and */
 
 	digitCount := 0
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
+	endOfVersionIndex := strings.IndexFunc(body, func(c rune) bool {
 		digitCount++
 		return !unicode.IsDigit(c) || digitCount == 6
 	})
 	if endOfVersionIndex < 0 {
-		return "", ""
+		return "", "", 0
 	}
 	if endOfVersionIndex < 5 {
 		endOfVersionIndex = 0
 	}
-	version := sql[0:endOfVersionIndex]
-	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
+	version := body[0:endOfVersionIndex]
+	afterVersion := body[endOfVersionIndex:]
+	innerSQL := strings.TrimFunc(afterVersion, unicode.IsSpace)
 
-	return version, innerSQL
+	// Compute the offset of innerSQL within the original sql string:
+	// 3 (for "/*!") + endOfVersionIndex + leading whitespace trimmed
+	offset := 3 + endOfVersionIndex + (len(afterVersion) - len(strings.TrimLeftFunc(afterVersion, unicode.IsSpace)))
+
+	return version, innerSQL, offset
 }
 
 const commentDirectivePreamble = "/*vt+"

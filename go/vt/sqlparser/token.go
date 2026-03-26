@@ -43,7 +43,9 @@ type Tokenizer struct {
 	posVarIndex    int
 	partialDDL     Statement
 	multi          bool
-	specialComment *Tokenizer
+	specialComment       *Tokenizer
+	specialCommentOffset int // base offset in outer buffer for mapping inner tokenizer positions
+	posAfterComment      int // saved Pos for resuming after special comment is consumed
 
 	Pos       int
 	buf       string
@@ -159,10 +161,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
-			// return the specialComment scan result as the result
+			// Map the inner tokenizer's positions back to the outer buffer
+			// so that yyloc spans reference the correct positions.
+			tkn.currStart = tkn.specialCommentOffset + specialComment.currStart
+			tkn.Pos = tkn.specialCommentOffset + specialComment.Pos
 			return tok, val
 		}
-		// leave specialComment scan mode after all stream consumed.
+		// Restore Pos to resume scanning the outer buffer after the comment.
+		tkn.Pos = tkn.posAfterComment
 		tkn.specialComment = nil
 	}
 
@@ -722,11 +728,13 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		tkn.skip(1)
 	}
 
-	commentVersion, sql := ExtractMysqlComment(tkn.buf[start:tkn.Pos])
+	commentVersion, sql, innerOffset := extractMysqlComment(tkn.buf[start:tkn.Pos])
 
 	if tkn.parser.version >= commentVersion {
 		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
 		tkn.specialComment = tkn.parser.NewStringTokenizer(sql)
+		tkn.specialCommentOffset = start + innerOffset
+		tkn.posAfterComment = tkn.Pos
 	}
 
 	return tkn.Scan()

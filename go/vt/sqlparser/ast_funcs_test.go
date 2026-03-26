@@ -363,6 +363,10 @@ func TestAliasedExprColumnName(t *testing.T) {
 		// Comments inside expressions are preserved (matches MySQL)
 		{"SELECT a + /* middle */ b FROM t", "a + /* middle */ b"},
 		{"SELECT COUNT(/* inner */ *) FROM t", "COUNT(/* inner */ *)"},
+		// Versioned comments — alias is the inner expression, not the comment wrapper
+		{"SELECT /*!80102 UPPER(a) */ FROM t", "UPPER(a)"},
+		{"SELECT /*! LOWER(a) */ FROM t", "LOWER(a)"},
+		{"SELECT /*!80102 1 + 1 */ FROM t", "1 + 1"},
 	}
 
 	for _, tt := range tests {
