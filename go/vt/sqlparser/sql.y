@@ -50,7 +50,10 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
-%struct {
+%locations
+%loctype location
+
+%union {
   empty         struct{}
   LengthScaleOption LengthScaleOption
   tableName     TableName
@@ -64,9 +67,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
-}
 
-%union {
   statement       Statement
   statements      []Statement
   selStmt         SelectStatement
@@ -282,12 +283,6 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // When we see '(', we can either reduce ignore_or_replace_opt to empty or shift '(' to parse table_spec.
 // We want shifting to take precedence, so we add lower precedence to the reduce rule.
 %nonassoc EMPTY_IGNORE_OR_REPLACE
-// EXPRESSION_PREC_START is used to resolve shift-reduce conflicts caused by the empty mark_start and mark_end rules
-// in select_expression. These rules capture input positions for implicit column aliases.
-// On '*' lookahead, the parser can shift '*' (for SELECT *) or reduce the empty mark_start — shifting is correct.
-// On 'MEMBER' lookahead, the parser can shift MEMBER (to continue expression MEMBER OF ...) or reduce mark_end — shifting is correct.
-// Giving mark_start/mark_end lower precedence than '*' and MEMBER resolves both conflicts.
-%nonassoc EXPRESSION_PREC_START
 
 %token LEX_ERROR
 %left <str> UNION
@@ -635,7 +630,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> partition_comment partition_data_directory partition_index_directory
 %type <intPtr> length_opt
-%type <integer> func_datetime_precision mark_start mark_end
+%type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -5562,26 +5557,26 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| mark_start expression mark_end as_ci_opt
+| expression as_ci_opt
   {
-    ae := &AliasedExpr{Expr: $2, As: $4}
-    if !$4.NotEmpty() {
-      switch $2.(type) {
+    ae := &AliasedExpr{Expr: $1, As: $2}
+    if !$2.NotEmpty() {
+      switch $1.(type) {
       case *ColName, *Literal:
         // ColName and Literal already have deterministic ColumnName() output
       default:
-        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression($1, $3)
+        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
       }
     }
     $$ = ae
   }
-| mark_start table_id '.' '*' mark_end
+| table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Name: $2}}
+    $$ = &StarExpr{TableName: TableName{Name: $1}}
   }
-| mark_start table_id '.' reserved_table_id '.' '*' mark_end
+| table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $2, Name: $4}}
+    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
 as_ci_opt:
@@ -5602,18 +5597,6 @@ col_alias:
 | STRING
   {
     $$ = NewIdentifierCI(string($1))
-  }
-
-mark_start:
-  %prec EXPRESSION_PREC_START
-  {
-    $$ = yylex.(*Tokenizer).currStart
-  }
-
-mark_end:
-  %prec EXPRESSION_PREC_START
-  {
-    $$ = yylex.(*Tokenizer).prevEnd
   }
 
 from_opt:

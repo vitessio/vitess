@@ -3,6 +3,7 @@ module vitess.io/vitess
 go 1.26.1
 
 tool (
+	github.com/vitessio/goyacc
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
 )
@@ -162,6 +163,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
+	github.com/vitessio/goyacc v0.0.0-20260326155227-faab0f9d3c4f // indirect
 	go.opentelemetry.io/collector/component v1.42.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.136.0 // indirect

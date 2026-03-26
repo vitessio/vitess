@@ -49,7 +49,27 @@ type Tokenizer struct {
 	buf       string
 	parser    *Parser
 	currStart int // start position of current token (set in Scan after skipBlank)
-	prevEnd   int // end position of previous token (set in Lex before Scan)
+}
+
+// location tracks the byte-offset span [start, end) of a grammar symbol
+// in the input buffer. Used by the parser's %locations feature.
+type location struct {
+	start int
+	end   int
+}
+
+// yyLocDefault merges locations during reductions. For non-empty
+// productions (n > 0), it spans from the first RHS symbol's start to
+// the last RHS symbol's end. For empty productions (n == 0), it
+// creates a zero-width span at the predecessor's end position.
+var yyLocDefault = func(cur *location, rhs []yySymType, n int) {
+	if n > 0 {
+		cur.start = rhs[1].yyloc.start
+		cur.end = rhs[n].yyloc.end
+	} else {
+		cur.start = rhs[0].yyloc.end
+		cur.end = rhs[0].yyloc.end
+	}
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -77,7 +97,6 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		}
 	}
 
-	tkn.prevEnd = tkn.Pos
 	typ, val := tkn.Scan()
 	for typ == COMMENT {
 		if tkn.AllowComments {
@@ -92,7 +111,9 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
-	lval.str = val
+	lval.yyloc.start = tkn.currStart
+	lval.yyloc.end = tkn.Pos
+	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ
