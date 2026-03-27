@@ -21,6 +21,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -453,19 +454,23 @@ func TestTrackerRequestsOnlyGTIDAndDDL(t *testing.T) {
 }
 
 func TestWaitWithContextStopsOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan bool, 1)
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan bool, 1)
 
-	go func() {
-		done <- waitWithContext(ctx, time.Minute)
-	}()
+		go func() {
+			done <- waitWithContext(ctx, time.Minute)
+		}()
 
-	cancel()
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
 
-	select {
-	case waited := <-done:
-		require.False(t, waited)
-	case <-time.After(time.Second):
-		require.FailNow(t, "waitWithContext did not stop after context cancellation")
-	}
+		select {
+		case waited := <-done:
+			require.False(t, waited)
+		default:
+			require.FailNow(t, "waitWithContext did not stop after context cancellation")
+		}
+	})
 }

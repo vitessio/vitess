@@ -144,7 +144,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.V(2).Info(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
+	log.Debug(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -157,7 +157,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.V(2).Info(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
+		log.Debug(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
 	}
 	return t, nil
 }
@@ -287,7 +287,7 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx == len(h.schemas) {
-		log.V(2).Info(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
+		log.Debug(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
 		return h.schemas[len(h.schemas)-1].schema[tableName.String()]
 	}
 	if idx == 0 && !pos.Equal(h.schemas[idx].pos) {
