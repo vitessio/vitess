@@ -329,6 +329,11 @@ func TestVersionedCommentParsing(t *testing.T) {
 			query:    "SELECT /*!90000 1 /* nested */ + 2 */ 42",
 			expected: "select 42 from dual",
 		},
+		{
+			name:     "nested version comment inside skipped version comment",
+			query:    "SELECT /*!90000 1 /*!99999 nested */ + 2 */ 42",
+			expected: "select 42 from dual",
+		},
 	}
 
 	for _, tt := range tests {
