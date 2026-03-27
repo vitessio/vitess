@@ -22,7 +22,7 @@ function fail() {
 }
 
 function vtctldclient() {
-  docker compose exec vtctld vtctldclient --server localhost:15999 "$@"
+  docker compose exec -T vtctld vtctldclient --server localhost:15999 "$@"
 }
 
 function wait_for_healthy_shard() {
