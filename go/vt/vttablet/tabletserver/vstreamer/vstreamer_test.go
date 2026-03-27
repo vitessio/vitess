@@ -587,8 +587,8 @@ func isolateSchemaVersionTable(t *testing.T) {
 	}))
 	t.Cleanup(func() {
 		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "delete from _vt.schema_version"))
-		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("insert into _vt.schema_version select * from %s", backupTable)))
-		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("drop table %s", backupTable)))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.schema_version select * from "+backupTable))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "drop table "+backupTable))
 	})
 }
 
