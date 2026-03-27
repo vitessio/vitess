@@ -1,4 +1,11 @@
 services:
+  vitess-lite:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
+    profiles: [build]
+
   etcd:
     image: quay.io/coreos/etcd:v3.5.21
     command:
@@ -13,9 +20,7 @@ services:
       retries: 30
 
   vtctld:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vtctld-up.sh"]
     environment:
       - CELL=${CELL}
@@ -35,9 +40,7 @@ services:
       retries: 30
 
   vtgate:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vtgate-up.sh"]
     environment:
       - CELL=${CELL}
@@ -58,9 +61,7 @@ services:
       retries: 30
 
   vtorc:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vtorc-up.sh"]
     environment:
       - CELL=${CELL}
@@ -75,9 +76,7 @@ services:
         condition: service_healthy
 
   vtadmin:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vtadmin-up.sh"]
     ports:
       - "14200:14200"
@@ -101,9 +100,7 @@ services:
 
   # Commerce keyspace tablets (profile: commerce)
   vttablet100:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -116,15 +113,12 @@ services:
       - "16100:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet101:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -137,15 +131,12 @@ services:
       - "16101:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet102:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -158,16 +149,13 @@ services:
       - "16102:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   # Customer keyspace tablets (profile: customer)
   vttablet200:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -180,15 +168,12 @@ services:
       - "16200:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet201:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -201,15 +186,12 @@ services:
       - "16201:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet202:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -222,16 +204,13 @@ services:
       - "16202:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   # Sharded customer keyspace tablets (profile: sharded)
   vttablet300:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -245,15 +224,12 @@ services:
       - "16300:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet301:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -267,15 +243,12 @@ services:
       - "16301:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet302:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -289,15 +262,12 @@ services:
       - "16302:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet400:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -311,15 +281,12 @@ services:
       - "16400:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet401:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -333,15 +300,12 @@ services:
       - "16401:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy
 
   vttablet402:
-    build:
-      context: ../..
-      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -355,7 +319,6 @@ services:
       - "16402:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-
     depends_on:
       vtctld:
         condition: service_healthy

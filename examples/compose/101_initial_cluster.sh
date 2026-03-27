@@ -18,6 +18,7 @@
 
 source ./env.sh
 
+docker compose --profile build build
 docker compose --profile commerce up -d
 
 vtctldclient CreateKeyspace --durability-policy=semi_sync commerce || fail "Failed to create commerce keyspace. If the compose example was previously running, please run ./501_teardown.sh to clean it up and then re-run this step."
