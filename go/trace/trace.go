@@ -147,6 +147,7 @@ var (
 		viperutil.Options[float64]{
 			Default:  0.1,
 			EnvVars:  []string{"JAEGER_SAMPLER_PARAM"},
+			Aliases:  []string{"trace.jaeger.sampling_rate"},
 			FlagName: "tracing-sampling-rate",
 		},
 	)

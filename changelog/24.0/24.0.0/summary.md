@@ -224,7 +224,7 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 Vitess now supports [OpenTelemetry](https://opentelemetry.io/) as a tracing backend. To use it, set `--tracer opentelemetry` on any Vitess binary. Traces are exported via OTLP/gRPC, configurable with the following flags:
 
-- `--otel-endpoint` (default `localhost:4317`): OpenTelemetry collector endpoint.
+- `--otel-endpoint`: OpenTelemetry collector endpoint. If empty, the `OTEL_EXPORTER_OTLP_ENDPOINT` env var is used; if that is also unset, the OTel SDK defaults to `localhost:4317`.
 - `--otel-insecure` (default `false`): use insecure connection to the collector.
 - `--tracing-sampling-rate` (default `0.1`): sampling rate for traces (shared across all tracing backends).
 

@@ -117,7 +117,11 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 		}))
 	}
 
-	log.Info(fmt.Sprintf("OpenTelemetry tracing enabled for %s, exporting to %s", serviceName, otelEndpoint.Get()))
+	endpoint := otelEndpoint.Get()
+	if endpoint == "" {
+		endpoint = "(OTEL_EXPORTER_OTLP_ENDPOINT or default localhost:4317)"
+	}
+	log.Info(fmt.Sprintf("OpenTelemetry tracing enabled for %s, exporting to %s", serviceName, endpoint))
 
 	tracer := tp.Tracer("vitess.io/vitess")
 
