@@ -710,7 +710,17 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	}
 
 	// Version not satisfied — skip the entire comment.
+	// Track one level of /* ... */ nesting so that a nested comment's
+	// closing */ does not prematurely end the versioned comment.
 	for {
+		if tkn.cur() == '/' && tkn.peek(1) == '*' {
+			// Nested /* ... */ comment — consume and discard it.
+			tkn.skip(2)
+			if tok, val := tkn.scanCommentType2(); tok == LEX_ERROR {
+				return tok, val
+			}
+			continue
+		}
 		if tkn.cur() == '*' {
 			tkn.skip(1)
 			if tkn.cur() == '/' {
