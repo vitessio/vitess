@@ -39,6 +39,7 @@ type warmingReadsVCursor struct {
 	warmingReadsChannel     chan bool
 	warmingReadsTimeout     time.Duration
 	warmingReadsExecuteFunc func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onResolveDestinationsFn func(context.Context)
 }
 
 func (vc *warmingReadsVCursor) GetWarmingReadsPercent() int {
@@ -51,8 +52,9 @@ func (vc *warmingReadsVCursor) GetWarmingReadsChannel() chan bool {
 
 func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	clonedLogging := &loggingVCursor{
-		shards:  vc.shards,
-		results: vc.results,
+		shards:                  vc.shards,
+		results:                 vc.results,
+		onResolveDestinationsFn: vc.onResolveDestinationsFn,
 	}
 	clone := &warmingReadsVCursor{
 		loggingVCursor:          clonedLogging,
@@ -60,6 +62,7 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCurs
 		warmingReadsChannel:     vc.warmingReadsChannel,
 		warmingReadsTimeout:     vc.warmingReadsTimeout,
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
+		onResolveDestinationsFn: vc.onResolveDestinationsFn,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
 	return clone
@@ -141,6 +144,7 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 			var capturedQuery string
 			var capturedCtxHasDeadline atomic.Bool
 			var capturedCtxErr atomic.Pointer[error]
+			var resolveDestCtxHasDeadline atomic.Bool
 			// done is closed by the test to unblock the warming read goroutine
 			// after context assertions have been made.
 			done := make(chan struct{})
@@ -152,6 +156,10 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				warmingReadsPercent: 100,
 				warmingReadsChannel: make(chan bool, 1),
 				warmingReadsTimeout: 5 * time.Second,
+				onResolveDestinationsFn: func(ctx context.Context) {
+					_, hasDeadline := ctx.Deadline()
+					resolveDestCtxHasDeadline.Store(hasDeadline)
+				},
 			}
 			vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 				if len(queries) > 0 {
@@ -187,8 +195,105 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 			// parent request context was canceled.
 			require.NoError(t, *capturedCtxErr.Load(), "warming read context should not be canceled when parent context is canceled")
 
+			// Verify findRoute received the warming context (with deadline), not the parent context.
+			require.True(t, resolveDestCtxHasDeadline.Load(), "ResolveDestinations should receive a context with deadline from the warming timeout")
+
 			// Unblock the warming read goroutine.
 			close(done)
 		})
 	}
+}
+
+func TestWarmingReadsDroppedWhenChannelFull(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	var warmingReadExecuted atomic.Bool
+	vc := &warmingReadsVCursor{
+		loggingVCursor: &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+		},
+		warmingReadsPercent: 100,
+		warmingReadsChannel: make(chan bool, 1),
+		warmingReadsTimeout: 5 * time.Second,
+	}
+	vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+		warmingReadExecuted.Store(true)
+	}
+
+	// Pre-fill the channel to simulate a full pool.
+	vc.warmingReadsChannel <- true
+
+	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	// Give any goroutine a chance to run (it shouldn't).
+	time.Sleep(50 * time.Millisecond)
+
+	require.False(t, warmingReadExecuted.Load(), "warming read should not execute when the channel is full")
+
+	// Drain the channel.
+	<-vc.warmingReadsChannel
+}
+
+func TestWarmingReadsContextTimeout(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	var capturedCtxErr atomic.Pointer[error]
+	var warmingReadExecuted atomic.Bool
+	vc := &warmingReadsVCursor{
+		loggingVCursor: &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+		},
+		warmingReadsPercent: 100,
+		warmingReadsChannel: make(chan bool, 1),
+		warmingReadsTimeout: 1 * time.Millisecond,
+	}
+	vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+		// Block until the warming context times out.
+		<-ctx.Done()
+		ctxErr := ctx.Err()
+		capturedCtxErr.Store(&ctxErr)
+		warmingReadExecuted.Store(true)
+	}
+
+	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return warmingReadExecuted.Load()
+	}, time.Second, 10*time.Millisecond, "warming read should have been executed and timed out")
+
+	require.ErrorIs(t, *capturedCtxErr.Load(), context.DeadlineExceeded, "warming read context should have timed out")
 }

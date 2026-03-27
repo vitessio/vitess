@@ -474,10 +474,11 @@ type loggingVCursor struct {
 
 	parser *sqlparser.Parser
 
-	onMirrorClonesFn       func(context.Context) VCursor
-	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
-	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
-	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
+	onMirrorClonesFn        func(context.Context) VCursor
+	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
+	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
+	onResolveDestinationsFn func(context.Context)
 
 	metrics *Metrics
 }
@@ -670,6 +671,9 @@ func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primi
 }
 
 func (f *loggingVCursor) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	if f.onResolveDestinationsFn != nil {
+		f.onResolveDestinationsFn(ctx)
+	}
 	f.log = append(f.log, fmt.Sprintf("ResolveDestinations %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
 	if f.shardErr != nil {
 		return nil, nil, f.shardErr

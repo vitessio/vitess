@@ -533,6 +533,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 		go func(replicaVCursor VCursor) {
 			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
+			// Defers run LIFO: channel slot is released first, then context is canceled.
 			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
