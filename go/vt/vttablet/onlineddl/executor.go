@@ -901,7 +901,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
-			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
 	}()
 
