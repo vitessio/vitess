@@ -2,7 +2,7 @@ name: 'Setup MySQL'
 description: 'Set up MySQL server for use in GitHub Actions workflows'
 inputs:
   flavor:
-    description: 'The flavor of MySQL to use (e.g. mysql-5.7, mysql-8.0, mysql-8.4)'
+    description: 'The flavor of MySQL to use (e.g. mysql-5.7, mysql-8.0, mysql-8.4, mysql-9.6)'
     required: true
 runs:
   using: "composite"
@@ -53,6 +53,11 @@ runs:
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+        elif [[ "${{ inputs.flavor }}" == "mysql-9.6" ]]; then
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-innovation | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server=9.6.* mysql-client=9.6.*
         else
           echo "Unsupported MySQL flavor: ${{ inputs.flavor }}"
           exit 1

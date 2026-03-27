@@ -279,7 +279,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
+DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 mysql96 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 BOOTSTRAP_VERSION=54
 ensure_bootstrap_version:

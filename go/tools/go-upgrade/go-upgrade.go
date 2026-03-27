@@ -364,9 +364,12 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
 		"./docker/lite/Dockerfile.percona80",
+		"./docker/lite/Dockerfile.mysql96",
+		"./docker/lite/Dockerfile.percona80",
 		"./docker/lite/Dockerfile.percona84",
 		"./docker/vttestserver/Dockerfile.mysql80",
 		"./docker/vttestserver/Dockerfile.mysql84",
+		"./docker/vttestserver/Dockerfile.mysql96",
 	}
 	filesToChange, err := getListOfFilesInPaths(explore)
 	if err != nil {

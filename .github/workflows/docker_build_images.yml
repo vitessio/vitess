@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ mysql80, mysql84 ]
+        branch: [ mysql80, mysql84, mysql96 ]
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest, mysql80, mysql84, percona80, percona84 ]
+        branch: [ latest, mysql80, mysql84, mysql96, percona80, percona84 ]
 
     steps:
       - name: Check out code

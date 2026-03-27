@@ -1,0 +1,33 @@
+# Copyright 2026 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM $image
+
+USER root
+
+# Install MySQL 9.6 (Innovation Release)
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done && \
+    for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
+    echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-innovation' > /etc/apt/sources.list.d/mysql.list && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+    } | debconf-set-selections && \
+    apt-get update -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server=9.6.* mysql-community-server=9.6.* mysql-community-server-core=9.6.* mysql-client=9.6.* mysql-community-client=9.6.* mysql-community-client-core=9.6.* mysql-community-client-plugins=9.6.* mysql-common=9.6.* libmysqlclient-dev=9.6.* libdbd-mysql-perl rsync libev4 libcurl4-openssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+USER vitess
