@@ -30,4 +30,4 @@ vtctldclient ApplyVSchema --vschema="$(cat ../common/vschema_commerce_initial.js
 echo "Vitess commerce cluster is up!"
 echo "  - vtgate MySQL:  mysql -h 127.0.0.1 -P 15306"
 echo "  - vtctld web:    http://localhost:15000"
-echo "  - vtadmin:       http://localhost:14200"
+echo "  - vtadmin:       http://localhost:14201"

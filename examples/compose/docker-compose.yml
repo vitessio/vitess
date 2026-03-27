@@ -91,9 +91,20 @@ services:
     volumes:
       - ./scripts:/vt/scripts:ro
       - ./vtadmin:/vt/config/vtadmin:ro
+      - vtadmin-web-build:/vt/web/vtadmin/build
     depends_on:
       vtctld:
         condition: service_healthy
+
+  vtadmin-web:
+    image: nginx:alpine
+    platform: linux/amd64
+    ports:
+      - "14201:80"
+    volumes:
+      - vtadmin-web-build:/usr/share/nginx/html:ro
+    depends_on:
+      - vtadmin
 
   # Commerce keyspace tablets (profile: commerce)
   vttablet100:
@@ -367,3 +378,6 @@ services:
     depends_on:
       vtctld:
         condition: service_healthy
+
+volumes:
+  vtadmin-web-build:

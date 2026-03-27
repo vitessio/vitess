@@ -22,8 +22,6 @@ echo "Starting vtorc..."
 # shellcheck disable=SC2086
 exec vtorc \
   ${TOPOLOGY_FLAGS} \
-  --logtostderr \
-  --alsologtostderr \
   --config-path=/vt/config/vtorc/ \
   --config-name="config.yaml" \
   --config-type="yml" \
