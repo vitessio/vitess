@@ -9,8 +9,6 @@ services:
       - --advertise-client-urls=http://etcd:2379
     ports:
       - "2379:2379"
-    volumes:
-      - etcd-data:/etcd-data
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 5s
@@ -31,7 +29,6 @@ services:
       - "15999:15999"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vtctld-data:/vt/vtdataroot
     depends_on:
       etcd:
         condition: service_healthy
@@ -116,7 +113,7 @@ services:
       - "16100:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet100-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -138,7 +135,7 @@ services:
       - "16101:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet101-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -160,7 +157,7 @@ services:
       - "16102:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet102-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -183,7 +180,7 @@ services:
       - "16200:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet200-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -205,7 +202,7 @@ services:
       - "16201:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet201-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -227,7 +224,7 @@ services:
       - "16202:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet202-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -251,7 +248,7 @@ services:
       - "16300:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet300-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -274,7 +271,7 @@ services:
       - "16301:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet301-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -297,7 +294,7 @@ services:
       - "16302:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet302-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -320,7 +317,7 @@ services:
       - "16400:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet400-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -343,7 +340,7 @@ services:
       - "16401:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet401-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
@@ -366,23 +363,7 @@ services:
       - "16402:16000"
     volumes:
       - ./scripts:/vt/scripts:ro
-      - vttablet402-data:/vt/vtdataroot
+
     depends_on:
       vtctld:
         condition: service_healthy
-
-volumes:
-  etcd-data:
-  vtctld-data:
-  vttablet100-data:
-  vttablet101-data:
-  vttablet102-data:
-  vttablet200-data:
-  vttablet201-data:
-  vttablet202-data:
-  vttablet300-data:
-  vttablet301-data:
-  vttablet302-data:
-  vttablet400-data:
-  vttablet401-data:
-  vttablet402-data:
