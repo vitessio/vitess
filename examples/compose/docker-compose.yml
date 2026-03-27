@@ -7,8 +7,6 @@ services:
       - --data-dir=/etcd-data
       - --listen-client-urls=http://0.0.0.0:2379
       - --advertise-client-urls=http://etcd:2379
-    ports:
-      - "2379:2379"
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 5s
