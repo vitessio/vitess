@@ -17,6 +17,7 @@ limitations under the License.
 package nocrosskeyspacejoins
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,7 @@ func TestNoCrossKeyspaceJoinsVSchemaSetting(t *testing.T) {
 func TestNoCrossKeyspaceJoinsVTGateFlag(t *testing.T) {
 	// Restart vtgate with the --no-cross-keyspace-joins flag.
 	originalArgs := clusterInstance.VtGateExtraArgs
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+	clusterInstance.VtGateExtraArgs = append(slices.Clone(originalArgs),
 		vtutils.GetFlagVariantForTests("--no-cross-keyspace-joins")+"=true")
 	require.NoError(t, clusterInstance.RestartVtgate())
 	vtParams = mysql.ConnParams{

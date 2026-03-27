@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -152,6 +153,21 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			},
 		},
 		{
+			name: "wrapped alternate in rhs keyspace still allowed",
+			lhs: &Projection{
+				unaryOperator: newUnaryOp(&Route{Routing: &AnyShardRouting{
+					keyspace: ks1,
+					Alternates: map[*vindexes.Keyspace]*Route{
+						ks2: makeRoute(ks2),
+					},
+				}}),
+			},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
 			name: "non-route wrapping route, cross-keyspace denied",
 			lhs: &Projection{
 				unaryOperator: newUnaryOp(makeRoute(ks1)),
@@ -177,16 +193,17 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &plancontext.PlanningContext{
+				SemTable:  &semantics.SemTable{},
 				VSchema:   tt.vschema,
 				Statement: tt.stmt,
 			}
 			if tt.expectPanic {
 				assert.Panics(t, func() {
-					checkCrossKeyspaceJoin(ctx, tt.lhs, tt.rhs)
+					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "join")
 				})
 			} else {
 				assert.NotPanics(t, func() {
-					checkCrossKeyspaceJoin(ctx, tt.lhs, tt.rhs)
+					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "join")
 				})
 			}
 		})

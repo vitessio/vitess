@@ -134,7 +134,7 @@ func mergeUnionInputs(
 	}
 
 	// Check cross-keyspace restrictions for UNIONs that cannot be merged.
-	checkCrossKeyspaceJoin(ctx, lhs, rhs)
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
 }

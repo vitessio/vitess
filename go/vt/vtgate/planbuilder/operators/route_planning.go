@@ -301,7 +301,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
-	checkCrossKeyspaceJoin(ctx, lhs, rhs)
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "join")
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {
@@ -329,10 +329,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	return join, Rewrote("logical join to applyJoin ")
 }
 
-// checkCrossKeyspaceJoin checks if the given operators would create a cross-keyspace join
+// checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
 // and if cross-keyspace joins are denied for either keyspace. If denied, it panics with an
 // error unless the ALLOW_CROSS_KEYSPACE_JOINS comment directive is set.
-func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator) {
+// The opType parameter describes the operation (e.g. "join", "UNION") for the error message.
+func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
 	lhsKs := operatorKeyspace(lhs)
 	rhsKs := operatorKeyspace(rhs)
 	if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
@@ -342,7 +343,9 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 	// If either side is an AnyShardRouting (reference table) with an alternate in the
 	// other keyspace, this is not a true cross-keyspace operation — the planner can
 	// resolve it to a single keyspace via the alternate route.
-	if hasAlternateInKeyspace(lhs, rhsKs) || hasAlternateInKeyspace(rhs, lhsKs) {
+	// We must also check that the route is not a DML target, because alternates are not
+	// used for DML targets (see getRoutesOrAlternates in join_merging.go).
+	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
 		return
 	}
 
@@ -357,18 +360,31 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 		}
 		if !allowed {
 			panic(vterrors.VT12001(
-				fmt.Sprintf("cross-keyspace join between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ to override)", lhsKs.Name, rhsKs.Name),
+				fmt.Sprintf("cross-keyspace %s between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ to override)", opType, lhsKs.Name, rhsKs.Name),
 			))
 		}
 	}
 }
 
-// hasAlternateInKeyspace checks if an operator is a Route with AnyShardRouting that
+// hasAlternateInKeyspace checks if an operator has a Route with AnyShardRouting that
 // has an alternate route in the given keyspace (e.g., a reference table available in
-// both keyspaces during a keyspace migration).
-func hasAlternateInKeyspace(op Operator, ks *vindexes.Keyspace) bool {
+// both keyspaces during a keyspace migration). It walks single-input wrapper operators
+// (Projection, Horizon, etc.) to find the underlying Route, consistent with operatorKeyspace.
+// Returns false if the route is a DML target, since alternates are not used for DML targets.
+func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	if op == nil {
+		return false
+	}
 	route, ok := op.(*Route)
 	if !ok {
+		inputs := op.Inputs()
+		if len(inputs) == 1 && inputs[0] != nil {
+			return hasAlternateInKeyspace(ctx, inputs[0], ks)
+		}
+		return false
+	}
+	// Alternates are not used for DML targets (see getRoutesOrAlternates).
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
 		return false
 	}
 	ref, ok := route.Routing.(*AnyShardRouting)
