@@ -267,11 +267,12 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 	statsTabletType.Set(s)
 	statsTabletTypeCount.Add(s, 1)
 
-	// Skip updateLocked when MySQL is local and down — it cannot connect to
-	// MySQL to transition serving state. retryTransition will handle it when
-	// MySQL comes back.
+	// Skip updateLocked when MySQL is local and down — it requires MySQL.
+	// VTOrc or VTTablet restart will repair state when MySQL comes back.
 	var err error
-	if !(ts.tm.MysqlDaemon.IsMySQLLocal() && ts.tm.MysqlDaemon.IsLocalMySQLDown(ctx)) {
+	if ts.tm.MysqlDaemon.IsMySQLLocal() && ts.tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+		ts.publishForDisplay()
+	} else {
 		err = ts.updateLocked(ctx)
 	}
 	// No need to short circuit. Apply all steps and return error in the end.

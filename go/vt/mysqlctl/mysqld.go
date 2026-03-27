@@ -349,6 +349,12 @@ func (mysqld *Mysqld) IsMySQLLocal() bool {
 // IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
 // if MySQL appears to be down. Only meaningful when IsMySQLLocal returns true.
 func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
+	// Resolve params once for both connection probe and socket file validation.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil || params.UnixSocket == "" {
+		return false
+	}
+
 	// Test if mysql is available by attempting to establish a DBA connection.
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
@@ -375,11 +381,8 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 		return false
 	}
 
-	// Finally, validate the socket file exists and that it really is a socket.
-	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if err != nil || params.UnixSocket == "" {
-		return false
-	}
+	// Validate the socket file exists and that it really is a socket. A stale
+	// socket file after SIGKILL is expected — we fall through to return true.
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
 		return false
@@ -391,10 +394,10 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	return true
 }
 
-// isFileDescriptorExhaustedProbe uses Dup to detect EMFILE/ENFILE,
+// isFileDescriptorExhaustedProbe uses syscall.Socket to detect EMFILE/ENFILE,
 // since the MySQL connector wraps the original syscall error.
 func isFileDescriptorExhaustedProbe() bool {
-	fd, err := syscall.Dup(0)
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE)
 	}

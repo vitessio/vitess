@@ -829,24 +829,28 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
-	// If MySQL is local and down, skip convertBoolToSemiSyncAction (which queries
-	// MySQL) and use SemiSyncActionNone. setReplicationSourceLocked will skip
-	// replication configuration.
-	localMySQLDown := tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx)
-	var semiSyncAction SemiSyncAction
-	if localMySQLDown {
-		semiSyncAction = SemiSyncActionNone
-	} else {
-		var err error
-		semiSyncAction, err = tm.convertBoolToSemiSyncAction(ctx, semiSync)
-		if err != nil {
-			return err
+	// If MySQL is local and down, demote PRIMARY in topo and return early — replication
+	// config requires MySQL. TOCTOU: VTOrc's repair loop handles the race.
+	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+		tablet := tm.Tablet()
+		if tablet.Type == topodatapb.TabletType_PRIMARY {
+			if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+				return err
+			}
 		}
+		log.Warn("SetReplicationSource: MySQL is down, skipping replication configuration")
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped; topo updated")
+	}
+
+	// convertBoolToSemiSyncAction queries MySQL, so it requires MySQL to be reachable.
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	if err != nil {
+		return err
 	}
 
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval, localMySQLDown)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
@@ -856,10 +860,10 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 	}
 	defer tm.unlock()
 
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0, false)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
 }
 
-func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64, localMySQLDown bool) (err error) {
+func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
@@ -871,14 +875,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
-	}
-
-	// If MySQL is local and down, everything below requires MySQL and cannot proceed.
-	// The ChangeTabletType call above will have updated the topo via publishStateLocked.
-	// VTOrc or VTTablet (re-)startup will repair replication when MySQL comes back.
-	if localMySQLDown {
-		log.Warn("setReplicationSourceLocked: MySQL is down, skipping replication configuration")
-		return nil
 	}
 
 	// See if we were replicating at all, and should be replicating.
