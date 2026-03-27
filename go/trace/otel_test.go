@@ -93,6 +93,13 @@ func TestOtelNewFromString(t *testing.T) {
 		require.NoError(t, tp.Shutdown(t.Context()))
 	}()
 
+	oldTP := otel.GetTracerProvider()
+	oldProp := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(oldTP)
+		otel.SetTextMapPropagator(oldProp)
+	})
+
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
