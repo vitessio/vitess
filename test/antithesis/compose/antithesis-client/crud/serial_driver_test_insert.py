@@ -81,13 +81,12 @@ def run_test():
         success, error, query_result = result
 
         sometimes(success, f"Get request successful", {"error":error})
-        log(f" Get request successful for {row_id}")
-
 
         if not success:
             log(f" Get request failed for {row_id}")
 
         else:
+            log(f" Get request successful for {row_id}")
             actual_id, actual_msg = query_result
             row_matches = (actual_id == row_id and actual_msg == expected_msg)
             if row_matches:
