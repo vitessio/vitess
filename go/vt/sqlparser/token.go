@@ -38,14 +38,13 @@ type Tokenizer struct {
 	ParseTrees          []Statement
 	BindVars            map[string]struct{}
 
-	lastTokenType  int
-	lastToken      string
-	posVarIndex    int
-	partialDDL     Statement
-	multi          bool
-	specialComment       *Tokenizer
-	specialCommentOffset int // base offset in outer buffer for mapping inner tokenizer positions
-	posAfterComment      int // saved Pos for resuming after special comment is consumed
+	lastTokenType      int
+	lastToken          string
+	posVarIndex        int
+	partialDDL         Statement
+	multi              bool
+	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+
 
 	Pos       int
 	buf       string
@@ -155,190 +154,203 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, string) {
-	if tkn.specialComment != nil {
-		// Enter specialComment scan mode.
-		// for scanning such kind of comment: /*! MySQL-specific code */
-		specialComment := tkn.specialComment
-		tok, val := specialComment.Scan()
-		if tok != 0 {
-			// Map the inner tokenizer's positions back to the outer buffer
-			// so that yyloc spans reference the correct positions.
-			tkn.currStart = tkn.specialCommentOffset + specialComment.currStart
-			tkn.Pos = tkn.specialCommentOffset + specialComment.Pos
-			return tok, val
+	for {
+		tkn.skipBlank()
+		// If inside a versioned comment and we've reached the closing */,
+		// skip past it and resume normal scanning.
+		if tkn.inVersionedComment && tkn.cur() == '*' && tkn.peek(1) == '/' {
+			tkn.skip(2)
+			tkn.inVersionedComment = false
+			tkn.skipBlank()
 		}
-		// Restore Pos to resume scanning the outer buffer after the comment.
-		tkn.Pos = tkn.posAfterComment
-		tkn.specialComment = nil
-	}
-
-	tkn.skipBlank()
-	tkn.currStart = tkn.Pos
-	switch ch := tkn.cur(); {
-	case ch == '@':
-		tokenID := AT_ID
-		tkn.skip(1)
-		if tkn.cur() == '@' {
-			tokenID = AT_AT_ID
+		tkn.currStart = tkn.Pos
+		switch ch := tkn.cur(); {
+		case ch == '@':
+			tokenID := AT_ID
 			tkn.skip(1)
-		}
-		var tID int
-		var tBytes string
-		if tkn.cur() == '`' {
-			tkn.skip(1)
-			tID, tBytes = tkn.scanLiteralIdentifier()
-		} else if tkn.cur() == eofChar {
-			return LEX_ERROR, ""
-		} else {
-			tID, tBytes = tkn.scanIdentifier(true)
-		}
-		if tID == LEX_ERROR {
-			return tID, ""
-		}
-		return tokenID, tBytes
-	case isLetter(ch):
-		if ch == 'X' || ch == 'x' {
-			if tkn.peek(1) == '\'' {
-				tkn.skip(2)
-				return tkn.scanHex()
-			}
-		}
-		if ch == 'B' || ch == 'b' {
-			if tkn.peek(1) == '\'' {
-				tkn.skip(2)
-				return tkn.scanBitLiteral()
-			}
-		}
-		// N\'literal' is used to create a string in the national character set
-		if ch == 'N' || ch == 'n' {
-			nxt := tkn.peek(1)
-			if nxt == '\'' || nxt == '"' {
-				tkn.skip(2)
-				return tkn.scanString(nxt, NCHAR_STRING)
-			}
-		}
-		return tkn.scanIdentifier(false)
-	case isDigit(ch):
-		return tkn.scanNumber()
-	case ch == ':':
-		return tkn.scanBindVarOrAssignmentExpression()
-	case ch == ';':
-		if tkn.multi {
-			// In multi mode, ';' is treated as EOF. So, we don't advance.
-			// Repeated calls to Scan will keep returning 0 until ParseNext
-			// forces the advance.
-			return 0, ""
-		}
-		tkn.skip(1)
-		return ';', ""
-	case ch == eofChar:
-		return 0, ""
-	default:
-		if ch == '.' && isDigit(tkn.peek(1)) {
-			return tkn.scanNumber()
-		}
-
-		tkn.skip(1)
-		switch ch {
-		case '=', ',', '(', ')', '+', '*', '%', '^', '~':
-			return int(ch), ""
-		case '&':
-			if tkn.cur() == '&' {
+			if tkn.cur() == '@' {
+				tokenID = AT_AT_ID
 				tkn.skip(1)
-				return AND, ""
 			}
-			return int(ch), ""
-		case '|':
-			if tkn.cur() == '|' {
+			var tID int
+			var tBytes string
+			if tkn.cur() == '`' {
 				tkn.skip(1)
-				return OR, ""
+				tID, tBytes = tkn.scanLiteralIdentifier()
+			} else if tkn.cur() == eofChar {
+				return LEX_ERROR, ""
+			} else {
+				tID, tBytes = tkn.scanIdentifier(true)
 			}
-			return int(ch), ""
-		case '?':
-			tkn.posVarIndex++
-			buf := make([]byte, 0, 8)
-			buf = append(buf, ":v"...)
-			buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-			return VALUE_ARG, string(buf)
-		case '.':
-			return int(ch), ""
-		case '/':
-			switch tkn.cur() {
-			case '/':
-				tkn.skip(1)
-				return tkn.scanCommentType1(2)
-			case '*':
-				tkn.skip(1)
-				if tkn.cur() == '!' && !tkn.SkipSpecialComments {
-					tkn.skip(1)
-					return tkn.scanMySQLSpecificComment()
+			if tID == LEX_ERROR {
+				return tID, ""
+			}
+			return tokenID, tBytes
+		case isLetter(ch):
+			if ch == 'X' || ch == 'x' {
+				if tkn.peek(1) == '\'' {
+					tkn.skip(2)
+					return tkn.scanHex()
 				}
-				return tkn.scanCommentType2()
-			default:
-				return int(ch), ""
 			}
-		case '#':
-			return tkn.scanCommentType1(1)
-		case '-':
-			switch tkn.cur() {
-			case '-':
-				nextChar := tkn.peek(1)
-				if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+			if ch == 'B' || ch == 'b' {
+				if tkn.peek(1) == '\'' {
+					tkn.skip(2)
+					return tkn.scanBitLiteral()
+				}
+			}
+			// N\'literal' is used to create a string in the national character set
+			if ch == 'N' || ch == 'n' {
+				nxt := tkn.peek(1)
+				if nxt == '\'' || nxt == '"' {
+					tkn.skip(2)
+					return tkn.scanString(nxt, NCHAR_STRING)
+				}
+			}
+			return tkn.scanIdentifier(false)
+		case isDigit(ch):
+			return tkn.scanNumber()
+		case ch == ':':
+			return tkn.scanBindVarOrAssignmentExpression()
+		case ch == ';':
+			if tkn.multi {
+				// In multi mode, ';' is treated as EOF. So, we don't advance.
+				// Repeated calls to Scan will keep returning 0 until ParseNext
+				// forces the advance.
+				return 0, ""
+			}
+			tkn.skip(1)
+			return ';', ""
+		case ch == eofChar:
+			if tkn.inVersionedComment {
+				// Unclosed versioned comment — report a lex error.
+				tkn.inVersionedComment = false
+				return LEX_ERROR, ""
+			}
+			return 0, ""
+		default:
+			if ch == '.' && isDigit(tkn.peek(1)) {
+				return tkn.scanNumber()
+			}
+
+			tkn.skip(1)
+			switch ch {
+			case '=', ',', '(', ')', '+', '*', '%', '^', '~':
+				return int(ch), ""
+			case '&':
+				if tkn.cur() == '&' {
+					tkn.skip(1)
+					return AND, ""
+				}
+				return int(ch), ""
+			case '|':
+				if tkn.cur() == '|' {
+					tkn.skip(1)
+					return OR, ""
+				}
+				return int(ch), ""
+			case '?':
+				tkn.posVarIndex++
+				buf := make([]byte, 0, 8)
+				buf = append(buf, ":v"...)
+				buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
+				return VALUE_ARG, string(buf)
+			case '.':
+				return int(ch), ""
+			case '/':
+				if tkn.inVersionedComment {
+					if tkn.cur() == '*' {
+						// Nested /* ... */ comment inside a versioned comment:
+						// consume and discard it (spec allows one level of nesting).
+						tkn.skip(1)
+						if tok, val := tkn.scanCommentType2(); tok == LEX_ERROR {
+							return tok, val
+						}
+						continue
+					}
+					// Not a comment start — return / as division operator.
+					return int(ch), ""
+				}
+				switch tkn.cur() {
+				case '/':
 					tkn.skip(1)
 					return tkn.scanCommentType1(2)
-				}
-			case '>':
-				tkn.skip(1)
-				if tkn.cur() == '>' {
+				case '*':
 					tkn.skip(1)
-					return JSON_UNQUOTE_EXTRACT_OP, ""
+					if tkn.cur() == '!' && !tkn.SkipSpecialComments {
+						tkn.skip(1)
+						if tok, val := tkn.scanMySQLSpecificComment(); tok == LEX_ERROR {
+							return tok, val
+						}
+						continue
+					}
+					return tkn.scanCommentType2()
+				default:
+					return int(ch), ""
 				}
-				return JSON_EXTRACT_OP, ""
-			}
-			return int(ch), ""
-		case '<':
-			switch tkn.cur() {
-			case '>':
-				tkn.skip(1)
-				return NE, ""
+			case '#':
+				return tkn.scanCommentType1(1)
+			case '-':
+				switch tkn.cur() {
+				case '-':
+					nextChar := tkn.peek(1)
+					if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+						tkn.skip(1)
+						return tkn.scanCommentType1(2)
+					}
+				case '>':
+					tkn.skip(1)
+					if tkn.cur() == '>' {
+						tkn.skip(1)
+						return JSON_UNQUOTE_EXTRACT_OP, ""
+					}
+					return JSON_EXTRACT_OP, ""
+				}
+				return int(ch), ""
 			case '<':
-				tkn.skip(1)
-				return SHIFT_LEFT, ""
-			case '=':
-				tkn.skip(1)
 				switch tkn.cur() {
 				case '>':
 					tkn.skip(1)
-					return NULL_SAFE_EQUAL, ""
+					return NE, ""
+				case '<':
+					tkn.skip(1)
+					return SHIFT_LEFT, ""
+				case '=':
+					tkn.skip(1)
+					switch tkn.cur() {
+					case '>':
+						tkn.skip(1)
+						return NULL_SAFE_EQUAL, ""
+					default:
+						return LE, ""
+					}
 				default:
-					return LE, ""
+					return int(ch), ""
 				}
-			default:
-				return int(ch), ""
-			}
-		case '>':
-			switch tkn.cur() {
-			case '=':
-				tkn.skip(1)
-				return GE, ""
 			case '>':
-				tkn.skip(1)
-				return SHIFT_RIGHT, ""
-			default:
+				switch tkn.cur() {
+				case '=':
+					tkn.skip(1)
+					return GE, ""
+				case '>':
+					tkn.skip(1)
+					return SHIFT_RIGHT, ""
+				default:
+					return int(ch), ""
+				}
+			case '!':
+				if tkn.cur() == '=' {
+					tkn.skip(1)
+					return NE, ""
+				}
 				return int(ch), ""
+			case '\'', '"':
+				return tkn.scanString(ch, STRING)
+			case '`':
+				return tkn.scanLiteralIdentifier()
+			default:
+				return LEX_ERROR, string(byte(ch))
 			}
-		case '!':
-			if tkn.cur() == '=' {
-				tkn.skip(1)
-				return NE, ""
-			}
-			return int(ch), ""
-		case '\'', '"':
-			return tkn.scanString(ch, STRING)
-		case '`':
-			return tkn.scanLiteralIdentifier()
-		default:
-			return LEX_ERROR, string(byte(ch))
 		}
 	}
 }
@@ -710,10 +722,45 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
-// scanMySQLSpecificComment scans a MySQL comment pragma, which always starts with '//*`
+// scanMySQLSpecificComment handles a MySQL versioned comment (/*!NNNNN ... */).
+// If the server version satisfies the comment's version, inVersionedComment is
+// set so that Scan reads inner tokens normally. Otherwise the entire comment
+// body is skipped. Returns LEX_ERROR if the comment is malformed; the caller
+// should continue scanning in all other cases.
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
+
+	// Read up to 5 version digits inline.
+	versionStart := tkn.Pos
+	for i := 0; i < 5 && isDigit(tkn.cur()); i++ {
+		tkn.skip(1)
+	}
+	versionStr := tkn.buf[versionStart:tkn.Pos]
+	if len(versionStr) < 5 {
+		// Fewer than 5 digits: no version, digits are part of the content.
+		versionStr = ""
+		tkn.Pos = versionStart
+	}
+
+	if tkn.parser.version >= versionStr {
+		// Version satisfied — Scan() will read inner tokens and detect
+		// the closing */ via the inVersionedComment flag.
+		tkn.inVersionedComment = true
+		return 0, ""
+	}
+
+	// Version not satisfied — skip the entire comment.
+	// Track one level of /* ... */ nesting so that a nested comment's
+	// closing */ does not prematurely end the versioned comment.
 	for {
+		if tkn.cur() == '/' && tkn.peek(1) == '*' {
+			// Nested /* ... */ comment — consume and discard it.
+			tkn.skip(2)
+			if tok, val := tkn.scanCommentType2(); tok == LEX_ERROR {
+				return tok, val
+			}
+			continue
+		}
 		if tkn.cur() == '*' {
 			tkn.skip(1)
 			if tkn.cur() == '/' {
@@ -727,17 +774,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		}
 		tkn.skip(1)
 	}
-
-	commentVersion, sql, innerOffset := extractMysqlComment(tkn.buf[start:tkn.Pos])
-
-	if tkn.parser.version >= commentVersion {
-		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
-		tkn.specialComment = tkn.parser.NewStringTokenizer(sql)
-		tkn.specialCommentOffset = start + innerOffset
-		tkn.posAfterComment = tkn.Pos
-	}
-
-	return tkn.Scan()
+	return 0, ""
 }
 
 func (tkn *Tokenizer) cur() uint16 {

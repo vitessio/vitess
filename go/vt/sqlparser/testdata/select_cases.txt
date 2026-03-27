@@ -20251,8 +20251,8 @@ END
 INPUT
 select 1/*!2*/;
 END
-OUTPUT
-select 1 from dual
+ERROR
+syntax error at position 13 near '2'
 END
 INPUT
 select a, t1.* as 'with_alias', b from t1;
