@@ -125,6 +125,27 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 				return stmt
 			}(),
 		},
+		{
+			name: "non-route wrapping route, cross-keyspace denied",
+			lhs: &Projection{
+				unaryOperator: newUnaryOp(makeRoute(ks1)),
+			},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+			},
+			expectPanic: true,
+		},
+		{
+			name: "non-route wrapping route, cross-keyspace allowed",
+			lhs: &Projection{
+				unaryOperator: newUnaryOp(makeRoute(ks1)),
+			},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": false, "ks2": false},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -142,6 +163,57 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 					checkCrossKeyspaceJoin(ctx, tt.lhs, tt.rhs)
 				})
 			}
+		})
+	}
+}
+
+func TestOperatorKeyspace(t *testing.T) {
+	ks1 := &vindexes.Keyspace{Name: "ks1"}
+
+	makeRoute := func(ks *vindexes.Keyspace) *Route {
+		return &Route{Routing: &NoneRouting{keyspace: ks}}
+	}
+
+	tests := []struct {
+		name     string
+		op       Operator
+		expected *vindexes.Keyspace
+	}{
+		{
+			name:     "route operator",
+			op:       makeRoute(ks1),
+			expected: ks1,
+		},
+		{
+			name:     "route with nil keyspace",
+			op:       makeRoute(nil),
+			expected: nil,
+		},
+		{
+			name:     "projection wrapping route",
+			op:       &Projection{unaryOperator: newUnaryOp(makeRoute(ks1))},
+			expected: ks1,
+		},
+		{
+			name:     "deeply nested single-input operators",
+			op:       &Projection{unaryOperator: newUnaryOp(&Projection{unaryOperator: newUnaryOp(makeRoute(ks1))})},
+			expected: ks1,
+		},
+		{
+			name:     "multi-input operator returns nil",
+			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
+			expected: nil,
+		},
+		{
+			name:     "non-route with no inputs",
+			op:       &Projection{},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, operatorKeyspace(tt.op))
 		})
 	}
 }

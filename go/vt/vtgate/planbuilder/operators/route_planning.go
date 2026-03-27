@@ -333,13 +333,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 // and if cross-keyspace joins are denied for either keyspace. If denied, it panics with an
 // error unless the ALLOW_CROSS_KEYSPACE_JOINS comment directive is set.
 func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator) {
-	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
-	if lhsRoute == nil || rhsRoute == nil {
-		return
-	}
-
-	lhsKs := lhsRoute.Routing.Keyspace()
-	rhsKs := rhsRoute.Routing.Keyspace()
+	lhsKs := operatorKeyspace(lhs)
+	rhsKs := operatorKeyspace(rhs)
 	if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
 		return
 	}
@@ -359,6 +354,23 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 			))
 		}
 	}
+}
+
+// operatorKeyspace extracts the keyspace from an operator. For Route operators it returns
+// the routing keyspace directly. For single-input wrapper operators (e.g. Projection, Horizon),
+// it walks down to find the underlying Route's keyspace.
+func operatorKeyspace(op Operator) *vindexes.Keyspace {
+	if op == nil {
+		return nil
+	}
+	if route, ok := op.(*Route); ok {
+		return route.Routing.Keyspace()
+	}
+	inputs := op.Inputs()
+	if len(inputs) == 1 && inputs[0] != nil {
+		return operatorKeyspace(inputs[0])
+	}
+	return nil
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {

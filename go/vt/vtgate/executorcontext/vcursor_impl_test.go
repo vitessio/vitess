@@ -435,3 +435,66 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 }
 
 var _ ResultsObserver = (*fakeObserver)(nil)
+
+func TestAllowCrossKeyspaceJoins(t *testing.T) {
+	ks1 := &vindexes.Keyspace{Name: "ks1"}
+	ks2 := &vindexes.Keyspace{Name: "ks2"}
+	vschema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: {Keyspace: ks1, NoCrossKeyspaceJoins: true},
+			ks2.Name: {Keyspace: ks2, NoCrossKeyspaceJoins: false},
+		},
+	}
+
+	tests := []struct {
+		name                 string
+		noCrossKeyspaceJoins bool
+		keyspace             string
+		expectedAllowed      bool
+		expectedError        string
+	}{
+		{
+			name:            "allowed by default",
+			keyspace:        ks2.Name,
+			expectedAllowed: true,
+		},
+		{
+			name:            "denied by keyspace vschema setting",
+			keyspace:        ks1.Name,
+			expectedAllowed: false,
+		},
+		{
+			name:                 "denied by vtgate flag",
+			noCrossKeyspaceJoins: true,
+			keyspace:             ks2.Name,
+			expectedAllowed:      false,
+		},
+		{
+			name:                 "vtgate flag overrides keyspace setting",
+			noCrossKeyspaceJoins: true,
+			keyspace:             ks2.Name,
+			expectedAllowed:      false,
+		},
+		{
+			name:          "unknown keyspace",
+			keyspace:      "unknown",
+			expectedError: "cannot find keyspace for: unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := VCursorConfig{NoCrossKeyspaceJoins: tt.noCrossKeyspaceJoins}
+			vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, fakeObserver{}, cfg, nil)
+			require.NoError(t, err)
+
+			allowed, err := vc.AllowCrossKeyspaceJoins(tt.keyspace)
+			if tt.expectedError != "" {
+				require.ErrorContains(t, err, tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedAllowed, allowed)
+			}
+		})
+	}
+}
