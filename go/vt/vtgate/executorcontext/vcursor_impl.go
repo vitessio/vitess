@@ -295,12 +295,15 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 }
 
 func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
+<<<<<<< HEAD
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
 	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) // nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
+=======
+>>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
 	v := &VCursorImpl{
 		config:         vc.config,
 		SafeSession:    NewAutocommitSession(vc.SafeSession.Session),
@@ -311,7 +314,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		executor:       vc.executor,
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
-		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		logStats:       &logstats.LogStats{},
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
@@ -325,6 +328,19 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	v.marginComments.Trailing += "/* warming read */"
 
 	return v
+}
+
+func (vc *VCursorImpl) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	baseCtx := context.WithoutCancel(ctx)
+	timedCtx, cancel := context.WithTimeout(baseCtx, vc.config.WarmingReadsTimeout)
+	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
+
+	vc.logStats = &logstats.LogStats{Ctx: clonedCtx}
+
+	return clonedCtx, cancel
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {

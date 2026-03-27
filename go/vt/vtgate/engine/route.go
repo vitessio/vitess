@@ -512,22 +512,45 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
+<<<<<<< HEAD
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
+=======
+	// Remove FOR UPDATE locks for warming reads if present
+	warmingQueries := queries
+	if modifiedQuery, ok := removeForUpdateLocks(route.QueryStatement); ok {
+		warmingQueries = make([]*querypb.BoundQuery, len(queries))
+		for i, query := range queries {
+			warmingQueries[i] = &querypb.BoundQuery{
+				Sql:           modifiedQuery,
+				BindVariables: query.BindVariables,
+			}
+		}
+	}
+
+>>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
 	// if there's no more room in the channel, drop the warming read
 	case warmingReadsChannel <- true:
+		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 		go func(replicaVCursor VCursor) {
+			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
+			// Defers run LIFO: channel slot is released first, then context is canceled.
+			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
 			}()
-			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 			if err != nil {
 				return
 			}
 
+<<<<<<< HEAD
 			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+=======
+			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+>>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
 			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {
