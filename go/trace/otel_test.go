@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -86,22 +87,75 @@ func TestOtelSpan(t *testing.T) {
 	require.Equal(t, context.TODO(), ctx)
 }
 
+func TestOtelNewFromString(t *testing.T) {
+	tp := sdktrace.NewTracerProvider()
+	defer func() {
+		require.NoError(t, tp.Shutdown(t.Context()))
+	}()
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	svc := &otelTracingService{Tracer: tp.Tracer("test")}
+
+	// Create a parent span and inject its context into a carrier string.
+	_, parentCtx := svc.New(t.Context(), "parent")
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(parentCtx, carrier)
+
+	carrierJSON, err := json.Marshal(map[string]string(carrier))
+	require.NoError(t, err)
+	carrierStr := base64.StdEncoding.EncodeToString(carrierJSON)
+
+	// Round-trip: extract from the carrier string and verify a valid child span is created.
+	span, ctx, err := svc.NewFromString(t.Context(), carrierStr, "child")
+	require.NoError(t, err)
+	require.NotNil(t, span)
+	require.NotNil(t, ctx)
+	span.Finish()
+
+	// Verify the child span is recoverable from the returned context.
+	fromCtx, ok := svc.FromContext(ctx)
+	assert.True(t, ok)
+	assert.NotNil(t, fromCtx)
+
+	// Invalid carrier string should return an error.
+	_, _, err = svc.NewFromString(t.Context(), "not-valid-base64!", "bad")
+	assert.Error(t, err)
+
+	// Valid base64 but no traceparent should return an error.
+	emptyCarrier, err := json.Marshal(map[string]string{"foo": "bar"})
+	require.NoError(t, err)
+	_, _, err = svc.NewFromString(t.Context(), base64.StdEncoding.EncodeToString(emptyCarrier), "bad")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "extracted span context is not valid")
+}
+
 func TestKeyValue(t *testing.T) {
 	kv := keyValue("str", "value")
 	assert.Equal(t, "str", string(kv.Key))
+	assert.Equal(t, "value", kv.Value.AsString())
 
 	kv = keyValue("bool", true)
 	assert.Equal(t, "bool", string(kv.Key))
+	assert.Equal(t, true, kv.Value.AsBool())
 
 	kv = keyValue("int", 42)
 	assert.Equal(t, "int", string(kv.Key))
+	assert.Equal(t, int64(42), kv.Value.AsInt64())
 
 	kv = keyValue("int64", int64(42))
 	assert.Equal(t, "int64", string(kv.Key))
+	assert.Equal(t, int64(42), kv.Value.AsInt64())
 
 	kv = keyValue("float64", 3.14)
 	assert.Equal(t, "float64", string(kv.Key))
+	assert.Equal(t, 3.14, kv.Value.AsFloat64())
 
 	kv = keyValue("other", []int{1, 2, 3})
 	assert.Equal(t, "other", string(kv.Key))
+	assert.Equal(t, "[1 2 3]", kv.Value.AsString())
 }

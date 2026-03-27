@@ -26,6 +26,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -117,6 +118,7 @@ func (ots *otelTracingService) otelUnaryServerInterceptor() grpc.UnaryServerInte
 		resp, err := handler(ctx, req)
 		if err != nil {
 			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 		}
 		return resp, err
 	}
@@ -131,6 +133,7 @@ func (ots *otelTracingService) otelStreamServerInterceptor() grpc.StreamServerIn
 		err := handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
 		if err != nil {
 			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 		}
 		return err
 	}
@@ -145,6 +148,7 @@ func (ots *otelTracingService) otelUnaryClientInterceptor() grpc.UnaryClientInte
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err != nil {
 			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 		}
 		return err
 	}
@@ -158,6 +162,7 @@ func (ots *otelTracingService) otelStreamClientInterceptor() grpc.StreamClientIn
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			span.End()
 			return cs, err
 		}
@@ -184,6 +189,7 @@ func (s *trackedClientStream) CloseSend() error {
 	err := s.ClientStream.CloseSend()
 	if err != nil {
 		s.span.RecordError(err)
+		s.span.SetStatus(codes.Error, err.Error())
 		s.endSpan()
 	}
 	return err
@@ -194,6 +200,7 @@ func (s *trackedClientStream) RecvMsg(m any) error {
 	if err != nil {
 		if err != io.EOF {
 			s.span.RecordError(err)
+			s.span.SetStatus(codes.Error, err.Error())
 		}
 		s.endSpan()
 	}
@@ -204,6 +211,7 @@ func (s *trackedClientStream) SendMsg(m any) error {
 	err := s.ClientStream.SendMsg(m)
 	if err != nil {
 		s.span.RecordError(err)
+		s.span.SetStatus(codes.Error, err.Error())
 		s.endSpan()
 	}
 	return err

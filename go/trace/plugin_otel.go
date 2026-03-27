@@ -87,6 +87,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 		),
 	)
 	if err != nil {
+		_ = exporter.Shutdown(ctx)
 		return nil, &nilCloser{}, fmt.Errorf("failed to create resource: %w", err)
 	}
 
