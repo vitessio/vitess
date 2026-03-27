@@ -975,7 +975,7 @@ func testScheduler(t *testing.T) {
 		// when the server has a low wait_timeout configured. Without this protection,
 		// MySQL would kill cutover connections mid-operation, potentially causing
 		// data corruption.
-		ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+		ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime*5)
 		defer cancel()
 
 		// Read the original wait_timeout.
