@@ -21,9 +21,7 @@ function fail() {
   exit 1
 }
 
-function vtctldclient() {
-  docker compose exec -T vtctld vtctldclient --server localhost:15999 "$@"
-}
+alias vtctldclient="vtctldclient --server localhost:15999"
 
 function wait_for_healthy_shard() {
   if [[ -z ${1} || -z ${2} ]]; then
