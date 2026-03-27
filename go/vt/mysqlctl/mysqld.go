@@ -721,7 +721,9 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	stopCtx, stopCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer stopCancel()
 	if conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool); err == nil {
-		mysqld.executeSuperQueryListConn(stopCtx, conn, []string{conn.Conn.StopReplicationCommand()})
+		if stopCmd := conn.Conn.StopReplicationCommand(); stopCmd != "" && stopCmd != "unsupported" {
+			mysqld.executeSuperQueryListConn(stopCtx, conn, []string{stopCmd})
+		}
 		conn.Recycle()
 	}
 
