@@ -161,7 +161,7 @@ To enable session mode, set the flag when starting VTGate:
 
 #### <a id="vtgate-cross-keyspace-joins"/>New controls for cross-keyspace JOINs</a>
 
-VTGate now supports disabling cross-keyspace joins, preventing queries that would join tables across different keyspaces. This can be configured at two levels:
+VTGate now supports disabling cross-keyspace joins and UNIONs, preventing queries that would combine data from different keyspaces. This can be configured at two levels:
 
 **VTGate flag** (applies to all queries):
 
@@ -175,13 +175,13 @@ VTGate now supports disabling cross-keyspace joins, preventing queries that woul
 vtctldclient ApplyVSchema --vschema='{"no_cross_keyspace_joins": true}' my_keyspace
 ```
 
-When enabled, the planner will reject queries that require joining tables from different keyspaces. This can be overridden on a per-query basis using the `ALLOW_CROSS_KEYSPACE_JOINS` comment directive:
+When enabled, the planner will reject queries that require joining or combining (via UNION) tables from different keyspaces. This can be overridden on a per-query basis using the `ALLOW_CROSS_KEYSPACE_JOINS` comment directive:
 
 ```sql
 /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ SELECT * FROM ks1.t1 JOIN ks2.t2 ON t1.id = t2.id;
 ```
 
-The VTGate flag disables cross-keyspace joins globally, regardless of per-keyspace VSchema settings.
+The VTGate flag disables cross-keyspace joins and UNIONs globally, regardless of per-keyspace VSchema settings.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
