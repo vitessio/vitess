@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -111,16 +112,34 @@ func TestDownPrimary(t *testing.T) {
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
 
-	// simulate case where the primary's mysqld and vttablet pods/services get restarted automatically
-	// because they (or the healthchecks) fail.
-	err = curPrimary.MysqlctlProcess.StartProvideInit(false)
+	// Simulate case where a stale primary's vttablet restarts while mysqld is
+	// still down. The vttablet should detect it's a stale primary via
+	// PrimaryTermStartTime comparison and self-demote to REPLICA even though
+	// mysqld is unavailable.
+	//
+	// First, confirm the old primary's topo record still says PRIMARY — ERS
+	// could not update it because the tablet was unreachable.
+	tablet, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(curPrimary.Alias)
 	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet.GetType())
+
 	err = curPrimary.VttabletProcess.Setup()
 	require.NoError(t, err)
-	// verify the old primary rejoins as a replica with replication working
+
+	// Verify the old primary self-demotes: both the tablet's own view and
+	// the topo record should show REPLICA.
 	err = curPrimary.VttabletProcess.WaitForTabletTypes([]string{"replica"})
 	require.NoError(t, err)
+	tablet, err = clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(curPrimary.Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tablet.GetType())
+
+	// Now start mysqld — the tablet should set up replication and catch up.
+	err = curPrimary.MysqlctlProcess.StartProvideInit(false)
+	require.NoError(t, err)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, crossCellReplica}, 15*time.Second)
+	err = curPrimary.VttabletProcess.WaitForTabletStatus("SERVING")
+	require.NoError(t, err)
 }
 
 // bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.
