@@ -254,3 +254,90 @@ func TestKeyspaceToNonQualifiedTable(t *testing.T) {
 	AddKeyspace(stmt, "ks2")
 	require.Equal(t, "select col, col + (select 1 from ks2.t4) from ks.t join ks2.t2 join (select 1 from ks2.t3) as x where t.id = t2.id and x.id = t.id", String(stmt))
 }
+
+// TestVersionedCommentParsing tests MySQL versioned comment handling.
+// All expectations validated against MySQL 8.4.
+func TestVersionedCommentParsing(t *testing.T) {
+	parser, err := New(Options{MySQLServerVersion: "8.1.20"})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		query    string
+		expected string // expected formatted output after parse
+		isError  bool
+		errMsg   string // if isError, the expected error message
+	}{
+		{
+			name:     "expanded (version matches)",
+			query:    "SELECT /*!80100 JSON_VALUE(col, '$.x') AS jval, */ id FROM t",
+			expected: "select json_value(col, '$.x') as jval, id from t",
+		},
+		{
+			name:     "discarded (version too new)",
+			query:    "SELECT /*!90000 UPPER('hidden'), */ 42",
+			expected: "select 42 from dual",
+		},
+		{
+			name:     "no version number (always expanded)",
+			query:    "SELECT /*! 1 + 1 */ FROM dual",
+			expected: "select 1 + 1 from dual",
+		},
+		{
+			name:     "nested regular comment inside version comment",
+			query:    "SELECT /*!80100 1 /* a comment */ + 2 */",
+			expected: "select 1 + 2 from dual",
+		},
+		{
+			name:     "nested version comment inside version comment treated as regular comment",
+			query:    "SELECT /*!80100 1 /*!99999 noise */ + 2 */",
+			expected: "select 1 + 2 from dual",
+		},
+		{
+			name:    "unclosed version comment",
+			query:   "SELECT /*!80100 1 + 2",
+			isError: true,
+			errMsg:  "syntax error at position 22",
+		},
+		{
+			name:     "version number without whitespace after digits",
+			query:    "SELECT 1 + /*!801002*/",
+			expected: "select 1 + 2 from dual",
+		},
+		{
+			name:     "empty version comment",
+			query:    "SELECT 1 /*!80100 */",
+			expected: "select 1 from dual",
+		},
+		{
+			name:     "fewer than 5 version digits are treated as content",
+			query:    "SELECT /*!8010*/ FROM dual",
+			expected: "select 8010 from dual",
+		},
+		{
+			name:     "non-digits after /*! are treated as content",
+			query:    "SELECT /*! 1 + 2*/ FROM dual",
+			expected: "select 1 + 2 from dual",
+		},
+		{
+			name:     "no space before closing */",
+			query:    "SELECT /*!80100 42*/ FROM dual",
+			expected: "select 42 from dual",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := parser.Parse(tt.query)
+			if tt.isError {
+				require.Error(t, err, "expected parse error for: %s", tt.query)
+				if tt.errMsg != "" {
+					assert.EqualError(t, err, tt.errMsg)
+				}
+				return
+			}
+			require.NoError(t, err, "unexpected error for: %s", tt.query)
+			assert.Equal(t, tt.expected, String(stmt))
+		})
+	}
+}
