@@ -764,7 +764,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			return err
 		}
 		if ti.Type == topodatapb.TabletType_PRIMARY {
-			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, false)
 		}
 	}
 
@@ -831,15 +831,17 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 	// If MySQL is local and down, demote PRIMARY in topo and return early — replication
 	// config requires MySQL. TOCTOU: VTOrc's repair loop handles the race.
+	// Uses ChangeTabletTypeDeferUpdateLocked so topo is updated synchronously
+	// but updateLocked (query service, VREngine) runs async best-effort.
 	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
 		tablet := tm.Tablet()
 		if tablet.Type == topodatapb.TabletType_PRIMARY {
-			if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			if err := tm.tmState.ChangeTabletTypeDeferUpdateLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 				return err
 			}
 		}
 		log.Warn("SetReplicationSource: MySQL is down, skipping replication configuration")
-		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped; topo updated")
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped")
 	}
 
 	// convertBoolToSemiSyncAction queries MySQL, so it requires MySQL to be reachable.

@@ -88,11 +88,10 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
-	defer func() {
-		// we remove the tablet from our global list
+	t.Cleanup(func() {
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
-	}()
+	})
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)

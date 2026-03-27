@@ -170,9 +170,11 @@ func (tr *Tracker) process(ctx context.Context) {
 				restorePreviousGTID()
 			}
 			log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended (error: %v), retrying in 5 seconds...", err))
+			retryTimer := time.NewTimer(5 * time.Second)
 			select {
-			case <-time.After(5 * time.Second):
+			case <-retryTimer.C:
 			case <-ctx.Done():
+				retryTimer.Stop()
 				return
 			}
 		}

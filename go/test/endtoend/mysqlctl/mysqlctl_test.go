@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -166,9 +166,9 @@ func TestAutoDetect(t *testing.T) {
 }
 
 func TestIsLocalMySQLDown(t *testing.T) {
-	tabletDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", replicaTablet.TabletUID))
-	socketFile := path.Join(tabletDir, "mysql.sock")
-	pidFile := path.Join(tabletDir, "mysql.pid")
+	tabletDir := filepath.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", replicaTablet.TabletUID))
+	socketFile := filepath.Join(tabletDir, "mysql.sock")
+	pidFile := filepath.Join(tabletDir, "mysql.pid")
 
 	connParams := mysql.ConnParams{
 		Uname:      "root",

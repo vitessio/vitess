@@ -205,7 +205,19 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 	return nil
 }
 
+// ChangeTabletTypeDeferUpdateLocked is like ChangeTabletType but runs
+// updateLocked (query service, VREngine, etc) asynchronously. Use when
+// MySQL may be down — topo is updated synchronously, and updateLocked
+// runs best-effort in the background (with retryTransition on failure).
+func (ts *tmState) ChangeTabletTypeDeferUpdateLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+	return ts.changeTabletType(ctx, tabletType, action, true)
+}
+
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+	return ts.changeTabletType(ctx, tabletType, action, false)
+}
+
+func (ts *tmState) changeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, deferUpdateLocked bool) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
@@ -240,12 +252,12 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 	}
 
-	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action)
+	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action, deferUpdateLocked)
 	return err
 }
 
 // updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
-func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction, deferUpdateLocked bool) error {
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
@@ -267,11 +279,20 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 	statsTabletType.Set(s)
 	statsTabletTypeCount.Add(s, 1)
 
-	// Skip updateLocked when MySQL is local and down — it requires MySQL.
-	// VTOrc or VTTablet restart will repair state when MySQL comes back.
 	var err error
-	if ts.tm.MysqlDaemon.IsMySQLLocal() && ts.tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+	if deferUpdateLocked {
+		// Run updateLocked async — topo is updated synchronously below,
+		// but query service/VREngine transitions happen best-effort.
+		// If updateLocked fails (e.g. MySQL is down), retryTransition
+		// in the state manager will keep retrying until it succeeds.
 		ts.publishForDisplay()
+		go func() {
+			ts.mu.Lock()
+			defer ts.mu.Unlock()
+			if updateErr := ts.updateLocked(context.Background()); updateErr != nil {
+				log.Warn(fmt.Sprintf("Deferred updateLocked failed (will retry): %v", updateErr))
+			}
+		}()
 	} else {
 		err = ts.updateLocked(ctx)
 	}
