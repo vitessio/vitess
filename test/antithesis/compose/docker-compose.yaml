@@ -214,7 +214,7 @@ services:
       - '/script/run-forever.sh /vt/bin/vtgate --topo_implementation etcd2 --topo_global_server_address
         etcd:2379 --topo_global_root /vitess/global --logtostderr=true --port 8080 --grpc_port
         15999 --mysql_server_port 15306 --mysql_auth_server_impl none --cell test --cells_to_watch
-        test --tablet_types_to_wait PRIMARY,REPLICA,RDONLY --service_map ''grpc-vtgateservice''
+        test --tablet_types_to_wait PRIMARY,REPLICA --service_map ''grpc-vtgateservice''
         --normalize_queries=true '
     depends_on:
       init_cell:
