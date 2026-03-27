@@ -16,6 +16,11 @@
 
 # Utility functions for compose example scripts.
 
+# Enable alias expansion in non-interactive shells (must be before alias definitions).
+if [[ -n ${BASH} ]]; then
+  shopt -s expand_aliases
+fi
+
 function fail() {
   echo "ERROR: ${1}"
   exit 1
@@ -79,8 +84,3 @@ function wait_for_healthy_shard() {
 
 # Set aliases for direct use
 alias mysql="mysql -h 127.0.0.1 -P 15306 --binary-as-hex=false"
-
-# If using bash, make sure aliases are expanded in non-interactive shell
-if [[ -n ${BASH} ]]; then
-  shopt -s expand_aliases
-fi

@@ -1,7 +1,6 @@
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.21
-    platform: linux/amd64
     command:
       - etcd
       - --data-dir=/etcd-data
@@ -17,7 +16,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vtctld-up.sh"]
     environment:
       - CELL=${CELL}
@@ -40,7 +38,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vtgate-up.sh"]
     environment:
       - CELL=${CELL}
@@ -64,7 +61,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vtorc-up.sh"]
     environment:
       - CELL=${CELL}
@@ -82,7 +78,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vtadmin-up.sh"]
     ports:
       - "14200:14200"
@@ -96,7 +91,6 @@ services:
 
   vtadmin-web:
     image: nginx@sha256:e7257f1ef28ba17cf7c248cb8ccf6f0c6e0228ab9c315c152f9c203cd34cf6d1
-    platform: linux/amd64
     ports:
       - "14201:80"
     volumes:
@@ -110,7 +104,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -132,7 +125,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -154,7 +146,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [commerce]
     environment:
@@ -177,7 +168,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -199,7 +189,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -221,7 +210,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [customer]
     environment:
@@ -244,7 +232,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -267,7 +254,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -290,7 +276,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -313,7 +298,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -336,7 +320,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
@@ -359,7 +342,6 @@ services:
     build:
       context: ../..
       dockerfile: docker/lite/Dockerfile
-    platform: linux/amd64
     command: ["/vt/scripts/vttablet-up.sh"]
     profiles: [sharded]
     environment:
