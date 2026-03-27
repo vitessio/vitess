@@ -98,7 +98,7 @@ func (h *historian) Open() error {
 	log.Info("Historian: opening")
 
 	ctx := tabletenv.LocalContext()
-	if err := h.loadFromDB(ctx); err != nil {
+	if err := h.loadFromDBBestEffort(ctx); err != nil {
 		log.Error(fmt.Sprintf("Historian failed to open: %v", err))
 		return err
 	}
@@ -130,10 +130,22 @@ func (h *historian) RegisterVersionEvent() error {
 		return nil
 	}
 	ctx := tabletenv.LocalContext()
-	if err := h.loadFromDB(ctx); err != nil {
+	if err := h.loadFromDBBestEffort(ctx); err != nil {
 		return err
 	}
 	return nil
+}
+
+// RefreshForStreamStart performs a strict one-time refresh for a new stream startup.
+// Unlike open and live version-event updates, it returns schema_version read errors so
+// the caller can fail stream startup instead of continuing with a stale cache.
+func (h *historian) RefreshForStreamStart(ctx context.Context) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.enabled || !h.isOpen {
+		return nil
+	}
+	return h.loadFromDBStrict(ctx)
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
@@ -162,9 +174,18 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 	return t, nil
 }
 
-// loadFromDB loads all rows from the schema_version table that the historian does not have as yet
+func (h *historian) loadFromDBBestEffort(ctx context.Context) error {
+	return h.loadFromDB(ctx, false)
+}
+
+func (h *historian) loadFromDBStrict(ctx context.Context) error {
+	return h.loadFromDB(ctx, true)
+}
+
+// loadFromDB loads all rows from the schema_version table that the historian does not have as yet.
+// Query read errors are either suppressed or returned based on the caller-specific helper.
 // caller should have locked h.mu
-func (h *historian) loadFromDB(ctx context.Context) error {
+func (h *historian) loadFromDB(ctx context.Context, failOnReadError bool) error {
 	conn, err := h.conns.Get(ctx, nil)
 	if err != nil {
 		return err
@@ -182,6 +203,9 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	}
 
 	if err != nil {
+		if failOnReadError {
+			return err
+		}
 		log.Info(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
 		return nil
 	}
