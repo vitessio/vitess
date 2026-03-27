@@ -170,7 +170,10 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				warmingReadExecuted.Store(true)
 				// Block until the test has checked our context assertions,
 				// preventing defer cancel() from running.
-				<-done
+				select {
+				case <-done:
+				case <-t.Context().Done():
+				}
 			}
 
 			// Use a cancelable parent context to verify the warming read
