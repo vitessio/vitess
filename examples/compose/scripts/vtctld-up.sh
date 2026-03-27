@@ -21,7 +21,7 @@ cell=${CELL:-'zone1'}
 echo "Adding CellInfo for ${cell}..."
 set +e
 # shellcheck disable=SC2086
-vtctldclient --server internal ${TOPOLOGY_FLAGS} AddCellInfo \
+vtctldclient --server internal --log-format text ${TOPOLOGY_FLAGS} AddCellInfo \
   --root "/vitess/${cell}" \
   --server-address "etcd:2379" \
   "${cell}"

@@ -21,7 +21,7 @@ function fail() {
   exit 1
 }
 
-alias vtctldclient="vtctldclient --server localhost:15999"
+alias vtctldclient="vtctldclient --server localhost:15999 --log-format text"
 
 function wait_for_healthy_shard() {
   if [[ -z ${1} || -z ${2} ]]; then
