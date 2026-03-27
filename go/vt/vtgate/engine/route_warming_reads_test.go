@@ -39,7 +39,6 @@ type warmingReadsVCursor struct {
 	warmingReadsChannel     chan bool
 	warmingReadsTimeout     time.Duration
 	warmingReadsExecuteFunc func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
-	onResolveDestinationsFn func(context.Context)
 }
 
 func (vc *warmingReadsVCursor) GetWarmingReadsPercent() int {
@@ -62,7 +61,6 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCurs
 		warmingReadsChannel:     vc.warmingReadsChannel,
 		warmingReadsTimeout:     vc.warmingReadsTimeout,
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
-		onResolveDestinationsFn: vc.onResolveDestinationsFn,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
 	return clone
@@ -152,14 +150,14 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				loggingVCursor: &loggingVCursor{
 					shards:  []string{"-20", "20-"},
 					results: []*sqltypes.Result{defaultSelectResult},
+					onResolveDestinationsFn: func(ctx context.Context) {
+						_, hasDeadline := ctx.Deadline()
+						resolveDestCtxHasDeadline.Store(hasDeadline)
+					},
 				},
 				warmingReadsPercent: 100,
 				warmingReadsChannel: make(chan bool, 1),
 				warmingReadsTimeout: 5 * time.Second,
-				onResolveDestinationsFn: func(ctx context.Context) {
-					_, hasDeadline := ctx.Deadline()
-					resolveDestCtxHasDeadline.Store(hasDeadline)
-				},
 			}
 			vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 				if len(queries) > 0 {
