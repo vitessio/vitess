@@ -68,6 +68,35 @@ percona_mysql_shell_package() {
 	printf 'percona-mysql-shell=%s-1-1.%s\n' "${version}" "${DEBIAN_CODENAME}"
 }
 
+# Oracle's Debian repo does not publish arm64 .deb packages for the MySQL
+# flavors we use here, so on arm64 we install `mysql80` and `mysql84` from
+# Oracle's generic aarch64 tarballs and pair them with Percona's arm64
+# `percona-mysql-shell` and xtrabackup packages.
+#
+# Those Oracle tarballs still link against libaio.so.1, but trixie's t64
+# transition renamed the packaged soname to libaio.so.1t64. Create a
+# compatibility symlink so the tarball-installed mysqld starts successfully on
+# arm64 trixie images.
+ensure_mysql_tarball_compat() {
+	local libdir="/usr/lib/aarch64-linux-gnu"
+
+	if [[ "${ARCH}" != "arm64" ]]; then
+		return
+	fi
+
+	if [[ "${FLAVOR}" != "mysql80" && "${FLAVOR}" != "mysql84" ]]; then
+		return
+	fi
+
+	if [[ "${LIBAIO}" != "libaio1t64" ]]; then
+		return
+	fi
+
+	if [[ ! -e "${libdir}/libaio.so.1" ]]; then
+		ln -s "${libdir}/libaio.so.1t64" "${libdir}/libaio.so.1"
+	fi
+}
+
 # Install base packages that are common to all flavors.
 BASE_PACKAGES=(
 	bzip2
@@ -95,6 +124,7 @@ BASE_PACKAGES=(
 
 apt-get update
 apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
+ensure_mysql_tarball_compat
 
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
