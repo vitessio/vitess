@@ -75,7 +75,7 @@ func TestNoCrossKeyspaceJoinsVTGateFlag(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		clusterInstance.VtGateExtraArgs = originalArgs
-		clusterInstance.RestartVtgate()
+		require.NoError(t, clusterInstance.RestartVtgate())
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
