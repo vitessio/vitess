@@ -831,12 +831,12 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 	// If MySQL is local and down, demote PRIMARY in topo and return early — replication
 	// config requires MySQL. TOCTOU: VTOrc's repair loop handles the race.
-	// Uses ChangeTabletTypeDeferUpdateLocked so topo is updated synchronously
+	// Uses ChangeTabletTypeDeferUpdate so topo is updated synchronously
 	// but updateLocked (query service, VREngine) runs async best-effort.
 	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
 		tablet := tm.Tablet()
 		if tablet.Type == topodatapb.TabletType_PRIMARY {
-			if err := tm.tmState.ChangeTabletTypeDeferUpdateLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			if err := tm.tmState.ChangeTabletTypeDeferUpdate(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 				return err
 			}
 		}

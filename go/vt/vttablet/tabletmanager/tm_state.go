@@ -205,11 +205,11 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 	return nil
 }
 
-// ChangeTabletTypeDeferUpdateLocked is like ChangeTabletType but runs
+// ChangeTabletTypeDeferUpdate is like ChangeTabletType but runs
 // updateLocked (query service, VREngine, etc) asynchronously. Use when
 // MySQL may be down — topo is updated synchronously, and updateLocked
 // runs best-effort in the background (with retryTransition on failure).
-func (ts *tmState) ChangeTabletTypeDeferUpdateLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+func (ts *tmState) ChangeTabletTypeDeferUpdate(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	return ts.changeTabletType(ctx, tabletType, action, true)
 }
 

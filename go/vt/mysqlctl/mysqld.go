@@ -350,12 +350,14 @@ func (mysqld *Mysqld) IsMySQLLocal() bool {
 // if MySQL appears to be down. Only meaningful when IsMySQLLocal returns true.
 func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	// Resolve params once for both connection probe and socket file validation.
+	// Returns false (not down) on param failure — conservative to avoid false
+	// positives that could trigger unnecessary demotions.
 	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil || params.UnixSocket == "" {
 		return false
 	}
 
-	// Test if mysql is available by attempting to establish a DBA connection.
+	// Test if mysql is available by attempting a DBA connection.
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err == nil {
 		conn.Close()

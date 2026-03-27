@@ -218,7 +218,7 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 #### <a id="vttablet-stop-replica-before-shutdown"/>`STOP REPLICA` before MySQL shutdown</a>
 
-`Mysqld.Shutdown()` now issues a best-effort `STOP REPLICA` (with a 3-second timeout) before shutting down MySQL. This addresses a brief race in MySQL's [`close_connections()`](https://github.com/mysql/mysql-server/blob/mysql-8.4.0/sql/mysqld.cc#L2368-L2391) where `close_listener()` removes the unix socket before `end_slave()` stops replication threads. Without this, there is a small window where the socket is gone but replication is still running.
+`Mysqld.Shutdown()` now issues a best-effort `STOP REPLICA` (with a 5-second timeout) before shutting down MySQL. This addresses a brief race in MySQL's [`close_connections()`](https://github.com/mysql/mysql-server/blob/mysql-8.4.0/sql/mysqld.cc#L2368-L2391) where `close_listener()` removes the unix socket before `end_slave()` stops replication threads. Without this, there is a small window where the socket is gone but replication is still running.
 
 See [#19624](https://github.com/vitessio/vitess/pull/19624) and [#19625](https://github.com/vitessio/vitess/issues/19625) for details.
 
