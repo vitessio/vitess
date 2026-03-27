@@ -79,6 +79,10 @@ function wait_for_healthy_shard() {
     sleep 1
   done
 
+  if ! vtctldclient workflow --keyspace "${keyspace}" list &>/dev/null; then
+    fail "Timed out waiting for VReplication engine in ${keyspace}/${shard}"
+  fi
+
   echo "${keyspace}/${shard} is healthy!"
 }
 
