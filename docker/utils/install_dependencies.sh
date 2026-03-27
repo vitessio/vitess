@@ -19,6 +19,7 @@ export DEBIAN_FRONTEND=noninteractive
 #  - APT source lines (codename: bookworm, trixie, ...)
 #  - MySQL .deb package URLs (debian12, debian13, ...)
 #  - Library package renames (time_t ABI transition in trixie)
+ARCH=$(dpkg --print-architecture)
 DEBIAN_CODENAME=$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release)
 DEBIAN_VERSION=$(sed -n 's/^VERSION_ID="\?\([0-9]*\).*/\1/p' /etc/os-release)
 if [[ "${DEBIAN_CODENAME}" == "trixie" ]]; then
@@ -33,6 +34,14 @@ else
 	LIBTCMALLOC=libtcmalloc-minimal4
 fi
 
+EXTRA_BASE_PACKAGES=()
+if [[ "${ARCH}" == "arm64" ]] && [[ "${FLAVOR}" == "mysql80" || "${FLAVOR}" == "mysql84" ]]; then
+	EXTRA_BASE_PACKAGES=(
+		libnuma1
+		xz-utils
+	)
+fi
+
 # Set number of times to retry a download
 MAX_RETRY=20
 
@@ -42,6 +51,21 @@ do_fetch() {
 	wget \
 		--tries=$MAX_RETRY --read-timeout=30 --timeout=30 --retry-connrefused --waitretry=1 --no-dns-cache \
 		"$1" -O "$2"
+}
+
+install_mysql_tarball() {
+	local series="$1"
+	local version="$2"
+	local archive="mysql-${version}-linux-glibc2.28-aarch64.tar.xz"
+	local source="/tmp/${archive}"
+
+	do_fetch "https://cdn.mysql.com/Downloads/MySQL-${series}/${archive}" "${source}"
+	tar -xJf "${source}" -C /usr/local --strip-components=1
+}
+
+percona_mysql_shell_package() {
+	local version="$1"
+	printf 'percona-mysql-shell=%s-1-1.%s\n' "${version}" "${DEBIAN_CODENAME}"
 }
 
 # Install base packages that are common to all flavors.
@@ -66,6 +90,7 @@ BASE_PACKAGES=(
 	curl
 	percona-toolkit
 	zstd
+	"${EXTRA_BASE_PACKAGES[@]}"
 )
 
 apt-get update
@@ -77,57 +102,73 @@ mysql80)
 	if [ -z "$VERSION" ]; then
 		VERSION=8.0.43
 	fi
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	PACKAGES=(
-		"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		percona-xtrabackup-80
-	)
+	if [[ "${ARCH}" == "arm64" ]]; then
+		install_mysql_tarball "8.0" "${VERSION}"
+		PACKAGES=(
+			"$(percona_mysql_shell_package "${VERSION}")"
+			percona-xtrabackup-80
+		)
+	else
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		PACKAGES=(
+			"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/libmysqlclient21_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			percona-xtrabackup-80
+		)
+	fi
 	;;
 mysql84)
 	if [ -z "$VERSION" ]; then
 		VERSION=8.4.8
 	fi
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-	PACKAGES=(
-		"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		percona-xtrabackup-84
-	)
+	if [[ "${ARCH}" == "arm64" ]]; then
+		install_mysql_tarball "8.4" "${VERSION}"
+		PACKAGES=(
+			"$(percona_mysql_shell_package "${VERSION}")"
+			percona-xtrabackup-84
+		)
+	else
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		PACKAGES=(
+			"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client-plugins_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-client_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			percona-xtrabackup-84
+		)
+	fi
 	;;
 percona80)
 	PACKAGES=(
@@ -155,9 +196,11 @@ esac
 mkdir -p /etc/apt/keyrings
 
 # repo.mysql.com - fetch the current MySQL GPG key from a public keyserver.
-do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${MYSQL_GPG_KEY}&options=mr" /tmp/mysql-key.asc
-gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
-rm -f /tmp/mysql-key.asc
+if [[ "${ARCH}" != "arm64" ]] && [[ "${FLAVOR}" == "mysql80" || "${FLAVOR}" == "mysql84" ]]; then
+	do_fetch "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${MYSQL_GPG_KEY}&options=mr" /tmp/mysql-key.asc
+	gpg --batch --dearmor -o /etc/apt/keyrings/mysql.gpg < /tmp/mysql-key.asc
+	rm -f /tmp/mysql-key.asc
+fi
 
 # repo.percona.com - extract keyring from official percona-release package.
 do_fetch https://repo.percona.com/apt/percona-release_latest.generic_all.deb /tmp/percona-release.deb
@@ -168,21 +211,35 @@ rm -rf /tmp/percona-release.deb /tmp/percona-release-extract
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql80)
-    echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ ${DEBIAN_CODENAME} mysql-8.0" > /etc/apt/sources.list.d/mysql.list
-    ;;
+	if [[ "${ARCH}" == "arm64" ]]; then
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona-shell.list
+	else
+		echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ ${DEBIAN_CODENAME} mysql-8.0" > /etc/apt/sources.list.d/mysql.list
+	fi
+	;;
 mysql84)
-    echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ ${DEBIAN_CODENAME} mysql-8.4-lts" > /etc/apt/sources.list.d/mysql.list
-    ;;
+	if [[ "${ARCH}" == "arm64" ]]; then
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona-shell.list
+	else
+		echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ ${DEBIAN_CODENAME} mysql-8.4-lts" > /etc/apt/sources.list.d/mysql.list
+	fi
+	;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql80)
-    echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
-    ;;
+	if [[ "${ARCH}" != "arm64" ]]; then
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
+	fi
+	;;
 mysql84)
-    echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
-    ;;
+	if [[ "${ARCH}" != "arm64" ]]; then
+		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
+	fi
+	;;
 percona80)
     echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
     echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-80/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona80.list
@@ -224,4 +281,5 @@ fi
 rm -rf /var/lib/apt/lists/*
 rm -rf /var/lib/mysql/
 rm -rf /tmp/*.deb
+rm -rf /tmp/*.tar.xz
 rm -rf /etc/apt/sources.list.d/mysql.list /etc/apt/sources.list.d/percona*.list /etc/apt/keyrings/mysql.gpg /etc/apt/keyrings/percona.gpg
