@@ -328,7 +328,8 @@ func (vc *VCursorImpl) WarmingReadsContext(ctx context.Context) (context.Context
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, cancel := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout)
+	baseCtx := context.WithoutCancel(ctx)
+	timedCtx, cancel := context.WithTimeout(baseCtx, vc.config.WarmingReadsTimeout)
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	vc.logStats = &logstats.LogStats{Ctx: clonedCtx}
