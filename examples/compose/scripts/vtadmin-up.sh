@@ -22,8 +22,8 @@ echo "Starting vtadmin..."
 exec vtadmin \
   --addr "0.0.0.0:14200" \
   --http-origin "http://localhost:14201" \
-  --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15000" \
+  --http-tablet-url-tmpl "http://localhost:15{{ .Tablet.Alias.Uid }}" \
   --log-format text \
   --rbac \
   --rbac-config=/vt/config/vtadmin/rbac.yaml \
-  --cluster "id=${cluster_name},name=${cluster_name},discovery=staticfile,discovery-staticfile-path=/vt/config/vtadmin/discovery.json,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15000,schema-cache-default-expiration=1m"
+  --cluster "id=${cluster_name},name=${cluster_name},discovery=staticfile,discovery-staticfile-path=/vt/config/vtadmin/discovery.json,tablet-fqdn-tmpl=http://localhost:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m"

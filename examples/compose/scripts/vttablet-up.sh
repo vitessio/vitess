@@ -55,7 +55,7 @@ echo "Starting vttablet for ${alias}..."
 exec vttablet \
   ${TOPOLOGY_FLAGS} \
   --tablet-path "${alias}" \
-  --tablet-hostname "$(hostname)" \
+  --tablet-hostname "vttablet${uid}" \
   --init-keyspace "${keyspace}" \
   --init-shard "${shard}" \
   --init-tablet-type "${tablet_type}" \
