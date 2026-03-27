@@ -244,7 +244,10 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					tkn.skip(1)
 					if tkn.cur() == '!' && !tkn.SkipSpecialComments {
 						tkn.skip(1)
-						return tkn.scanMySQLSpecificComment()
+						if tok, val := tkn.scanMySQLSpecificComment(); tok == LEX_ERROR {
+							return tok, val
+						}
+						continue
 					}
 					return tkn.scanCommentType2()
 				default:
@@ -684,9 +687,11 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
-// scanMySQLSpecificComment scans a MySQL comment pragma (/*!NNNNN ... */).
-// If the server version satisfies the comment's version, the inner SQL is
-// scanned as regular tokens. Otherwise the entire comment is skipped.
+// scanMySQLSpecificComment handles a MySQL versioned comment (/*!NNNNN ... */).
+// If the server version satisfies the comment's version, inVersionedComment is
+// set so that Scan reads inner tokens normally. Otherwise the entire comment
+// body is skipped. Returns LEX_ERROR if the comment is malformed; the caller
+// should continue scanning in all other cases.
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
 
@@ -703,10 +708,10 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	}
 
 	if tkn.parser.version >= versionStr {
-		// Version satisfied — scan the inner SQL as regular tokens.
-		// Scan() will detect the closing */ and skip past it.
+		// Version satisfied — Scan() will read inner tokens and detect
+		// the closing */ via the inVersionedComment flag.
 		tkn.inVersionedComment = true
-		return tkn.Scan()
+		return 0, ""
 	}
 
 	// Version not satisfied — skip the entire comment.
@@ -734,7 +739,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		}
 		tkn.skip(1)
 	}
-	return tkn.Scan()
+	return 0, ""
 }
 
 func (tkn *Tokenizer) cur() uint16 {
