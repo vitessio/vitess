@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -40,11 +41,11 @@ type otelSpan struct {
 	span oteltrace.Span
 }
 
-func (s otelSpan) Finish() {
+func (s *otelSpan) Finish() {
 	s.span.End()
 }
 
-func (s otelSpan) Annotate(key string, value any) {
+func (s *otelSpan) Annotate(key string, value any) {
 	s.span.SetAttributes(keyValue(key, value))
 }
 
@@ -54,60 +55,60 @@ type otelTracingService struct {
 	Tracer oteltrace.Tracer
 }
 
-func (ots otelTracingService) New(ctx context.Context, label string) (Span, context.Context) {
+func (ots *otelTracingService) New(ctx context.Context, label string) (Span, context.Context) {
 	ctx, span := ots.Tracer.Start(ctx, label)
-	return otelSpan{span: span}, ctx
+	return &otelSpan{span: span}, ctx
 }
 
-func (ots otelTracingService) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
+func (ots *otelTracingService) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	carrier, err := extractCarrierFromString(parent)
 	if err != nil {
-		return nil, nil, vterrors.Wrapf(err, "failed to deserialize span context")
+		return nil, nil, vterrors.Wrapf(err, "failed to decode span carrier")
 	}
 
 	propagator := otel.GetTextMapPropagator()
-	ctx = propagator.Extract(ctx, carrier)
+	extractedCtx := propagator.Extract(ctx, carrier)
 
-	spanCtx := oteltrace.SpanContextFromContext(ctx)
+	spanCtx := oteltrace.SpanContextFromContext(extractedCtx)
 	if !spanCtx.IsValid() {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "failed to deserialize span context")
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "extracted span context is not valid")
 	}
 
-	ctx, span := ots.Tracer.Start(ctx, label)
-	return otelSpan{span: span}, ctx, nil
+	extractedCtx, span := ots.Tracer.Start(extractedCtx, label)
+	return &otelSpan{span: span}, extractedCtx, nil
 }
 
-func (ots otelTracingService) FromContext(ctx context.Context) (Span, bool) {
+func (ots *otelTracingService) FromContext(ctx context.Context) (Span, bool) {
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
 		return nil, false
 	}
-	return otelSpan{span: span}, true
+	return &otelSpan{span: span}, true
 }
 
-func (ots otelTracingService) NewContext(parent context.Context, s Span) context.Context {
-	oSpan, ok := s.(otelSpan)
+func (ots *otelTracingService) NewContext(parent context.Context, s Span) context.Context {
+	oSpan, ok := s.(*otelSpan)
 	if !ok {
 		return parent
 	}
 	return oteltrace.ContextWithSpan(parent, oSpan.span)
 }
 
-func (ots otelTracingService) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+func (ots *otelTracingService) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 	addInterceptors(
 		ots.otelStreamServerInterceptor(),
 		ots.otelUnaryServerInterceptor(),
 	)
 }
 
-func (ots otelTracingService) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
+func (ots *otelTracingService) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 	addInterceptors(
 		ots.otelStreamClientInterceptor(),
 		ots.otelUnaryClientInterceptor(),
 	)
 }
 
-func (ots otelTracingService) otelUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+func (ots *otelTracingService) otelUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		ctx = extractFromGRPCMetadata(ctx, propagator)
@@ -121,7 +122,7 @@ func (ots otelTracingService) otelUnaryServerInterceptor() grpc.UnaryServerInter
 	}
 }
 
-func (ots otelTracingService) otelStreamServerInterceptor() grpc.StreamServerInterceptor {
+func (ots *otelTracingService) otelStreamServerInterceptor() grpc.StreamServerInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := extractFromGRPCMetadata(ss.Context(), propagator)
@@ -135,7 +136,7 @@ func (ots otelTracingService) otelStreamServerInterceptor() grpc.StreamServerInt
 	}
 }
 
-func (ots otelTracingService) otelUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+func (ots *otelTracingService) otelUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		ctx, span := ots.Tracer.Start(ctx, method, oteltrace.WithSpanKind(oteltrace.SpanKindClient))
@@ -149,7 +150,7 @@ func (ots otelTracingService) otelUnaryClientInterceptor() grpc.UnaryClientInter
 	}
 }
 
-func (ots otelTracingService) otelStreamClientInterceptor() grpc.StreamClientInterceptor {
+func (ots *otelTracingService) otelStreamClientInterceptor() grpc.StreamClientInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		ctx, span := ots.Tracer.Start(ctx, method, oteltrace.WithSpanKind(oteltrace.SpanKindClient))
@@ -164,18 +165,27 @@ func (ots otelTracingService) otelStreamClientInterceptor() grpc.StreamClientInt
 	}
 }
 
-// trackedClientStream wraps grpc.ClientStream to end the span when the stream finishes.
+// trackedClientStream wraps grpc.ClientStream to end the span when the stream
+// finishes. The span is ended exactly once via sync.Once when RecvMsg returns
+// an error (including io.EOF) or when SendMsg/CloseSend fails.
 type trackedClientStream struct {
 	grpc.ClientStream
-	span oteltrace.Span
+	span    oteltrace.Span
+	endOnce sync.Once
+}
+
+func (s *trackedClientStream) endSpan() {
+	s.endOnce.Do(func() {
+		s.span.End()
+	})
 }
 
 func (s *trackedClientStream) CloseSend() error {
 	err := s.ClientStream.CloseSend()
 	if err != nil {
 		s.span.RecordError(err)
+		s.endSpan()
 	}
-	s.span.End()
 	return err
 }
 
@@ -185,7 +195,7 @@ func (s *trackedClientStream) RecvMsg(m any) error {
 		if err != io.EOF {
 			s.span.RecordError(err)
 		}
-		s.span.End()
+		s.endSpan()
 	}
 	return err
 }
@@ -194,7 +204,7 @@ func (s *trackedClientStream) SendMsg(m any) error {
 	err := s.ClientStream.SendMsg(m)
 	if err != nil {
 		s.span.RecordError(err)
-		s.span.End()
+		s.endSpan()
 	}
 	return err
 }
@@ -209,11 +219,13 @@ func extractFromGRPCMetadata(ctx context.Context, propagator propagation.TextMap
 }
 
 // injectIntoGRPCMetadata injects trace context into outgoing gRPC metadata.
+// The metadata is copied before injection to avoid mutating shared state.
 func injectIntoGRPCMetadata(ctx context.Context, propagator propagation.TextMapPropagator) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.MD{}
 	}
+	md = md.Copy()
 	propagator.Inject(ctx, &metadataCarrier{md: md})
 	return metadata.NewOutgoingContext(ctx, md)
 }
@@ -283,6 +295,6 @@ func keyValue(key string, value any) attribute.KeyValue {
 	case float64:
 		return attribute.Float64(key, v)
 	default:
-		return attribute.String(key, fmt.Sprintf("%v", v))
+		return attribute.String(key, fmt.Sprint(v))
 	}
 }

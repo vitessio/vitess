@@ -41,7 +41,6 @@ var (
 	otelEndpoint = viperutil.Configure(
 		otelConfigKey("endpoint"),
 		viperutil.Options[string]{
-			Default:  "localhost:4317",
 			FlagName: "otel-endpoint",
 		},
 	)
@@ -56,18 +55,22 @@ var (
 
 func init() {
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
-		fs.String("otel-endpoint", otelEndpoint.Default(), "OpenTelemetry collector endpoint (host:port for gRPC)")
+		fs.String("otel-endpoint", "", "OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used")
 		fs.Bool("otel-insecure", otelInsecure.Default(), "use insecure connection to OpenTelemetry collector")
 
 		viperutil.BindFlags(fs, otelEndpoint, otelInsecure)
 	})
+
+	tracingBackendFactories["opentelemetry"] = newOTelTracer
 }
 
 func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	opts := []otlptracegrpc.Option{
-		otlptracegrpc.WithEndpoint(otelEndpoint.Get()),
+	var opts []otlptracegrpc.Option
+	if endpoint := otelEndpoint.Get(); endpoint != "" {
+		opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
 	}
 	if otelInsecure.Get() {
 		opts = append(opts, otlptracegrpc.WithInsecure())
@@ -99,7 +102,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sdktrace.TraceIDRatioBased(rate)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(rate))),
 	)
 
 	otel.SetTracerProvider(tp)
@@ -118,7 +121,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 
 	tracer := tp.Tracer("vitess.io/vitess")
 
-	return otelTracingService{Tracer: tracer}, &otelCloser{tp: tp}, nil
+	return &otelTracingService{Tracer: tracer}, &otelCloser{tp: tp}, nil
 }
 
 type otelCloser struct {
@@ -129,8 +132,4 @@ func (c *otelCloser) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return c.tp.Shutdown(ctx)
-}
-
-func init() {
-	tracingBackendFactories["opentelemetry"] = newOTelTracer
 }

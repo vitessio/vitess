@@ -59,7 +59,7 @@ func TestOtelSpan(t *testing.T) {
 	}()
 
 	tracer := tp.Tracer("test")
-	svc := otelTracingService{Tracer: tracer}
+	svc := &otelTracingService{Tracer: tracer}
 
 	clientSpan, ctx := svc.New(t.Context(), "test-label")
 	require.NotEmpty(t, clientSpan)

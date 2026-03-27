@@ -47,7 +47,7 @@ Flags:
       --max-sequence-id int                                         max sequence ID.
       --min-sequence-id int                                         min sequence ID to generate. When max-sequence-id > min-sequence-id, for each query, a number is generated in [min-sequence-id, max-sequence-id) and attached to the end of the bind variables.
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
-      --otel-endpoint string                                        OpenTelemetry collector endpoint (host:port for gRPC) (default "localhost:4317")
+      --otel-endpoint string                                        OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
       --otel-insecure                                               use insecure connection to OpenTelemetry collector
       --parallel int                                                DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing. (default 1)
       --pprof strings                                               enable profiling
