@@ -45,7 +45,6 @@ type Tokenizer struct {
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
-
 	Pos       int
 	buf       string
 	parser    *Parser
