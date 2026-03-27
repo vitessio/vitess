@@ -29,6 +29,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
@@ -555,10 +556,13 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	// may have been started with super-read-only enabled via my.cnf.
 	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
 	if err != nil {
-		if params.InitSQL.FailOnError {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
+		} else if params.InitSQL.FailOnError {
 			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		} else {
+			params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
 		}
-		params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
 	}
 	if resetFunc != nil {
 		defer func() {

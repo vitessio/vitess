@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -946,6 +947,25 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			},
 			wantErr:       true,
 			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
+		{
+			name: "SetSuperReadOnly ERUnknownSystemVariable with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, "", "Unknown system variable 'super_read_only'")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Server does not support super_read_only",
 		},
 		{
 			name: "SetSuperReadOnly failure with FailOnError false",
