@@ -41,12 +41,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -106,9 +104,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
@@ -531,22 +527,6 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-<<<<<<< HEAD
-	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
-=======
-	// Remove FOR UPDATE locks for warming reads if present
-	warmingQueries := queries
-	if modifiedQuery, ok := removeForUpdateLocks(route.QueryStatement); ok {
-		warmingQueries = make([]*querypb.BoundQuery, len(queries))
-		for i, query := range queries {
-			warmingQueries[i] = &querypb.BoundQuery{
-				Sql:           modifiedQuery,
-				BindVariables: query.BindVariables,
-			}
-		}
-	}
-
->>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
@@ -565,11 +545,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-<<<<<<< HEAD
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
-=======
-			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
->>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
+			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {

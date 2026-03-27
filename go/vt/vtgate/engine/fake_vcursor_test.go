@@ -414,6 +414,7 @@ func (t *noopVCursor) DisableLogging()        {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
+
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }
@@ -467,24 +468,11 @@ type loggingVCursor struct {
 
 	parser *sqlparser.Parser
 
-<<<<<<< HEAD
-	onMirrorClonesFn       func(context.Context) VCursor
-	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
-	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
-	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
-=======
 	onMirrorClonesFn        func(context.Context) VCursor
 	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
 	onResolveDestinationsFn func(context.Context)
-
-	metrics *Metrics
-}
-
-func (f *loggingVCursor) GetExecutionMetrics() *Metrics {
-	return f.metrics
->>>>>>> 8c937df416 (VTGate: fix warming reads timeout context (#19674))
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
