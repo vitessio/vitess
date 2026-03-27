@@ -470,10 +470,9 @@ func TestAllowCrossKeyspaceJoins(t *testing.T) {
 			expectedAllowed:      false,
 		},
 		{
-			name:                 "vtgate flag overrides keyspace setting",
-			noCrossKeyspaceJoins: true,
-			keyspace:             ks2.Name,
-			expectedAllowed:      false,
+			name:            "vtgate flag false does not override keyspace deny",
+			keyspace:        ks1.Name,
+			expectedAllowed: false,
 		},
 		{
 			name:          "unknown keyspace",

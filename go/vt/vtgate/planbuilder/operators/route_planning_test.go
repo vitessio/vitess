@@ -126,6 +126,32 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			}(),
 		},
 		{
+			name: "cross-keyspace denied but lhs has alternate in rhs keyspace",
+			lhs: &Route{Routing: &AnyShardRouting{
+				keyspace: ks1,
+				Alternates: map[*vindexes.Keyspace]*Route{
+					ks2: makeRoute(ks2),
+				},
+			}},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
+			name: "cross-keyspace denied but rhs has alternate in lhs keyspace",
+			lhs:  makeRoute(ks1),
+			rhs: &Route{Routing: &AnyShardRouting{
+				keyspace: ks2,
+				Alternates: map[*vindexes.Keyspace]*Route{
+					ks1: makeRoute(ks1),
+				},
+			}},
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
 			name: "non-route wrapping route, cross-keyspace denied",
 			lhs: &Projection{
 				unaryOperator: newUnaryOp(makeRoute(ks1)),

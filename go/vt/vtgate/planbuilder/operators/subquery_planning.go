@@ -748,9 +748,6 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 		return nil
 	}
 
-	// Check cross-keyspace restrictions for subqueries, same as for joins.
-	checkCrossKeyspaceJoin(ctx, in, out)
-
 	inRoute, outRoute, inRouting, outRouting, sameKeyspace := getRoutesOrAlternates(ctx, inRoute, outRoute)
 	inner, outer := getRoutingType(inRouting), getRoutingType(outRouting)
 

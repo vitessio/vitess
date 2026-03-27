@@ -339,6 +339,13 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 		return
 	}
 
+	// If either side is an AnyShardRouting (reference table) with an alternate in the
+	// other keyspace, this is not a true cross-keyspace operation — the planner can
+	// resolve it to a single keyspace via the alternate route.
+	if hasAlternateInKeyspace(lhs, rhsKs) || hasAlternateInKeyspace(rhs, lhsKs) {
+		return
+	}
+
 	if sqlparser.AllowCrossKeyspaceJoinsDirective(ctx.Statement) {
 		return
 	}
@@ -354,6 +361,21 @@ func checkCrossKeyspaceJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator)
 			))
 		}
 	}
+}
+
+// hasAlternateInKeyspace checks if an operator is a Route with AnyShardRouting that
+// has an alternate route in the given keyspace (e.g., a reference table available in
+// both keyspaces during a keyspace migration).
+func hasAlternateInKeyspace(op Operator, ks *vindexes.Keyspace) bool {
+	route, ok := op.(*Route)
+	if !ok {
+		return false
+	}
+	ref, ok := route.Routing.(*AnyShardRouting)
+	if !ok {
+		return false
+	}
+	return ref.AlternateInKeyspace(ks) != nil
 }
 
 // operatorKeyspace extracts the keyspace from an operator. For Route operators it returns
