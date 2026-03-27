@@ -309,6 +309,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		executor:       vc.executor,
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
+		logStats:       &logstats.LogStats{},
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
