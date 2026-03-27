@@ -135,6 +135,10 @@ func (p PositionedErr) Error() string {
 
 // GetInputExpression extracts the original input text between start and end positions.
 // The lexer's skipBlank ensures start/end already exclude leading/trailing whitespace.
+//
+// Note that this returns a slice into the original input buffer,
+// so it will keep the original input buffer alive in memory until
+// the returned string is no longer referenced.
 func (tkn *Tokenizer) GetInputExpression(start, end int) string {
 	if start < 0 || end < 0 || start >= end || end > len(tkn.buf) {
 		return ""
