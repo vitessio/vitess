@@ -17,6 +17,7 @@ permissions: read-all
 
 jobs:
   test:
+    if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
     name: Code Coverage
     runs-on: oracle-vm-8cpu-32gb-x86-64
 
