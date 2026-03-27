@@ -44,7 +44,7 @@ vtctldclient PlannedReparentShard commerce/0 --new-primary "zone1-100"
 
 # create the schema for commerce
 vtctldclient ApplySchema --sql-file ./create_commerce_schema.sql commerce || fail "Could not apply schema for the commerce keyspace"
-vtctldclient ApplyVSchema --vschema-file ../local/vschema_commerce_seq.json commerce || fail "Could not apply vschema for the commerce keyspace"
+vtctldclient ApplyVSchema --vschema-file ../common/vschema_commerce_seq.json commerce || fail "Could not apply vschema for the commerce keyspace"
 
 # Create keyspace and set the semi_sync durability policy.
 vtctldclient CreateKeyspace --durability-policy=semi_sync customer || fail "Failed to create and configure the customer keyspace"
@@ -69,7 +69,7 @@ done
 
 # create the schema for customer
 vtctldclient ApplySchema --sql-file ./create_customer_schema.sql customer || fail "Could not apply schema for the customer keyspace"
-vtctldclient ApplyVSchema --vschema-file ../local/vschema_customer_sharded.json customer || fail "Could not apply vschema for the customer keyspace"
+vtctldclient ApplyVSchema --vschema-file ../common/vschema_customer_sharded.json customer || fail "Could not apply vschema for the customer keyspace"
 
 
 # start vtgate

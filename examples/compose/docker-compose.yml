@@ -1,0 +1,388 @@
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    platform: linux/amd64
+    command:
+      - etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtctld:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vtctld-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "15000:15000"
+      - "15999:15999"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vtctld-data:/vt/vtdataroot
+    depends_on:
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15000/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtgate:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vtgate-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "15001:15001"
+      - "15306:15306"
+      - "15991:15991"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15001/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtorc:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vtorc-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "16000:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - ../common/vtorc:/vt/config/vtorc:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vtadmin:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vtadmin-up.sh"]
+    ports:
+      - "14200:14200"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - ./vtadmin:/vt/config/vtadmin:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Commerce keyspace tablets (profile: commerce)
+  vttablet100:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=100
+      - KEYSPACE=commerce
+    ports:
+      - "15100:15000"
+      - "16100:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet100-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet101:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=101
+      - KEYSPACE=commerce
+    ports:
+      - "15101:15000"
+      - "16101:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet101-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet102:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=102
+      - KEYSPACE=commerce
+    ports:
+      - "15102:15000"
+      - "16102:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet102-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Customer keyspace tablets (profile: customer)
+  vttablet200:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=200
+      - KEYSPACE=customer
+    ports:
+      - "15200:15000"
+      - "16200:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet200-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet201:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=201
+      - KEYSPACE=customer
+    ports:
+      - "15201:15000"
+      - "16201:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet201-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet202:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=202
+      - KEYSPACE=customer
+    ports:
+      - "15202:15000"
+      - "16202:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet202-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Sharded customer keyspace tablets (profile: sharded)
+  vttablet300:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=300
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15300:15000"
+      - "16300:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet300-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet301:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=301
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15301:15000"
+      - "16301:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet301-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet302:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=302
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15302:15000"
+      - "16302:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet302-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet400:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=400
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15400:15000"
+      - "16400:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet400-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet401:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=401
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15401:15000"
+      - "16401:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet401-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet402:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    platform: linux/amd64
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=402
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15402:15000"
+      - "16402:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - vttablet402-data:/vt/vtdataroot
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+volumes:
+  etcd-data:
+  vtctld-data:
+  vttablet100-data:
+  vttablet101-data:
+  vttablet102-data:
+  vttablet200-data:
+  vttablet201-data:
+  vttablet202-data:
+  vttablet300-data:
+  vttablet301-data:
+  vttablet302-data:
+  vttablet400-data:
+  vttablet401-data:
+  vttablet402-data:
