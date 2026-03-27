@@ -21,12 +21,21 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -154,4 +163,73 @@ func TestAutoDetect(t *testing.T) {
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.NoError(t, err)
+}
+
+func TestIsLocalMySQLDown(t *testing.T) {
+	tabletDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", replicaTablet.TabletUID))
+	socketFile := path.Join(tabletDir, "mysql.sock")
+	pidFile := path.Join(tabletDir, "mysql.pid")
+
+	connParams := mysql.ConnParams{
+		Uname:      "root",
+		UnixSocket: socketFile,
+	}
+	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connParams, "")
+	mysqld := mysqlctl.NewMysqld(dbcfgs)
+	defer mysqld.Close()
+
+	t.Run("mysql is alive", func(t *testing.T) {
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()))
+	})
+
+	t.Run("mysql killed with SIGKILL", func(t *testing.T) {
+		// Restore MySQL after the test so subsequent tests are not affected.
+		t.Cleanup(func() {
+			require.NoError(t, replicaTablet.MysqlctlProcess.StartProvideInit(false))
+		})
+
+		pidBytes, err := os.ReadFile(pidFile)
+		require.NoError(t, err)
+
+		pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+		require.NoError(t, err)
+
+		require.NoError(t, syscall.Kill(pid, syscall.SIGKILL))
+
+		// Wait for MySQL to be reported as down. We check IsLocalMySQLDown rather
+		// than waiting for the socket file to disappear, because SIGKILL bypasses
+		// cleanup and the socket file may persist on disk.
+		require.Eventually(t, func() bool {
+			return mysqld.IsLocalMySQLDown(t.Context())
+		}, 30*time.Second, 100*time.Millisecond, "MySQL was not reported down after SIGKILL")
+	})
+
+	t.Run("fd exhaustion", func(t *testing.T) {
+		// Lower the fd limit so we can exhaust fds without opening thousands.
+		var original syscall.Rlimit
+		require.NoError(t, syscall.Getrlimit(syscall.RLIMIT_NOFILE, &original))
+
+		low := syscall.Rlimit{Cur: 32, Max: original.Max}
+		require.NoError(t, syscall.Setrlimit(syscall.RLIMIT_NOFILE, &low))
+		t.Cleanup(func() {
+			require.NoError(t, syscall.Setrlimit(syscall.RLIMIT_NOFILE, &original))
+		})
+
+		// Consume all remaining fds via Dup.
+		var fds []int
+		t.Cleanup(func() {
+			for _, fd := range fds {
+				syscall.Close(fd)
+			}
+		})
+		for {
+			fd, err := syscall.Dup(0)
+			if err != nil {
+				break
+			}
+			fds = append(fds, fd)
+		}
+
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()), "should not report MySQL as down when fds are exhausted")
+	})
 }
