@@ -176,10 +176,9 @@ def insert_msg(conn, msg, table_name):
             f"INSERT INTO {table_name} (id, msg) VALUES (%s, %s)",
             (row_id, msg)
         )
-        lastrowid = cursor.lastrowid
         cursor.close()
         conn.commit()
-        return True, None, lastrowid
+        return True, None, row_id
     except Exception as e:
         try:
             cursor.close()
