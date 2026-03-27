@@ -55,7 +55,7 @@ var (
 
 func init() {
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
-		fs.String("otel-endpoint", "", "OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used")
+		fs.String("otel-endpoint", "", "OpenTelemetry collector endpoint (host:port for gRPC). If empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used; this must be a URL including scheme, e.g. http://collector:4317 or https://collector:4317")
 		fs.Bool("otel-insecure", otelInsecure.Default(), "use insecure connection to OpenTelemetry collector")
 
 		viperutil.BindFlags(fs, otelEndpoint, otelInsecure)
