@@ -912,7 +912,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	lockConnRestoreWaitTimeout, err := e.ensureConnectionWaitTimeout(ctx, lockConn.Conn, waitTimeoutDuringCutOver)
+	lockConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, lockConn.Conn, "wait_timeout", time.Duration(waitTimeoutDuringCutOver)*time.Second)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed ensuring wait_timeout on locking connection")
 	}
@@ -929,7 +929,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
-	renameConnRestoreWaitTimeout, err := e.ensureConnectionWaitTimeout(ctx, renameConn.Conn, waitTimeoutDuringCutOver)
+	renameConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, renameConn.Conn, "wait_timeout", time.Duration(waitTimeoutDuringCutOver)*time.Second)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
 	}
@@ -1289,25 +1289,6 @@ func (e *Executor) initDBConnectionLockWaitTimeout(conn *dbconnpool.DBConnection
 	}
 	deferFunc = func() {
 		conn.ExecuteFetch("set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
-	}
-	return deferFunc, nil
-}
-
-// ensureConnectionWaitTimeout explicitly sets the wait_timeout for the given connection, with a
-// deferred value restoration function. This prevents connections from being killed mid-cutover
-// if the server has a non-default (lower) wait_timeout configured.
-func (e *Executor) ensureConnectionWaitTimeout(ctx context.Context, conn *connpool.Conn, waitTimeout int64) (deferFunc func(), err error) {
-	deferFunc = func() {}
-
-	if _, err := conn.Exec(ctx, `set @wait_timeout=@@session.wait_timeout`, 1, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not read wait_timeout: %v", err)
-	}
-	setQuery := fmt.Sprintf("set @@session.wait_timeout=%d", waitTimeout)
-	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
-		return deferFunc, err
-	}
-	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.wait_timeout=@wait_timeout", 0, false)
 	}
 	return deferFunc, nil
 }
