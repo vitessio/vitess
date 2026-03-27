@@ -16,6 +16,6 @@
 
 # This script tears down the entire compose cluster and removes all data.
 
-docker compose --profile commerce --profile customer --profile sharded down
+docker compose --profile commerce --profile customer --profile sharded down -v
 
-echo "All containers stopped."
+echo "All containers and volumes removed."
