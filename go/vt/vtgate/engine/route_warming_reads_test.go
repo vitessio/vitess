@@ -242,11 +242,10 @@ func TestWarmingReadsDroppedWhenChannelFull(t *testing.T) {
 	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
-	// Give any goroutine a chance to run (it shouldn't).
-	time.Sleep(50 * time.Millisecond)
-
-	require.False(t, warmingReadExecuted.Load(), "warming read should not execute when the channel is full")
-
+	// Verify over a short window that no warming read is executed while the channel is full.
+	require.Never(t, func() bool {
+		return warmingReadExecuted.Load()
+	}, 100*time.Millisecond, 5*time.Millisecond, "warming read should not execute when the channel is full")
 	// Drain the channel.
 	<-vc.warmingReadsChannel
 }
