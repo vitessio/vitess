@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -80,37 +79,37 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 		{
 			name:                 "SELECT FOR UPDATE",
 			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FOR UPDATE",
 		},
 		{
 			name:                 "SELECT FOR UPDATE mixed case",
 			query:                "SELECT * FROM users WHERE id = 1 FoR UpDaTe",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FoR UpDaTe",
 		},
 		{
 			name:                 "SELECT FOR UPDATE with extra spaces",
 			query:                "SELECT * FROM users WHERE id = 1 FOR     UPDATE",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FOR     UPDATE",
 		},
 		{
 			name:                 "SELECT FOR UPDATE with comment",
 			query:                "SELECT * FROM users WHERE id = 1 FOR /* comment */ UPDATE",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FOR /* comment */ UPDATE",
 		},
 		{
 			name:                 "SELECT FOR UPDATE NOWAIT",
 			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE NOWAIT",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FOR UPDATE NOWAIT",
 		},
 		{
 			name:                 "SELECT FOR UPDATE SKIP LOCKED",
 			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE SKIP LOCKED",
-			expectedWarmingQuery: "select * from users where id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 FOR UPDATE SKIP LOCKED",
 		},
 		{
 			name:                 "UNION FOR UPDATE",
 			query:                "SELECT * FROM users WHERE id = 1 UNION SELECT * FROM users WHERE id = 2 FOR UPDATE",
-			expectedWarmingQuery: "select * from users where id = 1 union select * from users where id = 2",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1 UNION SELECT * FROM users WHERE id = 2 FOR UPDATE",
 		},
 		{
 			name:                 "Regular SELECT",
@@ -130,9 +129,6 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				tc.query,
 				"dummy_select_field",
 			)
-			// Parse and set QueryStatement to match how Routes are created in production
-			parser, _ := sqlparser.NewTestParser().Parse(tc.query)
-			route.QueryStatement = parser
 			route.Vindex = vindex.(vindexes.SingleColumn)
 			route.Values = []evalengine.Expr{
 				evalengine.NewLiteralInt(1),
@@ -216,8 +212,6 @@ func TestWarmingReadsDroppedWhenChannelFull(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -262,8 +256,6 @@ func TestWarmingReadsContextTimeout(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
