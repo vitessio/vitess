@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -1014,7 +1015,7 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 				mockController := gomock.NewController(t)
 				t.Cleanup(mockController.Finish)
 
-				mockTMC := NewMockTabletManagerClient(mockController)
+				mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 				mockTMC.EXPECT().
 					DemotePrimary(gomock.Any(), gomock.Any(), true).
 					DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.PrimaryStatus, error) {
@@ -1155,7 +1156,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 
 		// Simulate a replication RPC that never returns on its own. The call only unblocks
 		// when the passed context is canceled.
-		mockTMC := NewMockTabletManagerClient(mockController)
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 		mockTMC.EXPECT().
 			StopReplication(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
