@@ -46,6 +46,10 @@ type (
 		// Keyspace specifies the keyspace to send the query to.
 		Keyspace *vindexes.Keyspace
 
+		// TargetDestination specifies a fixed shard destination for inserts that
+		// do not need vindex evaluation, such as pinned tables in sharded keyspaces.
+		TargetDestination key.ShardDestination
+
 		// Ignore is for INSERT IGNORE and INSERT...ON DUPLICATE KEY constructs
 		// for sharded cases.
 		Ignore bool
@@ -155,6 +159,30 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	// any ids that MySQL might have generated. If both generated
 	// values, we don't return an error because this behavior
 	// is required to support migration.
+	if insertID != 0 {
+		qr.InsertIDChanged = true
+		qr.InsertID = insertID
+	}
+	return qr, nil
+}
+
+func (ins *InsertCommon) executeByDestinationTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, destination key.ShardDestination, insertID uint64) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.ShardDestination{destination})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Destination does not have exactly one shard: %v", rss)
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, ins.FetchLastInsertID)
+	if err != nil {
+		return nil, err
+	}
+
 	if insertID != 0 {
 		qr.InsertIDChanged = true
 		qr.InsertID = insertID

@@ -94,6 +94,9 @@ func newInsert(
 	}
 	if table != nil {
 		ins.TableName = table.Name.String()
+		if keyspace != nil && keyspace.Sharded && table.Pinned != nil {
+			ins.TargetDestination = key.DestinationKeyspaceID(table.Pinned)
+		}
 		for _, colVindex := range table.ColumnVindexes {
 			if colVindex.IsPartialVindex() {
 				continue
@@ -142,6 +145,9 @@ func (ins *Insert) insertIntoShardedTable(
 	insertID, err := ins.processGenerateFromValues(ctx, vcursor, ins, bindVars)
 	if err != nil {
 		return nil, err
+	}
+	if ins.TargetDestination != nil {
+		return ins.executeByDestinationTableQuery(ctx, vcursor, ins, bindVars, ins.Query, ins.TargetDestination, uint64(insertID))
 	}
 	rss, queries, err := ins.getInsertShardedQueries(ctx, vcursor, bindVars)
 	if err != nil {
@@ -381,10 +387,11 @@ func (ins *Insert) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType: "Insert",
-		Keyspace:     ins.Keyspace,
-		Variant:      ins.Opcode.String(),
-		Other:        other,
+		OperatorType:      "Insert",
+		Keyspace:          ins.Keyspace,
+		TargetDestination: ins.TargetDestination,
+		Variant:           ins.Opcode.String(),
+		Other:             other,
 	}
 }
 
