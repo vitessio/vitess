@@ -352,7 +352,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuper
 	} else {
 		query += "'OFF'"
 	}
-	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+	if err := mysqld.ExecuteSuperQuery(ctx, query); err != nil {
 		return nil, err
 	}
 
