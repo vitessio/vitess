@@ -19,6 +19,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [New `--slow-query-threshold` flag for slow query detection](#vtgate-slow-query-threshold)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -157,6 +158,25 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+#### <a id="vtgate-slow-query-threshold"/>New `--slow-query-threshold` flag for slow query detection</a>
+
+VTGate now supports configurable slow query detection with the new `--slow-query-threshold` flag. When set to a non-zero duration, queries whose total execution time meets or exceeds the threshold are marked as slow.
+
+Slow queries are:
+- Logged in vtgate logstats with a `SlowQuery` field set to `true`
+- Counted in the new `SlowQueries` metric, broken down by query type, plan type, and tablet type
+- Signaled to MySQL clients via the `SERVER_QUERY_WAS_SLOW` status flag
+
+**Example usage:**
+
+```
+--slow-query-threshold=500ms
+```
+
+The default value is `0`, which disables slow query detection.
+
+See [#19603](https://github.com/vitessio/vitess/pull/19603) for details.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
