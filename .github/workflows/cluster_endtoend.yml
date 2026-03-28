@@ -241,6 +241,7 @@ jobs:
           innodb_doublewrite=OFF
           innodb_flush_log_at_trx_commit=0
           innodb_flush_method=O_DIRECT
+          innodb_numa_interleave=ON
           innodb_adaptive_hash_index=OFF
           sync_binlog=0
           sync_relay_log=0
