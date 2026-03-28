@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -88,9 +90,9 @@ type (
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
 
-		WarmingReadsPercent int
-		WarmingReadsTimeout time.Duration
-		WarmingReadsChannel chan bool
+		WarmingReadsPercent   int
+		WarmingReadsTimeout   time.Duration
+		WarmingReadsSemaphore *semaphore.Weighted
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -1652,8 +1654,19 @@ func (vc *VCursorImpl) GetWarmingReadsPercent() int {
 	return vc.config.WarmingReadsPercent
 }
 
-func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
-	return vc.config.WarmingReadsChannel
+func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return vc.config.WarmingReadsSemaphore
+}
+
+func (vc *VCursorImpl) GetQueryPriority() (int, error) {
+	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
+		}
+		return priority, nil
+	}
+	return 0, nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

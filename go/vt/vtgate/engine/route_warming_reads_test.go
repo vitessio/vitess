@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -36,8 +37,9 @@ import (
 type warmingReadsVCursor struct {
 	*loggingVCursor
 	warmingReadsPercent     int
-	warmingReadsChannel     chan bool
+	warmingReadsSemaphore   *semaphore.Weighted
 	warmingReadsTimeout     time.Duration
+	queryPriority           int
 	warmingReadsExecuteFunc func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 }
 
@@ -45,8 +47,12 @@ func (vc *warmingReadsVCursor) GetWarmingReadsPercent() int {
 	return vc.warmingReadsPercent
 }
 
-func (vc *warmingReadsVCursor) GetWarmingReadsChannel() chan bool {
-	return vc.warmingReadsChannel
+func (vc *warmingReadsVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return vc.warmingReadsSemaphore
+}
+
+func (vc *warmingReadsVCursor) GetQueryPriority() (int, error) {
+	return vc.queryPriority, nil
 }
 
 func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
@@ -58,8 +64,9 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCurs
 	clone := &warmingReadsVCursor{
 		loggingVCursor:          clonedLogging,
 		warmingReadsPercent:     vc.warmingReadsPercent,
-		warmingReadsChannel:     vc.warmingReadsChannel,
+		warmingReadsSemaphore:   vc.warmingReadsSemaphore,
 		warmingReadsTimeout:     vc.warmingReadsTimeout,
+		queryPriority:           vc.queryPriority,
 		warmingReadsExecuteFunc: vc.warmingReadsExecuteFunc,
 	}
 	clone.onExecuteMultiShardFn = vc.warmingReadsExecuteFunc
@@ -155,9 +162,9 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 						resolveDestCtxHasDeadline.Store(hasDeadline)
 					},
 				},
-				warmingReadsPercent: 100,
-				warmingReadsChannel: make(chan bool, 1),
-				warmingReadsTimeout: 5 * time.Second,
+				warmingReadsPercent:   100,
+				warmingReadsSemaphore: semaphore.NewWeighted(100),
+				warmingReadsTimeout:   5 * time.Second,
 			}
 			vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 				if len(queries) > 0 {
@@ -205,7 +212,7 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 	}
 }
 
-func TestWarmingReadsDroppedWhenChannelFull(t *testing.T) {
+func TestWarmingReadsDroppedWhenSemaphoreFull(t *testing.T) {
 	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	route := NewRoute(
 		EqualUnique,
@@ -223,32 +230,105 @@ func TestWarmingReadsDroppedWhenChannelFull(t *testing.T) {
 		evalengine.NewLiteralInt(1),
 	}
 
+	// Create a semaphore with weight 100 and pre-acquire it to simulate a full pool.
+	sem := semaphore.NewWeighted(100)
+	sem.TryAcquire(100)
+
 	var warmingReadExecuted atomic.Bool
 	vc := &warmingReadsVCursor{
 		loggingVCursor: &loggingVCursor{
 			shards:  []string{"-20", "20-"},
 			results: []*sqltypes.Result{defaultSelectResult},
 		},
-		warmingReadsPercent: 100,
-		warmingReadsChannel: make(chan bool, 1),
-		warmingReadsTimeout: 5 * time.Second,
+		warmingReadsPercent:   100,
+		warmingReadsSemaphore: sem,
+		warmingReadsTimeout:   5 * time.Second,
 	}
 	vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 		warmingReadExecuted.Store(true)
 	}
 
-	// Pre-fill the channel to simulate a full pool.
-	vc.warmingReadsChannel <- true
-
 	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
-	// Verify over a short window that no warming read is executed while the channel is full.
+	// Verify over a short window that no warming read is executed while the semaphore is full.
 	require.Never(t, func() bool {
 		return warmingReadExecuted.Load()
-	}, 100*time.Millisecond, 5*time.Millisecond, "warming read should not execute when the channel is full")
-	// Drain the channel.
-	<-vc.warmingReadsChannel
+	}, 100*time.Millisecond, 5*time.Millisecond, "warming read should not execute when the semaphore is full")
+
+	// Release the semaphore.
+	sem.Release(100)
+}
+
+func TestWarmingReadsPriorityWeight(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	t.Run("priority 0 fits", func(t *testing.T) {
+		// Capacity 150: enough for priority 0 (weight 100) but not priority 100 (weight 200).
+		sem := semaphore.NewWeighted(150)
+		var warmingReadExecuted atomic.Bool
+		vc := &warmingReadsVCursor{
+			loggingVCursor: &loggingVCursor{
+				shards:  []string{"-20", "20-"},
+				results: []*sqltypes.Result{defaultSelectResult},
+			},
+			warmingReadsPercent:   100,
+			warmingReadsSemaphore: sem,
+			warmingReadsTimeout:   5 * time.Second,
+			queryPriority:         0,
+		}
+		vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+			warmingReadExecuted.Store(true)
+		}
+
+		_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			return warmingReadExecuted.Load()
+		}, time.Second, 10*time.Millisecond, "priority 0 warming read should execute (weight 100 fits in capacity 150)")
+	})
+
+	t.Run("priority 100 dropped", func(t *testing.T) {
+		// Capacity 150: weight 200 exceeds capacity, so the warming read is dropped.
+		sem := semaphore.NewWeighted(150)
+		var warmingReadExecuted atomic.Bool
+		vc := &warmingReadsVCursor{
+			loggingVCursor: &loggingVCursor{
+				shards:  []string{"-20", "20-"},
+				results: []*sqltypes.Result{defaultSelectResult},
+			},
+			warmingReadsPercent:   100,
+			warmingReadsSemaphore: sem,
+			warmingReadsTimeout:   5 * time.Second,
+			queryPriority:         100,
+		}
+		vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+			warmingReadExecuted.Store(true)
+		}
+
+		_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+
+		require.Never(t, func() bool {
+			return warmingReadExecuted.Load()
+		}, 100*time.Millisecond, 5*time.Millisecond, "priority 100 warming read should be dropped (weight 200 exceeds capacity 150)")
+	})
 }
 
 func TestWarmingReadsContextTimeout(t *testing.T) {
@@ -276,9 +356,9 @@ func TestWarmingReadsContextTimeout(t *testing.T) {
 			shards:  []string{"-20", "20-"},
 			results: []*sqltypes.Result{defaultSelectResult},
 		},
-		warmingReadsPercent: 100,
-		warmingReadsChannel: make(chan bool, 1),
-		warmingReadsTimeout: 1 * time.Millisecond,
+		warmingReadsPercent:   100,
+		warmingReadsSemaphore: semaphore.NewWeighted(100),
+		warmingReadsTimeout:   1 * time.Millisecond,
 	}
 	vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
 		// Block until the warming context times out.

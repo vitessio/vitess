@@ -41,6 +41,11 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
+// WarmingReadsBaseWeight is the base semaphore weight for a warming read.
+// The actual weight is WarmingReadsBaseWeight + priority, where priority is 0-100.
+// The semaphore capacity is concurrency * WarmingReadsBaseWeight.
+const WarmingReadsBaseWeight = 100
+
 var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
 	"ReplicaWarmingReadsMirrored",
 	"Number of reads mirrored to replicas to warm their bufferpools",
@@ -525,34 +530,38 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		}
 	}
 
-	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
-
-	select {
-	// if there's no more room in the channel, drop the warming read
-	case warmingReadsChannel <- true:
-		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
-		go func(replicaVCursor VCursor) {
-			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
-			// Defers run LIFO: channel slot is released first, then context is canceled.
-			defer cancel()
-			defer func() {
-				<-warmingReadsChannel
-			}()
-			rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
-			if err != nil {
-				return
-			}
-
-			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
-			if len(errs) > 0 {
-				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
-			} else {
-				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
-			}
-		}(replicaVCursor)
-	default:
-		log.Warn("Failed to execute warming replica read as pool is full")
+	priority, err := vcursor.GetQueryPriority()
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to get query priority for warming replica read: %v", err))
+		return
 	}
+	weight := int64(WarmingReadsBaseWeight + priority)
+
+	sem := vcursor.GetWarmingReadsSemaphore()
+	if sem != nil && !sem.TryAcquire(weight) {
+		log.Warn("Failed to execute warming replica read as pool is full")
+		return
+	}
+
+	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
+	go func(replicaVCursor VCursor) {
+		if sem != nil {
+			defer sem.Release(weight)
+		}
+		warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
+		defer cancel()
+		rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
+		if err != nil {
+			return
+		}
+
+		_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+		if len(errs) > 0 {
+			log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
+		} else {
+			replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
+		}
+	}(replicaVCursor)
 }
 
 func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
