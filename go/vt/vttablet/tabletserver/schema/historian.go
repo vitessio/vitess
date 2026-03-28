@@ -206,7 +206,7 @@ func (h *historian) loadFromDB(ctx context.Context, failOnReadError bool) error 
 		if failOnReadError {
 			return err
 		}
-		log.Info(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
+		log.Info(fmt.Sprintf("Error reading %s.schema_version table: %v, will operate with the latest available schema", sidecar.GetIdentifier(), err))
 		return nil
 	}
 	for _, row := range tableData.Rows {

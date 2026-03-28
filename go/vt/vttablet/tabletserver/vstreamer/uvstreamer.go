@@ -383,7 +383,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 	}
 	if uvs.startPos == "current" {
 		if err := uvs.se.Open(); err != nil {
-			return wrapError(err, uvs.pos, uvs.vse)
+			return wrapError(err, curPos, uvs.vse)
 		}
 		uvs.pos = curPos
 		vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(curPos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
@@ -393,7 +393,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		uvs.historianRefreshedForStartup = true
 		uvs.setVs(vs)
 		if err := uvs.sendEventsForCurrentPos(); err != nil {
-			return err
+			return wrapError(err, uvs.pos, uvs.vse)
 		}
 		return nil
 	}
