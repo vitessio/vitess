@@ -124,6 +124,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
+func (t *noopVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) CloneForMirroring(ctx context.Context) VCursor {
 	panic("implement me")
 }
@@ -470,10 +474,11 @@ type loggingVCursor struct {
 
 	parser *sqlparser.Parser
 
-	onMirrorClonesFn       func(context.Context) VCursor
-	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
-	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
-	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
+	onMirrorClonesFn        func(context.Context) VCursor
+	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
+	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
+	onResolveDestinationsFn func(context.Context)
 
 	metrics *Metrics
 }
@@ -599,6 +604,10 @@ func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	return f
 }
 
+func (f *loggingVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return ctx, func() {}
+}
+
 func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
 	if f.onMirrorClonesFn != nil {
 		return f.onMirrorClonesFn(ctx)
@@ -662,6 +671,9 @@ func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primi
 }
 
 func (f *loggingVCursor) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	if f.onResolveDestinationsFn != nil {
+		f.onResolveDestinationsFn(ctx)
+	}
 	f.log = append(f.log, fmt.Sprintf("ResolveDestinations %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
 	if f.shardErr != nil {
 		return nil, nil, f.shardErr
