@@ -74,7 +74,7 @@ jobs:
                 needs: ([.[].value.Needs // []] | add | unique // []),
                 buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // ""),
                 flavor: "mysql-9.6",
-                flavorSuffix: "_mysql96"
+                platform: "mysql96"
               })
           ' test/config.json test/config_partial_keyspace.json)
 
@@ -91,7 +91,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
-    name: "Run endtoend tests on Cluster (${{ matrix.shard }}${{ matrix.flavorSuffix }})"
+    name: "Run endtoend tests on Cluster (${{ matrix.shard }}${{ matrix.platform && format('_{0}', matrix.platform) || '' }})"
     runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
