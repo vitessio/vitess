@@ -90,7 +90,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
-    name: Run endtoend tests on Cluster (${{ matrix.shard }}) ${{ matrix.flavor }}
+    name: "Run endtoend tests on Cluster (${{ matrix.shard }})${{ matrix.flavor != 'mysql-8.4' && format(' {0}', matrix.flavor) || '' }}"
     runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
