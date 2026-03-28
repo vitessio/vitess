@@ -15,6 +15,7 @@
         - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
+        - [Support for `binlog_rows_query_log_events` in VStream](#vreplication-rows-query-event)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -129,6 +130,22 @@ vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer 
 # Stop workflow on specific shards only
 vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
 ```
+
+#### <a id="vreplication-rows-query-event"/>Support for `binlog_rows_query_log_events` in VStream</a>
+
+VStream now supports MySQL's `binlog_rows_query_log_events` system variable. When enabled on the MySQL source (`SET binlog_rows_query_log_events=ON`), the original SQL query that produced row changes is included in the binary log and exposed through a new `ROWS_QUERY` VEvent type. Each `ROWS_QUERY` event contains the original SQL statement and appears immediately before the corresponding `ROW` events.
+
+**Example VStream output with `binlog_rows_query_log_events=ON`:**
+
+```
+type:BEGIN
+type:ROWS_QUERY statement:"insert into customer values (1, 'user@example.com')"
+type:FIELD field_event:{table_name:"commerce.customer" ...}
+type:ROW row_event:{table_name:"commerce.customer" row_changes:{after:{...}}}
+type:COMMIT
+```
+
+This is useful for debugging, auditing, and understanding which queries produced specific row changes. VReplication workflows process this event but continue to apply row changes directly rather than re-executing the original query.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
