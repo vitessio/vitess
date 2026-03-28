@@ -469,6 +469,16 @@ func TestGetQueryPriority(t *testing.T) {
 			wantResult: 100,
 		},
 		{
+			name:       "negative priority clamped to 0",
+			options:    &querypb.ExecuteOptions{Priority: "-10"},
+			wantResult: 0,
+		},
+		{
+			name:       "priority above max clamped to 100",
+			options:    &querypb.ExecuteOptions{Priority: "999"},
+			wantResult: 100,
+		},
+		{
 			name:    "invalid priority",
 			options: &querypb.ExecuteOptions{Priority: "not_a_number"},
 			wantErr: "invalid query priority",

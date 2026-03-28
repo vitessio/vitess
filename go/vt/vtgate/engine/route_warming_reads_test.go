@@ -232,7 +232,7 @@ func TestWarmingReadsDroppedWhenSemaphoreFull(t *testing.T) {
 
 	// Create a semaphore with weight 100 and pre-acquire it to simulate a full pool.
 	sem := semaphore.NewWeighted(100)
-	sem.TryAcquire(100)
+	require.True(t, sem.TryAcquire(100))
 
 	var warmingReadExecuted atomic.Bool
 	vc := &warmingReadsVCursor{
