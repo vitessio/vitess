@@ -10,6 +10,7 @@
         - [Tablet targeting via USE statement](#tablet-targeting)
     - **[Breaking Changes](#breaking-changes)**
         - [External Decompressor No Longer Read from Backup MANIFEST by Default](#vttablet-external-decompressor-manifest)
+        - [`DUAL` is Now a Reserved Keyword](#sqlparser-dual-reserved-keyword)
 - **[Minor Changes](#minor-changes)**
     - **[Logging](#minor-changes-logging)**
         - [Structured logging](#structured-logging)
@@ -103,6 +104,24 @@ The external decompressor command stored in a backup's `MANIFEST` file is no lon
 Starting in v24, the `MANIFEST`-based decompressor is ignored unless you explicitly opt in with the new `--external-decompressor-use-manifest` flag. If you rely on this behavior, add the flag to your VTTablet configuration, but be aware of the security implications.
 
 See [#19460](https://github.com/vitessio/vitess/pull/19460) for details.
+
+#### <a id="sqlparser-dual-reserved-keyword"/>`DUAL` is Now a Reserved Keyword</a>
+
+`DUAL` is now a reserved keyword in the Vitess SQL parser, matching MySQL behavior. Unquoted `DUAL` continues to be treated as the virtual pseudo-table (for queries like `SELECT 1 FROM DUAL`). Backtick-quoted `` `dual` `` now refers to an actual table named `dual` instead of the virtual pseudo-table.
+
+**Impact**: If you were using backtick-quoted `` `dual` `` expecting the virtual dual table behavior, your queries will now attempt to reference an actual table named `dual` (and fail if it doesn't exist).
+
+**Migration**: Remove backticks from queries that expect the virtual dual table:
+
+```sql
+-- Before (now attempts to reference a real table named `dual`)
+SELECT 1 FROM `dual`;
+
+-- After (correctly references the virtual dual table)
+SELECT 1 FROM dual;
+```
+
+See [#19579](https://github.com/vitessio/vitess/pull/19579) for details.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
