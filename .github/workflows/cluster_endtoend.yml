@@ -49,17 +49,36 @@ jobs:
             "onlineddl_flow"
           ]'
 
-          # Build matrix
-          matrix=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" '
+          # Build mysql-8.4 matrix (all shards except excluded)
+          mysql84=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" '
             map(.Tests) | add | to_entries
             | group_by(.value.Shard)
             | map(select(.[0].value.Shard as $s | ($s != null) and ($exclude | index($s) | not)))
             | map({
                 shard: .[0].value.Shard,
                 needs: ([.[].value.Needs // []] | add | unique // []),
-                buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // "")
+                buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // ""),
+                flavor: "mysql-8.4"
               })
           ' test/config.json test/config_partial_keyspace.json)
+
+          # Build mysql-9.6 matrix (small subset of version-sensitive shards, no xtrabackup)
+          MYSQL96_SHARDS='["vtgate_queries","onlineddl_vrepl","vreplication_basic","vtorc","tabletmanager_tablegc"]'
+
+          mysql96=$(jq -c -s --argjson shards "$MYSQL96_SHARDS" '
+            map(.Tests) | add | to_entries
+            | group_by(.value.Shard)
+            | map(select(.[0].value.Shard as $s | ($shards | index($s)) != null))
+            | map({
+                shard: .[0].value.Shard,
+                needs: ([.[].value.Needs // []] | add | unique // []),
+                buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // ""),
+                flavor: "mysql-9.6"
+              })
+          ' test/config.json test/config_partial_keyspace.json)
+
+          # Merge both matrices
+          matrix=$(jq -c -s 'add' <(echo "$mysql84") <(echo "$mysql96"))
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
 
@@ -71,7 +90,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
-    name: Run endtoend tests on Cluster (${{ matrix.shard }})
+    name: Run endtoend tests on Cluster (${{ matrix.shard }}) ${{ matrix.flavor }}
     runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
@@ -144,7 +163,7 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
         uses: ./.github/actions/setup-mysql
         with:
-          flavor: mysql-8.4
+          flavor: ${{ matrix.flavor }}
 
       - name: Setup Percona Apt repository
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
@@ -203,10 +222,17 @@ jobs:
           source build.env
           set -exo pipefail
 
+          # Determine the mycnf file for this flavor
+          case "${{ matrix.flavor }}" in
+            mysql-8.4) MYCNF="./config/mycnf/mysql84.cnf" ;;
+            mysql-9.6) MYCNF="./config/mycnf/mysql90.cnf" ;;
+            *) echo "ERROR: unknown flavor '${{ matrix.flavor }}'"; exit 1 ;;
+          esac
+
           # Apply resource limits for heavy shards
           if [[ "${{ contains(matrix.needs, 'limit-resources') }}" == "true" ]]; then
             ulimit -n 65536
-            cat <<-EOF>>./config/mycnf/mysql84.cnf
+            cat <<-EOF>>"$MYCNF"
           innodb_buffer_pool_dump_at_shutdown=OFF
           innodb_buffer_pool_in_core_file=OFF
           innodb_buffer_pool_load_at_startup=OFF
@@ -214,7 +240,6 @@ jobs:
           innodb_doublewrite=OFF
           innodb_flush_log_at_trx_commit=0
           innodb_flush_method=O_DIRECT
-          innodb_numa_interleave=ON
           innodb_adaptive_hash_index=OFF
           sync_binlog=0
           sync_relay_log=0
@@ -225,7 +250,7 @@ jobs:
 
           # Enable binlog compression for vreplication shards
           if [[ "${{ contains(matrix.needs, 'binlog-compression') }}" == "true" ]]; then
-            cat <<-EOF>>./config/mycnf/mysql84.cnf
+            cat <<-EOF>>"$MYCNF"
           binlog-transaction-compression=ON
           binlog-row-value-options=PARTIAL_JSON
           EOF
