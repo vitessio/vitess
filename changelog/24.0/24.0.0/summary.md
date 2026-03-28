@@ -34,6 +34,8 @@
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
         - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
+    - **[Vitess Operator](#minor-changes-vitess-operator)**
+        - [Cluster and Keyspace Level Backup Schedules](#vitess-operator-backup-schedule-scopes)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -266,4 +268,49 @@ The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use
 **Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
 
 **Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
+
+### <a id="minor-changes-vitess-operator"/>Vitess Operator</a>
+
+#### <a id="vitess-operator-backup-schedule-scopes"/>Cluster and Keyspace Level Backup Schedules</a>
+
+The Vitess Operator's `VitessBackupSchedule` custom resource now supports a `scope` field in backup strategies, allowing operators to schedule backups at three levels:
+
+- **Shard**: Back up a specific shard (existing behavior, requires `keyspace` and `shard` fields)
+- **Keyspace**: Back up all shards in a keyspace (requires only `keyspace` field)
+- **Cluster**: Back up all keyspaces and shards in the entire cluster (no additional targeting fields required)
+
+This simplifies backup configuration by removing the need to define separate backup jobs for each shard when you want to back up an entire keyspace or cluster.
+
+**Example: Cluster-level backup schedule**
+
+```yaml
+apiVersion: planetscale.com/v2
+kind: VitessBackupSchedule
+metadata:
+  name: daily-cluster-backup
+spec:
+  cluster: my-vitess-cluster
+  name: daily-backup
+  schedule: "0 2 * * *"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  strategies:
+    - name: full-cluster
+      scope: Cluster
+```
+
+**Example: Keyspace-level backup schedule**
+
+```yaml
+strategies:
+  - name: commerce-backup
+    scope: Keyspace
+    keyspace: commerce
+```
+
+Additionally, backup schedules can now be defined directly in the `VitessCluster` spec under `spec.backup.schedules`, and a new `frequency` field provides an alternative to cron-based scheduling. New status fields (`generatedSchedules`, `nextScheduledTimes`) provide visibility into when backups are scheduled to run.
+
+See [#19734](https://github.com/vitessio/vitess/pull/19734) for details.
 
