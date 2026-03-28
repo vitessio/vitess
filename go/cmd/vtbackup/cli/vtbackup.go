@@ -631,6 +631,14 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
+	// Re-enable redo logging before running init SQL, so that init SQL
+	// queries run with full crash safety.
+	if disabledRedoLog {
+		if err := mysqld.EnableRedoLog(ctx); err != nil {
+			return fmt.Errorf("failed to re-enable redo log: %v", err)
+		}
+	}
+
 	// Perform any requested backup initialization queries after catch-up replication.
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
 		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
@@ -639,13 +647,6 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	// Set BackupTime after catch-up and init SQL, so the timestamp on the
 	// backup postdates any changes made by init SQL queries.
 	backupParams.BackupTime = time.Now()
-
-	// Re-enable redo logging.
-	if disabledRedoLog {
-		if err := mysqld.EnableRedoLog(ctx); err != nil {
-			return fmt.Errorf("failed to re-enable redo log: %v", err)
-		}
-	}
 
 	if restartBeforeBackup {
 		restartAt := time.Now()
