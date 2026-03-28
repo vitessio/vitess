@@ -41,12 +41,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -106,9 +104,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
@@ -531,22 +527,25 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
 	// if there's no more room in the channel, drop the warming read
 	case warmingReadsChannel <- true:
+		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 		go func(replicaVCursor VCursor) {
+			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
+			// Defers run LIFO: channel slot is released first, then context is canceled.
+			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
 			}()
-			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 			if err != nil {
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {
