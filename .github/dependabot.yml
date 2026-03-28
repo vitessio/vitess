@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      all:
+      go:
         patterns:
           - "*"
 
@@ -14,7 +14,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      all:
+      actions:
         patterns:
           - "*"
 
@@ -23,7 +23,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      all:
+      java:
         patterns:
           - "*"
 
@@ -32,7 +32,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      all:
+      vtadmin-npm:
         patterns:
           - "*"
 
@@ -53,6 +53,6 @@ updates:
         versions:
           - ">= 8.5"
     groups:
-      all:
+      docker:
         patterns:
           - "*"

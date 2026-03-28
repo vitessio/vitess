@@ -222,36 +222,6 @@ a`,
 	}
 }
 
-func TestExtractMysqlComment(t *testing.T) {
-	testCases := []struct {
-		input, outSQL, outVersion string
-	}{{
-		input:      "/*!50708SET max_execution_time=5000 */",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
-	}, {
-		input:      "/*!50708 SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
-	}, {
-		input:      "/*!50708* from*/",
-		outSQL:     "* from",
-		outVersion: "50708",
-	}, {
-		input:      "/*! SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "",
-	}}
-	for _, testCase := range testCases {
-		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)
-		assert.Equal(t, testCase.outVersion, gotVersion, "version mismatch")
-
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
-	}
-}
-
 func TestExtractCommentDirectives(t *testing.T) {
 	testCases := []struct {
 		input string

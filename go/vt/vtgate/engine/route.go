@@ -525,22 +525,25 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		}
 	}
 
-	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
 	// if there's no more room in the channel, drop the warming read
 	case warmingReadsChannel <- true:
+		replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 		go func(replicaVCursor VCursor) {
+			warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
+			// Defers run LIFO: channel slot is released first, then context is canceled.
+			defer cancel()
 			defer func() {
 				<-warmingReadsChannel
 			}()
-			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 			if err != nil {
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
