@@ -248,6 +248,8 @@ func TestWarmingReadsDroppedWhenSemaphoreFull(t *testing.T) {
 		warmingReadExecuted.Store(true)
 	}
 
+	droppedBefore := replicaWarmingReadsDropped.Counts()["ks"]
+
 	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -255,6 +257,9 @@ func TestWarmingReadsDroppedWhenSemaphoreFull(t *testing.T) {
 	require.Never(t, func() bool {
 		return warmingReadExecuted.Load()
 	}, 100*time.Millisecond, 5*time.Millisecond, "warming read should not execute when the semaphore is full")
+
+	require.Equal(t, droppedBefore+1, replicaWarmingReadsDropped.Counts()["ks"],
+		"ReplicaWarmingReadsDropped should be incremented when the semaphore is full")
 
 	// Release the semaphore.
 	sem.Release(100)
@@ -281,6 +286,7 @@ func TestWarmingReadsPriorityWeight(t *testing.T) {
 	t.Run("priority 0 fits", func(t *testing.T) {
 		// Capacity 150: enough for priority 0 (weight 100) but not priority 100 (weight 200).
 		sem := semaphore.NewWeighted(150)
+		mirroredBefore := replicaWarmingReadsMirrored.Counts()["ks"]
 		var warmingReadExecuted atomic.Bool
 		vc := &warmingReadsVCursor{
 			loggingVCursor: &loggingVCursor{
@@ -302,11 +308,16 @@ func TestWarmingReadsPriorityWeight(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return warmingReadExecuted.Load()
 		}, time.Second, 10*time.Millisecond, "priority 0 warming read should execute (weight 100 fits in capacity 150)")
+
+		require.Eventually(t, func() bool {
+			return replicaWarmingReadsMirrored.Counts()["ks"] == mirroredBefore+1
+		}, time.Second, 10*time.Millisecond, "ReplicaWarmingReadsMirrored should be incremented")
 	})
 
 	t.Run("priority 100 dropped", func(t *testing.T) {
 		// Capacity 150: weight 200 exceeds capacity, so the warming read is dropped.
 		sem := semaphore.NewWeighted(150)
+		droppedBefore := replicaWarmingReadsDropped.Counts()["ks"]
 		var warmingReadExecuted atomic.Bool
 		vc := &warmingReadsVCursor{
 			loggingVCursor: &loggingVCursor{
@@ -328,6 +339,9 @@ func TestWarmingReadsPriorityWeight(t *testing.T) {
 		require.Never(t, func() bool {
 			return warmingReadExecuted.Load()
 		}, 100*time.Millisecond, 5*time.Millisecond, "priority 100 warming read should be dropped (weight 200 exceeds capacity 150)")
+
+		require.Equal(t, droppedBefore+1, replicaWarmingReadsDropped.Counts()["ks"],
+			"ReplicaWarmingReadsDropped should be incremented when weight exceeds capacity")
 	})
 }
 

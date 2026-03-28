@@ -51,6 +51,16 @@ var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
 	"Number of reads mirrored to replicas to warm their bufferpools",
 	[]string{"Keyspace"})
 
+var replicaWarmingReadsDropped = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsDropped",
+	"Number of warming reads dropped due to concurrency limits",
+	[]string{"Keyspace"})
+
+var replicaWarmingReadsErrors = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsErrors",
+	"Number of warming reads that failed with errors",
+	[]string{"Keyspace", "Code"})
+
 // Route represents the instructions to route a read query to
 // one or many vttablets.
 type Route struct {
@@ -533,6 +543,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	priority, err := vcursor.GetQueryPriority()
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to get query priority for warming replica read: %v", err))
+		replicaWarmingReadsDropped.Add([]string{route.Keyspace.Name}, 1)
 		return
 	}
 	weight := int64(WarmingReadsBaseWeight + priority)
@@ -540,6 +551,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	sem := vcursor.GetWarmingReadsSemaphore()
 	if sem != nil && !sem.TryAcquire(weight) {
 		log.Warn("Failed to execute warming replica read as pool is full")
+		replicaWarmingReadsDropped.Add([]string{route.Keyspace.Name}, 1)
 		return
 	}
 
@@ -552,12 +564,14 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		defer cancel()
 		rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 		if err != nil {
+			replicaWarmingReadsErrors.Add([]string{route.Keyspace.Name, vterrors.Code(err).String()}, 1)
 			return
 		}
 
 		_, errs := replicaVCursor.ExecuteMultiShard(warmingCtx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 		if len(errs) > 0 {
 			log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
+			replicaWarmingReadsErrors.Add([]string{route.Keyspace.Name, vterrors.Code(errs[0]).String()}, 1)
 		} else {
 			replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
 		}

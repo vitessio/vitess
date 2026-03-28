@@ -208,6 +208,8 @@ For gRPC clients, specify the keyspace, shard, and optionally the tablet type or
 - No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
 - Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
 
+Two new stats counters are exported alongside the existing `ReplicaWarmingReadsMirrored` counter: `ReplicaWarmingReadsDropped` (keyed by keyspace — warming reads shed due to concurrency limits or invalid priority) and `ReplicaWarmingReadsErrors` (keyed by keyspace and gRPC error code — warming reads that failed during execution).
+
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
