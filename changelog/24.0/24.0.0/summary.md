@@ -19,6 +19,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [Priority-weighted warming reads concurrency](#vtgate-warming-reads-weighted-semaphore)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -157,6 +158,18 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+#### <a id="vtgate-warming-reads-weighted-semaphore"/>Priority-weighted warming reads concurrency</a>
+
+The `--warming-reads-concurrency` flag now uses a weighted semaphore instead of a buffered channel. Set query priority using the `PRIORITY` directive:
+
+```sql
+SELECT /*vt+ PRIORITY=50 */ * FROM users;
+```
+
+Priority ranges from 0 to 100. Higher-priority queries consume more semaphore capacity and are shed first when the pool is full. Default-priority queries (priority 0) use 1 slot; maximum-priority queries (priority 100) use 2 slots.
+
+This keeps warming read slots available for lower-priority queries during high contention.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
