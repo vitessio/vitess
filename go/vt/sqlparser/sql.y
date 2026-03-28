@@ -4802,12 +4802,16 @@ user_or_role_list:
   {
     if $1 != nil {
       $$ = []UserOrRole{*$1}
+    } else {
+      $$ = nil
     }
   }
 | user_or_role_list ',' user_or_role
   {
     if $3 != nil {
       $$ = append($1, *$3)
+    } else {
+      $$ = $1
     }
   }
 
