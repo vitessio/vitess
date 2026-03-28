@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 
@@ -43,10 +44,43 @@ import (
 )
 
 var (
-	gossipOnce   sync.Once
-	gossipAgent  *gossip.Gossip
-	gossipCancel context.CancelFunc
+	gossipOnce    sync.Once
+	gossipStateMu sync.RWMutex
+	gossipAgent   *gossip.Gossip
+	gossipCancel  context.CancelFunc
 )
+
+func currentGossipAgent() *gossip.Gossip {
+	gossipStateMu.RLock()
+	defer gossipStateMu.RUnlock()
+	return gossipAgent
+}
+
+func setGossipCancel(cancel context.CancelFunc) {
+	gossipStateMu.Lock()
+	defer gossipStateMu.Unlock()
+	gossipCancel = cancel
+}
+
+func clearGossipState() (*gossip.Gossip, context.CancelFunc) {
+	gossipStateMu.Lock()
+	defer gossipStateMu.Unlock()
+
+	agent := gossipAgent
+	cancel := gossipCancel
+	gossipAgent = nil
+	gossipCancel = nil
+	return agent, cancel
+}
+
+func clearGossipAgent() *gossip.Gossip {
+	gossipStateMu.Lock()
+	defer gossipStateMu.Unlock()
+
+	agent := gossipAgent
+	gossipAgent = nil
+	return agent
+}
 
 func startGossip() {
 	gossipOnce.Do(func() {
@@ -54,8 +88,9 @@ func startGossip() {
 		// when gossipAgent is nil.
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			if gossipAgent != nil {
-				_ = json.NewEncoder(w).Encode(gossipAgent.Debug())
+			agent := currentGossipAgent()
+			if agent != nil {
+				_ = json.NewEncoder(w).Encode(agent.Debug())
 			} else {
 				_, _ = w.Write([]byte("null\n"))
 			}
@@ -71,7 +106,9 @@ func startGossip() {
 		// enabled yet, pollForGossipKeyspace rescans periodically
 		// until one is found.
 		var gossipCtx context.Context
-		gossipCtx, gossipCancel = context.WithCancel(context.Background())
+		var cancel context.CancelFunc
+		gossipCtx, cancel = context.WithCancel(context.Background())
+		setGossipCancel(cancel)
 		if ksName != "" {
 			go watchGossipConfig(gossipCtx, ksName)
 		} else {
@@ -92,7 +129,7 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 		phiThreshold = 4
 	}
 
-	gossipAgent = gossip.New(gossip.Config{
+	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(config.GossipNodeID()),
 		BindAddr:     config.GossipListenAddr(),
 		Seeds:        seeds,
@@ -102,17 +139,20 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 		MaxUpdateAge: maxUpdateAge,
 	}, transport, nil)
 
-	if gossipAgent == nil {
+	if agent == nil {
 		return
 	}
 
-	if err := gossipAgent.Start(context.Background()); err != nil {
+	gossipStateMu.Lock()
+	defer gossipStateMu.Unlock()
+	if gossipAgent != nil {
+		return
+	}
+	if err := agent.Start(context.Background()); err != nil {
 		log.Error("failed to start gossip", slog.Any("error", err))
-		gossipAgent = nil
 		return
 	}
-
-	servenv.OnTerm(gossipAgent.Stop)
+	gossipAgent = agent
 }
 
 // findGossipConfig scans all keyspaces for an enabled GossipConfig.
@@ -169,11 +209,12 @@ func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
 }
 
 func stopGossip() {
-	if gossipCancel != nil {
-		gossipCancel()
+	agent, cancel := clearGossipState()
+	if cancel != nil {
+		cancel()
 	}
-	if gossipAgent != nil {
-		gossipAgent.Stop()
+	if agent != nil {
+		agent.Stop()
 	}
 }
 
@@ -185,38 +226,93 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 	if ts == nil || keyspace == "" {
 		return false
 	}
-	cells, err := ts.GetCellInfoNames(ctx)
-	if err != nil || len(cells) == 0 {
-		return false
-	}
-	// Try each cell until we find one serving this keyspace.
-	var initial *topo.WatchSrvKeyspaceData
-	var changes <-chan *topo.WatchSrvKeyspaceData
-	for _, cell := range cells {
-		initial, changes, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-		if err == nil {
-			break
-		}
-	}
-	if changes == nil {
-		return false
-	}
-	// Apply the initial value so we don't miss config set before the watch.
-	if initial != nil && initial.Value != nil {
-		applyGossipConfigChange(initial.Value)
-	}
-	for change := range changes {
-		if change.Err != nil {
-			if !topo.IsErrType(change.Err, topo.Interrupted) {
-				log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+	retryTicker := time.NewTicker(100 * time.Millisecond)
+	defer retryTicker.Stop()
+
+	for {
+		watchKeyspace := keyspace
+		cells, err := ts.GetCellInfoNames(ctx)
+		if err != nil || len(cells) == 0 {
+			if ctx.Err() != nil {
+				return false
 			}
+			select {
+			case <-ctx.Done():
+				return false
+			case <-retryTicker.C:
+			}
+			continue
+		}
+
+		// Try each cell until we find one serving this keyspace.
+		var initial *topo.WatchSrvKeyspaceData
+		var changes <-chan *topo.WatchSrvKeyspaceData
+		watchCtx, watchCancel := context.WithCancel(ctx)
+		for _, cell := range cells {
+			initial, changes, err = ts.WatchSrvKeyspace(watchCtx, cell, watchKeyspace)
+			if err == nil {
+				break
+			}
+		}
+		if changes == nil {
+			watchCancel()
+			if ctx.Err() != nil {
+				return false
+			}
+			select {
+			case <-ctx.Done():
+				return false
+			case <-retryTicker.C:
+			}
+			continue
+		}
+
+		// Apply the initial value so we don't miss config set before the watch.
+		if initial != nil && initial.Value != nil {
+			applyGossipConfigChange(initial.Value)
+		}
+
+		restart := false
+		for change := range changes {
+			if change.Err != nil {
+				if ctx.Err() != nil || topo.IsErrType(change.Err, topo.Interrupted) {
+					watchCancel()
+					return true
+				}
+				if topo.IsErrType(change.Err, topo.NoNode) {
+					if agent := clearGossipAgent(); agent != nil {
+						agent.Stop()
+					}
+				} else {
+					log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+				}
+				restart = true
+				break
+			}
+			if change.Value != nil {
+				cfg := change.Value.GossipConfig
+				if cfg == nil || !cfg.Enabled {
+					fallbackCfg, fallbackKeyspace := findGossipConfig()
+					if fallbackCfg != nil && fallbackCfg.Enabled && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
+						keyspace = fallbackKeyspace
+						restart = true
+						break
+					}
+				}
+				applyGossipConfigChange(change.Value)
+			}
+		}
+		watchCancel()
+		if !restart {
 			return true
 		}
-		if change.Value != nil {
-			applyGossipConfigChange(change.Value)
+
+		select {
+		case <-ctx.Done():
+			return false
+		case <-retryTicker.C:
 		}
 	}
-	return true
 }
 
 // applyGossipConfigChange processes a SrvKeyspace change for gossip config.
@@ -225,20 +321,20 @@ func applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace) {
 	cfg := srvKs.GossipConfig
 	if cfg == nil || !cfg.Enabled {
 		// Disable: stop agent and clear it so stale state isn't analyzed.
-		if gossipAgent != nil {
-			gossipAgent.Stop()
-			gossipAgent = nil
+		if agent := clearGossipAgent(); agent != nil {
+			agent.Stop()
 		}
 		return
 	}
 	// Enable or reconfigure.
-	if gossipAgent == nil {
+	agent := currentGossipAgent()
+	if agent == nil {
 		// Cold-enable: create and start a new agent.
 		startGossipAgent(cfg)
 		return
 	}
 	// Tuning update on running agent.
-	gossipAgent.Reconfigure(gossip.Config{
+	agent.Reconfigure(gossip.Config{
 		PhiThreshold: cfg.PhiThreshold,
 		PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
 		MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
@@ -261,7 +357,7 @@ func pollForGossipKeyspace(ctx context.Context) {
 			if cfg == nil || !cfg.Enabled || ksName == "" {
 				continue
 			}
-			if gossipAgent == nil {
+			if currentGossipAgent() == nil {
 				startGossipAgent(cfg)
 			}
 			if watchGossipConfig(ctx, ksName) {
@@ -291,6 +387,11 @@ func discoverGossipSeeds() []gossip.Member {
 		seeds = append(seeds, gossip.Member{
 			ID:   gossip.NodeID(addr),
 			Addr: addr,
+			Meta: map[string]string{
+				gossip.MetaKeyKeyspace:    tablet.Keyspace,
+				gossip.MetaKeyShard:       tablet.Shard,
+				gossip.MetaKeyTabletAlias: topoproto.TabletAliasString(tablet.Alias),
+			},
 		})
 		return nil
 	})

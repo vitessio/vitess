@@ -144,11 +144,12 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 // It also enriches analyses with ERS-disabled flags from keyspace/shard metadata
 // and builds the VTOrc tiebreaker view from instance health data.
 func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
-	if gossipAgent == nil {
+	agent := currentGossipAgent()
+	if agent == nil {
 		return nil
 	}
 
-	primaries, ersDisabled, err := gossipShardPrimaries(gossipAgent)
+	primaries, ersDisabled, err := gossipShardPrimaries(agent)
 	if err != nil || len(primaries) == 0 {
 		return nil
 	}
@@ -170,7 +171,7 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		vtorcView[key] = !instance.IsLastCheckValid
 	}
 
-	analyses := AnalyzeGossipQuorum(gossipAgent, primaries, vtorcView)
+	analyses := AnalyzeGossipQuorum(agent, primaries, vtorcView)
 
 	for _, a := range analyses {
 		key := a.AnalyzedKeyspace + "/" + a.AnalyzedShard

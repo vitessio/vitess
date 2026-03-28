@@ -401,6 +401,7 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
+	var updatedCellsMu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {
@@ -413,7 +414,9 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 					rec.RecordError(err)
 					return
 				}
+				updatedCellsMu.Lock()
 				updatedCells = append(updatedCells, cell)
+				updatedCellsMu.Unlock()
 				return
 			case IsErrType(err, NoNode):
 				// NOOP as not every cell will contain a serving tablet in the keyspace
@@ -446,6 +449,7 @@ func (ts *Server) UpdateSrvKeyspaceGossipConfig(ctx context.Context, keyspace st
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
+	var updatedCellsMu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {
@@ -458,7 +462,9 @@ func (ts *Server) UpdateSrvKeyspaceGossipConfig(ctx context.Context, keyspace st
 					rec.RecordError(err)
 					return
 				}
+				updatedCellsMu.Lock()
 				updatedCells = append(updatedCells, cell)
+				updatedCellsMu.Unlock()
 				return
 			case IsErrType(err, NoNode):
 				// NOOP as not every cell will contain a serving tablet in the keyspace

@@ -67,9 +67,16 @@ func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest)
 
 func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
 	if t.dialer == nil {
-		return nil, nil
+		return nil, fmt.Errorf("gossip transport dialer is nil")
 	}
-	return t.dialer.Dial(ctx, addr)
+	client, err := t.dialer.Dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("gossip transport dialer returned nil client for %q", addr)
+	}
+	return client, nil
 }
 
 func toProtoMessage(msg *Message) *gossippb.GossipMessage {

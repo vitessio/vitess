@@ -404,8 +404,20 @@ func TestGRPCTransportNilDialer(t *testing.T) {
 	transport := NewGRPCTransport(nil).(*grpcTransport)
 
 	client, err := transport.dial(t.Context(), "addr")
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, client)
+}
+
+func TestGRPCTransportNilClient(t *testing.T) {
+	transport := NewGRPCTransport(nilClientDialer{})
+
+	resp, err := transport.PushPull(t.Context(), "addr", &Message{})
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+
+	joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
+	assert.Error(t, err)
+	assert.Nil(t, joinResp)
 }
 
 func TestGRPCTransportErrorPropagation(t *testing.T) {
@@ -738,4 +750,10 @@ type failingDialer struct{}
 
 func (failingDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
 	return nil, errors.New("dial failed")
+}
+
+type nilClientDialer struct{}
+
+func (nilClientDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
+	return nil, nil
 }

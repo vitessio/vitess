@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -29,8 +30,67 @@ import (
 
 // SetGossip sets the gossip agent used by the tablet manager.
 func (tm *TabletManager) SetGossip(agent *gossip.Gossip, enabled bool) {
+	tm.gossipMu.Lock()
+	defer tm.gossipMu.Unlock()
 	tm.Gossip = agent
 	tm.GossipEnabled = enabled
+}
+
+func (tm *TabletManager) currentGossipAgent() *gossip.Gossip {
+	if tm == nil {
+		return nil
+	}
+	tm.gossipMu.RLock()
+	defer tm.gossipMu.RUnlock()
+	return tm.Gossip
+}
+
+func (tm *TabletManager) currentGossipState() (*gossip.Gossip, bool) {
+	if tm == nil {
+		return nil, false
+	}
+	tm.gossipMu.RLock()
+	defer tm.gossipMu.RUnlock()
+	return tm.Gossip, tm.GossipEnabled
+}
+
+func (tm *TabletManager) setGossipCancel(cancel context.CancelFunc) {
+	tm.gossipMu.Lock()
+	defer tm.gossipMu.Unlock()
+	tm.gossipCancel = cancel
+}
+
+func (tm *TabletManager) stopGossipAgent() {
+	if tm == nil {
+		return
+	}
+	tm.gossipMu.Lock()
+	agent := tm.Gossip
+	tm.Gossip = nil
+	tm.GossipEnabled = false
+	tm.gossipMu.Unlock()
+	if agent != nil {
+		agent.Stop()
+	}
+}
+
+func (tm *TabletManager) stopGossipLifecycle() {
+	if tm == nil {
+		return
+	}
+	tm.gossipMu.Lock()
+	cancel := tm.gossipCancel
+	tm.gossipCancel = nil
+	agent := tm.Gossip
+	tm.Gossip = nil
+	tm.GossipEnabled = false
+	tm.gossipMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if agent != nil {
+		agent.Stop()
+	}
 }
 
 var gossipServiceOnce sync.Once
@@ -47,14 +107,15 @@ func registerGossipService(tm *TabletManager) {
 	gossipServiceOnce.Do(func() {
 		if servenv.GRPCCheckServiceMap("gossip") {
 			gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
-				GetAgent: func() *gossip.Gossip { return tm.Gossip },
+				GetAgent: func() *gossip.Gossip { return tm.currentGossipAgent() },
 			})
 		}
 
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			if tm.Gossip != nil {
-				_ = json.NewEncoder(w).Encode(tm.Gossip.Debug())
+			agent := tm.currentGossipAgent()
+			if agent != nil {
+				_ = json.NewEncoder(w).Encode(agent.Debug())
 			} else {
 				_, _ = w.Write([]byte("null\n"))
 			}

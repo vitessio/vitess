@@ -17,6 +17,8 @@ limitations under the License.
 package logic
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -119,8 +121,186 @@ func TestStopGossipWithAgent(t *testing.T) {
 
 	gossipAgent = agent
 	stopGossip()
+	assert.Nil(t, gossipAgent)
 	// Calling stop again should be safe.
 	stopGossip()
+}
+
+func TestGetGossipQuorumAnalysesConcurrentWithConfigChange(t *testing.T) {
+	orcDb, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = orcDb.Exec("delete from vitess_tablet")
+		_, _ = orcDb.Exec("delete from vitess_keyspace")
+		_, _ = orcDb.Exec("delete from vitess_shard")
+		db.ClearVTOrcDatabase()
+		stopGossip()
+	})
+
+	cfg := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 5,
+		PingInterval: "100ms",
+		MaxUpdateAge: "500ms",
+	}
+	enabled := &topodatapb.SrvKeyspace{GossipConfig: cfg}
+	disabled := &topodatapb.SrvKeyspace{}
+
+	startGossipAgent(cfg)
+	require.NotNil(t, gossipAgent)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = getGossipQuorumAnalyses()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			applyGossipConfigChange(disabled)
+			applyGossipConfigChange(enabled)
+		}
+	}()
+	wg.Wait()
+}
+
+func TestWatchGossipConfigRecoversAfterSrvKeyspaceCreate(t *testing.T) {
+	ctx := t.Context()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() {
+		stopGossip()
+		ts = origTS
+	}()
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go watchGossipConfig(watchCtx, "ks")
+
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 4,
+			PingInterval: "100ms",
+			MaxUpdateAge: "1s",
+		},
+	}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
+	ctx := t.Context()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() {
+		stopGossip()
+		ts = origTS
+	}()
+
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 4,
+			PingInterval: "100ms",
+			MaxUpdateAge: "1s",
+		},
+	}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go watchGossipConfig(watchCtx, "ks")
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, ts.DeleteSrvKeyspace(ctx, "zone1", "ks"))
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() == nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 4,
+			PingInterval: "100ms",
+			MaxUpdateAge: "1s",
+		},
+	}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestWatchGossipConfigSwitchesToAnotherEnabledKeyspace(t *testing.T) {
+	ctx := t.Context()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() {
+		stopGossip()
+		ts = origTS
+	}()
+
+	for _, keyspace := range []string{"ks1", "ks2"} {
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 4,
+				PingInterval: "100ms",
+				MaxUpdateAge: "1s",
+			},
+		}))
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", keyspace, &topodatapb.SrvKeyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 4,
+				PingInterval: "100ms",
+				MaxUpdateAge: "1s",
+			},
+		}))
+	}
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go watchGossipConfig(watchCtx, "ks1")
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	updateKeyspaceGossipConfig(t, ts, "ks1", &topodatapb.GossipConfig{})
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks1", &topodatapb.SrvKeyspace{}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	updateKeyspaceGossipConfig(t, ts, "ks2", &topodatapb.GossipConfig{})
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() == nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func updateKeyspaceGossipConfig(t *testing.T, ts *topo.Server, keyspace string, cfg *topodatapb.GossipConfig) {
+	t.Helper()
+	lockCtx, unlock, err := ts.LockKeyspace(t.Context(), keyspace, "update gossip config")
+	require.NoError(t, err)
+	var unlockErr error
+	defer unlock(&unlockErr)
+
+	ki, err := ts.GetKeyspace(lockCtx, keyspace)
+	require.NoError(t, err)
+	ki.GossipConfig = cfg
+	require.NoError(t, ts.UpdateKeyspace(lockCtx, ki))
 }
 
 func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {

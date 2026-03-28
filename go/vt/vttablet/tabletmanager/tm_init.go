@@ -175,6 +175,7 @@ type TabletManager struct {
 	Env                 *vtenv.Environment
 	Gossip              *gossip.Gossip
 	GossipEnabled       bool
+	gossipMu            sync.RWMutex
 	gossipCancel        context.CancelFunc
 
 	// tmc is used to run an RPC against other vttablets.
@@ -423,23 +424,25 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
-	if tm.Gossip == nil {
+	if tm.currentGossipAgent() == nil {
 		gossipCfg := tm.getGossipConfig(tablet)
 		if agent, enabled := newGossipAgent(gossipCfg, tablet, tm.TopoServer); enabled {
-			tm.Gossip = agent
-			tm.GossipEnabled = enabled
+			tm.SetGossip(agent, enabled)
 		}
 	}
-	if tm.Gossip != nil && tm.GossipEnabled {
-		if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
+	agent, enabled := tm.currentGossipState()
+	if agent != nil && enabled {
+		if err := agent.Start(tm.BatchCtx); err != nil {
 			return err
 		}
-		servenv.OnTerm(tm.Gossip.Stop)
+		servenv.OnTerm(tm.stopGossipLifecycle)
 	}
 	// Always start the watcher so runtime config changes (including
 	// cold-enable) can create/start/stop the gossip agent.
 	var gossipCtx context.Context
-	gossipCtx, tm.gossipCancel = context.WithCancel(tm.BatchCtx)
+	var gossipCancel context.CancelFunc
+	gossipCtx, gossipCancel = context.WithCancel(tm.BatchCtx)
+	tm.setGossipCancel(gossipCancel)
 	go tm.watchGossipConfig(gossipCtx, tablet)
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
@@ -523,6 +526,7 @@ func (tm *TabletManager) Close() {
 	// running during lame duck.
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
+	tm.stopGossipLifecycle()
 
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
@@ -556,13 +560,7 @@ func (tm *TabletManager) Stop() {
 	// here in addition to in Close() because tests do not call Close().
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
-
-	if tm.gossipCancel != nil {
-		tm.gossipCancel()
-	}
-	if tm.Gossip != nil {
-		tm.Gossip.Stop()
-	}
+	tm.stopGossipLifecycle()
 
 	if tm.QueryServiceControl != nil {
 		tm.QueryServiceControl.Stats().Stop()
@@ -601,23 +599,53 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 // and tuning changes. This follows the tablet throttler's SrvKeyspace
 // watcher pattern.
 func (tm *TabletManager) watchGossipConfig(ctx context.Context, tablet *topodatapb.Tablet) {
-	initial, changes, err := tm.TopoServer.WatchSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
-	if err != nil {
-		return
-	}
-	// Apply the initial value so we don't miss config set before the watch.
-	if initial != nil && initial.Value != nil {
-		tm.applyGossipConfigChange(initial.Value, tablet)
-	}
-	for change := range changes {
-		if change.Err != nil {
-			if !topo.IsErrType(change.Err, topo.Interrupted) {
-				log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+	retryTicker := time.NewTicker(100 * time.Millisecond)
+	defer retryTicker.Stop()
+
+	for {
+		initial, changes, err := tm.TopoServer.WatchSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
+		if err != nil {
+			if ctx.Err() != nil || topo.IsErrType(err, topo.Interrupted) {
+				return
 			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-retryTicker.C:
+			}
+			continue
+		}
+		// Apply the initial value so we don't miss config set before the watch.
+		if initial != nil && initial.Value != nil {
+			tm.applyGossipConfigChange(initial.Value, tablet)
+		}
+
+		restart := false
+		for change := range changes {
+			if change.Err != nil {
+				if ctx.Err() != nil || topo.IsErrType(change.Err, topo.Interrupted) {
+					return
+				}
+				if topo.IsErrType(change.Err, topo.NoNode) {
+					tm.stopGossipAgent()
+				} else {
+					log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
+				}
+				restart = true
+				break
+			}
+			if change.Value != nil {
+				tm.applyGossipConfigChange(change.Value, tablet)
+			}
+		}
+		if !restart {
 			return
 		}
-		if change.Value != nil {
-			tm.applyGossipConfigChange(change.Value, tablet)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-retryTicker.C:
 		}
 	}
 }
@@ -627,29 +655,32 @@ func (tm *TabletManager) watchGossipConfig(ctx context.Context, tablet *topodata
 func (tm *TabletManager) applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace, tablet *topodatapb.Tablet) {
 	cfg := srvKs.GossipConfig
 	if cfg == nil || !cfg.Enabled {
-		if tm.GossipEnabled && tm.Gossip != nil {
-			tm.Gossip.Stop()
-			tm.Gossip = nil
-			tm.GossipEnabled = false
-		}
+		tm.stopGossipAgent()
 		return
 	}
-	if tm.Gossip == nil {
+	agent := tm.currentGossipAgent()
+	if agent == nil {
 		agent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
 		if !enabled {
 			return
 		}
+		tm.gossipMu.Lock()
+		if tm.Gossip != nil {
+			tm.gossipMu.Unlock()
+			return
+		}
+		if err := agent.Start(tm.BatchCtx); err != nil {
+			tm.gossipMu.Unlock()
+			log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
+			return
+		}
 		tm.Gossip = agent
 		tm.GossipEnabled = true
-		if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
-			log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
-			tm.Gossip = nil
-			tm.GossipEnabled = false
-		}
+		tm.gossipMu.Unlock()
 		registerGossipService(tm)
 		return
 	}
-	tm.Gossip.Reconfigure(gossip.Config{
+	agent.Reconfigure(gossip.Config{
 		PhiThreshold: cfg.PhiThreshold,
 		PingInterval: parseDuration(cfg.PingInterval, 0),
 		MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
