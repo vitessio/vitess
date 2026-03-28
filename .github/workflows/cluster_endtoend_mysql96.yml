@@ -26,23 +26,34 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
       - name: Generate shard matrix
         id: set-matrix
         run: |
-          # Run a small subset of shards to preview MySQL 9.6 compatibility.
-          # These cover the areas most sensitive to MySQL version changes:
-          #   vtgate_queries        - SQL parsing/execution (21 tests)
+          # Small subset of shards covering areas most sensitive to MySQL version changes:
+          #   vtgate_queries        - SQL parsing/execution
           #   onlineddl_vrepl       - Online DDL via VReplication
           #   vreplication_basic    - Core VReplication, binlog, GTID
           #   vtorc                 - Replication topology, failover, semi-sync
           #   tabletmanager_tablegc - Tablet lifecycle, mysqld management
-          matrix='{"include":[
-            {"shard":"vtgate_queries","needs":[],"buildTag":""},
-            {"shard":"onlineddl_vrepl","needs":["binlog-compression","larger-runner"],"buildTag":""},
-            {"shard":"vreplication_basic","needs":["binlog-compression","larger-runner","limit-resources"],"buildTag":""},
-            {"shard":"vtorc","needs":["larger-runner","memory-check"],"buildTag":""},
-            {"shard":"tabletmanager_tablegc","needs":[],"buildTag":""}
-          ]}'
+          SHARDS='["vtgate_queries","onlineddl_vrepl","vreplication_basic","vtorc","tabletmanager_tablegc"]'
+
+          matrix=$(jq -c -s --argjson shards "$SHARDS" '
+            map(.Tests) | add | to_entries
+            | group_by(.value.Shard)
+            | map(select(.[0].value.Shard as $s | ($shards | index($s)) != null))
+            | map({
+                shard: .[0].value.Shard,
+                needs: ([.[].value.Needs // []] | add | unique // []),
+                buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // "")
+              })
+          ' test/config.json test/config_partial_keyspace.json)
+
+          echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
 
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 

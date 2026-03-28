@@ -57,6 +57,15 @@ jobs:
             evalengine: "1"
             flavor: mysql-8.4
 
+          # mysql96 tests
+          - platform: mysql96
+            evalengine: "0"
+            flavor: mysql-9.6
+
+          - platform: mysql96
+            evalengine: "1"
+            flavor: mysql-9.6
+
           # Race tests (mysql80 only)
           - platform: mysql80
             evalengine: "0"
