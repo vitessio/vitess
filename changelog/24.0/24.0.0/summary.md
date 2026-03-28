@@ -21,6 +21,7 @@
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
+        - [EXCEPT and INTERSECT set operations support](#query-serving-except-intersect-support)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
@@ -167,6 +168,28 @@ The `JSON_EXTRACT` function now supports dynamic path arguments like bind variab
 Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
 
 Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
+
+#### <a id="query-serving-except-intersect-support"/>EXCEPT and INTERSECT set operations support</a>
+
+Vitess now supports the `EXCEPT` and `INTERSECT` SQL set operations. `EXCEPT` returns rows from the first query not present in the second; `INTERSECT` returns rows that appear in both.
+
+Both operations support the `ALL` and `DISTINCT` modifiers:
+
+```sql
+-- Returns distinct rows in first query that aren't in second
+SELECT id, name FROM table1 EXCEPT SELECT id, name FROM table2;
+
+-- Returns all rows (including duplicates) from first query not in second
+SELECT id, name FROM table1 EXCEPT ALL SELECT id, name FROM table2;
+
+-- Returns distinct rows that appear in both queries
+SELECT id, name FROM table1 INTERSECT SELECT id, name FROM table2;
+
+-- Returns all matching rows (including duplicates)
+SELECT id, name FROM table1 INTERSECT ALL SELECT id, name FROM table2;
+```
+
+Operator precedence matches MySQL behavior: `INTERSECT` binds tighter than `UNION` and `EXCEPT`. This means `A UNION B INTERSECT C` is evaluated as `A UNION (B INTERSECT C)`.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
