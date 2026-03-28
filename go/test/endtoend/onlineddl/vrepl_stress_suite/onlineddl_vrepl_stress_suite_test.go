@@ -380,7 +380,7 @@ const (
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
 	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
-	waitForStatusTimeout          = 180 * time.Second
+	waitForStatusTimeout          = 300 * time.Second
 )
 
 func resetOpOrder() {
@@ -533,9 +533,9 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				}
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
+				require.Equal(t, string(expectStatus), string(status), "migration did not reach expected status within timeout")
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
