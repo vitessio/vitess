@@ -21,6 +21,8 @@
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
+    - **[VTBackup](#minor-changes-vtbackup)**
+        - [`--init-backup-sql-queries` Timing Change](#vtbackup-init-sql-timing)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
@@ -167,6 +169,18 @@ The `JSON_EXTRACT` function now supports dynamic path arguments like bind variab
 Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
 
 Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
+
+### <a id="minor-changes-vtbackup"/>VTBackup</a>
+
+#### <a id="vtbackup-init-sql-timing"/>`--init-backup-sql-queries` Timing Change</a>
+
+The `--init-backup-sql-queries` flag now executes queries **after** the catch-up replication phase rather than before. This enables use cases like running `OPTIMIZE TABLE` to reduce table fragmentation introduced by the catch-up replication process.
+
+Additionally, `super_read_only` is now temporarily disabled during init SQL query execution, allowing write operations to succeed even when MySQL is started with `super-read-only` enabled. The original `super_read_only` setting is restored after the queries complete.
+
+**Impact**: If your workflow depends on init SQL queries running before replication catch-up, you'll need to adjust accordingly. Most users will benefit from the new timing, as queries now run after all data changes from replication have been applied.
+
+See [#19713](https://github.com/vitessio/vitess/pull/19713) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
