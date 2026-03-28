@@ -55,8 +55,6 @@ jobs:
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
 
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
-
   test:
     needs: generate-matrix
     if: needs.generate-matrix.outputs.matrix != ''
