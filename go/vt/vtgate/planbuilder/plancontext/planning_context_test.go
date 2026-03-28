@@ -64,7 +64,7 @@ func TestTyping(t *testing.T) {
 				col2 = node
 			}
 		case *sqlparser.FuncExpr:
-			switch node.Name.Lowered() {
+			switch node.Name.Normalized() {
 			case "length":
 				length = node
 			case "acos":

@@ -181,7 +181,7 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	_ = sqlparser.SafeRewrite(filter, nil, func(cursor *sqlparser.Cursor) bool {
 		switch n := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+			if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Normalized(), "tables_in_") {
 				cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
 			}
 		}

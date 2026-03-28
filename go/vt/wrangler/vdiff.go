@@ -584,14 +584,14 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
-			columnCollations[column.Name.Lowered()] = collations.Unknown
+			columnCollations[column.Name.Normalized()] = collations.Unknown
 			continue
 		}
-		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
+		columnCollations[column.Name.Normalized()] = getColumnCollation(column)
 		if len(column.Type.EnumValues) == 0 {
 			continue
 		}
-		columnValues[column.Name.Lowered()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
+		columnValues[column.Name.Normalized()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
 	return columnCollations, columnValues, nil
 }
@@ -612,7 +612,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 		case *sqlparser.AliasedExpr:
 			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 				var convertTZFuncExpr *sqlparser.FuncExpr
-				colName := colAs.Name.Lowered()
+				colName := colAs.Name.Normalized()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
@@ -643,9 +643,9 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 	var colname string
 	switch t := expr.(type) {
 	case *sqlparser.ColName:
-		colname = t.Name.Lowered()
+		colname = t.Name.Normalized()
 	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
-		colname = aliasedExpr.As.Lowered()
+		colname = aliasedExpr.As.Normalized()
 	default:
 		return "", fmt.Errorf("found target SelectExpr which was neither ColName or FuncExpr: %+v", aliasedExpr)
 	}

@@ -6541,5 +6541,109 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "utf8mb4_general_ci: non-accented column matches accented vindex column",
+    "query": "select * from accent_tbl where cafe = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from accent_tbl where cafe = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from accent_tbl where 1 != 1",
+        "Query": "select * from accent_tbl where cafe = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.accent_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "utf8mb4_general_ci: uppercase non-accented matches accented vindex column",
+    "query": "select * from accent_tbl where CAFE = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from accent_tbl where CAFE = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from accent_tbl where 1 != 1",
+        "Query": "select * from accent_tbl where CAFE = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.accent_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "utf8mb4_general_ci: backtick-quoted accented matches accented vindex column",
+    "query": "select * from accent_tbl where `café` = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from accent_tbl where `café` = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from accent_tbl where 1 != 1",
+        "Query": "select * from accent_tbl where `café` = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.accent_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "utf8mb4_general_ci: backtick-quoted uppercase accented matches accented vindex column",
+    "query": "select * from accent_tbl where `CAFÉ` = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from accent_tbl where `CAFÉ` = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from accent_tbl where 1 != 1",
+        "Query": "select * from accent_tbl where `CAFÉ` = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.accent_tbl"
+      ]
+    }
   }
 ]

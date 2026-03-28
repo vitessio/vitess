@@ -132,7 +132,7 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 				return
 			}
 
-			idx, ok := offsets[col.Name.Lowered()]
+			idx, ok := offsets[col.Name.Normalized()]
 			if !ok {
 				panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
 			}

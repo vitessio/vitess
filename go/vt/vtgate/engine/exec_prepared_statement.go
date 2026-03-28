@@ -58,7 +58,7 @@ func (e *ExecStmt) Inputs() ([]Primitive, []map[string]any) {
 func (e *ExecStmt) description() PrimitiveDescription {
 	var params []string
 	for _, p := range e.Params {
-		params = append(params, p.Name.Lowered())
+		params = append(params, p.Name.Normalized())
 	}
 	return PrimitiveDescription{
 		OperatorType: "EXECUTE",
@@ -72,7 +72,7 @@ func (e *ExecStmt) prepareBindVars(vcursor VCursor, bindVars map[string]*querypb
 	count := 1
 	for _, p := range e.Params {
 		bvName := "v" + strconv.Itoa(count)
-		bv := vcursor.Session().GetUDV(p.Name.Lowered())
+		bv := vcursor.Session().GetUDV(p.Name.Normalized())
 		if bv == nil {
 			bv = sqltypes.NullBindVariable
 		}

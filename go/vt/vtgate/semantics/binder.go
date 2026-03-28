@@ -83,7 +83,7 @@ func (b *binder) bindOverClause(node *sqlparser.OverClause) error {
 	if node.WindowName.NotEmpty() {
 		// If the window name is present, we need to resolve it
 		// and bind the window definition to the over clause
-		windowDef := b.scoper.currentScope().findWindow(node.WindowName.Lowered())
+		windowDef := b.scoper.currentScope().findWindow(node.WindowName.Normalized())
 		if windowDef == nil {
 			return vterrors.VT03025(node.WindowName.String())
 		}
@@ -171,7 +171,7 @@ func (b *binder) bindJoinCondition(condition *sqlparser.JoinCondition) error {
 		if err != nil {
 			return err
 		}
-		currScope.joinUsing[ident.Lowered()] = deps.direct
+		currScope.joinUsing[ident.Normalized()] = deps.direct
 	}
 	return nil
 }
@@ -245,7 +245,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 // canRewriteUsingJoin will return true when this ColName is safe to rewrite since it can only belong to a USING JOIN
 func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) bool {
 	tbls := deps.direct.Constituents()
-	colName := node.Name.Lowered()
+	colName := node.Name.Normalized()
 	for _, tbl := range tbls {
 		m := b.usingJoinInfo[tbl]
 		if _, found := m[colName]; !found {

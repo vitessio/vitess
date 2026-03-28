@@ -520,7 +520,7 @@ func (tr *ShardedRouting) getLoweredNameAndIndex(colVindex *vindexes.ColumnVinde
 	indexOfCol := -1
 	for idx, col := range colVindex.Columns {
 		if column.Name.Equal(col) {
-			colLoweredName = column.Name.Lowered()
+			colLoweredName = column.Name.Normalized()
 			indexOfCol = idx
 			break
 		}

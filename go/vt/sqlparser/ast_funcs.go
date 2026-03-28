@@ -380,7 +380,7 @@ func (node *VindexSpec) ParseParams() (string, map[string]string) {
 	var owner string
 	params := map[string]string{}
 	for _, p := range node.Params {
-		if p.Key.Lowered() == VindexOwnerStr {
+		if p.Key.Normalized() == VindexOwnerStr {
 			owner = p.Val
 		} else {
 			params[p.Key.String()] = p.Val
@@ -738,7 +738,8 @@ func (node *ColName) Equal(c *ColName) bool {
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
 	return IdentifierCI{
-		val: str,
+		val:        str,
+		normalized: identNormalize(str),
 	}
 }
 
@@ -1038,27 +1039,22 @@ func (node IdentifierCI) CompliantName() string {
 	return compliantName(node.val)
 }
 
-// Lowered returns a lower-cased column name.
-// This function should generally be used only for optimizing
-// comparisons.
-func (node IdentifierCI) Lowered() string {
-	if node.val == "" {
-		return ""
-	}
-	if node.lowered == "" {
-		node.lowered = strings.ToLower(node.val)
-	}
-	return node.lowered
+// Normalized returns the identifier normalized using the utf8mb4_general_ci
+// collation, matching MySQL's case-insensitive identifier comparison behavior.
+// The result is lowercased and accent-stripped (e.g., "café" → "cafe").
+func (node IdentifierCI) Normalized() string {
+	return node.normalized
 }
 
-// Equal performs a case-insensitive compare.
+// Equal performs a case-insensitive compare using utf8mb4_general_ci collation.
 func (node IdentifierCI) Equal(in IdentifierCI) bool {
-	return node.Lowered() == in.Lowered()
+	return node.normalized == in.normalized
 }
 
-// EqualString performs a case-insensitive compare with str.
+// EqualString performs a case-insensitive compare with str using
+// utf8mb4_general_ci collation, without allocating.
 func (node IdentifierCI) EqualString(str string) bool {
-	return node.Lowered() == strings.ToLower(str)
+	return identCollate(node.val, str) == 0
 }
 
 // EqualsAnyString returns true if any of these strings match
@@ -1079,6 +1075,7 @@ func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	node.val = result
+	node.normalized = identNormalize(result)
 	return nil
 }
 

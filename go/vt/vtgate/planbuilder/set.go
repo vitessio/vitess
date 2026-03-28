@@ -74,7 +74,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				return nil, err
 			}
 			setOp := &engine.UserDefinedVariable{
-				Name: expr.Var.Name.Lowered(),
+				Name: expr.Var.Name.Normalized(),
 				Expr: evalExpr,
 			}
 			setOps = append(setOps, setOp)
@@ -105,7 +105,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 
 			setOps = append(setOps,
-				&engine.VitessMetadata{Name: expr.Var.Name.Lowered(), Value: val})
+				&engine.VitessMetadata{Name: expr.Var.Name.Normalized(), Value: val})
 		default:
 			return nil, vterrors.VT13001(fmt.Sprintf("undefined set type: %v", expr.Var.Scope.ToString()))
 		}
@@ -141,7 +141,7 @@ func buildSetOpIgnore(s setting) planFunc {
 			return nil, err
 		}
 		return &engine.SysVarIgnore{
-			Name: expr.Var.Name.Lowered(),
+			Name: expr.Var.Name.Normalized(),
 			Expr: value,
 		}, nil
 	}
@@ -164,7 +164,7 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 	}
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:              expr.Var.Name.Lowered(),
+		Name:              expr.Var.Name.Normalized(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
@@ -188,7 +188,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 		value = provideAppliedCase(value, s.storageCase)
 
 		return &engine.SysVarReservedConn{
-			Name:              expr.Var.Name.Lowered(),
+			Name:              expr.Var.Name.Normalized(),
 			Keyspace:          ks,
 			TargetDestination: vschema.ShardDestination(),
 			Expr:              value,
@@ -228,7 +228,7 @@ func buildSetOpVitessAware(s setting) planFunc {
 		}
 
 		return &engine.SysVarSetAware{
-			Name: astExpr.Var.Name.Lowered(),
+			Name: astExpr.Var.Name.Normalized(),
 			Expr: runtimeExpr,
 		}, nil
 	}
@@ -261,7 +261,7 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	case *sqlparser.ColName:
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
 		// an enumeration, such as utf8mb3, utf8mb4, etc
-		switch node.Name.Lowered() {
+		switch node.Name.Normalized() {
 		case "on":
 			return "1", nil
 		case "off":

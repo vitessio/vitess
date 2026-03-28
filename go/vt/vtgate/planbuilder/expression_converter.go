@@ -52,7 +52,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 		}
 	case *sqlparser.ColName:
 		// set autocommit = on
-		switch node.Name.Lowered() {
+		switch node.Name.Normalized() {
 		case "on":
 			return ON
 		case "off":
@@ -65,7 +65,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.SystemCollation)
+		return evalengine.NewLiteralString([]byte(colName.Name.Normalized()), collations.SystemCollation)
 	}
 	return nil
 }

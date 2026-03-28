@@ -472,7 +472,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
-		switch fname := expr.Name.Lowered(); fname {
+		switch fname := expr.Name.Normalized(); fname {
 		case "keyspace_id":
 			if len(expr.Exprs) != 0 {
 				return nil, fmt.Errorf("unsupported multiple keyspace_id expressions: %v", sqlparser.String(expr))

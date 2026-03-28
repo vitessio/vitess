@@ -4170,8 +4170,8 @@ type IdentifierCI struct {
 	// This artifact prevents this struct from being compared
 	// with itself. It consumes no space as long as it's not the
 	// last field in the struct.
-	_            [0]struct{ _ []byte }
-	val, lowered string
+	_               [0]struct{ _ []byte }
+	val, normalized string
 }
 
 // IdentifierCS is a case sensitive SQL identifier. It will be escaped with

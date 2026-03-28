@@ -88,7 +88,7 @@ var sysvarPlanningFuncs sysvarPlanCache
 
 func (pc *sysvarPlanCache) Get(env *vtenv.Environment, expr *sqlparser.SetExpr) (planFunc, error) {
 	pc.init(env)
-	pf, ok := pc.funcs[expr.Var.Name.Lowered()]
+	pf, ok := pc.funcs[expr.Var.Name.Normalized()]
 	if !ok {
 		return nil, vterrors.VT05006(sqlparser.String(expr))
 	}

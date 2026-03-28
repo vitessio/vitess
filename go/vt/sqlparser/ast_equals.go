@@ -3178,7 +3178,7 @@ func (cmp *Comparator) RefOfHandlerConditionSQLWarning(a, b *HandlerConditionSQL
 // IdentifierCI does deep equals between the two objects.
 func (cmp *Comparator) IdentifierCI(a, b IdentifierCI) bool {
 	return a.val == b.val &&
-		a.lowered == b.lowered
+		a.normalized == b.normalized
 }
 
 // IdentifierCS does deep equals between the two objects.
@@ -8305,7 +8305,7 @@ func (cmp *Comparator) RefOfIdentifierCI(a, b *IdentifierCI) bool {
 		return false
 	}
 	return a.val == b.val &&
-		a.lowered == b.lowered
+		a.normalized == b.normalized
 }
 
 // RefOfIdentifierCS does deep equals between the two objects.

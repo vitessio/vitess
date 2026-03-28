@@ -2233,7 +2233,7 @@ func (node *Order) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node, ok := node.Expr.(*FuncExpr); ok {
-		if node.Name.Lowered() == "rand" {
+		if node.Name.Normalized() == "rand" {
 			buf.astPrintf(node, "%v", node)
 			return
 		}

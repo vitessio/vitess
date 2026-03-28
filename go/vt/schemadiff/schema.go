@@ -404,7 +404,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 
 		tableColumns := map[string]*sqlparser.ColumnDefinition{}
 		for _, col := range t.TableSpec.Columns {
-			colName := col.Name.Lowered()
+			colName := col.Name.Normalized()
 			tableColumns[colName] = col
 		}
 
@@ -423,17 +423,17 @@ func (s *Schema) normalize(hints *DiffHints) error {
 
 			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
 			for _, col := range referencedTable.TableSpec.Columns {
-				colName := col.Name.Lowered()
+				colName := col.Name.Normalized()
 				referencedColumns[colName] = col
 			}
 			// Thanks to table validation, we already know the foreign key covered columns count is equal to the
 			// referenced table column count. Now ensure their types are identical
 			for i, col := range check.Source {
-				coveredColumn, ok := tableColumns[col.Lowered()]
+				coveredColumn, ok := tableColumns[col.Normalized()]
 				if !ok {
 					return errors.Join(errs, &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()})
 				}
-				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
+				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Normalized()
 				referencedColumn, ok := referencedColumns[referencedColumnName]
 				if !ok {
 					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
@@ -955,23 +955,23 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				// on those columns, that's a sequential execution dependency.
 				referencedColumnNames := map[string]bool{}
 				for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
-					referencedColumnNames[referencedColumn.Lowered()] = true
+					referencedColumnNames[referencedColumn.Normalized()] = true
 				}
 				// Walk parentDiff.Statement()
 				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 					switch node := node.(type) {
 					case *sqlparser.ModifyColumn:
-						if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
+						if referencedColumnNames[node.NewColDefinition.Name.Normalized()] {
 							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 						}
 					case *sqlparser.AddColumns:
 						for _, col := range node.Columns {
-							if referencedColumnNames[col.Name.Lowered()] {
+							if referencedColumnNames[col.Name.Normalized()] {
 								schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 							}
 						}
 					case *sqlparser.DropColumn:
-						if referencedColumnNames[node.Name.Name.Lowered()] {
+						if referencedColumnNames[node.Name.Name.Normalized()] {
 							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 						}
 					case *sqlparser.AddIndexDefinition:
@@ -1094,7 +1094,7 @@ func (s *Schema) ValidateViewReferences() error {
 		}
 		schemaInformation.addTable(e.Name())
 		for _, col := range entityColumns {
-			schemaInformation.addColumn(e.Name(), col.Lowered())
+			schemaInformation.addColumn(e.Name(), col.Normalized())
 		}
 	}
 

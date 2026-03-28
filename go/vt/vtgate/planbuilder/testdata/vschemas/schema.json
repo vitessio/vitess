@@ -452,6 +452,14 @@
         "pin_test": {
           "pinned": "80"
         },
+        "accent_tbl": {
+          "column_vindexes": [
+            {
+              "column": "café",
+              "name": "hash"
+            }
+          ]
+        },
         "weird`name": {
           "column_vindexes": [
             {

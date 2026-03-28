@@ -197,7 +197,7 @@ func (s *scoper) pushSelectScope(node *sqlparser.Select) {
 
 	for _, namedWindow := range node.Windows {
 		for _, windowDef := range namedWindow.Windows {
-			currScope.windows[windowDef.Name.Lowered()] = windowDef
+			currScope.windows[windowDef.Name.Normalized()] = windowDef
 		}
 	}
 

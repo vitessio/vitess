@@ -547,8 +547,8 @@ func TestIdentifierCI(t *testing.T) {
 	if str.String() != "Ab" {
 		t.Errorf("Val=%s, want Ab", str.String())
 	}
-	if str.Lowered() != "ab" {
-		t.Errorf("Val=%s, want ab", str.Lowered())
+	if str.Normalized() != "ab" {
+		t.Errorf("Val=%s, want ab", str.Normalized())
 	}
 	if !str.Equal(NewIdentifierCI("aB")) {
 		t.Error("str.Equal(NewIdentifierCI(aB))=false, want true")
@@ -557,9 +557,55 @@ func TestIdentifierCI(t *testing.T) {
 		t.Error("str.EqualString(ab)=false, want true")
 	}
 	str = NewIdentifierCI("")
-	if str.Lowered() != "" {
-		t.Errorf("Val=%s, want \"\"", str.Lowered())
+	if str.Normalized() != "" {
+		t.Errorf("Val=%s, want \"\"", str.Normalized())
 	}
+}
+
+func TestIdentifierCI_UTF8MB3GeneralCI(t *testing.T) {
+	tests := []struct {
+		a, b  string
+		equal bool
+	}{
+		// Basic ASCII case insensitivity
+		{"hello", "HELLO", true},
+		{"Hello", "hELLO", true},
+		// Accent insensitivity (matches MySQL utf8mb4_general_ci)
+		{"café", "CAFE", true},
+		{"café", "cafe", true},
+		{"CAFÉ", "cafe", true},
+		// Ñ/ñ treated as N/n
+		{"piñata", "PINATA", true},
+		{"Ñ", "n", true},
+		// Accented vowels
+		{"résumé", "RESUME", true},
+		{"naïve", "NAIVE", true},
+		{"über", "UBER", true},
+		// Different characters should not be equal
+		{"hello", "world", false},
+		{"a", "b", false},
+		// Empty strings
+		{"", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.a+"_vs_"+tt.b, func(t *testing.T) {
+			idA := NewIdentifierCI(tt.a)
+			idB := NewIdentifierCI(tt.b)
+			assert.Equal(t, tt.equal, idA.Equal(idB), "Equal(%q, %q)", tt.a, tt.b)
+			assert.Equal(t, tt.equal, idA.EqualString(tt.b), "EqualString(%q, %q)", tt.a, tt.b)
+			if tt.equal {
+				assert.Equal(t, idA.Normalized(), idB.Normalized(),
+					"Normalized forms should match for equal identifiers: %q vs %q", tt.a, tt.b)
+			}
+		})
+	}
+
+	// Verify Normalized() produces lowercase, accent-stripped output
+	assert.Equal(t, "cafe", NewIdentifierCI("café").Normalized())
+	assert.Equal(t, "cafe", NewIdentifierCI("CAFÉ").Normalized())
+	assert.Equal(t, "pinata", NewIdentifierCI("piñata").Normalized())
+	assert.Equal(t, "primary", NewIdentifierCI("primary").Normalized())
+	assert.Equal(t, "primary", NewIdentifierCI("PRIMARY").Normalized())
 }
 
 func TestIdentifierCIMarshal(t *testing.T) {

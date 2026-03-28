@@ -328,7 +328,7 @@ func isDbNameCol(col *sqlparser.ColName, version string) bool {
 		schemaColumns = schemaColumns80
 	}
 
-	_, found := schemaColumns[col.Name.Lowered()]
+	_, found := schemaColumns[col.Name.Normalized()]
 	return found
 }
 

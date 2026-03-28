@@ -766,7 +766,7 @@ func isSpecialOrderBy(o OrderBy) bool {
 		return true
 	}
 	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
-	return isFunction && f.Name.Lowered() == "rand"
+	return isFunction && f.Name.Normalized() == "rand"
 }
 
 func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {

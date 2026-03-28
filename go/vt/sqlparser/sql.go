@@ -19209,7 +19209,7 @@ yydefault:
 //line sql.y:4422
 		{
 			// Change this to an alter statement
-			if yyDollar[4].identifierCI().Lowered() == "primary" {
+			if yyDollar[4].identifierCI().Normalized() == "primary" {
 				yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs()).Parsed(), FullyParsed: true, Table: yyDollar[6].tableName(), AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[7].alterOptions()...)}
 			} else {
 				yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs()).Parsed(), FullyParsed: true, Table: yyDollar[6].tableName(), AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].identifierCI()}}, yyDollar[7].alterOptions()...)}
@@ -19736,7 +19736,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4702
 		{
-			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCI().Lowered(), Action: "status"}}
+			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCI().Normalized(), Action: "status"}}
 		}
 		yyVAL.setstatement(yyLOCAL)
 	case 860:
@@ -19744,7 +19744,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4706
 		{
-			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCI().Lowered(), Action: "mutex"}}
+			yyLOCAL = &Show{&ShowEngine{EngineName: yyDollar[3].identifierCI().Normalized(), Action: "mutex"}}
 		}
 		yyVAL.setstatement(yyLOCAL)
 	case 861:
@@ -25623,7 +25623,7 @@ yydefault:
 //line sql.y:7978
 		{
 			// TODO(sougou): Deprecate this construct.
-			if yyDollar[1].identifierCI().Lowered() != "value" {
+			if yyDollar[1].identifierCI().Normalized() != "value" {
 				yylex.Error("expecting value after next")
 				return 1
 			}
