@@ -153,14 +153,14 @@ func waitForHealthyShards(ctx context.Context, vtgateAddr string, cell string) e
 				if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
 					continue
 				}
-				if !isTabletHealthy(tablet) {
-					continue
-				}
 				key := tablet.Tablet.Keyspace + ":" + tablet.Tablet.Shard
 				entry := counts[key]
 				if entry == nil {
 					entry = &healthCounts{}
 					counts[key] = entry
+				}
+				if !isTabletHealthy(tablet) {
+					continue
 				}
 				if tablet.Target.TabletType == 1 {
 					entry.primaries++
