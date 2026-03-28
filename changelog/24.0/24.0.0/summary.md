@@ -19,6 +19,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [MySQL zstd Connection Compression](#vtgate-zstd-compression)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -157,6 +158,24 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+#### <a id="vtgate-zstd-compression"/>MySQL zstd Connection Compression</a>
+
+VTGate now supports zstd compression for MySQL protocol connections. When `--mysql-enable-zstd-compression` is enabled, VTGate advertises compression support during the MySQL handshake.
+
+To enable:
+
+```
+--mysql-enable-zstd-compression=true
+```
+
+Clients can connect with compression:
+
+```bash
+mysql --compression-algorithms=zstd -h vtgate_host -P vtgate_port
+```
+
+The compression level is negotiated during handshake (levels 1-22, default 3). Requires MySQL 8.0+ compatible clients. When disabled (the default), no compression is advertised and connections remain uncompressed.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
