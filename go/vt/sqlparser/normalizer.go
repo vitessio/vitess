@@ -220,12 +220,18 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 	if node.As.NotEmpty() {
 		return
 	}
-	buf := NewTrackedBuffer(nil)
-	node.Expr.Format(buf)
+	var originalText string
+	if node.InputExpression != "" {
+		originalText = node.InputExpression
+	} else {
+		buf := NewTrackedBuffer(nil)
+		node.Expr.Format(buf)
+		originalText = buf.String()
+	}
 	rewrites := nz.bindVarNeeds.NumberOfRewrites()
 	nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
 		if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
-			newAliasedExpr.As = NewIdentifierCI(buf.String())
+			newAliasedExpr.As = NewIdentifierCI(originalText)
 		}
 	}
 }

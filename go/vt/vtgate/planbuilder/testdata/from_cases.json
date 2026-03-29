@@ -3793,7 +3793,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "user_extra.col + 1 as user_extra.col + 1"
+          "user_extra.col + 1 as user_extra.col+1"
         ],
         "Inputs": [
           {
@@ -3850,7 +3850,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as id",
-              "user_extra.col + 1 as user_extra.col + 1"
+              "user_extra.col + 1 as user_extra.col+1"
             ],
             "Inputs": [
               {
@@ -3913,7 +3913,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "`user`.foo + user_extra.col + 1 as `user`.foo + user_extra.col + 1"
+          "`user`.foo + user_extra.col + 1 as user.foo+user_extra.col+1"
         ],
         "Inputs": [
           {

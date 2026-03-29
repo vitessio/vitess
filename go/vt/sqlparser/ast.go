@@ -2442,8 +2442,9 @@ type (
 
 	// AliasedExpr defines an aliased SELECT expression.
 	AliasedExpr struct {
-		Expr Expr
-		As   IdentifierCI
+		Expr            Expr
+		As              IdentifierCI
+		InputExpression string
 	}
 
 	// Nextval defines the NEXT VALUE expression.

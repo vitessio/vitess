@@ -2282,8 +2282,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
-            "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id"
+            "FieldQuery": "select e.id, :cte_level + 1 as `cte.level + 1` from `user` as e where 1 != 1",
+            "Query": "select e.id, :cte_level + 1 as `cte.level + 1` from `user` as e where e.manager_id = :cte_id"
           }
         ]
       },

@@ -45,9 +45,31 @@ type Tokenizer struct {
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
-	Pos    int
-	buf    string
-	parser *Parser
+	Pos       int
+	buf       string
+	parser    *Parser
+	currStart int // start position of current token (set in Scan after skipBlank)
+}
+
+// location tracks the byte-offset span [start, end) of a grammar symbol
+// in the input buffer. Used by the parser's %locations feature.
+type location struct {
+	start int
+	end   int
+}
+
+// yyLocDefault merges locations during reductions. For non-empty
+// productions (n > 0), it spans from the first RHS symbol's start to
+// the last RHS symbol's end. For empty productions (n == 0), it
+// creates a zero-width span at the predecessor's end position.
+func yyLocDefault(cur *location, rhs []yySymType, n int) {
+	if n > 0 {
+		cur.start = rhs[1].yyloc.start
+		cur.end = rhs[n].yyloc.end
+	} else {
+		cur.start = rhs[0].yyloc.end
+		cur.end = rhs[0].yyloc.end
+	}
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -89,6 +111,8 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
+	lval.yyloc.start = tkn.currStart
+	lval.yyloc.end = tkn.Pos
 	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
@@ -107,6 +131,19 @@ func (p PositionedErr) Error() string {
 		return fmt.Sprintf("%s at position %v near '%s'", p.Err, p.Pos, p.Near)
 	}
 	return fmt.Sprintf("%s at position %v", p.Err, p.Pos)
+}
+
+// GetInputExpression extracts the original input text between start and end positions.
+// The lexer's skipBlank ensures start/end already exclude leading/trailing whitespace.
+//
+// Note that this returns a slice into the original input buffer,
+// so it will keep the original input buffer alive in memory until
+// the returned string is no longer referenced.
+func (tkn *Tokenizer) GetInputExpression(start, end int) string {
+	if start < 0 || end < 0 || start >= end || end > len(tkn.buf) {
+		return ""
+	}
+	return tkn.buf[start:end]
 }
 
 // Error is called by go yacc if there's a parsing error.
@@ -129,6 +166,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			tkn.inVersionedComment = false
 			tkn.skipBlank()
 		}
+		tkn.currStart = tkn.Pos
 		switch ch := tkn.cur(); {
 		case ch == '@':
 			tokenID := AT_ID

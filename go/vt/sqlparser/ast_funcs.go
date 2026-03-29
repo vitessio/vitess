@@ -2512,6 +2512,16 @@ func (ae *AliasedExpr) ColumnName() string {
 		if node.Type == StrVal {
 			return node.Val
 		}
+	case *IntroducerExpr:
+		// MySQL strips the charset introducer for string literals:
+		// _utf8 'hello' → column name is 'hello', not '_utf8 hello'
+		if lit, ok := node.Expr.(*Literal); ok && lit.Type == StrVal {
+			return lit.Val
+		}
+	}
+
+	if ae.InputExpression != "" {
+		return ae.InputExpression
 	}
 
 	return String(ae.Expr)

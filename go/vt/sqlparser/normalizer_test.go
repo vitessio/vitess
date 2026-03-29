@@ -638,7 +638,7 @@ func TestRewrites(in *testing.T) {
 	}, {
 		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select database() as `(select database() from dual)` from test",
+		expected: "select database() as `(select database())` from test",
 		// no bindvar needs
 	}, {
 		// unnest database() call
@@ -719,7 +719,7 @@ func TestRewrites(in *testing.T) {
 		socket:   true,
 	}, {
 		in:       "select (select 42) from dual",
-		expected: "select 42 as `(select 42 from dual)` from dual",
+		expected: "select 42 as `(select 42)` from dual",
 	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",

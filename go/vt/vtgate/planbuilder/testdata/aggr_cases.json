@@ -67,12 +67,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`user`.col)",
+        "Aggregates": "sum(0) AS sum(user.col)",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(`user`.col) * count(*) as sum(`user`.col)"
+              "sum(`user`.col) * count(*) as sum(user.col)"
             ],
             "Inputs": [
               {
@@ -125,12 +125,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(`user`.col)",
+        "Aggregates": "sum_count(0) AS count(user.col)",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(`user`.col) * count(*) as count(`user`.col)"
+              "count(`user`.col) * count(*) as count(user.col)"
             ],
             "Inputs": [
               {
@@ -183,7 +183,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0) AS max(`user`.col)",
+        "Aggregates": "max(0) AS max(user.col)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -3973,12 +3973,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(u.id)",
+        "Aggregates": "sum_count(0) AS count (u.id)",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(u.id) * coalesce(count(*), 1) as count(u.id)"
+              "count(u.id) * coalesce(count(*), 1) as count (u.id)"
             ],
             "Inputs": [
               {
@@ -5288,7 +5288,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max(u.foo * ue.bar)",
+        "Aggregates": "max(0|1) AS max(u.foo*ue.bar)",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -5339,7 +5339,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`user`.foo + user_extra.bar)",
+        "Aggregates": "sum(0) AS sum(user.foo+user_extra.bar)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5458,7 +5458,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 + count(*) as 1 + count(*)"
+          "1 + count(*) as 1+count(*)"
         ],
         "Inputs": [
           {
@@ -5495,7 +5495,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "greatest(sum(`user`.foo), sum(user_extra.bar)) as greatest(sum(`user`.foo), sum(user_extra.bar))"
+          "greatest(sum(`user`.foo), sum(user_extra.bar)) as greatest(sum(user.foo), sum(user_extra.bar))"
         ],
         "Inputs": [
           {
@@ -5562,7 +5562,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "group_concat(0) AS group_concat(`user`.a)",
+        "Aggregates": "group_concat(0) AS group_concat(user.a)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5609,13 +5609,13 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*), any_value(1) AS any_value(u.`name`), any_value(2) AS any_value(ue.title)",
+        "Aggregates": "sum_count_star(0) AS count(*), any_value(1) AS any_value(u.name), any_value(2) AS any_value(ue.title)",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               "count(*) * count(*) as count(*)",
-              ":2 as any_value(u.`name`)",
+              ":2 as any_value(u.name)",
               ":3 as any_value(ue.title)"
             ],
             "Inputs": [
@@ -5744,7 +5744,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "group_concat(0) AS group_concat(`user`.id)",
+        "Aggregates": "group_concat(0) AS group_concat(user.id)",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -6239,8 +6239,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
-                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual"
+                "FieldQuery": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from user) + (select count(*) from user_extra)` from dual where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from user) + (select count(*) from user_extra)` from dual"
               }
             ]
           }
@@ -6300,7 +6300,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+          "avg(id) + count(foo) + bar as avg(id)+count(foo)+bar"
         ],
         "Inputs": [
           {
@@ -6349,7 +6349,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+          "avg(id) + count(foo) + bar as avg(id)+count(foo)+bar"
         ],
         "Inputs": [
           {
@@ -6847,7 +6847,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
+        "Aggregates": "max(0|1) AS max((select min(col) from user where id = 1))",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -6959,7 +6959,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from `user` where id = 1))",
+        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from user where id = 1))",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -7014,7 +7014,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "Aggregates": "max(0|1) AS max((select max(col2) from user u1 where u1.id = u2.id))",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -7044,7 +7044,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(a, b)",
+        "Aggregates": "sum_count(0) AS count(a,b)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7102,7 +7102,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct `name`, id)",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct name, id)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7270,7 +7270,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS COUNT(*)",
         "Inputs": [
           {
             "OperatorType": "Projection",
@@ -7315,14 +7315,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(0) AS sum(`user`.type)",
+        "Aggregates": "sum(0) AS sum(user.type)",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(`user`.type) * count(*) as sum(`user`.type)",
+              "sum(`user`.type) * count(*) as sum(user.type)",
               ":2 as id",
               ":3 as weight_string(user_extra.id)"
             ],
