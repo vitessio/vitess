@@ -225,13 +225,16 @@ func (mysqlFlavorLegacy) catchupToGTIDCommands(params *ConnParams, replPos repli
 	return cmds
 }
 
-func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
 		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
+	}
+	if retryCount > 0 {
+		args = append(args, fmt.Sprintf("MASTER_RETRY_COUNT = %d", retryCount))
 	}
 	if params.SslEnabled() {
 		args = append(args, "MASTER_SSL = 1")

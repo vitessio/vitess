@@ -123,6 +123,7 @@ Flags:
       --rdonly-count int                                                 Rdonly tablets per shard (default 1)
       --replica-count int                                                Replica tablets per shard (includes primary) (default 2)
       --replication-connect-retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
+      --replication-retry-count int                                      how many times a replica should retry reconnecting to the primary before giving up. 0 leaves MySQL's default unchanged.
       --rng-seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize-with-random-data). Multiple runs with the same seed will result with the same initial data. (default 123)
       --schema-dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)

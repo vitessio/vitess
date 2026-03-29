@@ -42,7 +42,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 	heartbeatInterval := 5.4
@@ -56,8 +56,32 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 
-	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
+}
+
+func TestMysql8SetReplicationSourceCommandRetryCount(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	retryCount := 5678
+	want := `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'localhost',
+  SOURCE_PORT = 123,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 1234,
+  SOURCE_RETRY_COUNT = 5678,
+  GET_SOURCE_PUBLIC_KEY = 1,
+  SOURCE_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor8{}}
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, retryCount)
+	assert.Equal(t, want, got)
 }
 
 func TestMysql8SetReplicationSourceCommandSSL(t *testing.T) {
@@ -87,7 +111,7 @@ func TestMysql8SetReplicationSourceCommandSSL(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 }
 
@@ -148,7 +172,7 @@ func TestMysql9SetReplicationSourceCommand(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor9{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 	heartbeatInterval := 5.4
@@ -162,7 +186,7 @@ func TestMysql9SetReplicationSourceCommand(t *testing.T) {
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 
-	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
 }
 
@@ -193,6 +217,6 @@ func TestMysql9SetReplicationSourceCommandSSL(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor9{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 }
