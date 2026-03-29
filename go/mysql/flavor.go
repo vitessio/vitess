@@ -19,7 +19,6 @@ package mysql
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -200,9 +199,9 @@ func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavo
 	case strings.Contains(serverVersion, mariaDBVersionString):
 		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
 		if err != nil || mariadbVersion < 10.2 {
-			f = mariadbFlavor101{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
+			f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 		} else {
-			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
+			f = mariadbFlavor102{mariadbFlavor{serverVersion: canonicalVersion}}
 		}
 	case strings.HasPrefix(serverVersion, mysql8VersionPrefix):
 		if latest, _ := capabilities.ServerVersionAtLeast(serverVersion, 8, 2, 0); latest {
@@ -407,20 +406,7 @@ func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port
 }
 
 func (c *Conn) SetReplicationSourceCommandWithRetry(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
-	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, c.replicationSourceRetryCount(retryCount))
-}
-
-func (c *Conn) replicationSourceRetryCount(retryCount int) int {
-	if retryCount <= 0 || !c.IsMariaDB() {
-		return retryCount
-	}
-
-	atLeast, err := c.ServerVersionAtLeast(12, 0, 1)
-	if err != nil || !atLeast {
-		return 0
-	}
-
-	return retryCount
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, retryCount)
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.
