@@ -42,7 +42,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 	heartbeatInterval := 5.4
@@ -56,7 +56,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 
-	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, 0)
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
 }
 
@@ -80,7 +80,31 @@ func TestMysql8SetReplicationSourceCommandRetryCount(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, retryCount)
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, retryCount)
+	assert.Equal(t, want, got)
+}
+
+func TestMysql57SetReplicationSourceCommandRetryCount(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	retryCount := 5678
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_RETRY_COUNT = 5678,
+  GET_MASTER_PUBLIC_KEY = 1,
+  MASTER_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor57{}}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, retryCount)
 	assert.Equal(t, want, got)
 }
 
@@ -111,7 +135,7 @@ func TestMysql8SetReplicationSourceCommandSSL(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 }
 
@@ -172,7 +196,7 @@ func TestMysql9SetReplicationSourceCommand(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor9{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 	heartbeatInterval := 5.4
@@ -186,7 +210,7 @@ func TestMysql9SetReplicationSourceCommand(t *testing.T) {
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 
-	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, 0)
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
 }
 
@@ -217,6 +241,12 @@ func TestMysql9SetReplicationSourceCommandSSL(t *testing.T) {
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor9{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+}
+
+func TestFilePosSetReplicationSourceCommandWithRetry(t *testing.T) {
+	conn := &Conn{flavor: &filePosFlavor{}}
+	got := conn.SetReplicationSourceCommandWithRetry(&ConnParams{}, "localhost", 123, 0, 456, 789)
+	assert.Equal(t, "unsupported", got)
 }

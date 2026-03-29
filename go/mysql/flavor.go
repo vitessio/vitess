@@ -402,8 +402,25 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 // as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
-	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, retryCount)
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return c.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, connectRetry, 0)
+}
+
+func (c *Conn) SetReplicationSourceCommandWithRetry(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, c.replicationSourceRetryCount(retryCount))
+}
+
+func (c *Conn) replicationSourceRetryCount(retryCount int) int {
+	if retryCount <= 0 || !c.IsMariaDB() {
+		return retryCount
+	}
+
+	atLeast, err := c.ServerVersionAtLeast(12, 0, 1)
+	if err != nil || !atLeast {
+		return 0
+	}
+
+	return retryCount
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.

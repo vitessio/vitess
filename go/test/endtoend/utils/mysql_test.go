@@ -211,7 +211,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	q := conn.SetReplicationSourceCommand(&mysqlParams, host, port, 0, int(port), 0)
+	q := conn.SetReplicationSourceCommand(&mysqlParams, host, port, 0, int(port))
 	res := Exec(t, conn, q)
 	require.NotNil(t, res)
 

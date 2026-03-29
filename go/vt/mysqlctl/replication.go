@@ -511,7 +511,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()), replicationRetryCount)
+	smc := conn.Conn.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()), replicationRetryCount)
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())

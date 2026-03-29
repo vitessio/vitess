@@ -431,6 +431,34 @@ func TestSetReplicationSource(t *testing.T) {
 	assert.ErrorContains(t, err, `CHANGE REPLICATION SOURCE TO`)
 }
 
+func TestSetReplicationSourceRetryCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
+
+	oldRetryCount := replicationRetryCount
+	replicationRetryCount = 12
+	t.Cleanup(func() {
+		replicationRetryCount = oldRetryCount
+	})
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
+	assert.ErrorContains(t, err, `SOURCE_RETRY_COUNT = 12`)
+}
+
 func TestResetReplication(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

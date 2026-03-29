@@ -38,8 +38,8 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
   MASTER_CONNECT_RETRY = 1234,
   MASTER_USE_GTID = current_pos`
 
-	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	conn := &Conn{flavor: mariadbFlavor101{}, ServerVersion: "10.1.48-MariaDB"}
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 	heartbeatInterval := 5.4
@@ -52,7 +52,7 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
   MASTER_HEARTBEAT_PERIOD = 5.4,
   MASTER_USE_GTID = current_pos`
 
-	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, 0)
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
 }
 
@@ -74,8 +74,29 @@ func TestMariadbSetReplicationSourceCommandRetryCount(t *testing.T) {
   MASTER_RETRY_COUNT = 5678,
   MASTER_USE_GTID = current_pos`
 
-	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, retryCount)
+	conn := &Conn{flavor: mariadbFlavor102{}, ServerVersion: "12.0.1-MariaDB"}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, retryCount)
+	assert.Equal(t, want, got)
+}
+
+func TestMariadbSetReplicationSourceCommandRetryCountUnsupportedVersion(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_USE_GTID = current_pos`
+
+	conn := &Conn{flavor: mariadbFlavor101{}, ServerVersion: "10.1.48-MariaDB"}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, 5678)
 	assert.Equal(t, want, got)
 }
 
@@ -105,7 +126,7 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
   MASTER_SSL_KEY = 'ssl-key',
   MASTER_USE_GTID = current_pos`
 
-	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry, 0)
+	conn := &Conn{flavor: mariadbFlavor101{}, ServerVersion: "10.1.48-MariaDB"}
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 }
