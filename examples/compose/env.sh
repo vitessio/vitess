@@ -46,6 +46,11 @@ function wait_for_healthy_shard() {
     sleep 1
   done
 
+  cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" 2>/dev/null | wc -l)
+  if [[ ${cur_tablets} -lt ${num_tablets} ]]; then
+    fail "Timed out waiting for ${num_tablets} tablets in ${keyspace}/${shard} (got ${cur_tablets})"
+  fi
+
   echo "Waiting for healthy primary in ${keyspace}/${shard}..."
   local unhealthy_indicator='"primary_alias": null'
   for _ in $(seq 1 ${wait_secs}); do
