@@ -250,9 +250,13 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Length *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Length != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Scale *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Scale != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
 	size += cached.CollationEnv.CachedSize(true)
 	return size
@@ -2160,7 +2164,9 @@ func (cached *builtinWeightString) CachedSize(alloc bool) int64 {
 	// field Cast string
 	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
 	// field Len *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Len != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	return size
 }
 
