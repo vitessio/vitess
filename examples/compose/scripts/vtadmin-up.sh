@@ -22,7 +22,7 @@ echo "Starting vtadmin..."
 exec vtadmin \
   --addr "0.0.0.0:14200" \
   --http-origin "http://localhost:14201" \
-  --http-tablet-url-tmpl "http://localhost:15{{ .Tablet.Alias.Uid }}" \
+  --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15000" \
   --log-format text \
   --rbac \
   --rbac-config=/vt/config/vtadmin/rbac.yaml \
