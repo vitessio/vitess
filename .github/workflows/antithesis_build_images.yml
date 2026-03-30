@@ -28,6 +28,17 @@ jobs:
           username: _json_key
           password: ${{ secrets.ANTITHESIS_GAR_KEY }}
 
+      - name: Build and push vitess instrumented image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./test/antithesis/compose/Dockerfile.vitess-instrumented
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-vitess:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-vitess:${{ github.sha }}
+
       - name: Build and push config image
         uses: docker/build-push-action@v7
         with:
