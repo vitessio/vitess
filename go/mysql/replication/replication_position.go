@@ -96,6 +96,21 @@ func (rp Position) IsZero() bool {
 	return rp.GTIDSet == nil || rp.GTIDSet.Empty()
 }
 
+// Clone returns a deep copy of the Position. The returned Position's
+// GTIDSet is independent of the original and can be safely read while
+// the original is mutated in place.
+func (rp Position) Clone() Position {
+	if rp.GTIDSet == nil {
+		return Position{}
+	}
+	cloned, err := DecodePosition(EncodePosition(rp))
+	if err != nil {
+		// This should never happen since we're round-tripping a valid GTIDSet.
+		return rp
+	}
+	return cloned
+}
+
 // AppendGTID returns a new Position that represents the position
 // after the given GTID is replicated.
 func AppendGTID(rp Position, gtid GTID) Position {

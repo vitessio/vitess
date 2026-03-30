@@ -410,7 +410,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	if err := se.reload(ctx, includeStats); err != nil {
 		return err
 	}
-	se.reloadAtPos = pos
+	se.reloadAtPos = pos.Clone()
 	return nil
 }
 
