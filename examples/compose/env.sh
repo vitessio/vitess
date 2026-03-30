@@ -69,6 +69,9 @@ function wait_for_healthy_shard() {
       fi
       sleep 1
     done
+    if vtctldclient GetFullStatus "$primary_tablet" 2>/dev/null | grep "super_read_only" | grep --quiet "true"; then
+      fail "Timed out waiting for writable primary in ${keyspace}/${shard}"
+    fi
   fi
 
   echo "Waiting for VReplication engine in ${keyspace}/${shard}..."
