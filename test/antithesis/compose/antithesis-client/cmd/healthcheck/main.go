@@ -43,7 +43,7 @@ type tabletCacheStatus struct {
 	TabletsStats []tabletStats `json:"TabletsStats"`
 }
 
-const defaultTimeout = 30 * time.Second
+const defaultTimeout = 90 * time.Second
 
 func main() {
 	defaultVtgate := getenv("VTGATE_ADDR", "http://vtgate:8080")
