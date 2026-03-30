@@ -2,7 +2,7 @@
     "vtctlds": [
         {
             "host": {
-                "fqdn": "vtctld:15000",
+                "fqdn": "localhost:15000",
                 "hostname": "vtctld:15999"
             }
         }
@@ -10,7 +10,7 @@
     "vtgates": [
         {
             "host": {
-                "fqdn": "vtgate:15001",
+                "fqdn": "localhost:15001",
                 "hostname": "vtgate:15991"
             }
         }
