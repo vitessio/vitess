@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-cluster_name="compose"
+cluster_name="vitess-example"
 
 echo "Starting vtadmin..."
 exec vtadmin \
