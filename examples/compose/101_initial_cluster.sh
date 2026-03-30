@@ -19,9 +19,20 @@
 source ./env.sh
 
 docker compose --profile build build
-docker compose --profile commerce up -d
 
-vtctldclient CreateKeyspace --durability-policy=semi_sync commerce || fail "Failed to create commerce keyspace. If the compose example was previously running, please run ./501_teardown.sh to clean it up and then re-run this step."
+# Start infrastructure services first (etcd, vtctld, vtgate, vtorc, vtadmin).
+docker compose up -d
+
+# Create the keyspace before starting tablets to avoid racing with
+# vttablet's auto-creation (which would skip the durability policy).
+if vtctldclient GetKeyspace commerce > /dev/null 2>&1; then
+  vtctldclient SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
+else
+  vtctldclient CreateKeyspace --durability-policy=semi_sync commerce || fail "Failed to create commerce keyspace"
+fi
+
+# Now start the commerce tablets.
+docker compose --profile commerce up -d
 
 wait_for_healthy_shard commerce 0 || exit 1
 
