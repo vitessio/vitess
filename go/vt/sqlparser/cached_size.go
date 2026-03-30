@@ -4529,7 +4529,7 @@ func (cached *ShowGrants) CachedSize(alloc bool) int64 {
 	size += cached.User.CachedSize(true)
 	// field UsingRole []vitess.io/vitess/go/vt/sqlparser.UserOrRole
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.UsingRole)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.UsingRole)) * int64(16))
 		for _, elem := range cached.UsingRole {
 			size += elem.CachedSize(false)
 		}
@@ -5326,12 +5326,12 @@ func (cached *UserOrRole) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(16)
 	}
-	// field Name string
-	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
-	// field Host string
-	size += hack.RuntimeAllocSize(int64(len(cached.Host)))
+	// field Name *string
+	size += hack.RuntimeAllocSize(int64(16))
+	// field Host *string
+	size += hack.RuntimeAllocSize(int64(16))
 	return size
 }
 
