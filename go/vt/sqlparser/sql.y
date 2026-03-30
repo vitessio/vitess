@@ -64,6 +64,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
+
+
   statement       Statement
   statements      []Statement
   selStmt         SelectStatement
@@ -1250,13 +1252,21 @@ values_statement:
   }
 
 stream_statement:
-  STREAM comment_opt select_expression FROM table_name
+  STREAM comment_opt '*' FROM table_name
+  {
+    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: &StarExpr{}, Table: $5}
+  }
+| STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
-  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
+  VSTREAM comment_opt '*' FROM table_name where_expression_opt limit_opt
+  {
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: &StarExpr{}, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+  }
+| VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
     $$ = &VStream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5, Where: na(yylex).newWhere(WhereClause, $6), Limit: $7}
   }
@@ -1346,7 +1356,7 @@ view_name_list:
   }
 | view_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_name_list:
@@ -1356,7 +1366,7 @@ table_name_list:
   }
 | table_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 delete_table_list:
@@ -1366,7 +1376,7 @@ delete_table_list:
   }
 | delete_table_list ',' delete_table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 opt_partition_clause:
@@ -1587,7 +1597,7 @@ vindex_param_list:
   }
 | vindex_param_list ',' vindex_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 vindex_param:
@@ -1612,7 +1622,7 @@ json_object_param_list:
   }
 | json_object_param_list ',' json_object_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 json_object_param:
@@ -2797,7 +2807,7 @@ index_option_list:
   }
 | index_option_list index_option
   {
-    $$ = append($$, $2)
+    $$ = append($1, $2)
   }
 
 index_option:
@@ -2935,7 +2945,7 @@ index_column_list:
   }
 | index_column_list ',' index_column
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_column:
@@ -4793,12 +4803,16 @@ user_or_role_list:
   {
     if $1 != nil {
       $$ = []UserOrRole{*$1}
+    } else {
+      $$ = nil
     }
   }
 | user_or_role_list ',' user_or_role
   {
     if $3 != nil {
       $$ = append($1, *$3)
+    } else {
+      $$ = $1
     }
   }
 
@@ -5537,27 +5551,23 @@ select_option:
   }
 
 select_expression_list:
-  select_expression
+  '*'
+  {
+    $$ = &SelectExprs{Exprs: []SelectExpr{&StarExpr{}}}
+  }
+| select_expression
   {
     se := na(yylex).allocSelectExprs(); s := na(yylex).makeSelectExprSlice(1); s[0] = $1; se.Exprs = s; $$ = se
   }
 | select_expression_list ',' select_expression
   {
-    if starExpr, ok := $3.(*StarExpr); ok && starExpr.TableName.IsEmpty() {
-      yylex.Error("syntax error: unexpected '*'")
-      return 1
-    }
     res := $1
     res.Exprs = append(res.Exprs, $3)
     $$ = res
   }
 
 select_expression:
-  '*'
-  {
-    $$ = &StarExpr{}
-  }
-| expression as_ci_opt
+  expression as_ci_opt
   {
     node := na(yylex).allocAliasedExpr(); node.Expr = $1; node.As = $2; $$ = node
   }
@@ -5612,7 +5622,7 @@ table_references:
   }
 | table_references ',' table_reference
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_reference:
@@ -5682,7 +5692,7 @@ column_list:
   }
 | column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 at_id_list:
@@ -5692,7 +5702,7 @@ at_id_list:
   }
 | at_id_list ',' user_defined_variable
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_list:
@@ -5706,11 +5716,11 @@ index_list:
   }
 | index_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | index_list ',' PRIMARY
   {
-    $$ = append($$, NewIdentifierCI(string($3)))
+    $$ = append($1, NewIdentifierCI(string($3)))
   }
 
 partition_list:
@@ -5720,7 +5730,7 @@ partition_list:
   }
 | partition_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 // There is a grammar conflict here:
@@ -8246,7 +8256,7 @@ proc_params_list:
   }
 | proc_params_list ',' proc_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 proc_param:
@@ -8561,11 +8571,11 @@ ins_column_list:
   }
 | ins_column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | ins_column_list ',' sql_id '.' sql_id
   {
-    $$ = append($$, $5)
+    $$ = append($1, $5)
   }
 
 row_alias_opt:

@@ -17,6 +17,7 @@ permissions: read-all
 
 jobs:
   test:
+    if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
     name: Code Coverage
     runs-on: oracle-vm-8cpu-32gb-x86-64
 
@@ -145,7 +146,7 @@ jobs:
 
     - name: Upload coverage reports
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
       with:
         files: coverage.out
         fail_ci_if_error: true
