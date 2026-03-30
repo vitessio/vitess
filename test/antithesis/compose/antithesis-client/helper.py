@@ -207,6 +207,8 @@ def get_msg(conn, row_id, table_name, tablet_type='primary'):
     try:
         if tablet_type != 'primary':
             cursor.execute(f"USE {config['keyspace']}@{tablet_type}")
+        else:
+            cursor.execute(f"USE {config['keyspace']}")
         cursor.execute(
             f"SELECT id, msg FROM {table_name} WHERE id = %s",
             (row_id,)
