@@ -17,6 +17,9 @@ services:
       - "3306"
 
   vtctld:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
 
@@ -25,11 +28,17 @@ services:
       - "15999"
 
   vttablet101:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
 
   vttablet102:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
@@ -40,11 +49,17 @@ services:
       - "3306"
 
   vttablet201:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
 
   vttablet202:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
@@ -55,11 +70,17 @@ services:
       - "3306"
 
   vttablet301:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
 
   vttablet302:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
