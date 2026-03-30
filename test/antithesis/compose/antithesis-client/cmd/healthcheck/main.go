@@ -113,14 +113,14 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 			if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
 				continue
 			}
-			if !isHealthy(tablet) {
-				continue
-			}
 			key := tablet.Tablet.Keyspace + ":" + tablet.Tablet.Shard
 			entry := counts[key]
 			if entry == nil {
 				entry = &healthCounts{}
 				counts[key] = entry
+			}
+			if !isHealthy(tablet) {
+				continue
 			}
 			if isPrimary(tablet.Target.TabletType) {
 				entry.primaries++
