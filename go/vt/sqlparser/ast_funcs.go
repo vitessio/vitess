@@ -738,7 +738,8 @@ func (node *ColName) Equal(c *ColName) bool {
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
 	return IdentifierCI{
-		val: str,
+		val:     str,
+		lowered: strings.ToLower(str),
 	}
 }
 
@@ -1042,12 +1043,6 @@ func (node IdentifierCI) CompliantName() string {
 // This function should generally be used only for optimizing
 // comparisons.
 func (node IdentifierCI) Lowered() string {
-	if node.val == "" {
-		return ""
-	}
-	if node.lowered == "" {
-		node.lowered = strings.ToLower(node.val)
-	}
 	return node.lowered
 }
 
@@ -1079,6 +1074,7 @@ func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	node.val = result
+	node.lowered = strings.ToLower(result)
 	return nil
 }
 
