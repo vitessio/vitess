@@ -15,7 +15,7 @@
  */
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useClusters, useCreateKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -43,7 +43,7 @@ export const CreateKeyspace = () => {
     useDocumentTitle('Create a Keyspace');
 
     const queryClient = useQueryClient();
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
@@ -60,7 +60,7 @@ export const CreateKeyspace = () => {
             onSuccess: (res) => {
                 queryClient.invalidateQueries({ queryKey: ['keyspaces'] });
                 success(`Created keyspace ${res?.keyspace?.keyspace?.name}`, { autoClose: 1600 });
-                history.push(`/keyspace/${res?.keyspace?.cluster?.id}/${res?.keyspace?.keyspace?.name}`);
+                navigate(`/keyspace/${res?.keyspace?.cluster?.id}/${res?.keyspace?.keyspace?.name}`);
             },
         }
     );

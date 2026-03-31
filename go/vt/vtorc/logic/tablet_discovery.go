@@ -322,7 +322,7 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
-	tablets, err := ts.GetTabletsByShardCell(ctx, keyspace, shard, cellsToWatch)
+	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, cellsToWatch)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
 		return
@@ -330,6 +330,14 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	query := "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?"
 	args := sqlutils.Args(keyspace, shard)
 	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
+}
+
+// getShardTabletsByCell gets tablets for the given keyspace/shard and cells with a timeout.
+func getShardTabletsByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
 }
 
 func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
