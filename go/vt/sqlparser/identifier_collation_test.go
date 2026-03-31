@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/collations/unicase"
 )
 
 // TestIdentCollateMatchesColldata verifies that our identCollate function
@@ -87,9 +88,9 @@ func TestIdentCollateMatchesColldata(t *testing.T) {
 	}
 }
 
-// TestUnicodeSortWeightMatchesColldata verifies that our unicodeSortWeight
+// TestSortWeightMatchesColldata verifies that our unicodeSortWeight
 // lookup matches the canonical collation's weight string for all BMP code points.
-func TestUnicodeSortWeightMatchesColldata(t *testing.T) {
+func TestSortWeightMatchesColldata(t *testing.T) {
 	coll := colldata.Lookup(collations.ID(45) /* utf8mb4_general_ci */)
 	require.NotNil(t, coll, "utf8mb4_general_ci collation not found")
 
@@ -101,10 +102,10 @@ func TestUnicodeSortWeightMatchesColldata(t *testing.T) {
 			continue
 		}
 		expected := rune(uint16(dst[0])<<8 | uint16(dst[1]))
-		got := unicodeSortWeight(cp)
+		got := unicase.SortWeight(cp)
 		if got != expected {
 			if mismatches < 10 {
-				t.Errorf("unicodeSortWeight(0x%04X) = 0x%04X, want 0x%04X", cp, got, expected)
+				t.Errorf("unicase.SortWeight(0x%04X) = 0x%04X, want 0x%04X", cp, got, expected)
 			}
 			mismatches++
 		}
@@ -132,7 +133,7 @@ func TestNormalizeConsistentWithCollate(t *testing.T) {
 	for cp := rune(1); cp <= 0xFFFF; cp++ {
 		s := string(cp)
 		norm := identNormalize(s)
-		weight := unicodeSortWeight(cp)
+		weight := unicase.SortWeight(cp)
 
 		if prev, ok := normalized[norm]; ok {
 			if prev.weight != weight {
