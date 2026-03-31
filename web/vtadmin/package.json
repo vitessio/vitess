@@ -51,7 +51,7 @@
     "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix"
   },
-"browserslist": {
+  "browserslist": {
     "production": [
       ">0.2%",
       "not dead",
