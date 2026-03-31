@@ -69,7 +69,7 @@ func Init(namespace string) {
 			Name: "go_info_ext",
 			Help: "Extended information about the Go environment.",
 		},
-		[]string{"compiler", "GOARCH", "GOOS"},
+		[]string{"compiler", "goarch", "goos"},
 	)
 	goInfoExt.WithLabelValues(runtime.Compiler, runtime.GOARCH, runtime.GOOS).Set(1)
 	prometheus.MustRegister(goInfoExt)
