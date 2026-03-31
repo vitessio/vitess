@@ -301,6 +301,12 @@ const (
 	ErrNotImplementedForProjectedSRS = ErrorCode(3705)
 	ErrNonPositiveRadius             = ErrorCode(3706)
 
+	// ERRestartServerFailed is ER_RESTART_SERVER_FAILED.
+	// Returned when CLONE INSTANCE FROM completes data transfer but mysqld cannot
+	// restart itself because it is not managed by a supervisor process. The clone
+	// data has already been transferred successfully when this error is returned.
+	ERRestartServerFailed = ErrorCode(3707)
+
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)
 )
