@@ -139,6 +139,30 @@ func (cached *Padded) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *PtrToBasic) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field field1 *bool
+	if cached.field1 != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	// field field2 *int
+	if cached.field2 != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
+	// field field3 *string
+	if cached.field3 != nil {
+		size += hack.RuntimeAllocSize(int64(16))
+		size += hack.RuntimeAllocSize(int64(len(*cached.field3)))
+	}
+	return size
+}
+
 func (cached *Slice1) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
