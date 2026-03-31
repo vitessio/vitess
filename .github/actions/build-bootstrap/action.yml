@@ -24,7 +24,7 @@ runs:
         load: true
         set: |
           *.cache-from=type=gha,scope=bootstrap
-          *.cache-to=type=gha,scope=bootstrap,mode=min
+          *.cache-to=type=gha,scope=bootstrap,mode=max
       env:
         BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
         BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}
