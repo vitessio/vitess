@@ -736,7 +736,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	for i, loc := range bindLocations {
 		field = tp.Fields[fieldsIndex]
 		length := row.Lengths[fieldsIndex]
-		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
+		for tp.FieldsToSkip[sqlparser.NewIdentifierCI(field.Name).Normalized()] {
 			if length > 0 {
 				offset += length
 			}

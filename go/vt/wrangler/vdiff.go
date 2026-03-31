@@ -512,8 +512,8 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
-				td.compareCols[i].collation = columnCollations[strings.ToLower(colname)]
-				td.compareCols[i].values = columnValues[strings.ToLower(colname)]
+				td.compareCols[i].collation = columnCollations[sqlparser.NewIdentifierCI(colname).Normalized()]
+				td.compareCols[i].values = columnValues[sqlparser.NewIdentifierCI(colname).Normalized()]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -716,7 +716,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 	fields := make(map[string]querypb.Type)
 	for _, field := range table.Fields {
-		fields[strings.ToLower(field.Name)] = field.Type
+		fields[sqlparser.NewIdentifierCI(field.Name).Normalized()] = field.Type
 	}
 
 	targetSelect.SelectExprs.Exprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs.Exprs, fields)
