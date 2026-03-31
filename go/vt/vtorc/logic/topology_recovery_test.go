@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 )
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
