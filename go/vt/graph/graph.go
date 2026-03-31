@@ -63,7 +63,7 @@ func (gr *Graph[C]) AddEdge(start C, end C) {
 
 // PrintGraph is used to print the graph. This is only used for testing.
 func (gr *Graph[C]) PrintGraph() string {
-	adjacencyLists := []string{}
+	adjacencyLists := make([]string, 0, len(gr.edges))
 	for vertex, edges := range gr.edges {
 		adjacencyList := fmt.Sprintf("%v -", vertex)
 		var adjacencyListSb69 strings.Builder
