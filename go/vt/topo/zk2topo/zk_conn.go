@@ -61,13 +61,13 @@ var (
 
 	zkConnAcquisition = stats.NewGaugeDuration(
 		"ZkConnAcquisition",
-		"Time to acquire a zk connection")
+		"Time to acquire a zookeeper lock")
 	zkConnAcquisitionRetry = stats.NewCounter(
 		"ZkConnAcquisitionRetry",
-		"Number of retries to acquire a zk connection")
+		"Number of retries to acquire a zookeeper connection")
 	zkConnState = stats.NewCountersWithSingleLabel(
 		"ZkConnState",
-		"ZK connection state we are in", "state")
+		"Number of times the zookeeper connection has entered each state", "state")
 )
 
 func init() {
