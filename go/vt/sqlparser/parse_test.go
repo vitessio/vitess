@@ -2424,6 +2424,19 @@ var validSQL = []struct {
 	input:  "show grants for current_user()",
 	output: "show grants",
 }, {
+	input: "show grants for 'u' using 'r1', current_user, 'r2'",
+}, {
+	input: "show grants for 'u' using current_user",
+}, {
+	input: "show grants for current_user using 'r1', 'r2'",
+}, {
+	input:  "show grants for current_user() using 'r1'",
+	output: "show grants for current_user using 'r1'",
+}, {
+	input: "show grants for 'u' using ''@''",
+}, {
+	input: "show grants for 'u' using 'r1'@''",
+}, {
 	input:  "show index from t",
 	output: "show indexes from t",
 }, {
