@@ -24,17 +24,14 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
-	"vitess.io/vitess/go/mysql/collations/unicase"
 )
 
-// TestIdentCollateMatchesColldata verifies that our identCollate function
-// produces the same results as the canonical utf8mb4_general_ci collation
-// implementation in the colldata package.
-func TestIdentCollateMatchesColldata(t *testing.T) {
+// TestIdentEqualMatchesColldata verifies that identEqual produces the same
+// equality results as the canonical utf8mb4_general_ci collation.
+func TestIdentEqualMatchesColldata(t *testing.T) {
 	coll := colldata.Lookup(collations.ID(45) /* utf8mb4_general_ci */)
 	require.NotNil(t, coll, "utf8mb4_general_ci collation not found")
 
-	// Test pairs of strings that exercise various Unicode behaviors.
 	pairs := [][2]string{
 		// ASCII case
 		{"hello", "HELLO"},
@@ -75,65 +72,39 @@ func TestIdentCollateMatchesColldata(t *testing.T) {
 
 	for _, pair := range pairs {
 		a, b := pair[0], pair[1]
-		expected := coll.Collate([]byte(a), []byte(b), false)
-		got := identCollate(a, b)
+		expected := coll.Collate([]byte(a), []byte(b), false) == 0
+		got := identEqual(a, b)
 
-		// Normalize to signum for comparison
-		expectedSign := sign(expected)
-		gotSign := sign(got)
-
-		assert.Equal(t, expectedSign, gotSign,
-			"identCollate(%q, %q) = %d (sign %d), colldata.Collate = %d (sign %d)",
-			a, b, got, gotSign, expected, expectedSign)
+		assert.Equal(t, expected, got,
+			"identEqual(%q, %q) = %v, want %v", a, b, got, expected)
 	}
 }
 
-// TestSortWeightMatchesColldata verifies that our unicodeSortWeight
-// lookup matches the canonical collation's weight string for all BMP code points.
-func TestSortWeightMatchesColldata(t *testing.T) {
+// TestNormalizeMatchesColldata verifies that identNormalize produces the same
+// output for two strings iff the canonical utf8mb4_general_ci collation
+// considers them equal, for all BMP codepoints.
+func TestNormalizeMatchesColldata(t *testing.T) {
 	coll := colldata.Lookup(collations.ID(45) /* utf8mb4_general_ci */)
 	require.NotNil(t, coll, "utf8mb4_general_ci collation not found")
 
-	var mismatches int
-	for cp := rune(0); cp <= 0xFFFF; cp++ {
-		s := string(cp)
-		dst := coll.WeightString(nil, []byte(s), 0)
-		if len(dst) < 2 {
-			continue
-		}
-		expected := rune(uint16(dst[0])<<8 | uint16(dst[1]))
-		got := unicase.SortWeight(cp)
-		if got != expected {
-			if mismatches < 10 {
-				t.Errorf("unicase.SortWeight(0x%04X) = 0x%04X, want 0x%04X", cp, got, expected)
-			}
-			mismatches++
-		}
-	}
-	if mismatches > 10 {
-		t.Errorf("... and %d more mismatches", mismatches-10)
-	}
-}
-
-// TestNormalizeConsistentWithCollate verifies that for all single-character
-// pairs in the BMP, identNormalize produces the same output iff identCollate
-// considers them equal. This ensures no false matches or false mismatches
-// from the normalization step.
-func TestNormalizeConsistentWithCollate(t *testing.T) {
-	// Build a map from normalized single-char string to a representative code point.
-	// If two code points normalize to the same string but have different sort weights,
-	// that's a bug.
+	// For each codepoint, compute its weight via colldata's WeightString.
+	// Then verify that two codepoints normalize to the same string iff
+	// they have the same weight.
 	type entry struct {
 		cp     rune
-		weight rune
+		weight uint16
 	}
 	normalized := make(map[string]entry)
 
 	var falseMatches int
 	for cp := rune(1); cp <= 0xFFFF; cp++ {
 		s := string(cp)
+		dst := coll.WeightString(nil, []byte(s), 0)
+		if len(dst) < 2 {
+			continue
+		}
+		weight := uint16(dst[0])<<8 | uint16(dst[1])
 		norm := identNormalize(s)
-		weight := unicase.SortWeight(cp)
 
 		if prev, ok := normalized[norm]; ok {
 			if prev.weight != weight {
@@ -153,16 +124,6 @@ func TestNormalizeConsistentWithCollate(t *testing.T) {
 	assert.Zero(t, falseMatches, "identNormalize must not merge characters with different sort weights")
 }
 
-func sign(n int) int {
-	if n < 0 {
-		return -1
-	}
-	if n > 0 {
-		return 1
-	}
-	return 0
-}
-
 func BenchmarkIdentNormalize(b *testing.B) {
 	b.Run("ASCII", func(b *testing.B) {
 		for b.Loop() {
@@ -176,20 +137,20 @@ func BenchmarkIdentNormalize(b *testing.B) {
 	})
 }
 
-func BenchmarkIdentCollate(b *testing.B) {
+func BenchmarkIdentEqual(b *testing.B) {
 	b.Run("ASCII_equal", func(b *testing.B) {
 		for b.Loop() {
-			identCollate("my_table_name", "MY_TABLE_NAME")
+			identEqual("my_table_name", "MY_TABLE_NAME")
 		}
 	})
 	b.Run("ASCII_unequal", func(b *testing.B) {
 		for b.Loop() {
-			identCollate("my_table_name", "other_table")
+			identEqual("my_table_name", "other_table")
 		}
 	})
 	b.Run("Unicode_equal", func(b *testing.B) {
 		for b.Loop() {
-			identCollate("café_résumé", "CAFE_RESUME")
+			identEqual("café_résumé", "CAFE_RESUME")
 		}
 	})
 }

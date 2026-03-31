@@ -1054,7 +1054,7 @@ func (node IdentifierCI) Equal(in IdentifierCI) bool {
 // EqualString performs a case-insensitive compare with str using
 // utf8mb4_general_ci collation, without allocating.
 func (node IdentifierCI) EqualString(str string) bool {
-	return identCollate(node.val, str) == 0
+	return identEqual(node.val, str)
 }
 
 // EqualsAnyString returns true if any of these strings match

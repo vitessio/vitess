@@ -19,13 +19,23 @@ package sqlparser
 import (
 	"strings"
 	"unicode/utf8"
-
-	"vitess.io/vitess/go/mysql/collations/unicase"
 )
 
-// identCollate compares two strings using utf8mb4_general_ci semantics.
-// Returns a negative value if a < b, 0 if equal, a positive value if a > b.
-func identCollate(a, b string) int {
+// identNormalizedRune returns the utf8mb4_general_ci normalized form of a
+// single rune using the sparse page table in identifier_normalized.go.
+// Codepoints in pages where every entry is identity (no case/accent folding)
+// are returned as-is.
+func identNormalizedRune(r rune) rune {
+	if r <= 0xFFFF {
+		if page := normalizedPages[uint16(r)>>8]; page != nil {
+			return page[uint16(r)&0xFF]
+		}
+	}
+	return r
+}
+
+// identEqual reports whether a and b are equal under utf8mb4_general_ci.
+func identEqual(a, b string) bool {
 	for len(a) > 0 && len(b) > 0 {
 		var aRune, bRune rune
 		if a[0] < utf8.RuneSelf {
@@ -41,24 +51,17 @@ func identCollate(a, b string) int {
 			bRune, b = r, b[size:]
 		}
 
-		aWeight := unicase.SortWeight(aRune)
-		bWeight := unicase.SortWeight(bRune)
-		if aWeight != bWeight {
-			if aWeight < bWeight {
-				return -1
-			}
-			return 1
+		if identNormalizedRune(aRune) != identNormalizedRune(bRune) {
+			return false
 		}
 	}
-	return len(a) - len(b)
+	return len(a) == len(b)
 }
 
 // identNormalize returns the utf8mb4_general_ci normalized form of a string.
 // Each rune is mapped to the canonical lowercase representative of its
 // equivalence class under the collation. For ASCII-only input, this produces
 // the same result as strings.ToLower.
-//
-// The normalizedRune table is defined in identifier_normalized.go.
 func identNormalize(s string) string {
 	// Fast path: all ASCII.
 	isASCII := true
@@ -76,11 +79,7 @@ func identNormalize(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s))
 	for _, r := range s {
-		if r <= 0xFFFF {
-			buf.WriteRune(normalizedRune[r])
-		} else {
-			buf.WriteRune(r)
-		}
+		buf.WriteRune(identNormalizedRune(r))
 	}
 	return buf.String()
 }

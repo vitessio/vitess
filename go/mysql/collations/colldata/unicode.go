@@ -23,13 +23,13 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
-	"vitess.io/vitess/go/mysql/collations/unicase"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_unicode_general_ci struct {
 	id      collations.ID
 	name    string
+	unicase *UnicaseInfo
 	charset charset.Charset
 }
 
@@ -50,6 +50,7 @@ func (c *Collation_unicode_general_ci) IsBinary() bool {
 }
 
 func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool) int {
+	unicaseInfo := c.unicase
 	cs := c.charset
 
 	for len(left) > 0 && len(right) > 0 {
@@ -60,8 +61,8 @@ func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool
 			return bytes.Compare(left, right)
 		}
 
-		lRune := unicase.SortWeight(l)
-		rRune := unicase.SortWeight(r)
+		lRune := unicaseInfo.unicodeSort(l)
+		rRune := unicaseInfo.unicodeSort(r)
 
 		if lRune > rRune {
 			return 1
@@ -79,6 +80,7 @@ func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool
 }
 
 func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
+	unicaseInfo := c.unicase
 	cs := c.charset
 
 	if numCodepoints == 0 || numCodepoints == PadToMax {
@@ -89,7 +91,7 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 			}
 
 			src = src[width:]
-			sorted := unicase.SortWeight(r)
+			sorted := unicaseInfo.unicodeSort(r)
 			dst = append(dst, byte(sorted>>8), byte(sorted))
 		}
 
@@ -109,7 +111,7 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 			}
 
 			src = src[width:]
-			sorted := unicase.SortWeight(r)
+			sorted := unicaseInfo.unicodeSort(r)
 			dst = append(dst, byte(sorted>>8), byte(sorted))
 			numCodepoints--
 		}
@@ -123,6 +125,7 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 }
 
 func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
+	unicaseInfo := c.unicase
 	cs := c.charset
 
 	hasher.Write64(uint64(c.id))
@@ -137,7 +140,7 @@ func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, n
 			break
 		}
 		src = src[width:]
-		hasher.Write16(bits.ReverseBytes16(uint16(unicase.SortWeight(r))))
+		hasher.Write16(bits.ReverseBytes16(uint16(unicaseInfo.unicodeSort(r))))
 		left--
 	}
 
@@ -154,8 +157,9 @@ func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	sort := c.unicase.unicodeSort
 	equals := func(a, b rune) bool {
-		return unicase.SortWeight(a) == unicase.SortWeight(b)
+		return sort(a) == sort(b)
 	}
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }

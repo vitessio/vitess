@@ -14,12 +14,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unicase
+package colldata
 
-// This file contains the utf8mb4_general_ci sort weight and case mapping
-// tables. The data originated in go/mysql/collations/colldata/unicase.go.
+import (
+	"vitess.io/vitess/go/mysql/collations/charset"
+)
 
-var plane00 = [256]Char{
+type UnicaseChar struct {
+	ToUpper, ToLower, Sort rune
+}
+
+type UnicaseInfo struct {
+	MaxChar   rune
+	Page      []*[]UnicaseChar
+	LowerSort bool
+}
+
+func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
+	if codepoint > info.MaxChar {
+		return charset.RuneError
+	}
+	if page := info.Page[int(codepoint)>>8]; page != nil {
+		unicaseChar := (*page)[int(codepoint)&0xFF]
+		if info.LowerSort {
+			return unicaseChar.ToLower
+		}
+		return unicaseChar.Sort
+	}
+	return codepoint
+}
+
+var plane00 = []UnicaseChar{
 	{0x0000, 0x0000, 0x0000},
 	{0x0001, 0x0001, 0x0001},
 	{0x0002, 0x0002, 0x0002},
@@ -278,7 +303,7 @@ var plane00 = [256]Char{
 	{0x0178, 0x00FF, 0x0059},
 }
 
-var plane01 = [256]Char{
+var plane01 = []UnicaseChar{
 	{0x0100, 0x0101, 0x0041},
 	{0x0100, 0x0101, 0x0041},
 	{0x0102, 0x0103, 0x0041},
@@ -537,7 +562,7 @@ var plane01 = [256]Char{
 	{0x01FE, 0x01FF, 0x00D8},
 }
 
-var plane02 = [256]Char{
+var plane02 = []UnicaseChar{
 	{0x0200, 0x0201, 0x0041},
 	{0x0200, 0x0201, 0x0041},
 	{0x0202, 0x0203, 0x0041},
@@ -796,7 +821,7 @@ var plane02 = [256]Char{
 	{0x02FF, 0x02FF, 0x02FF},
 }
 
-var plane03 = [256]Char{
+var plane03 = []UnicaseChar{
 	{0x0300, 0x0300, 0x0300},
 	{0x0301, 0x0301, 0x0301},
 	{0x0302, 0x0302, 0x0302},
@@ -1055,7 +1080,7 @@ var plane03 = [256]Char{
 	{0x03FF, 0x03FF, 0x03FF},
 }
 
-var plane04 = [256]Char{
+var plane04 = []UnicaseChar{
 	{0x0400, 0x0450, 0x0415},
 	{0x0401, 0x0451, 0x0415},
 	{0x0402, 0x0452, 0x0402},
@@ -1314,7 +1339,7 @@ var plane04 = [256]Char{
 	{0x04FF, 0x04FF, 0x04FF},
 }
 
-var plane05 = [256]Char{
+var plane05 = []UnicaseChar{
 	{0x0500, 0x0500, 0x0500},
 	{0x0501, 0x0501, 0x0501},
 	{0x0502, 0x0502, 0x0502},
@@ -1573,7 +1598,7 @@ var plane05 = [256]Char{
 	{0x05FF, 0x05FF, 0x05FF},
 }
 
-var plane1E = [256]Char{
+var plane1E = []UnicaseChar{
 	{0x1E00, 0x1E01, 0x0041},
 	{0x1E00, 0x1E01, 0x0041},
 	{0x1E02, 0x1E03, 0x0042},
@@ -1832,7 +1857,7 @@ var plane1E = [256]Char{
 	{0x1EFF, 0x1EFF, 0x1EFF},
 }
 
-var plane1F = [256]Char{
+var plane1F = []UnicaseChar{
 	{0x1F08, 0x1F00, 0x0391},
 	{0x1F09, 0x1F01, 0x0391},
 	{0x1F0A, 0x1F02, 0x0391},
@@ -2091,7 +2116,7 @@ var plane1F = [256]Char{
 	{0x1FFF, 0x1FFF, 0x1FFF},
 }
 
-var plane21 = [256]Char{
+var plane21 = []UnicaseChar{
 	{0x2100, 0x2100, 0x2100},
 	{0x2101, 0x2101, 0x2101},
 	{0x2102, 0x2102, 0x2102},
@@ -2350,7 +2375,7 @@ var plane21 = [256]Char{
 	{0x21FF, 0x21FF, 0x21FF},
 }
 
-var plane24 = [256]Char{
+var plane24 = []UnicaseChar{
 	{0x2400, 0x2400, 0x2400},
 	{0x2401, 0x2401, 0x2401},
 	{0x2402, 0x2402, 0x2402},
@@ -2609,7 +2634,7 @@ var plane24 = [256]Char{
 	{0x24FF, 0x24FF, 0x24FF},
 }
 
-var planeFF = [256]Char{
+var planeFF = []UnicaseChar{
 	{0xFF00, 0xFF00, 0xFF00},
 	{0xFF01, 0xFF01, 0xFF01},
 	{0xFF02, 0xFF02, 0xFF02},
@@ -2868,7 +2893,7 @@ var planeFF = [256]Char{
 	{0xFFFF, 0xFFFF, 0xFFFF},
 }
 
-var pages = [256]*[256]Char{
+var unicasePages_default = []*[]UnicaseChar{
 	&plane00, &plane01, &plane02, &plane03, &plane04, &plane05, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
@@ -2901,4 +2926,9 @@ var pages = [256]*[256]Char{
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, &planeFF,
+}
+
+var unicaseInfo_default = &UnicaseInfo{
+	MaxChar: 0xFFFF,
+	Page:    unicasePages_default,
 }
