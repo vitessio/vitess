@@ -63,15 +63,21 @@ func identEqual(a, b string) bool {
 // equivalence class under the collation. For ASCII-only input, this produces
 // the same result as strings.ToLower.
 func identNormalize(s string) string {
-	// Fast path: all ASCII.
-	isASCII := true
+	// Single pass: check if ASCII and already normalized simultaneously.
+	isASCII, isNormalized := true, true
 	for i := 0; i < len(s); i++ {
-		if s[i] >= utf8.RuneSelf {
+		c := s[i]
+		if c >= utf8.RuneSelf {
 			isASCII = false
 			break
 		}
+		isNormalized = isNormalized && !('A' <= c && c <= 'Z')
 	}
+
 	if isASCII {
+		if isNormalized {
+			return s
+		}
 		return strings.ToLower(s)
 	}
 

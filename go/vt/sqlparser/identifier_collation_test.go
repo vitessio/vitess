@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,14 +126,34 @@ func TestNormalizeMatchesColldata(t *testing.T) {
 }
 
 func BenchmarkIdentNormalize(b *testing.B) {
-	b.Run("ASCII", func(b *testing.B) {
+	b.Run("ASCII_lower/identNormalize", func(b *testing.B) {
 		for b.Loop() {
 			identNormalize("my_table_name")
 		}
 	})
-	b.Run("Unicode", func(b *testing.B) {
+	b.Run("ASCII_lower/strings.ToLower", func(b *testing.B) {
+		for b.Loop() {
+			strings.ToLower("my_table_name")
+		}
+	})
+	b.Run("ASCII_upper/identNormalize", func(b *testing.B) {
+		for b.Loop() {
+			identNormalize("MY_TABLE_NAME")
+		}
+	})
+	b.Run("ASCII_upper/strings.ToLower", func(b *testing.B) {
+		for b.Loop() {
+			strings.ToLower("MY_TABLE_NAME")
+		}
+	})
+	b.Run("Unicode/identNormalize", func(b *testing.B) {
 		for b.Loop() {
 			identNormalize("café_résumé")
+		}
+	})
+	b.Run("Unicode/strings.ToLower", func(b *testing.B) {
+		for b.Loop() {
+			strings.ToLower("café_résumé")
 		}
 	})
 }
