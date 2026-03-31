@@ -9,6 +9,13 @@ Another alternative is to customize our Docker images and build them yourselves.
 This is described below and involves building the `base` image first.
 Then you can run our build script for the `lite` image which extracts the Vitess binaries from the built `base` image.
 
+## Supported Architectures
+
+Local Docker builds support both AMD64 (x86_64) and ARM64 (Apple Silicon) architectures.
+On Apple Silicon Macs, images build natively without emulation.
+
+## Building Custom Images
+
 1.  Install [Docker](https://docs.docker.com/v17.12/install/) on your workstation.
 
     Our scripts also assume you can run the `docker` command without `sudo`,
