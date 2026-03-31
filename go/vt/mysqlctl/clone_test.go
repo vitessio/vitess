@@ -157,6 +157,11 @@ func TestIsCloneConnError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "restart server failed (no supervisor)",
+			err:      sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+			expected: true,
+		},
+		{
 			name:     "access denied",
 			err:      accessDenied,
 			expected: false,
