@@ -19,6 +19,8 @@ package aggregation
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -69,6 +71,16 @@ func TestDistinctIt(t *testing.T) {
 	}
 }
 
+func TestWindowFunctionWithGroupByError(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	_, err := mcmp.ExecAllowError(
+		`SELECT FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv, deptno FROM emp GROUP BY fv, deptno`,
+	)
+	require.ErrorContains(t, err, "(errno 3593) (sqlstate HY000)")
+}
+
 func TestDistinctWindowLimitShardTruncation(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -99,4 +111,20 @@ func TestDistinctWindowLimitShardTruncation(t *testing.T) {
 	ORDER BY deptno ASC
 	LIMIT 3`,
 		`[[INT64(503) DATE("2024-03-03") INT64(5)] [INT64(103) DATE("2024-01-03") INT64(10)] [INT64(203) DATE("2024-02-03") INT64(20)]]`)
+
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate ASC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3 OFFSET 0
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3 OFFSET 1`,
+		`[[INT64(101) DATE("2024-01-01") INT64(10)] [INT64(201) DATE("2024-02-01") INT64(20)]]`)
 }
