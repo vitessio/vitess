@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 )
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
@@ -648,7 +649,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 
 		// Simulate a replication RPC that never returns on its own. The call only unblocks
 		// when the passed context is canceled.
-		mockTMC := NewMockTabletManagerClient(mockController)
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 		mockTMC.EXPECT().
 			StopReplication(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
