@@ -1358,7 +1358,7 @@ view_name_list:
   }
 | view_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_name_list:
@@ -1368,7 +1368,7 @@ table_name_list:
   }
 | table_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 delete_table_list:
@@ -1378,7 +1378,7 @@ delete_table_list:
   }
 | delete_table_list ',' delete_table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 opt_partition_clause:
@@ -1599,7 +1599,7 @@ vindex_param_list:
   }
 | vindex_param_list ',' vindex_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 vindex_param:
@@ -1624,7 +1624,7 @@ json_object_param_list:
   }
 | json_object_param_list ',' json_object_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 json_object_param:
@@ -2809,7 +2809,7 @@ index_option_list:
   }
 | index_option_list index_option
   {
-    $$ = append($$, $2)
+    $$ = append($1, $2)
   }
 
 index_option:
@@ -2947,7 +2947,7 @@ index_column_list:
   }
 | index_column_list ',' index_column
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_column:
@@ -4767,27 +4767,27 @@ for_opt:
 user_or_role:
   STRING AT_ID
   {
-    $$ = &UserOrRole{Name: string($1), Host: formatUserOrRoleHost($2)}
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | STRING
   {
-    $$ = &UserOrRole{Name: string($1)}
+    $$ = &UserOrRole{Name: new(string($1))}
   }
 | CURRENT_USER openb closeb
   {
-    $$ = nil
+    $$ = new(UserOrRole)
   }
 | CURRENT_USER
   {
-    $$ = nil
+    $$ = new(UserOrRole)
   }
 | ci_identifier AT_ID
   {
-    $$ = &UserOrRole{Name: $1.String(), Host: formatUserOrRoleHost($2)}
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | ci_identifier
   {
-    $$ = &UserOrRole{Name: $1.String()}
+    $$ = &UserOrRole{Name: new(string($1.String()))}
   }
 
 show_grants_opt:
@@ -4803,15 +4803,11 @@ show_grants_opt:
 user_or_role_list:
   user_or_role
   {
-    if $1 != nil {
-      $$ = []UserOrRole{*$1}
-    }
+    $$ = []UserOrRole{*$1}
   }
 | user_or_role_list ',' user_or_role
   {
-    if $3 != nil {
-      $$ = append($1, *$3)
-    }
+    $$ = append($1, *$3)
   }
 
 show_profile_types_opt:
@@ -5633,7 +5629,7 @@ table_references:
   }
 | table_references ',' table_reference
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_reference:
@@ -5703,7 +5699,7 @@ column_list:
   }
 | column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 at_id_list:
@@ -5713,7 +5709,7 @@ at_id_list:
   }
 | at_id_list ',' user_defined_variable
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_list:
@@ -5727,11 +5723,11 @@ index_list:
   }
 | index_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | index_list ',' PRIMARY
   {
-    $$ = append($$, NewIdentifierCI(string($3)))
+    $$ = append($1, NewIdentifierCI(string($3)))
   }
 
 partition_list:
@@ -5741,7 +5737,7 @@ partition_list:
   }
 | partition_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 // There is a grammar conflict here:
@@ -8267,7 +8263,7 @@ proc_params_list:
   }
 | proc_params_list ',' proc_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 proc_param:
@@ -8582,11 +8578,11 @@ ins_column_list:
   }
 | ins_column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | ins_column_list ',' sql_id '.' sql_id
   {
-    $$ = append($$, $5)
+    $$ = append($1, $5)
   }
 
 row_alias_opt:

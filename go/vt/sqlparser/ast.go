@@ -2028,9 +2028,10 @@ type (
 	}
 
 	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
+	// When both Name and Host are nil, this represents CURRENT_USER.
 	UserOrRole struct {
-		Name string
-		Host string
+		Name *string
+		Host *string
 	}
 
 	// ShowEngine represents SHOW ENGINE engine_name {STATUS | MUTEX}.

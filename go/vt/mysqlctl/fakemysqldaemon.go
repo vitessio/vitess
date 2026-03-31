@@ -125,6 +125,13 @@ type FakeMysqlDaemon struct {
 	// SuperReadOnly is the current value of the flag.
 	SuperReadOnly atomic.Bool
 
+	// SetSuperReadOnlyError is used by SetSuperReadOnly.
+	SetSuperReadOnlyError error
+
+	// ExecuteSuperQueryListCallback is called at the start of ExecuteSuperQueryList
+	// before any queries are executed, if set.
+	ExecuteSuperQueryListCallback func()
+
 	// SetReplicationPositionPos is matched against the input of
 	// SetReplicationPosition. If it doesn't match, SetReplicationPosition
 	// will return an error.
@@ -456,9 +463,25 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
 
 // SetSuperReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+	if fmd.SetSuperReadOnlyError != nil {
+		return nil, fmd.SetSuperReadOnlyError
+	}
+	prev := fmd.SuperReadOnly.Load()
+	prevReadOnly := fmd.ReadOnly
 	fmd.SuperReadOnly.Store(on)
-	fmd.ReadOnly = on
-	return nil, nil
+	// In real MySQL, enabling super_read_only implies read_only = ON,
+	// but disabling super_read_only does not change read_only.
+	if on {
+		fmd.ReadOnly = true
+	}
+	if prev == on {
+		return nil, nil
+	}
+	return func() error {
+		fmd.SuperReadOnly.Store(prev)
+		fmd.ReadOnly = prevReadOnly
+		return nil
+	}, nil
 }
 
 // GetGlobalStatusVars is part of the MysqlDaemon interface.
@@ -593,6 +616,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string)
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
+	if fmd.ExecuteSuperQueryListCallback != nil {
+		fmd.ExecuteSuperQueryListCallback()
+	}
 	for _, query := range queryList {
 		// test we still have a query to compare
 		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
