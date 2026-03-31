@@ -892,11 +892,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			log.Warningf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
-<<<<<<< HEAD
-			log.Warningf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
-=======
-			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
->>>>>>> db0da943d1 (OnlineDDL: set `wait_timeout` on cutover connections (#19630))
+			log.Errorf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 	}()
 
@@ -918,15 +914,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
 	}
-<<<<<<< HEAD
-	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
-	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 5*onlineDDL.CutOverThreshold*4)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
-	}
-=======
->>>>>>> db0da943d1 (OnlineDDL: set `wait_timeout` on cutover connections (#19630))
 	defer renameConn.Recycle()
 	defer func() {
 		if !renameWasSuccessful {

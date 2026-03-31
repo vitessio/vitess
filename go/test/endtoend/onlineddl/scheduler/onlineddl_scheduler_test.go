@@ -243,7 +243,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -295,11 +295,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
-
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
@@ -793,65 +791,6 @@ func testScheduler(t *testing.T) {
 			})
 		})
 	}
-<<<<<<< HEAD
-=======
-
-	if forceCutoverCapable {
-		t.Run("force_cutover_instant", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
-			defer cancel()
-
-			t.Run("populate t1_test", func(t *testing.T) {
-				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
-			})
-
-			commitTransactionChan := make(chan any)
-			transactionErrorChan := make(chan error)
-			t.Run("locking table rows", func(t *testing.T) {
-				go runInTransaction(t, ctx, primaryTablet, "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
-			})
-
-			t.Run("execute migration", func(t *testing.T) {
-				t1uuid = testOnlineDDLStatement(t, createParams(instantAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --force-cut-over-after=1ms", "vtgate", "", "", true)) // skip wait
-			})
-			t.Run("expect completion", func(t *testing.T) {
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-			})
-			t.Run("check special_plan", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					specialPlan := row.AsString("special_plan", "")
-					assert.Contains(t, specialPlan, "instant-ddl")
-				}
-			})
-			t.Run("expect transaction failure", func(t *testing.T) {
-				select {
-				case commitTransactionChan <- true: // good
-				case <-ctx.Done():
-					assert.Fail(t, ctx.Err().Error())
-				}
-				// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
-				// the transaction's connection.
-				select {
-				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
-				case <-ctx.Done():
-					assert.Fail(t, ctx.Err().Error())
-				}
-			})
-			t.Run("cleanup: undo migration", func(t *testing.T) {
-				t1uuid = testOnlineDDLStatement(t, createParams(instantUndoAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --force-cut-over-after=1ms", "vtgate", "", "", true)) // skip wait
-			})
-			t.Run("cleanup: expect completion", func(t *testing.T) {
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-			})
-		})
-	}
 
 	t.Run("low wait_timeout", func(t *testing.T) {
 		// Validate that OnlineDDL cutover increases wait_timeout on its connections
@@ -963,7 +902,6 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
->>>>>>> db0da943d1 (OnlineDDL: set `wait_timeout` on cutover connections (#19630))
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
@@ -2136,6 +2074,7 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
+
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -2808,7 +2747,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-
 	var (
 		createStatements = []string{
 			`
@@ -2857,7 +2795,7 @@ func testForeignKeys(t *testing.T) {
 		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name:             "modify parent, not allowed",
 			sql:              "alter table parent_table engine=innodb",
