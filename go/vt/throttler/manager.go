@@ -197,7 +197,7 @@ func (m *managerImpl) Throttlers() []string {
 }
 
 func (m *managerImpl) throttlerNamesLocked() []string {
-	var names []string
+	names := make([]string, 0, len(m.throttlers))
 	for k := range m.throttlers {
 		names = append(names, k)
 	}
