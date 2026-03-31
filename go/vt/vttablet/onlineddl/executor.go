@@ -913,11 +913,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			log.Warningf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
-<<<<<<< HEAD
-			log.Warningf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
-=======
-			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
->>>>>>> db0da943d1 (OnlineDDL: set `wait_timeout` on cutover connections (#19630))
+			log.Errorf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 		}
 	}()
 
