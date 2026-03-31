@@ -4,6 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    minimum-version-age: 14
     groups:
       go:
         patterns:
@@ -13,6 +14,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    minimum-version-age: 14
     groups:
       actions:
         patterns:
@@ -22,6 +24,7 @@ updates:
     directory: "/java"
     schedule:
       interval: "weekly"
+    minimum-version-age: 14
     groups:
       java:
         patterns:
@@ -31,6 +34,7 @@ updates:
     directory: "/web/vtadmin"
     schedule:
       interval: "weekly"
+    minimum-version-age: 30
     groups:
       vtadmin-npm:
         patterns:
@@ -48,6 +52,7 @@ updates:
       - "/go/mysql/collations/tools/colldump"
     schedule:
       interval: "weekly"
+    minimum-version-age: 14
     ignore:
       - dependency-name: "mysql"
         versions:
