@@ -16,10 +16,7 @@ limitations under the License.
 
 package sqlparser
 
-import (
-	"strings"
-	"unicode/utf8"
-)
+import "unicode/utf8"
 
 // identNormalizedRune returns the utf8mb4_general_ci normalized form of a
 // single rune using the sparse page table in identifier_normalized.go.
@@ -63,29 +60,51 @@ func identEqual(a, b string) bool {
 // equivalence class under the collation. For ASCII-only input, this produces
 // the same result as strings.ToLower.
 func identNormalize(s string) string {
-	// Single pass: check if ASCII and already normalized simultaneously.
-	isASCII, isNormalized := true, true
+	// Single pass: scan for the first byte that needs transformation.
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c >= utf8.RuneSelf {
-			isASCII = false
-			break
+			b := make([]byte, len(s))
+			copy(b[:i], s[:i])
+			n := identNormalizeUnicode(b[i:], s[i:])
+			return string(b[:i+n])
 		}
-		isNormalized = isNormalized && !('A' <= c && c <= 'Z')
-	}
-
-	if isASCII {
-		if isNormalized {
-			return s
+		if 'A' <= c && c <= 'Z' {
+			b := make([]byte, len(s))
+			copy(b[:i], s[:i])
+			n := identNormalizeASCII(b[i:], s[i:])
+			return string(b[:i+n])
 		}
-		return strings.ToLower(s)
 	}
+	// All ASCII, already lowercase — return as-is, zero allocation.
+	return s
+}
 
-	// Slow path: look up each rune's precomputed normalized form.
-	var buf strings.Builder
-	buf.Grow(len(s))
-	for _, r := range s {
-		buf.WriteRune(identNormalizedRune(r))
+// identNormalizeASCII lowercases ASCII bytes from src into dst. If a non-ASCII
+// byte is encountered, it falls through to identNormalizeUnicode for the
+// remainder. Returns the number of bytes written to dst.
+func identNormalizeASCII(dst []byte, src string) int {
+	for i := 0; i < len(src); i++ {
+		c := src[i]
+		if c >= utf8.RuneSelf {
+			return i + identNormalizeUnicode(dst[i:], src[i:])
+		}
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		dst[i] = c
 	}
-	return buf.String()
+	return len(src)
+}
+
+// identNormalizeUnicode normalizes runes from src into dst using the sparse
+// page table lookup. The normalized form is never longer than the input
+// (accented characters fold to base ASCII letters). Returns the number of
+// bytes written to dst.
+func identNormalizeUnicode(dst []byte, src string) int {
+	pos := 0
+	for _, r := range src {
+		pos += utf8.EncodeRune(dst[pos:], identNormalizedRune(r))
+	}
+	return pos
 }
