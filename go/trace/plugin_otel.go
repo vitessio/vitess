@@ -82,6 +82,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 	}
 
 	res, err := resource.New(ctx,
+		resource.WithFromEnv(),
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
 		),

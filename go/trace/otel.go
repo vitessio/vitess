@@ -68,15 +68,20 @@ func (ots *otelTracingService) NewFromString(ctx context.Context, parent, label 
 	}
 
 	propagator := otel.GetTextMapPropagator()
-	extractedCtx := propagator.Extract(ctx, carrier)
+	// Extract into a clean context so that a pre-existing span in ctx
+	// cannot mask an invalid carrier payload.
+	extractedCtx := propagator.Extract(context.Background(), carrier)
 
 	spanCtx := oteltrace.SpanContextFromContext(extractedCtx)
 	if !spanCtx.IsValid() {
 		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "extracted span context is not valid")
 	}
 
-	extractedCtx, span := ots.Tracer.Start(extractedCtx, label)
-	return &otelSpan{span: span}, extractedCtx, nil
+	// Re-apply the extracted remote span context onto the caller's context
+	// so that deadlines, cancellation, and values are preserved.
+	ctx = oteltrace.ContextWithRemoteSpanContext(ctx, spanCtx)
+	ctx, span := ots.Tracer.Start(ctx, label)
+	return &otelSpan{span: span}, ctx, nil
 }
 
 func (ots *otelTracingService) FromContext(ctx context.Context) (Span, bool) {

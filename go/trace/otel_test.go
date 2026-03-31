@@ -139,6 +139,14 @@ func TestOtelNewFromString(t *testing.T) {
 	_, _, err = svc.NewFromString(t.Context(), base64.StdEncoding.EncodeToString(emptyCarrier), "bad")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "extracted span context is not valid")
+
+	// Regression: an invalid carrier must fail even when the incoming context
+	// already has a live span. Without extracting into a clean context, the
+	// pre-existing span would mask the bad carrier.
+	_, ctxWithSpan := svc.New(t.Context(), "existing-span")
+	_, _, err = svc.NewFromString(ctxWithSpan, base64.StdEncoding.EncodeToString(emptyCarrier), "bad")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "extracted span context is not valid")
 }
 
 func TestKeyValue(t *testing.T) {
