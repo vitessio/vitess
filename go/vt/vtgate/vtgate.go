@@ -385,12 +385,12 @@ func Init(
 	plans := DefaultPlanCache()
 
 	eConfig := ExecutorConfig{
-		Normalize:               normalizeQueries,
-		StreamSize:              streamBufferSize,
-		AllowScatter:            !noScatter,
-		AllowCrossKeyspaceJoins: !noCrossKeyspaceJoins,
-		WarmingReadsPercent:     warmingReadsPercent,
-		QueryLogToFile:          queryLogToFile,
+		Normalize:            normalizeQueries,
+		StreamSize:           streamBufferSize,
+		AllowScatter:         !noScatter,
+		NoCrossKeyspaceJoins: noCrossKeyspaceJoins,
+		WarmingReadsPercent:  warmingReadsPercent,
+		QueryLogToFile:       queryLogToFile,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)

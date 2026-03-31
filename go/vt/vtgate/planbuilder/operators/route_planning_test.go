@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -120,9 +121,10 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
 			},
 			stmt: func() sqlparser.Statement {
-				stmt, _ := sqlparser.NewTestParser().Parse(
+				stmt, err := sqlparser.NewTestParser().Parse(
 					fmt.Sprintf("select /*vt+ %s */ 1", sqlparser.DirectiveAllowCrossKeyspaceJoins),
 				)
+				require.NoError(t, err)
 				return stmt
 			}(),
 		},
@@ -166,6 +168,15 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			vschema: &mockVSchema{
 				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
 			},
+		},
+		{
+			name: "composite same-keyspace lhs, cross-keyspace denied",
+			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
+			rhs:  makeRoute(ks2),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+			},
+			expectPanic: true,
 		},
 		{
 			name: "non-route wrapping route, cross-keyspace denied",
@@ -212,6 +223,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 
 func TestOperatorKeyspace(t *testing.T) {
 	ks1 := &vindexes.Keyspace{Name: "ks1"}
+	ks2 := &vindexes.Keyspace{Name: "ks2"}
 
 	makeRoute := func(ks *vindexes.Keyspace) *Route {
 		return &Route{Routing: &NoneRouting{keyspace: ks}}
@@ -243,8 +255,13 @@ func TestOperatorKeyspace(t *testing.T) {
 			expected: ks1,
 		},
 		{
-			name:     "multi-input operator returns nil",
+			name:     "multi-input same keyspace returns common keyspace",
 			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
+			expected: ks1,
+		},
+		{
+			name:     "multi-input different keyspaces returns nil",
+			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
 			expected: nil,
 		},
 		{

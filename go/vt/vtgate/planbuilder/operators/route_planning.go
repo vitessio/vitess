@@ -396,7 +396,9 @@ func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *v
 
 // operatorKeyspace extracts the keyspace from an operator. For Route operators it returns
 // the routing keyspace directly. For single-input wrapper operators (e.g. Projection, Horizon),
-// it walks down to find the underlying Route's keyspace.
+// it walks down to find the underlying Route's keyspace. For multi-input operators (e.g.
+// ApplyJoin, HashJoin), it returns the common keyspace if all inputs resolve to the same
+// keyspace, or nil if the keyspaces differ.
 func operatorKeyspace(op Operator) *vindexes.Keyspace {
 	if op == nil {
 		return nil
@@ -405,10 +407,17 @@ func operatorKeyspace(op Operator) *vindexes.Keyspace {
 		return route.Routing.Keyspace()
 	}
 	inputs := op.Inputs()
-	if len(inputs) == 1 && inputs[0] != nil {
-		return operatorKeyspace(inputs[0])
+	if len(inputs) == 0 {
+		return nil
 	}
-	return nil
+	ks := operatorKeyspace(inputs[0])
+	for _, input := range inputs[1:] {
+		inputKs := operatorKeyspace(input)
+		if ks == nil || inputKs == nil || ks != inputKs {
+			return nil
+		}
+	}
+	return ks
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {
