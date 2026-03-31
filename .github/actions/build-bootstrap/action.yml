@@ -23,8 +23,8 @@ runs:
         files: docker/bootstrap/docker-bake.hcl
         load: true
         set: |
-          *.cache-from=type=gha
-          *.cache-to=type=gha,mode=max
+          *.cache-from=type=gha,scope=bootstrap
+          *.cache-to=type=gha,scope=bootstrap,mode=min
       env:
         BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
         BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}
