@@ -50,14 +50,6 @@ var (
 			FlagName: "tracing-sampling-type",
 		},
 	)
-	samplingRate = viperutil.Configure(
-		jaegerConfigKey("sampling_rate"),
-		viperutil.Options[float64]{
-			Default:  0.1,
-			EnvVars:  []string{"JAEGER_SAMPLER_PARAM"},
-			FlagName: "tracing-sampling-rate",
-		},
-	)
 )
 
 func init() {
@@ -66,9 +58,8 @@ func init() {
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
 		fs.String("jaeger-agent-host", agentHost.Default(), "host and port to send spans to. if empty, no tracing will be done")
 		fs.String("tracing-sampling-type", samplingType.Default(), "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
-		fs.Float64("tracing-sampling-rate", samplingRate.Default(), "sampling rate for the probabilistic jaeger sampler")
 
-		viperutil.BindFlags(fs, agentHost, samplingRate, samplingType)
+		viperutil.BindFlags(fs, agentHost, samplingType)
 	})
 }
 
@@ -78,7 +69,7 @@ func init() {
 // JAEGER_RPC_METRICS
 // JAEGER_TAGS
 // JAEGER_SAMPLER_TYPE
-// JAEGER_SAMPLER_PARAM
+// JAEGER_SAMPLER_PARAM (also bound to --tracing-sampling-rate)
 // JAEGER_SAMPLER_MANAGER_HOST_PORT
 // JAEGER_SAMPLER_MAX_OPERATIONS
 // JAEGER_SAMPLER_REFRESH_INTERVAL
@@ -90,7 +81,10 @@ func init() {
 // JAEGER_PASSWORD
 // JAEGER_AGENT_HOST
 // JAEGER_AGENT_PORT
+// Deprecated: use --tracer opentelemetry instead. The opentracing-jaeger backend
+// will be removed in a future release.
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
+	log.Warn("tracer \"opentracing-jaeger\" is deprecated; migrate to \"opentelemetry\" (OTLP). See https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.0/summary.md#tracing-opentracing-deprecation")
 	cfg, err := config.FromEnv()
 	if err != nil {
 		return nil, nil, err
