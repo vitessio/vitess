@@ -34,6 +34,8 @@ Usage of vtctlclient:
       --log_link string                                             If non-empty, add symbolic links in this directory to the log files
       --logbuflevel int                                             Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                 log to standard error instead of files
+      --otel-endpoint string                                        OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
+      --otel-insecure                                               use insecure connection to OpenTelemetry collector
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
@@ -42,7 +44,7 @@ Usage of vtctlclient:
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --tracer string                                               tracing service to use (default "noop")
       --tracing-enable-logging                                      whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                 sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-rate float                                 sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
       --tracing-sampling-type string                                sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
