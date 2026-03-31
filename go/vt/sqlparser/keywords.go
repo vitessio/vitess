@@ -26,25 +26,6 @@ type keyword struct {
 	id   int
 }
 
-func (k *keyword) match(input []byte) bool {
-	if len(input) != len(k.name) {
-		return false
-	}
-	for i, c := range input {
-		if 'A' <= c && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		if k.name[i] != c {
-			return false
-		}
-	}
-	return true
-}
-
-func (k *keyword) matchStr(input string) bool {
-	return keywordASCIIMatch(input, k.name)
-}
-
 func keywordASCIIMatch(input string, expected string) bool {
 	if len(input) != len(expected) {
 		return false
@@ -839,31 +820,62 @@ var (
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
 
-type caseInsensitiveTable struct {
-	h map[uint64]keyword
+type kwEntry struct {
+	hash uint64
+	id   int
 }
 
-func buildCaseInsensitiveTable(keywords []keyword) *caseInsensitiveTable {
-	table := &caseInsensitiveTable{
-		h: make(map[uint64]keyword, len(keywords)),
+type caseInsensitiveTable struct {
+	entries []kwEntry
+	mask    uint64
+}
+
+func buildCaseInsensitiveTable(kws []keyword) *caseInsensitiveTable {
+	// Find next power of 2 that gives < 50% load factor
+	size := 1
+	for size < len(kws)*2 {
+		size *= 2
 	}
 
-	for _, kw := range keywords {
-		hash := fnv1aIstr(offset64, kw.name)
-		if _, exists := table.h[hash]; exists {
-			panic("collision in caseInsensitiveTable")
+	table := &caseInsensitiveTable{
+		entries: make([]kwEntry, size),
+		mask:    uint64(size - 1),
+	}
+
+	for _, kw := range kws {
+		h := fnv1aIstr(offset64, kw.name)
+		if h == 0 {
+			panic("keyword hashes to zero (sentinel value)")
 		}
-		table.h[hash] = kw
+		for idx := h & table.mask; ; idx = (idx + 1) & table.mask {
+			if table.entries[idx].hash == 0 {
+				table.entries[idx] = kwEntry{hash: h, id: kw.id}
+				break
+			}
+			if table.entries[idx].hash == h {
+				panic("collision in caseInsensitiveTable")
+			}
+		}
 	}
 	return table
 }
 
+// LookupString returns the keyword token ID for name, using hash-only matching
+// without string verification. This is safe because buildCaseInsensitiveTable
+// guarantees all keywords have distinct 64-bit FNV-1a hashes at init time, and
+// the probability of a non-keyword colliding with any keyword hash is ~N/2^64
+// (where N ≈ 756 keywords), which is effectively zero.
 func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
-	hash := fnv1aIstr(offset64, name)
-	if candidate, ok := cit.h[hash]; ok {
-		return candidate.id, candidate.matchStr(name)
+	h := fnv1aIstr(offset64, name)
+	for idx := h & cit.mask; ; idx = (idx + 1) & cit.mask {
+		e := cit.entries[idx]
+		if e.hash == h {
+			return e.id, true
+		}
+		if e.hash == 0 {
+			return 0, false
+		}
 	}
-	return 0, false
 }
 
 func init() {

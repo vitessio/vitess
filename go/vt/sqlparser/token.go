@@ -48,6 +48,7 @@ type Tokenizer struct {
 	Pos    int
 	buf    string
 	parser *Parser
+	alloc  nodeAllocator
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -333,10 +334,8 @@ func (tkn *Tokenizer) skipStatement() int {
 
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
-	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch := tkn.cur(); ch < 256 && charClass[ch]&ccSpace != 0; ch = tkn.cur() {
 		tkn.skip(1)
-		ch = tkn.cur()
 	}
 }
 
@@ -762,26 +761,65 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 }
 
+const (
+	ccSpace  uint8 = 1 << iota // whitespace: ' ', '\t', '\r', '\n'
+	ccLetter                   // identifier start: a-z, A-Z, _, $
+	ccDigit                    // decimal digit: 0-9
+	ccHexA                     // hex alpha: a-f, A-F
+	ccCarat                    // carat chars: . ' " `
+)
+
+var charClass [256]uint8
+
+func init() {
+	for ch := byte('a'); ch <= 'z'; ch++ {
+		charClass[ch] |= ccLetter
+	}
+	for ch := byte('A'); ch <= 'Z'; ch++ {
+		charClass[ch] |= ccLetter
+	}
+	charClass['_'] |= ccLetter
+	charClass['$'] |= ccLetter
+
+	for ch := byte('0'); ch <= '9'; ch++ {
+		charClass[ch] |= ccDigit
+	}
+	for _, ch := range "abcdefABCDEF" {
+		charClass[ch] |= ccHexA
+	}
+
+	charClass[' '] |= ccSpace
+	charClass['\t'] |= ccSpace
+	charClass['\r'] |= ccSpace
+	charClass['\n'] |= ccSpace
+
+	charClass['.'] |= ccCarat
+	charClass['\''] |= ccCarat
+	charClass['"'] |= ccCarat
+	charClass['`'] |= ccCarat
+}
+
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '$'
+	return ch < 256 && charClass[ch]&ccLetter != 0
 }
 
 func isCarat(ch uint16) bool {
-	return ch == '.' || ch == '\'' || ch == '"' || ch == '`'
+	return ch < 256 && charClass[ch]&ccCarat != 0
 }
 
 func digitVal(ch uint16) int {
-	switch {
-	case '0' <= ch && ch <= '9':
-		return int(ch) - '0'
-	case 'a' <= ch && ch <= 'f':
-		return int(ch) - 'a' + 10
-	case 'A' <= ch && ch <= 'F':
-		return int(ch) - 'A' + 10
+	if ch < 256 {
+		c := charClass[ch]
+		if c&ccDigit != 0 {
+			return int(ch) - '0'
+		}
+		if c&ccHexA != 0 {
+			return int(ch|0x20) - 'a' + 10
+		}
 	}
 	return 16 // larger than any legal digit val
 }
 
 func isDigit(ch uint16) bool {
-	return '0' <= ch && ch <= '9'
+	return ch < 256 && charClass[ch]&ccDigit != 0
 }

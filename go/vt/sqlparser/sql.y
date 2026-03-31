@@ -65,6 +65,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   columnType    *ColumnType
   columnCharset ColumnCharset
 
+
   statement       Statement
   statements      []Statement
   selStmt         SelectStatement
@@ -695,7 +696,7 @@ parse:
 multiple_commands:
   comment_command_opt
   {
-    $$ = []Statement{$1}
+    s := na(yylex).makeStatementSlice(1); s[0] = $1; $$ = s
     resetTokenizer(yylex)
   }
 |  multiple_commands ';' comment_command_opt
@@ -912,7 +913,7 @@ signal_condition_value:
 sqlstate_condition_value:
   SQLSTATE value_opt STRING
   {
-    $$ = &HandlerConditionSQLState{SQLStateValue: NewStrLiteral($3)}
+    $$ = &HandlerConditionSQLState{SQLStateValue: na(yylex).newStrLiteral($3)}
   }
 
 condition_name:
@@ -1084,7 +1085,7 @@ with_list:
   }
 | common_table_expr
   {
-    $$ = []*CommonTableExpr{$1}
+    s := na(yylex).makeCTEPtrSlice(1); s[0] = $1; $$ = s
   }
 
 common_table_expr:
@@ -1168,7 +1169,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = NewSelect(Comments($2), &SelectExprs{Exprs: []SelectExpr{&Nextval{Expr: $5}}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+    se := na(yylex).allocSelectExprs(); ses := na(yylex).makeSelectExprSlice(1); ses[0] = &Nextval{Expr: $5}; se.Exprs = ses; ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; $$ = na(yylex).newSelect(Comments($2), se, []string{$3}/*options*/, nil, te, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -1243,11 +1244,11 @@ select_stmt_with_into:
 values_statement:
   VALUES comment_opt LIST_ARG
   {
-    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), ListArg: ListArg($3[2:])}
+    $$ = &ValuesStatement{Comments: na(yylex).parsedComments(Comments($2)), ListArg: ListArg($3[2:])}
   }
 | VALUES comment_opt row_tuple_list
   {
-    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: $3}
+    $$ = &ValuesStatement{Comments: na(yylex).parsedComments(Comments($2)), Rows: $3}
   }
 
 stream_statement:
@@ -1257,7 +1258,7 @@ stream_statement:
   }
 | STREAM comment_opt select_expression FROM table_name
   {
-    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5}
+    $$ = &Stream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
@@ -1267,7 +1268,7 @@ vstream_statement:
   }
 | VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: na(yylex).parsedComments(Comments($2)), SelectExpr: $3, Table: $5, Where: na(yylex).newWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -1275,11 +1276,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), $8, NewWhere(HavingClause, $9), $10)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, na(yylex).newWhere(WhereClause, $7), $8, na(yylex).newWhere(HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8), $9)
+    $$ = na(yylex).newSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, na(yylex).newWhere(WhereClause, $6), $7, na(yylex).newWhere(HavingClause, $8), $9)
   }
 | values_statement
   {
@@ -1292,9 +1293,9 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
     ins.Action = $1
-    ins.Comments = Comments($2).Parsed()
+    ins.Comments = na(yylex).parsedComments(Comments($2))
     ins.Ignore = $3
-    ins.Table = getAliasedTableExprFromTableName($4)
+    ins.Table = na(yylex).getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
     ins.OnDup = OnDup($7)
     $$ = ins
@@ -1307,7 +1308,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: getAliasedTableExprFromTableName($4), Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    ins := na(yylex).allocInsert(); ins.Action = $1; ins.Comments = na(yylex).parsedComments(Comments($2)); ins.Ignore = $3; ins.Table = na(yylex).getAliasedTableExprFromTableName($4); ins.Partitions = $5; ins.Columns = cols; vv := na(yylex).makeValuesSlice(1); vv[0] = vals; ins.Rows = vv; ins.OnDup = OnDup($8); $$ = ins
   }
 
 insert_or_replace:
@@ -1323,25 +1324,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    upd := na(yylex).allocUpdate(); upd.With = $1; upd.Comments = na(yylex).parsedComments(Comments($3)); upd.Ignore = $4; upd.TableExprs = $5; upd.Exprs = $7; upd.Where = na(yylex).newWhere(WhereClause, $8); upd.OrderBy = $9; upd.Limit = $10; $$ = upd
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $6; ate.As = $7; te := na(yylex).makeTableExprSlice(1); te[0] = ate; del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.TableExprs = te; del.Partitions = $8; del.Where = na(yylex).newWhere(WhereClause, $9); del.OrderBy = $10; del.Limit = $11; $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $6; del.TableExprs = $8; del.Where = na(yylex).newWhere(WhereClause, $9); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    del := na(yylex).allocDelete(); del.With = $1; del.Comments = na(yylex).parsedComments(Comments($3)); del.Ignore = $4; del.Targets = $5; del.TableExprs = $7; del.Where = na(yylex).newWhere(WhereClause, $8); $$ = del
   }
 
 from_or_using:
@@ -1390,13 +1391,13 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), $3)
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), $3)
   }
 
 set_list:
   set_expression
   {
-    $$ = SetExprs{$1}
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | set_list ',' set_expression
   {
@@ -1406,11 +1407,11 @@ set_list:
 set_expression:
   set_variable '=' ON
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+    $$ = &SetExpr{Var: $1, Expr: na(yylex).newStrLiteral("on")}
   }
 | set_variable '=' OFF
   {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+    $$ = &SetExpr{Var: $1, Expr: na(yylex).newStrLiteral("off")}
   }
 | set_variable '=' expression
   {
@@ -1438,17 +1439,17 @@ set_variable:
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = NewSetStatement(Comments($2).Parsed(), $4)
+    $$ = NewSetStatement(na(yylex).parsedComments(Comments($2)), $4)
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    se := na(yylex).makeSetExprSlice(1); se[0] = $1; $$ = se
   }
 | transaction_chars ',' transaction_char
   {
@@ -1458,15 +1459,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: na(yylex).newStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: na(yylex).newStrLiteral("on")}
   }
 
 isolation_level:
@@ -1633,13 +1634,13 @@ json_object_param:
 create_procedure:
   CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_name openb proc_params_list_opt closeb compound_statement
   {
-    $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
+    $$ = &CreateProcedure{Comments: na(yylex).parsedComments(Comments($2)), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
   }
 
 create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
+    $$ = &CreateTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
@@ -1655,58 +1656,58 @@ create_table_prefix:
 create_view_prefix:
   CREATE comment_opt definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $6, Comments: Comments($2).Parsed(), Definer: $3 ,Security:$4}
+    $$ = &CreateView{ViewName: $6, Comments: na(yylex).parsedComments(Comments($2)), Definer: $3 ,Security:$4}
   }
 | CREATE comment_opt replace algorithm_view_opt definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
+    $$ = &CreateView{ViewName: $8, Comments: na(yylex).parsedComments(Comments($2)), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
   }
 | CREATE comment_opt algorithm_view definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5}
+    $$ = &CreateView{ViewName: $7, Comments: na(yylex).parsedComments(Comments($2)), Algorithm:$3, Definer: $4 ,Security:$5}
   }
 
 
 alter_table_prefix:
   ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $4}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $4}
     setDDL(yylex, $$)
   }
 
 create_index_prefix:
   CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
 create_database_prefix:
   CREATE comment_opt database_or_schema not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfNotExists: $4}
+    $$ = &CreateDatabase{Comments: na(yylex).parsedComments(Comments($2)), DBName: $5, IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
 alter_database_prefix:
   ALTER comment_opt database_or_schema
   {
-    $$ = &AlterDatabase{Comments: Comments($2).Parsed()}
+    $$ = &AlterDatabase{Comments: na(yylex).parsedComments(Comments($2))}
     setDDL(yylex,$$)
   }
 
@@ -1924,7 +1925,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = na(yylex).newStrLiteral($3)
     $$ = $1
   }
 | column_attribute_list_opt keys
@@ -1947,7 +1948,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt SRID INTEGRAL
   {
-    $1.SRID = NewIntLiteral($3)
+    $1.SRID = na(yylex).newIntLiteral($3)
     $$ = $1
   }
 | column_attribute_list_opt VISIBLE
@@ -1962,11 +1963,11 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.EngineAttribute = NewStrLiteral($4)
+    $1.EngineAttribute = na(yylex).newStrLiteral($4)
   }
 | column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+    $1.SecondaryEngineAttribute = na(yylex).newStrLiteral($4)
   }
 
 column_format:
@@ -2018,7 +2019,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
   {
-    $1.Comment = NewStrLiteral($3)
+    $1.Comment = na(yylex).newStrLiteral($3)
     $$ = $1
   }
 | generated_column_attribute_list_opt keys
@@ -2028,7 +2029,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt SRID INTEGRAL
   {
-    $1.SRID = NewIntLiteral($3)
+    $1.SRID = na(yylex).newIntLiteral($3)
     $$ = $1
   }
 | generated_column_attribute_list_opt VISIBLE
@@ -2093,7 +2094,7 @@ NULL
    }
 | '-' NUM_literal
    {
-    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = UMinusOp; ue.Expr = $2; $$ = ue
    }
 
 literal:
@@ -2111,19 +2112,19 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | HEX
   {
-    $$ = NewHexLiteral($1)
+    $$ = na(yylex).newHexLiteral($1)
   }
 | HEXNUM
   {
-    $$ = NewHexNumLiteral($1)
+    $$ = na(yylex).newHexNumLiteral($1)
   }
 | BITNUM
   {
-    $$ = NewBitLiteral($1)
+    $$ = na(yylex).newBitLiteral($1)
   }
 | BIT_LITERAL
   {
-    $$ = NewBitLiteral("0b" + $1)
+    $$ = na(yylex).newBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -2131,19 +2132,19 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newHexNumLiteral($2)}
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newHexLiteral($2)}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
@@ -2152,11 +2153,11 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | DATE STRING
   {
-    $$ = NewDateLiteral($2)
+    $$ = na(yylex).newDateLiteral($2)
   }
 | TIME STRING
   {
-    $$ = NewTimeLiteral($2)
+    $$ = na(yylex).newTimeLiteral($2)
   }
 | TIMESTAMP STRING
   {
@@ -2340,15 +2341,15 @@ literal
 NUM_literal:
 INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | FLOAT
   {
-    $$ = NewFloatLiteral($1)
+    $$ = na(yylex).newFloatLiteral($1)
   }
 | DECIMAL
   {
-    $$ = NewDecimalLiteral($1)
+    $$ = na(yylex).newDecimalLiteral($1)
   }
 
 text_literal:
@@ -2364,15 +2365,15 @@ text_start
 text_start:
 STRING
   {
-    $$ = NewStrLiteral($1)
+    $$ = na(yylex).newStrLiteral($1)
   }
 | NCHAR_STRING
   {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = NStringOp; ue.Expr = na(yylex).newStrLiteral($1); $$ = ue
   }
  | underscore_charsets STRING %prec UNARY
    {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: na(yylex).newStrLiteral($2)}
    }
 
 text_literal_or_arg:
@@ -2817,11 +2818,11 @@ index_option:
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
     // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newIntLiteral($3)}
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($2)}
   }
 | VISIBLE
   {
@@ -2837,11 +2838,11 @@ index_option:
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 
 equal_opt:
@@ -3151,15 +3152,15 @@ space_separated_table_option_list:
 table_option:
   AUTO_INCREMENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | AUTOEXTEND_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newIntLiteral($3)}
   }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | default_optional charset_or_character_set equal_opt charset
   {
@@ -3171,35 +3172,35 @@ table_option:
   }
 | CHECKSUM equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:na(yylex).newStrLiteral($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:na(yylex).newStrLiteral($4)}
   }
 | DELAY_KEY_WRITE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | ENGINE equal_opt table_alias
   {
@@ -3207,7 +3208,7 @@ table_option:
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
@@ -3215,19 +3216,19 @@ table_option:
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | MAX_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | MIN_ROWS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | PACK_KEYS equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | PACK_KEYS equal_opt DEFAULT
   {
@@ -3235,7 +3236,7 @@ table_option:
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newStrLiteral($3)}
   }
 | ROW_FORMAT equal_opt row_format_options
   {
@@ -3243,11 +3244,11 @@ table_option:
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: na(yylex).newStrLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
@@ -3255,7 +3256,7 @@ table_option:
   }
 | STATS_PERSISTENT equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
@@ -3263,7 +3264,7 @@ table_option:
   }
 | STATS_SAMPLE_PAGES equal_opt INTEGRAL
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:na(yylex).newIntLiteral($3)}
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
@@ -3357,11 +3358,11 @@ ratio_opt:
   }
 | RATIO INTEGRAL
   {
-    $$ = NewIntLiteral($2)
+    $$ = na(yylex).newIntLiteral($2)
   }
 | RATIO DECIMAL
   {
-    $$ = NewDecimalLiteral($2)
+    $$ = na(yylex).newDecimalLiteral($2)
   }
 
 alter_commands_list:
@@ -3611,7 +3612,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view_opt definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7, Comments: na(yylex).parsedComments(Comments($2)), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -4116,7 +4117,7 @@ partition_operation:
   }
 | COALESCE PARTITION INTEGRAL
   {
-    $$ = &PartitionSpec{Action:CoalesceAction, Number:NewIntLiteral($3) }
+    $$ = &PartitionSpec{Action:CoalesceAction, Number:na(yylex).newIntLiteral($3) }
   }
 | EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
   {
@@ -4348,19 +4349,19 @@ partition_engine:
 partition_comment:
   COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = NewStrLiteral($3)
+    $$ = na(yylex).newStrLiteral($3)
   }
 
 partition_data_directory:
   DATA DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = na(yylex).newStrLiteral($4)
   }
 
 partition_index_directory:
   INDEX DIRECTORY equal_opt STRING
   {
-    $$ = NewStrLiteral($4)
+    $$ = na(yylex).newStrLiteral($4)
   }
 
 partition_max_rows:
@@ -4416,28 +4417,28 @@ rename_list:
 drop_statement:
   DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: na(yylex).parsedComments(Comments($2)), Temp: $3}
   }
 | DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+    $$ = &AlterTable{Comments: na(yylex).parsedComments(Comments($2)), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $5, Comments: Comments($2).Parsed(), IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: na(yylex).parsedComments(Comments($2)), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfExists: $4}
+    $$ = &DropDatabase{Comments: na(yylex).parsedComments(Comments($2)), DBName: $5, IfExists: $4}
   }
 | DROP comment_opt PROCEDURE exists_opt table_name
   {
-    $$ = &DropProcedure{Comments: Comments($2).Parsed(), Name: $5, IfExists: $4}
+    $$ = &DropProcedure{Comments: na(yylex).parsedComments(Comments($2)), Name: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -4860,7 +4861,7 @@ for_query_opt:
   }
 | FOR QUERY INTEGRAL
   {
-    $$ = NewIntLiteral($3)
+    $$ = na(yylex).newIntLiteral($3)
   }
 
 binlog_in_opt:
@@ -4880,7 +4881,7 @@ binlog_from_opt:
   }
 | FROM INTEGRAL
   {
-    $$ = NewIntLiteral($2)
+    $$ = na(yylex).newIntLiteral($2)
   }
 
 show_for_channel_opt:
@@ -5203,13 +5204,13 @@ explain_statement:
   }
 | explain_synonyms comment_opt explain_format_opt explainable_statement
   {
-    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: na(yylex).parsedComments(Comments($2))}
   }
 
 vexplain_statement:
   VEXPLAIN comment_opt vexplain_type_opt explainable_statement
   {
-    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: na(yylex).parsedComments(Comments($2))}
   }
 
 other_statement:
@@ -5271,7 +5272,7 @@ unlock_statement:
 revert_statement:
   REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{Comments: Comments($2).Parsed(), UUID: string($4)}
+    $$ = &RevertMigration{Comments: na(yylex).parsedComments(Comments($2)), UUID: string($4)}
   }
 
 flush_statement:
@@ -5398,7 +5399,11 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($1, $2)
+    if $1 == nil {
+      s := na(yylex).makeStringSlice(1); s[0] = $2; $$ = s
+    } else {
+      $$ = append($1, $2)
+    }
   }
 
 union_op:
@@ -5444,13 +5449,13 @@ distinct_opt:
 prepare_statement:
   PREPARE comment_opt sql_id FROM text_literal_or_arg
   {
-    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
+    $$ = &PrepareStmt{Name:$3, Comments: na(yylex).parsedComments(Comments($2)), Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM user_defined_variable
   {
     $$ = &PrepareStmt{
     	Name:$3,
-    	Comments: Comments($2).Parsed(),
+    	Comments: na(yylex).parsedComments(Comments($2)),
     	Statement: $5,
     }
   }
@@ -5458,7 +5463,7 @@ prepare_statement:
 execute_statement:
   EXECUTE comment_opt sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$3, Comments: Comments($2).Parsed(), Arguments: $4}
+    $$ = &ExecuteStmt{Name:$3, Comments: na(yylex).parsedComments(Comments($2)), Arguments: $4}
   }
 
 execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
@@ -5473,11 +5478,11 @@ execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name:$4}
+    $$ = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments($2)), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
+    $$ = &DeallocateStmt{Comments: na(yylex).parsedComments(Comments($2)), Name: $4}
   }
 
 select_options_opt:
@@ -5492,7 +5497,7 @@ select_options_opt:
 select_options:
 select_option
   {
-    $$ = []string{$1}
+    s := na(yylex).makeStringSlice(1); s[0] = $1; $$ = s
   }
 | select_options select_option
   {
@@ -5552,7 +5557,7 @@ select_expression_list:
   }
 | select_expression
   {
-    $$ = &SelectExprs{Exprs: []SelectExpr{$1}}
+    se := na(yylex).allocSelectExprs(); s := na(yylex).makeSelectExprSlice(1); s[0] = $1; se.Exprs = s; $$ = se
   }
 | select_expression_list ',' select_expression
   {
@@ -5564,7 +5569,7 @@ select_expression_list:
 select_expression:
   expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    node := na(yylex).allocAliasedExpr(); node.Expr = $1; node.As = $2; $$ = node
   }
 | table_id '.' '*'
   {
@@ -5597,7 +5602,7 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}}}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = TableName{Name: NewIdentifierCS("dual")}; te := na(yylex).makeTableExprSlice(1); te[0] = ate; $$ = te
   }
   | from_clause
   {
@@ -5613,7 +5618,7 @@ FROM table_references
 table_references:
   table_reference
   {
-    $$ = TableExprs{$1}
+    s := na(yylex).makeTableExprSlice(1); s[0] = $1; $$ = s
   }
 | table_references ',' table_reference
   {
@@ -5631,7 +5636,7 @@ table_factor:
   }
 | derived_table as_opt table_id column_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $3; ate.Columns = $4; $$ = ate
   }
 | openb table_references closeb
   {
@@ -5655,11 +5660,11 @@ derived_table:
 aliased_table_name:
 table_name as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.As = $2; ate.Hints = $3; $$ = ate
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    ate := na(yylex).allocAliasedTableExpr(); ate.Expr = $1; ate.Partitions = $4; ate.As = $6; ate.Hints = $7; $$ = ate
   }
 
 column_list_opt:
@@ -5683,7 +5688,7 @@ column_list_empty:
 column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | column_list ',' sql_id
   {
@@ -5693,7 +5698,7 @@ column_list:
 at_id_list:
   user_defined_variable
   {
-    $$ = []*Variable{$1}
+    s := na(yylex).makeVariablePtrSlice(1); s[0] = $1; $$ = s
   }
 | at_id_list ',' user_defined_variable
   {
@@ -5703,11 +5708,11 @@ at_id_list:
 index_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | PRIMARY
   {
-    $$ = Columns{NewIdentifierCI(string($1))}
+    cols := na(yylex).makeColumns(1); cols[0] = NewIdentifierCI(string($1)); $$ = cols
   }
 | index_list ',' sql_id
   {
@@ -5738,19 +5743,19 @@ partition_list:
 join_table:
   table_reference inner_join table_factor join_condition_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference straight_join table_factor on_expression_opt
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference outer_join table_reference join_condition
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; jte.Condition = $4; $$ = jte
   }
 | table_reference natural_join table_factor
   {
-    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
+    jte := na(yylex).allocJoinTableExpr(); jte.LeftExpr = $1; jte.Join = $2; jte.RightExpr = $3; $$ = jte
   }
 
 join_condition:
@@ -5950,23 +5955,23 @@ where_expression_opt:
 expression:
   expression OR expression %prec OR
   {
-    $$ = &OrExpr{Left: $1, Right: $3}
+    node := na(yylex).allocOrExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | expression XOR expression %prec XOR
   {
-    $$ = &XorExpr{Left: $1, Right: $3}
+    node := na(yylex).allocXorExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | expression AND expression %prec AND
   {
-    $$ = &AndExpr{Left: $1, Right: $3}
+    node := na(yylex).allocAndExpr(); node.Left = $1; node.Right = $3; $$ = node
   }
 | NOT expression %prec NOT
   {
-	    $$ = &NotExpr{Expr: $2}
+	    node := na(yylex).allocNotExpr(); node.Expr = $2; $$ = node
   }
 | bool_pri IS is_suffix %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: $3}
+	 ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = $3; $$ = ie
   }
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
@@ -5992,27 +5997,27 @@ null_or_unknown:
 bool_pri:
 bool_pri IS null_or_unknown %prec IS
   {
-    $$ = &IsExpr{Left: $1, Right: IsNullOp}
+    ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = IsNullOp; $$ = ie
   }
 | bool_pri IS NOT null_or_unknown %prec IS
   {
-    $$ = &IsExpr{Left: $1, Right: IsNotNullOp}
+    ie := na(yylex).allocIsExpr(); ie.Left = $1; ie.Right = IsNotNullOp; $$ = ie
   }
 | bool_pri compare predicate
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Right = $3; $$ = cmp
   }
 | bool_pri any_all_compare ANY subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = Any; cmp.Right = $4; $$ = cmp
   }
 | bool_pri any_all_compare SOME subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = Any; cmp.Right = $4; $$ = cmp
   }
 | bool_pri any_all_compare ALL subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: All, Right: $4 }
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = $2; cmp.Modifier = All; cmp.Right = $4; $$ = cmp
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
@@ -6022,11 +6027,11 @@ bool_pri IS null_or_unknown %prec IS
 predicate:
 bit_expr IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = InOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotInOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr BETWEEN bit_expr AND predicate
   {
@@ -6038,27 +6043,27 @@ bit_expr IN col_tuple
   }
 | bit_expr LIKE simple_expr
   {
-	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+	    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = LikeOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT LIKE simple_expr
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotLikeOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+	    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = LikeOp; cmp.Right = $3; cmp.Escape = $5; $$ = cmp
   }
 | bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotLikeOp; cmp.Right = $4; cmp.Escape = $6; $$ = cmp
   }
 | bit_expr regexp_symbol bit_expr
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+    cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = RegexpOp; cmp.Right = $3; $$ = cmp
   }
 | bit_expr NOT regexp_symbol bit_expr
   {
-	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+	 cmp := na(yylex).allocComparisonExpr(); cmp.Left = $1; cmp.Operator = NotRegexpOp; cmp.Right = $4; $$ = cmp
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
@@ -6077,27 +6082,27 @@ regexp_symbol:
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitOrOp; be.Right = $3; $$ = be
   }
 | bit_expr '&' bit_expr %prec '&'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitAndOp; be.Right = $3; $$ = be
   }
 | bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ShiftLeftOp; be.Right = $3; $$ = be
   }
 | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ShiftRightOp; be.Right = $3; $$ = be
   }
 | bit_expr '+' bit_expr %prec '+'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = PlusOp; be.Right = $3; $$ = be
   }
 | bit_expr '-' bit_expr %prec '-'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = MinusOp; be.Right = $3; $$ = be
   }
 | bit_expr '+' INTERVAL bit_expr interval %prec '+'
   {
@@ -6109,27 +6114,27 @@ bit_expr '|' bit_expr %prec '|'
   }
 | bit_expr '*' bit_expr %prec '*'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = MultOp; be.Right = $3; $$ = be
   }
 | bit_expr '/' bit_expr %prec '/'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = DivOp; be.Right = $3; $$ = be
   }
 | bit_expr '%' bit_expr %prec '%'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ModOp; be.Right = $3; $$ = be
   }
 | bit_expr DIV bit_expr %prec DIV
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = IntDivOp; be.Right = $3; $$ = be
   }
 | bit_expr MOD bit_expr %prec MOD
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = ModOp; be.Right = $3; $$ = be
   }
 | bit_expr '^' bit_expr %prec '^'
   {
-	    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+	    be := na(yylex).allocBinaryExpr(); be.Left = $1; be.Operator = BitXorOp; be.Right = $3; $$ = be
   }
 | simple_expr %prec EXPRESSION_PREC_SETTER
   {
@@ -6175,15 +6180,15 @@ function_call_keyword
   }
 | '-' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = UMinusOp; ue.Expr = $2; $$ = ue
   }
 | '~' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = TildaOp; ue.Expr = $2; $$ = ue
   }
 | '!' simple_expr %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
+    ue := na(yylex).allocUnaryExpr(); ue.Operator = BangOp; ue.Expr = $2; $$ = ue
   }
 | subquery
   {
@@ -6235,11 +6240,11 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}
+    pathList := na(yylex).makeExprSlice(1); pathList[0] = $3; $$ = &JSONExtractExpr{JSONDoc: $1, PathList: pathList}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}}
+    pathList := na(yylex).makeExprSlice(1); pathList[0] = $3; $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: pathList}}
   }
 
 column_names_opt_paren:
@@ -6255,7 +6260,7 @@ column_names_opt_paren:
 column_names:
   column_name
   {
-    $$ = []*ColName{$1}
+    s := na(yylex).makeColNamePtrSlice(1); s[0] = $1; $$ = s
   }
 | column_names ',' column_name
   {
@@ -6575,13 +6580,13 @@ col_tuple:
 subquery:
   query_expression_parens %prec SUBQUERY_AS_EXPR
   {
-    $$ = &Subquery{$1}
+    node := na(yylex).allocSubquery(); node.Select = $1; $$ = node
   }
 
 expression_list:
   expression
   {
-    $$ = []Expr{$1}
+    e := na(yylex).makeExprSlice(1); e[0] = $1; $$ = e
   }
 | expression_list ',' expression
   {
@@ -6595,11 +6600,11 @@ expression_list:
 function_call_generic:
   sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = $1; fe.Exprs = $3; $$ = fe
   }
 | table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+    fe := na(yylex).allocFuncExpr(); fe.Qualifier = $1; fe.Name = $3; fe.Exprs = $5; $$ = fe
   }
 
 /*
@@ -6609,11 +6614,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("left"); fe.Exprs = $3; $$ = fe
   }
 | RIGHT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("right"); fe.Exprs = $3; $$ = fe
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -6649,7 +6654,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI($1); $$ = fe
   }
 
 /*
@@ -6660,7 +6665,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("utc_date"); $$ = fe
   }
 | now
   {
@@ -6670,11 +6675,11 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("current_date"); $$ = fe
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("curdate"); $$ = fe
   }
 | UTC_TIME func_datetime_precision
   {
@@ -7430,7 +7435,7 @@ null_int_variable_arg:
   }
 | INTEGRAL
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | user_defined_variable
   {
@@ -7763,23 +7768,23 @@ func_datetime_precision:
 function_call_conflict:
   IF openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("if"); fe.Exprs = $3; $$ = fe
   }
 | DATABASE openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("database"); fe.Exprs = $3; $$ = fe
   }
 | SCHEMA openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("schema"); fe.Exprs = $3; $$ = fe
   }
 | MOD openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("mod"); fe.Exprs = $3; $$ = fe
   }
 | REPLACE openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
+    fe := na(yylex).allocFuncExpr(); fe.Name = NewIdentifierCI("replace"); fe.Exprs = $3; $$ = fe
   }
 
 match_option:
@@ -7927,7 +7932,7 @@ separator_opt:
 when_expression_list:
   when_expression
   {
-    $$ = []*When{$1}
+    s := na(yylex).makeWhenPtrSlice(1); s[0] = $1; $$ = s
   }
 | when_expression_list when_expression
   {
@@ -7952,19 +7957,19 @@ else_expression_opt:
 column_name:
   ci_identifier
   {
-    $$ = &ColName{Name: $1}
+    cn := na(yylex).allocColName(); cn.Name = $1; $$ = cn
   }
 | non_reserved_keyword
   {
-    $$ = &ColName{Name: NewIdentifierCI(string($1))}
+    cn := na(yylex).allocColName(); cn.Name = NewIdentifierCI(string($1)); $$ = cn
   }
 | table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
+    cn := na(yylex).allocColName(); cn.Qualifier = TableName{Name: $1}; cn.Name = $3; $$ = cn
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+    cn := na(yylex).allocColName(); cn.Qualifier = TableName{Qualifier: $1, Name: $3}; cn.Name = $5; $$ = cn
   }
 
 column_name_or_offset:
@@ -7985,11 +7990,11 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntLiteral("1")
+    $$ = na(yylex).newIntLiteral("1")
   }
 | INTEGRAL VALUES
   {
-    $$ = NewIntLiteral($1)
+    $$ = na(yylex).newIntLiteral($1)
   }
 | VALUE_ARG VALUES
   {
@@ -8002,7 +8007,7 @@ group_by_opt:
   }
 | GROUP BY expression_list rollup_opt
   {
-    $$ = &GroupBy{Exprs: $3, WithRollup: $4}
+    node := na(yylex).allocGroupBy(); node.Exprs = $3; node.WithRollup = $4; $$ = node
   }
 
 rollup_opt:
@@ -8067,7 +8072,7 @@ ORDER BY order_list
 order_list:
   order
   {
-    $$ = OrderBy{$1}
+    o := na(yylex).makeOrderSlice(1); o[0] = $1; $$ = o
   }
 | order_list ',' order
   {
@@ -8077,7 +8082,7 @@ order_list:
 order:
   expression asc_desc_opt
   {
-    $$ = &Order{Expr: $1, Direction: $2}
+    node := na(yylex).allocOrder(); node.Expr = $1; node.Direction = $2; $$ = node
   }
 
 asc_desc_opt:
@@ -8105,15 +8110,15 @@ limit_opt:
 limit_clause:
 LIMIT expression
   {
-    $$ = &Limit{Rowcount: $2}
+    lim := na(yylex).allocLimit(); lim.Rowcount = $2; $$ = lim
   }
 | LIMIT expression ',' expression
   {
-    $$ = &Limit{Offset: $2, Rowcount: $4}
+    lim := na(yylex).allocLimit(); lim.Offset = $2; lim.Rowcount = $4; $$ = lim
   }
 | LIMIT expression OFFSET expression
   {
-    $$ = &Limit{Offset: $4, Rowcount: $2}
+    lim := na(yylex).allocLimit(); lim.Offset = $4; lim.Rowcount = $2; $$ = lim
   }
 
 algorithm_lock_opt:
@@ -8384,7 +8389,7 @@ into_var_list:
   }
 | into_var
   {
-    $$ = []*Variable{$1}
+    s := na(yylex).makeVariablePtrSlice(1); s[0] = $1; $$ = s
   }
 
 into_var:
@@ -8532,23 +8537,23 @@ optionally_opt:
 insert_data:
   value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2, RowAlias: $3}
+    ins := na(yylex).allocInsert(); ins.Rows = $2; ins.RowAlias = $3; $$ = ins
   }
 | select_statement
   {
-    $$ = &Insert{Rows: $1}
+    ins := na(yylex).allocInsert(); ins.Rows = $1; $$ = ins
   }
 | openb ins_column_list closeb value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $5; ins.RowAlias = $6; $$ = ins
   }
 | openb closeb value_or_values val_tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
+    ins := na(yylex).allocInsert(); ins.Columns = []IdentifierCI{}; ins.Rows = $4; ins.RowAlias = $5; $$ = ins
   }
 | openb ins_column_list closeb select_statement
   {
-    $$ = &Insert{Columns: $2, Rows: $4}
+    ins := na(yylex).allocInsert(); ins.Columns = $2; ins.Rows = $4; $$ = ins
   }
 
 value_or_values:
@@ -8558,11 +8563,11 @@ value_or_values:
 ins_column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    cols := na(yylex).makeColumns(1); cols[0] = $1; $$ = cols
   }
 | sql_id '.' sql_id
   {
-    $$ = Columns{$3}
+    cols := na(yylex).makeColumns(1); cols[0] = $3; $$ = cols
   }
 | ins_column_list ',' sql_id
   {
@@ -8598,7 +8603,7 @@ on_dup_opt:
 row_tuple_list:
   row_tuple_or_empty
   {
-    $$ = Values{$1}
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | row_tuple_list ',' row_tuple_or_empty
   {
@@ -8608,7 +8613,7 @@ row_tuple_list:
 val_tuple_list:
   val_tuple_or_empty
   {
-    $$ = Values{$1}
+    v := na(yylex).makeValuesSlice(1); v[0] = $1; $$ = v
   }
 | val_tuple_list ',' val_tuple_or_empty
   {
@@ -8664,7 +8669,7 @@ tuple_expression:
 update_list:
   update_expression
   {
-    $$ = UpdateExprs{$1}
+    ue := na(yylex).makeUpdateExprSlice(1); ue[0] = $1; $$ = ue
   }
 | update_list ',' update_expression
   {
@@ -8691,15 +8696,15 @@ charset_or_character_set_or_names:
 charset_value:
   sql_id
   {
-    $$ = NewStrLiteral($1.String())
+    $$ = na(yylex).newStrLiteral($1.String())
   }
 | STRING
   {
-    $$ = NewStrLiteral($1)
+    $$ = na(yylex).newStrLiteral($1)
   }
 | BINARY
   {
-    $$ = NewStrLiteral("binary")
+    $$ = na(yylex).newStrLiteral("binary")
   }
 | DEFAULT
   {

@@ -40,6 +40,33 @@ var parserPool = sync.Pool{
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser yyParserImpl
 
+// tokenizerPool is a pool for top-level tokenizer objects.
+var tokenizerPool = sync.Pool{
+	New: func() any {
+		return &Tokenizer{}
+	},
+}
+
+func (p *Parser) getTokenizer(sql string) *Tokenizer {
+	tkn := tokenizerPool.Get().(*Tokenizer)
+	tkn.buf = sql
+	tkn.parser = p
+	if tkn.BindVars == nil {
+		tkn.BindVars = make(map[string]struct{})
+	}
+	return tkn
+}
+
+func releaseTokenizer(tkn *Tokenizer) {
+	bindVars := tkn.BindVars
+	alloc := tkn.alloc
+	*tkn = Tokenizer{}
+	clear(bindVars)
+	tkn.BindVars = bindVars
+	tkn.alloc = alloc
+	tokenizerPool.Put(tkn)
+}
+
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
 //
@@ -75,10 +102,11 @@ func yyParsePooled(yylex yyLexer) int {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
-	tokenizer := p.NewStringTokenizer(sql)
+	tokenizer := p.getTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
+				releaseTokenizer(tokenizer)
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
 			}
 			log.Warn(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
@@ -88,27 +116,41 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 			case DDLStatement:
 				x.SetFullyParsed(false)
 			}
-			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
-			return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+			tree := tokenizer.partialDDL
+			bindVars := tokenizer.BindVars
+			tokenizer.BindVars = nil
+			releaseTokenizer(tokenizer)
+			return tree, bindVars, nil
 		}
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+		lastErr := tokenizer.LastError
+		releaseTokenizer(tokenizer)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, lastErr.Error())
 	}
 	err := checkParseTreesError(tokenizer)
 	if err != nil {
+		releaseTokenizer(tokenizer)
 		return nil, nil, err
 	}
-	return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+	tree := tokenizer.ParseTrees[0]
+	bindVars := tokenizer.BindVars
+	tokenizer.BindVars = nil
+	releaseTokenizer(tokenizer)
+	return tree, bindVars, nil
 }
 
 // ParseMultiple parses the SQL in full and returns a list of Statements, which
 // are the AST representation of the query. This command is meant to parse more than
 // one SQL statement at a time.
 func (p *Parser) ParseMultiple(sql string) ([]Statement, error) {
-	tokenizer := p.NewStringTokenizer(sql)
+	tokenizer := p.getTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
-		return nil, tokenizer.LastError
+		lastErr := tokenizer.LastError
+		releaseTokenizer(tokenizer)
+		return nil, lastErr
 	}
-	return tokenizer.ParseTrees, nil
+	trees := tokenizer.ParseTrees
+	releaseTokenizer(tokenizer)
+	return trees, nil
 }
 
 // ParseMultipleIgnoreEmpty parses multiple statements, but ignores empty statements.
@@ -205,15 +247,20 @@ func (p *Parser) Parse(sql string) (Statement, error) {
 // ParseStrictDDL is the same as Parse except it errors on
 // partially parsed DDL statements.
 func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := p.NewStringTokenizer(sql)
+	tokenizer := p.getTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
-		return nil, tokenizer.LastError
+		lastErr := tokenizer.LastError
+		releaseTokenizer(tokenizer)
+		return nil, lastErr
 	}
 	err := checkParseTreesError(tokenizer)
 	if err != nil {
+		releaseTokenizer(tokenizer)
 		return nil, err
 	}
-	return tokenizer.ParseTrees[0], nil
+	tree := tokenizer.ParseTrees[0]
+	releaseTokenizer(tokenizer)
+	return tree, nil
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
@@ -225,7 +272,7 @@ var ErrMultipleStatements = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vt
 // SplitStatement returns the first sql statement up to either a ';' or EOF
 // and the remainder from the given buffer
 func (p *Parser) SplitStatement(blob string) (string, string, error) {
-	tokenizer := p.NewStringTokenizer(blob)
+	tokenizer := p.getTokenizer(blob)
 	tkn := 0
 	for {
 		tkn, _ = tokenizer.Scan()
@@ -233,11 +280,14 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 			break
 		}
 	}
-	if tokenizer.LastError != nil {
-		return "", "", tokenizer.LastError
+	lastErr := tokenizer.LastError
+	pos := tokenizer.Pos
+	releaseTokenizer(tokenizer)
+	if lastErr != nil {
+		return "", "", lastErr
 	}
 	if tkn == ';' {
-		return blob[:tokenizer.Pos-1], blob[tokenizer.Pos:], nil
+		return blob[:pos-1], blob[pos:], nil
 	}
 	return blob, "", nil
 }
@@ -289,7 +339,7 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 	}
 
 	pieces = make([]string, 0, 16)
-	tokenizer := p.NewStringTokenizer(blob)
+	tokenizer := p.getTokenizer(blob)
 
 	tkn := 0
 	var stmt string
@@ -340,22 +390,25 @@ loop:
 	}
 
 	err = tokenizer.LastError
+	releaseTokenizer(tokenizer)
 	return
 }
 
 // IsStatementIncomplete returns true if the statement is incomplete.
 func (p *Parser) IsStatementIncomplete(stmt string) bool {
-	tkn := p.NewStringTokenizer(stmt)
+	tkn := p.getTokenizer(stmt)
 	yyParsePooled(tkn)
+	var result bool
 	if tkn.LastError != nil {
 		var pe PositionedErr
 		isPe := errors.As(tkn.LastError, &pe)
 		if isPe && pe.Pos == len(stmt)+1 {
 			// The error is at the end of the statement, which means it is incomplete.
-			return true
+			result = true
 		}
 	}
-	return false
+	releaseTokenizer(tkn)
+	return result
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {
