@@ -53,8 +53,9 @@ func newEchoClient(fallback vtgateservice.VTGateService) *echoClient {
 }
 
 func printSortedMap(val reflect.Value) []byte {
-	keys := make([]string, 0, len(val.MapKeys()))
-	for _, key := range val.MapKeys() {
+	mapKeys := val.MapKeys()
+	keys := make([]string, 0, len(mapKeys))
+	for _, key := range mapKeys {
 		keys = append(keys, key.String())
 	}
 	sort.Strings(keys)
