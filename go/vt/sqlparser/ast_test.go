@@ -562,25 +562,29 @@ func TestIdentifierCI(t *testing.T) {
 	}
 }
 
-func TestIdentifierCI_UTF8MB3GeneralCI(t *testing.T) {
+func TestIdentifierCI_CaseFolding(t *testing.T) {
 	tests := []struct {
 		a, b  string
 		equal bool
 	}{
-		// Basic ASCII case insensitivity
+		// Case-insensitive
 		{"hello", "HELLO", true},
 		{"Hello", "hELLO", true},
-		// Accent insensitivity (matches MySQL utf8mb4_general_ci)
-		{"café", "CAFE", true},
-		{"café", "cafe", true},
-		{"CAFÉ", "cafe", true},
-		// Ñ/ñ treated as N/n
-		{"piñata", "PINATA", true},
-		{"Ñ", "n", true},
-		// Accented vowels
-		{"résumé", "RESUME", true},
-		{"naïve", "NAIVE", true},
-		{"über", "UBER", true},
+		// Accented chars: case-insensitive (café == CAFÉ)
+		{"café", "CAFÉ", true},
+		{"résumé", "RÉSUMÉ", true},
+		{"über", "ÜBER", true},
+		{"piñata", "PIÑATA", true},
+		{"Ñ", "ñ", true},
+		// Accent-sensitive: accented != base (café != cafe)
+		{"café", "cafe", false},
+		{"café", "CAFE", false},
+		{"CAFÉ", "cafe", false},
+		{"piñata", "PINATA", false},
+		{"Ñ", "n", false},
+		{"résumé", "RESUME", false},
+		{"naïve", "NAIVE", false},
+		{"über", "UBER", false},
 		// Different characters should not be equal
 		{"hello", "world", false},
 		{"a", "b", false},
@@ -600,10 +604,10 @@ func TestIdentifierCI_UTF8MB3GeneralCI(t *testing.T) {
 		})
 	}
 
-	// Verify Normalized() produces lowercase, accent-stripped output
-	assert.Equal(t, "cafe", NewIdentifierCI("café").Normalized())
-	assert.Equal(t, "cafe", NewIdentifierCI("CAFÉ").Normalized())
-	assert.Equal(t, "pinata", NewIdentifierCI("piñata").Normalized())
+	// Verify Normalized() produces lowercase, accent-preserving output
+	assert.Equal(t, "café", NewIdentifierCI("café").Normalized())
+	assert.Equal(t, "café", NewIdentifierCI("CAFÉ").Normalized())
+	assert.Equal(t, "piñata", NewIdentifierCI("piñata").Normalized())
 	assert.Equal(t, "primary", NewIdentifierCI("primary").Normalized())
 	assert.Equal(t, "primary", NewIdentifierCI("PRIMARY").Normalized())
 }

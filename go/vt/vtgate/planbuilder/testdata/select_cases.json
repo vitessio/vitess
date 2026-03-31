@@ -6543,25 +6543,21 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: non-accented column matches accented vindex column",
+    "comment": "utf8mb4_general_ci: non-accented column does NOT match accented vindex column (accent-sensitive)",
     "query": "select * from accent_tbl where cafe = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from accent_tbl where cafe = 1",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "EqualUnique",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select * from accent_tbl where 1 != 1",
-        "Query": "select * from accent_tbl where cafe = 1",
-        "Values": [
-          "1"
-        ],
-        "Vindex": "hash"
+        "Query": "select * from accent_tbl where cafe = 1"
       },
       "TablesUsed": [
         "user.accent_tbl"
@@ -6569,25 +6565,21 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: uppercase non-accented matches accented vindex column",
+    "comment": "utf8mb4_general_ci: uppercase non-accented does NOT match accented vindex column (accent-sensitive)",
     "query": "select * from accent_tbl where CAFE = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from accent_tbl where CAFE = 1",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "EqualUnique",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select * from accent_tbl where 1 != 1",
-        "Query": "select * from accent_tbl where CAFE = 1",
-        "Values": [
-          "1"
-        ],
-        "Vindex": "hash"
+        "Query": "select * from accent_tbl where CAFE = 1"
       },
       "TablesUsed": [
         "user.accent_tbl"
@@ -6643,6 +6635,58 @@
       },
       "TablesUsed": [
         "user.accent_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "unicase: İ (U+0130) vindex column matches i (MySQL unicase maps İ→i, but strings.ToLower does not)",
+    "query": "select * from unicase_tbl where i_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from unicase_tbl where i_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from unicase_tbl where 1 != 1",
+        "Query": "select * from unicase_tbl where i_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.unicase_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "unicase: İ (U+0130) vindex column matches I (standard case folding)",
+    "query": "select * from unicase_tbl where I_ID = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from unicase_tbl where I_ID = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from unicase_tbl where 1 != 1",
+        "Query": "select * from unicase_tbl where I_ID = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash"
+      },
+      "TablesUsed": [
+        "user.unicase_tbl"
       ]
     }
   }

@@ -460,6 +460,14 @@
             }
           ]
         },
+        "unicase_tbl": {
+          "column_vindexes": [
+            {
+              "column": "İ_id",
+              "name": "hash"
+            }
+          ]
+        },
         "weird`name": {
           "column_vindexes": [
             {

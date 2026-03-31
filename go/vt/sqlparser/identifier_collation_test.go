@@ -21,108 +21,164 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/colldata"
 )
 
-// TestIdentEqualMatchesColldata verifies that identEqual produces the same
-// equality results as the canonical utf8mb4_general_ci collation.
-func TestIdentEqualMatchesColldata(t *testing.T) {
-	coll := colldata.Lookup(collations.ID(45) /* utf8mb4_general_ci */)
-	require.NotNil(t, coll, "utf8mb4_general_ci collation not found")
+// TestIdentEqual verifies that identEqual matches MySQL's identifier comparison
+// behavior: case-insensitive but accent-sensitive.
+func TestIdentEqual(t *testing.T) {
+	tests := []struct {
+		a, b  string
+		equal bool
+	}{
+		// Case-insensitive
+		{"hello", "HELLO", true},
+		{"Hello", "hello", true},
+		{"abc", "ABC", true},
+		{"z", "Z", true},
+		{"A", "a", true},
 
-	pairs := [][2]string{
-		// ASCII case
-		{"hello", "HELLO"},
-		{"Hello", "hello"},
-		{"abc", "ABC"},
-		{"z", "Z"},
-		// Accented characters
-		{"café", "CAFE"},
-		{"café", "cafe"},
-		{"résumé", "RESUME"},
-		{"naïve", "NAIVE"},
-		{"über", "UBER"},
-		{"piñata", "PINATA"},
+		// Accent-sensitive: accented chars are NOT equal to base chars
+		{"café", "cafe", false},
+		{"café", "CAFE", false},
+		{"résumé", "resume", false},
+		{"naïve", "naive", false},
+		{"über", "uber", false},
+		{"piñata", "pinata", false},
+		{"Ä", "A", false},
+
+		// Accented chars ARE equal to their case variants
+		{"café", "Café", true},
+		{"café", "CAFÉ", true},
+		{"résumé", "RÉSUMÉ", true},
+		{"über", "ÜBER", true},
+		{"Ä", "ä", true},
+		{"É", "é", true},
+		{"Ñ", "ñ", true},
+		{"Ü", "ü", true},
+
 		// Different strings
-		{"hello", "world"},
-		{"abc", "abd"},
-		{"a", "b"},
+		{"hello", "world", false},
+		{"abc", "abd", false},
+		{"a", "b", false},
+
 		// Empty
-		{"", ""},
-		{"a", ""},
-		{"", "a"},
-		// Single characters
-		{"A", "a"},
-		{"É", "e"},
-		{"é", "E"},
-		{"Ñ", "n"},
-		{"ñ", "N"},
-		{"Ü", "u"},
-		{"ü", "U"},
-		// Extended Latin
-		{"Ā", "a"},
-		{"ā", "A"},
-		{"Ç", "c"},
-		{"ç", "C"},
+		{"", "", true},
+		{"a", "", false},
+		{"", "a", false},
+
+		// Greek case folding
+		{"ω", "Ω", true},
+
+		// Cases where MySQL's unicase ToLower differs from Go's strings.ToLower:
+		// U+0130 İ: MySQL lowercases to i, Go keeps as İ. The old strings.ToLower
+		// behavior would incorrectly treat İ and i as different identifiers.
+		{"İ", "i", true},
+		// U+0220 Ƞ: MySQL has no lowercase mapping (identity), Go lowercases to ƞ.
+		// The old strings.ToLower behavior would incorrectly treat Ƞ and ƞ as equal.
+		{"Ƞ", "ƞ", false},
+
 		// Longer strings
-		{"thé café résumé", "THE CAFE RESUME"},
+		{"thé café", "THÉ CAFÉ", true},
+		{"thé café", "the cafe", false},
 	}
 
-	for _, pair := range pairs {
-		a, b := pair[0], pair[1]
-		expected := coll.Collate([]byte(a), []byte(b), false) == 0
-		got := identEqual(a, b)
-
-		assert.Equal(t, expected, got,
-			"identEqual(%q, %q) = %v, want %v", a, b, got, expected)
+	for _, tt := range tests {
+		t.Run(tt.a+"_vs_"+tt.b, func(t *testing.T) {
+			got := identEqual(tt.a, tt.b)
+			assert.Equal(t, tt.equal, got,
+				"identEqual(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.equal)
+		})
 	}
 }
 
-// TestNormalizeMatchesColldata verifies that identNormalize produces the same
-// output for two strings iff the canonical utf8mb4_general_ci collation
-// considers them equal, for all BMP codepoints.
-func TestNormalizeMatchesColldata(t *testing.T) {
-	coll := colldata.Lookup(collations.ID(45) /* utf8mb4_general_ci */)
-	require.NotNil(t, coll, "utf8mb4_general_ci collation not found")
+// TestIdentNormalize verifies normalization properties.
+func TestIdentNormalize(t *testing.T) {
+	// Case-insensitive: different cases produce the same normalized form.
+	assert.Equal(t, identNormalize("hello"), identNormalize("HELLO"))
+	assert.Equal(t, identNormalize("café"), identNormalize("CAFÉ"))
+	assert.Equal(t, identNormalize("Café"), identNormalize("café"))
 
-	// For each codepoint, compute its weight via colldata's WeightString.
-	// Then verify that two codepoints normalize to the same string iff
-	// they have the same weight.
+	// Accent-sensitive: accented and base chars produce different normalized forms.
+	assert.NotEqual(t, identNormalize("café"), identNormalize("cafe"))
+	assert.NotEqual(t, identNormalize("Ä"), identNormalize("A"))
+	assert.NotEqual(t, identNormalize("é"), identNormalize("e"))
+
+	// Already lowercase ASCII returns the original string (zero allocation).
+	s := "my_table_name"
+	norm := identNormalize(s)
+	assert.Equal(t, s, norm)
+}
+
+// TestNormalizeConsistentWithEqual verifies that for all BMP codepoints,
+// identNormalize(a) == identNormalize(b) iff identEqual(a, b).
+func TestNormalizeConsistentWithEqual(t *testing.T) {
 	type entry struct {
-		cp     rune
-		weight uint16
+		cp   rune
+		norm string
 	}
-	normalized := make(map[string]entry)
+	seen := make(map[string]entry)
 
-	var falseMatches int
+	var inconsistencies int
 	for cp := rune(1); cp <= 0xFFFF; cp++ {
-		s := string(cp)
-		dst := coll.WeightString(nil, []byte(s), 0)
-		if len(dst) < 2 {
+		if cp >= 0xD800 && cp <= 0xDFFF {
 			continue
 		}
-		weight := uint16(dst[0])<<8 | uint16(dst[1])
+		s := string(cp)
 		norm := identNormalize(s)
 
-		if prev, ok := normalized[norm]; ok {
-			if prev.weight != weight {
-				if falseMatches < 10 {
-					t.Errorf("false match: U+%04X (weight 0x%04X) and U+%04X (weight 0x%04X) both normalize to %q",
-						cp, weight, prev.cp, prev.weight, norm)
+		if prev, ok := seen[norm]; ok {
+			// Same normalization — they should be identEqual.
+			if !identEqual(string(prev.cp), s) {
+				if inconsistencies < 10 {
+					t.Errorf("U+%04X and U+%04X normalize to same %q but identEqual returns false",
+						prev.cp, cp, norm)
 				}
-				falseMatches++
+				inconsistencies++
 			}
 		} else {
-			normalized[norm] = entry{cp: cp, weight: weight}
+			seen[norm] = entry{cp: cp, norm: norm}
 		}
 	}
-	if falseMatches > 10 {
-		t.Errorf("... and %d more false matches", falseMatches-10)
+	if inconsistencies > 10 {
+		t.Errorf("... and %d more inconsistencies", inconsistencies-10)
 	}
-	assert.Zero(t, falseMatches, "identNormalize must not merge characters with different sort weights")
+	assert.Zero(t, inconsistencies)
+}
+
+// TestIdentNormalizeInvalidUTF8 verifies that identNormalize does not panic
+// on invalid UTF-8 sequences and preserves invalid bytes verbatim.
+func TestIdentNormalizeInvalidUTF8(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"single invalid byte", string([]byte{0x80})},
+		{"multiple invalid bytes", string([]byte{0x80, 0x81, 0x82})},
+		{"ASCII then invalid", string([]byte{'h', 'e', 'l', 'l', 'o', 0x80})},
+		{"invalid then ASCII", string([]byte{0x80, 'h', 'e', 'l', 'l', 'o'})},
+		{"uppercase then invalid", string([]byte{'H', 'E', 'L', 'L', 'O', 0x80})},
+		{"mixed valid and invalid", string([]byte{'c', 'a', 'f', 0xC3, 0xA9, 0x80, 0x81})},
+		{"truncated UTF-8 sequence", string([]byte{0xC3})},
+		{"all 0xFF bytes", string([]byte{0xFF, 0xFF, 0xFF})},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			norm := identNormalize(tt.input)
+			assert.LessOrEqual(t, len(norm), len(tt.input),
+				"normalized output must not be longer than input")
+		})
+	}
+}
+
+// TestIdentEqualInvalidUTF8 verifies that identEqual does not panic on
+// invalid UTF-8.
+func TestIdentEqualInvalidUTF8(t *testing.T) {
+	// Same invalid bytes should be equal.
+	a := string([]byte{'x', 0x80})
+	c := string([]byte{'x', 0x80})
+	assert.True(t, identEqual(a, c),
+		"same invalid bytes should compare equal")
 }
 
 func BenchmarkIdentNormalize(b *testing.B) {
@@ -171,7 +227,7 @@ func BenchmarkIdentEqual(b *testing.B) {
 	})
 	b.Run("Unicode_equal", func(b *testing.B) {
 		for b.Loop() {
-			identEqual("café_résumé", "CAFE_RESUME")
+			identEqual("café_résumé", "CAFÉ_RÉSUMÉ")
 		}
 	})
 }

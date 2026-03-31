@@ -98,13 +98,33 @@ func identNormalizeASCII(dst []byte, src string) int {
 }
 
 // identNormalizeUnicode normalizes runes from src into dst using the sparse
-// page table lookup. The normalized form is never longer than the input
-// (accented characters fold to base ASCII letters). Returns the number of
-// bytes written to dst.
+// page table lookup. Invalid UTF-8 bytes are copied through verbatim to
+// guarantee the output is never longer than the input. Returns the number
+// of bytes written to dst.
 func identNormalizeUnicode(dst []byte, src string) int {
-	pos := 0
-	for _, r := range src {
+	var pos, i int
+	for i < len(src) {
+		if src[i] < utf8.RuneSelf {
+			// ASCII byte: normalize inline.
+			c := src[i]
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			dst[pos] = c
+			pos++
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(src[i:])
+		if r == utf8.RuneError && size == 1 {
+			// Invalid UTF-8 byte: copy verbatim.
+			dst[pos] = src[i]
+			pos++
+			i++
+			continue
+		}
 		pos += utf8.EncodeRune(dst[pos:], identNormalizedRune(r))
+		i += size
 	}
 	return pos
 }
