@@ -236,19 +236,33 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	close(commitCh)
 	<-commitDone
 
-	// Determine the final error. Priority: applyErr (from commitLoop/scheduleLoop)
-	// over workerErr, since commitLoop's io.EOF is the authoritative "stop position
-	// reached" signal. Workers typically exit with context.Canceled as a consequence.
+	// Drain all errors and prioritize real failures over io.EOF/context.Canceled.
+	// Both scheduleLoop and commitLoop may send to applyErr, so we must drain
+	// the channel fully to avoid masking a commit failure behind an io.EOF.
+	var realErrs []error
+	var hasEOF bool
+drainApplyErrs:
+	for {
+		select {
+		case err := <-applyErr:
+			if err == io.EOF || errors.Is(err, context.Canceled) {
+				hasEOF = hasEOF || err == io.EOF
+			} else {
+				realErrs = append(realErrs, err)
+			}
+		default:
+			break drainApplyErrs
+		}
+	}
+
 	var finalErr error
-	select {
-	case err := <-applyErr:
-		finalErr = err
-	default:
-		// Drain all worker errors and join them so that no diagnostic
-		// information is silently dropped. The first error triggers
-		// cancel() so subsequent workers usually exit with
-		// context.Canceled, but collecting all errors helps debugging
-		// cases where multiple workers hit independent failures.
+	if len(realErrs) > 0 {
+		finalErr = errors.Join(realErrs...)
+	} else if hasEOF {
+		finalErr = io.EOF
+	} else {
+		// No applyErr — check worker errors. Drain all and join so that
+		// no diagnostic information is silently dropped.
 		var workerErrs []error
 	drainWorkerErrs:
 		for {
