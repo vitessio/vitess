@@ -396,7 +396,7 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
 		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
 		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
-		if atomic.LoadInt64(&runningMigration.WasReadyToComplete) == 0 {
+		if atomic.LoadInt64(&runningMigration.WasReadyToComplete) == 0 && runningMigration.MigrationContext == proposedMigration.MigrationContext {
 			return true
 		}
 	}
