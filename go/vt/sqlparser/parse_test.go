@@ -6339,10 +6339,10 @@ var (
 		output: "syntax error at position 39",
 	}, {
 		input:  "select a, * from t",
-		output: "syntax error: unexpected '*' at position 12",
+		output: "syntax error at position 12",
 	}, {
 		input:  "select *, * from t",
-		output: "syntax error: unexpected '*' at position 12",
+		output: "syntax error at position 12",
 	}}
 )
 
