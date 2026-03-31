@@ -244,7 +244,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -296,11 +296,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
-
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
@@ -2248,6 +2246,7 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
+
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -2920,7 +2919,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-
 	var (
 		createStatements = []string{
 			`
@@ -2969,7 +2967,7 @@ func testForeignKeys(t *testing.T) {
 		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name:             "modify parent, not allowed",
 			sql:              "alter table parent_table engine=innodb",
