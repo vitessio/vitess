@@ -18,6 +18,7 @@ package replication
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -96,21 +97,6 @@ func (rp Position) IsZero() bool {
 	return rp.GTIDSet == nil || rp.GTIDSet.Empty()
 }
 
-// Clone returns a deep copy of the Position. The returned Position's
-// GTIDSet is independent of the original and can be safely read while
-// the original is mutated in place.
-func (rp Position) Clone() Position {
-	if rp.GTIDSet == nil {
-		return Position{}
-	}
-	cloned, err := DecodePosition(EncodePosition(rp))
-	if err != nil {
-		// This should never happen since we're round-tripping a valid GTIDSet.
-		return rp
-	}
-	return cloned
-}
-
 // AppendGTID returns a new Position that represents the position
 // after the given GTID is replicated.
 func AppendGTID(rp Position, gtid GTID) Position {
@@ -174,15 +160,11 @@ func MustParsePosition(flavor, value string) Position {
 // EncodePosition returns a string that contains both the flavor
 // and value of the Position, so that the correct parser can be
 // selected when that string is passed to DecodePosition.
-// Uses string concatenation instead of fmt.Sprintf to avoid the
-// reflection and interface boxing overhead of the format package.
-// This function is called on every committed transaction in the
-// vstreamer hot path.
 func EncodePosition(rp Position) string {
 	if rp.GTIDSet == nil {
 		return ""
 	}
-	return rp.GTIDSet.Flavor() + "/" + rp.GTIDSet.String()
+	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), rp.GTIDSet.String())
 }
 
 // DecodePosition converts a string in the format returned by
