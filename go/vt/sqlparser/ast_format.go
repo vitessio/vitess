@@ -2384,8 +2384,10 @@ func (node *ShowEngine) Format(buf *TrackedBuffer) {
 func (node *ShowGrants) Format(buf *TrackedBuffer) {
 	buf.literal("show grants")
 	if node.User != nil {
-		buf.literal(" for ")
-		node.User.formatTo(buf)
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.literal(" for ")
+			node.User.formatTo(buf)
+		}
 		if len(node.UsingRole) > 0 {
 			buf.literal(" using ")
 			for i, role := range node.UsingRole {

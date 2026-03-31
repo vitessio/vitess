@@ -2313,12 +2313,16 @@ func formatUserOrRoleHost(atID string) string {
 }
 
 func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
+	if node.Name == nil {
+		buf.WriteString("current_user")
+		return
+	}
 	buf.WriteString("'")
-	buf.WriteString(node.Name)
+	buf.WriteString(*node.Name)
 	buf.WriteString("'")
-	if node.Host != "" {
+	if node.Host != nil {
 		buf.WriteString("@'")
-		buf.WriteString(node.Host)
+		buf.WriteString(*node.Host)
 		buf.WriteString("'")
 	}
 }
