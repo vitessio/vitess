@@ -400,6 +400,27 @@ func TestPrometheusLabels(t *testing.T) {
 	}
 }
 
+// TestGoRuntimeMetrics verifies that the custom GoCollector configuration
+// exposes extended runtime/metrics series beyond the default set, and that
+// the go_info_ext gauge is present with lowercase label names.
+func TestGoRuntimeMetrics(t *testing.T) {
+	response := testMetricsHandler(t)
+	body := response.Body.String()
+
+	for _, series := range []string{
+		// go_info_ext with lowercase labels.
+		`go_info_ext{compiler=`,
+		// Memory metric only present with MetricsMemory.
+		`go_memory_classes_total_bytes`,
+		// Scheduler metric only present with MetricsScheduler.
+		`go_sched_goroutines_goroutines`,
+	} {
+		if !strings.Contains(body, series) {
+			t.Errorf("expected metrics output to contain %q", series)
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
 	Init(namespace)
 	os.Exit(m.Run())
