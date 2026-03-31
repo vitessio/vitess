@@ -4764,27 +4764,27 @@ for_opt:
 user_or_role:
   STRING AT_ID
   {
-    $$ = &UserOrRole{Name: string($1), Host: formatUserOrRoleHost($2)}
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | STRING
   {
-    $$ = &UserOrRole{Name: string($1)}
+    $$ = &UserOrRole{Name: new(string($1))}
   }
 | CURRENT_USER openb closeb
   {
-    $$ = nil
+    $$ = new(UserOrRole)
   }
 | CURRENT_USER
   {
-    $$ = nil
+    $$ = new(UserOrRole)
   }
 | ci_identifier AT_ID
   {
-    $$ = &UserOrRole{Name: $1.String(), Host: formatUserOrRoleHost($2)}
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | ci_identifier
   {
-    $$ = &UserOrRole{Name: $1.String()}
+    $$ = &UserOrRole{Name: new(string($1.String()))}
   }
 
 show_grants_opt:
@@ -4800,19 +4800,11 @@ show_grants_opt:
 user_or_role_list:
   user_or_role
   {
-    if $1 != nil {
-      $$ = []UserOrRole{*$1}
-    } else {
-      $$ = nil
-    }
+    $$ = []UserOrRole{*$1}
   }
 | user_or_role_list ',' user_or_role
   {
-    if $3 != nil {
-      $$ = append($1, *$3)
-    } else {
-      $$ = $1
-    }
+    $$ = append($1, *$3)
   }
 
 show_profile_types_opt:
