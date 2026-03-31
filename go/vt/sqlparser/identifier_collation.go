@@ -24,7 +24,8 @@ import (
 
 // identEqual reports whether a and b are equal under MySQL's identifier
 // comparison rules: case-insensitive but accent-sensitive, using the
-// utf8mb3_general_ci unicase ToLower tables.
+// utf8mb3_general_ci unicase ToLower tables. Invalid UTF-8 bytes are
+// treated as '?' (matching MySQL's charset sanitization).
 func identEqual(a, b string) bool {
 	for len(a) > 0 && len(b) > 0 {
 		var aRune, bRune rune
@@ -32,13 +33,23 @@ func identEqual(a, b string) bool {
 			aRune, a = rune(a[0]), a[1:]
 		} else {
 			r, size := utf8.DecodeRuneInString(a)
-			aRune, a = r, a[size:]
+			if r == utf8.RuneError && size == 1 {
+				aRune = '?'
+			} else {
+				aRune = r
+			}
+			a = a[size:]
 		}
 		if b[0] < utf8.RuneSelf {
 			bRune, b = rune(b[0]), b[1:]
 		} else {
 			r, size := utf8.DecodeRuneInString(b)
-			bRune, b = r, b[size:]
+			if r == utf8.RuneError && size == 1 {
+				bRune = '?'
+			} else {
+				bRune = r
+			}
+			b = b[size:]
 		}
 
 		if unicase.ToLowerRune(aRune) != unicase.ToLowerRune(bRune) {
@@ -90,10 +101,15 @@ func identNormalizeASCII(dst []byte, src string) int {
 }
 
 // identNormalizeUnicode normalizes runes from src into dst using the unicase
-// ToLower tables. Invalid UTF-8 bytes are copied through verbatim to
-// guarantee the output is never longer than the input. Returns the number
-// of bytes written to dst.
+// ToLower tables. Invalid UTF-8 bytes are replaced with '?' to match
+// MySQL's charset sanitization behavior. Trailing truncated UTF-8 sequences
+// are silently dropped (also matching MySQL). Returns the number of bytes
+// written to dst.
 func identNormalizeUnicode(dst []byte, src string) int {
+	// Strip any trailing truncated UTF-8 sequence before processing.
+	// MySQL silently drops incomplete sequences at the end of identifiers.
+	src = trimTrailingTruncatedUTF8(src)
+
 	var pos, i int
 	for i < len(src) {
 		if src[i] < utf8.RuneSelf {
@@ -108,7 +124,7 @@ func identNormalizeUnicode(dst []byte, src string) int {
 		}
 		r, size := utf8.DecodeRuneInString(src[i:])
 		if r == utf8.RuneError && size == 1 {
-			dst[pos] = src[i]
+			dst[pos] = '?'
 			pos++
 			i++
 			continue
@@ -117,4 +133,42 @@ func identNormalizeUnicode(dst []byte, src string) int {
 		i += size
 	}
 	return pos
+}
+
+// trimTrailingTruncatedUTF8 removes a trailing incomplete UTF-8 sequence
+// from s. A truncated sequence is a valid multi-byte lead byte (C2-F4)
+// followed by zero or more continuation bytes (80-BF) at the end of the
+// string, where the total byte count is less than what the lead byte
+// requires. MySQL silently drops these from identifier names.
+func trimTrailingTruncatedUTF8(s string) string {
+	// Scan backwards past continuation bytes (10xxxxxx).
+	end := len(s)
+	for end > 0 && s[end-1]&0xC0 == 0x80 {
+		end--
+	}
+	if end == 0 {
+		// The string is all continuation bytes — those become '?'
+		// individually, not a truncated sequence.
+		return s
+	}
+	lead := s[end-1]
+	var expectedLen int
+	switch {
+	case lead >= 0xC2 && lead <= 0xDF: // C2-DF: valid 2-byte lead
+		expectedLen = 2
+	case lead&0xF0 == 0xE0: // E0-EF: 3-byte sequence
+		expectedLen = 3
+	case lead >= 0xF0 && lead <= 0xF4: // F0-F4: valid 4-byte lead
+		expectedLen = 4
+	default:
+		// Not a valid lead byte (C0/C1 are overlong, F5+ are invalid,
+		// 00-7F are ASCII). These become '?', not truncated.
+		return s
+	}
+	actualLen := len(s) - end + 1 // lead byte + trailing continuations
+	if actualLen < expectedLen {
+		// Truncated: strip the incomplete sequence.
+		return s[:end-1]
+	}
+	return s
 }
