@@ -97,9 +97,10 @@ var (
 )
 
 const (
-	defaultCutOverThreshold = 10 * time.Second
-	minCutOverThreshold     = 5 * time.Second
-	maxCutOverThreshold     = 30 * time.Second
+	defaultCutOverThreshold  = 10 * time.Second
+	minCutOverThreshold      = 5 * time.Second
+	maxCutOverThreshold      = 30 * time.Second
+	waitTimeoutDuringCutOver = 365 * 24 * time.Hour // maximum MySQL wait_timeout
 )
 
 func init() {
@@ -901,7 +902,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
 		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
-			log.Warn(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 		}
 	}()
 
@@ -912,17 +913,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
+	lockConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, lockConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on locking connection")
+	}
+	defer lockConnRestoreWaitTimeout()
 
 	renameCompleteChan := make(chan error)
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
-	}
-	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
-	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
 	defer renameConn.Recycle()
 	defer func() {
@@ -933,7 +933,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 		}
 	}()
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
+	}
 	defer renameConnRestoreLockWaitTimeout()
+	renameConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, renameConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
+	}
+	defer renameConnRestoreWaitTimeout()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
@@ -1280,7 +1291,9 @@ func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connp
 		return deferFunc, err
 	}
 	deferFunc = func() {
-		conn.Exec(ctx, restoreQuery, 0, false)
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Exec(restoreCtx, restoreQuery, 0, false)
 	}
 	return deferFunc, nil
 }

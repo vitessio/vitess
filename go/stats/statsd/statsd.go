@@ -61,7 +61,7 @@ func makeLabels(labelNames []string, labelValsCombined string) []string {
 }
 
 func makeCommonTags(tags map[string]string) []string {
-	var commonTags []string
+	commonTags := make([]string, 0, len(tags))
 	for k, v := range tags {
 		commonTag := fmt.Sprintf("%s:%s", k, v)
 		commonTags = append(commonTags, commonTag)
