@@ -1278,7 +1278,16 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 		slog.Any("error", err),
 	)
 
-	// Recover from the error by reinitializing replication metadata through `RESET REPLICA ALL`.
+	// If the replica was running when the source-change attempt failed, stop it
+	// explicitly before resetting replication metadata.
+	if wasReplicating {
+		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+			return err
+		}
+	}
+
+	// Recover from the error by reinitializing replication metadata through
+	// `RESET REPLICA ALL`.
 	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return err
 	}

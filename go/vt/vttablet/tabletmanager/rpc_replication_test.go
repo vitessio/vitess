@@ -540,6 +540,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		fakeMysqlDaemon.CurrentSourcePort = 3305
 		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			"STOP REPLICA",
+			"STOP REPLICA",
 			"FAKE RESET REPLICA ALL",
 			"FAKE SET SOURCE",
 			"START REPLICA",
