@@ -145,9 +145,10 @@ func TestNormalizeConsistentWithEqual(t *testing.T) {
 	assert.Zero(t, inconsistencies)
 }
 
-// TestIdentNormalizeInvalidUTF8 verifies that identNormalize replaces invalid
-// UTF-8 bytes with '?' to match MySQL's charset sanitization behavior.
-func TestIdentNormalizeInvalidUTF8(t *testing.T) {
+// TestIdentSanitizeInvalidUTF8 verifies that identSanitize (called by
+// NewIdentifierCI) matches MySQL's identifier sanitization: invalid bytes
+// become '?' and trailing truncated sequences are dropped.
+func TestIdentSanitizeInvalidUTF8(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -158,7 +159,6 @@ func TestIdentNormalizeInvalidUTF8(t *testing.T) {
 		{"multiple invalid bytes", string([]byte{0x80, 0x81, 0x82}), "???"},
 		{"ASCII then invalid", string([]byte{'h', 'e', 'l', 'l', 'o', 0x80}), "hello?"},
 		{"invalid then ASCII", string([]byte{0x80, 'h', 'e', 'l', 'l', 'o'}), "?hello"},
-		{"uppercase then invalid", string([]byte{'H', 'E', 'L', 'L', 'O', 0x80}), "hello?"},
 		{"mixed valid and invalid", string([]byte{'c', 'a', 'f', 0xC3, 0xA9, 0x80, 0x81}), "caf\xc3\xa9??"},
 		// Invalid bytes mid-string → each byte becomes '?'
 		{"invalid mid then ASCII", string([]byte{0xE4, 0x80, 'e', 'n', 'd'}), "??end"},
@@ -172,37 +172,37 @@ func TestIdentNormalizeInvalidUTF8(t *testing.T) {
 		{"C0 80 overlong", string([]byte{0xC0, 0x80}), "??"},
 		// 0xFF is not a valid lead byte → '?'
 		{"all 0xFF bytes", string([]byte{0xFF, 0xFF, 0xFF}), "???"},
+		// Valid UTF-8 passes through unchanged
+		{"valid ASCII", "hello", "hello"},
+		{"valid Unicode", "café", "café"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			norm := identNormalize(tt.input)
-			assert.Equal(t, tt.expected, norm)
-			assert.LessOrEqual(t, len(norm), len(tt.input),
-				"normalized output must not be longer than input")
+			id := NewIdentifierCI(tt.input)
+			assert.Equal(t, tt.expected, id.String(),
+				"NewIdentifierCI(%q).String()", tt.input)
 		})
 	}
 }
 
-// TestIdentEqualInvalidUTF8 verifies that identEqual treats invalid UTF-8
-// bytes as '?' (matching MySQL), so all invalid bytes compare equal to each
-// other and to a literal '?'.
-func TestIdentEqualInvalidUTF8(t *testing.T) {
-	// Different invalid bytes should be equal (both become '?').
-	a := string([]byte{'x', 0x80})
-	b := string([]byte{'x', 0x81})
-	assert.True(t, identEqual(a, b),
-		"different invalid bytes should compare equal (both become '?')")
+// TestIdentEqualAfterSanitize verifies that identifiers with invalid UTF-8
+// compare correctly after sanitization.
+func TestIdentEqualAfterSanitize(t *testing.T) {
+	// Different invalid bytes both become '?' → equal after sanitization.
+	a := NewIdentifierCI(string([]byte{'x', 0x80}))
+	b := NewIdentifierCI(string([]byte{'x', 0x81}))
+	assert.True(t, a.Equal(b),
+		"different invalid bytes should be equal after sanitization to '?'")
 
-	// Invalid byte should equal literal '?'.
-	c := "x?"
-	assert.True(t, identEqual(a, c),
-		"invalid byte should equal literal '?'")
+	// Invalid byte becomes '?', should equal literal '?'.
+	c := NewIdentifierCI("x?")
+	assert.True(t, a.Equal(c))
 
-	// Valid U+FFFD should NOT equal '?' (it's a real character).
-	d := "x\uFFFD"
-	assert.False(t, identEqual(c, d),
-		"literal '?' and valid U+FFFD should not compare equal")
+	// Valid U+FFFD should NOT equal '?' — it's a real character.
+	d := NewIdentifierCI("x\uFFFD")
+	assert.False(t, c.Equal(d),
+		"literal '?' and valid U+FFFD should not be equal")
 }
 
 func BenchmarkIdentNormalize(b *testing.B) {
@@ -234,6 +234,24 @@ func BenchmarkIdentNormalize(b *testing.B) {
 	b.Run("Unicode/strings.ToLower", func(b *testing.B) {
 		for b.Loop() {
 			strings.ToLower("café_résumé")
+		}
+	})
+}
+
+func BenchmarkNewIdentifierCI(b *testing.B) {
+	b.Run("ASCII_lower", func(b *testing.B) {
+		for b.Loop() {
+			NewIdentifierCI("my_table_name")
+		}
+	})
+	b.Run("ASCII_upper", func(b *testing.B) {
+		for b.Loop() {
+			NewIdentifierCI("MY_TABLE_NAME")
+		}
+	})
+	b.Run("Unicode", func(b *testing.B) {
+		for b.Loop() {
+			NewIdentifierCI("café_résumé")
 		}
 	})
 }

@@ -3540,7 +3540,7 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 	require.NoError(t, err)
 	tableColumns := map[string]sqlparser.IdentifierCI{}
 	for _, col := range c.TableSpec.Columns {
-		tableColumns[col.Name.Normalized()] = col.Name
+		tableColumns[col.Name.Lowered()] = col.Name
 	}
 	for _, ts := range tt {
 		name := strings.Join(ts.columns, ",")

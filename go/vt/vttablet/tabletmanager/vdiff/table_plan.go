@@ -133,7 +133,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 	}
 	fields := make(map[string]querypb.Type)
 	for _, field := range tp.table.Fields {
-		fields[sqlparser.NewIdentifierCI(field.Name).Normalized()] = field.Type
+		fields[sqlparser.NewIdentifierCI(field.Name).Lowered()] = field.Type
 	}
 
 	targetSelect.SetSelectExprs(td.adjustForSourceTimeZone(targetSelect.GetColumns(), fields)...)

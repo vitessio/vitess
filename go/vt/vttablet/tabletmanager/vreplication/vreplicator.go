@@ -839,7 +839,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
 			fkCols := make([]string, len(fkDef.Source))
 			for i, fkCol := range fkDef.Source {
-				fkCols[i] = fkCol.Normalized()
+				fkCols[i] = fkCol.Lowered()
 			}
 			fkIndexCols[strings.Join(fkCols, ",")] = true
 		}
@@ -848,7 +848,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		if index.Info.Type != sqlparser.IndexTypePrimary {
 			cols := make([]string, len(index.Columns))
 			for i, col := range index.Columns {
-				cols[i] = col.Column.Normalized()
+				cols[i] = col.Column.Lowered()
 			}
 			if fkIndexCols[strings.Join(cols, ",")] {
 				// This index is needed for a FK constraint so we cannot drop it.

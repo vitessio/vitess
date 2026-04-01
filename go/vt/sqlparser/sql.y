@@ -4421,7 +4421,7 @@ drop_statement:
 | DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
-    if $4.Normalized() == "primary" {
+    if $4.Lowered() == "primary" {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
@@ -4700,11 +4700,11 @@ show_statement:
   }
 | SHOW ENGINE ci_identifier STATUS
   {
-    $$ = &Show{&ShowEngine{EngineName: $3.Normalized(), Action: "status"}}
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "status"}}
   }
 | SHOW ENGINE ci_identifier MUTEX
   {
-    $$ = &Show{&ShowEngine{EngineName: $3.Normalized(), Action: "mutex"}}
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "mutex"}}
   }
 | SHOW FUNCTION CODE table_name
   {
@@ -7973,7 +7973,7 @@ num_val:
   sql_id
   {
     // TODO(sougou): Deprecate this construct.
-    if $1.Normalized() != "value" {
+    if $1.Lowered() != "value" {
       yylex.Error("expecting value after next")
       return 1
     }

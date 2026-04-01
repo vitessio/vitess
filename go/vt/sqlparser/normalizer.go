@@ -737,7 +737,7 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 
 // sysVarRewrite replaces system variables with corresponding bind variables.
 func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
-	lowered := node.Name.Normalized()
+	lowered := node.Name.Lowered()
 
 	var found bool
 	if nz.sysVars != nil {
@@ -783,7 +783,7 @@ func (nz *normalizer) udvRewrite(cursor *Cursor, node *Variable) {
 
 // funcRewrite replaces certain function expressions with bind variables.
 func (nz *normalizer) funcRewrite(cursor *Cursor, node *FuncExpr) {
-	lowered := node.Name.Normalized()
+	lowered := node.Name.Lowered()
 	if lowered == "last_insert_id" && len(node.Exprs) > 0 {
 		// Do not rewrite LAST_INSERT_ID() when it has arguments.
 		return

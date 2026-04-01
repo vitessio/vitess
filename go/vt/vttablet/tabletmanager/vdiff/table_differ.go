@@ -915,7 +915,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 		case *sqlparser.AliasedExpr:
 			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 				var convertTZFuncExpr *sqlparser.FuncExpr
-				colName := colAs.Name.Normalized()
+				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
@@ -1032,9 +1032,9 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 	var colname string
 	switch t := expr.(type) {
 	case *sqlparser.ColName:
-		colname = t.Name.Normalized()
+		colname = t.Name.Lowered()
 	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
-		colname = aliasedExpr.As.Normalized()
+		colname = aliasedExpr.As.Lowered()
 	default:
 		return "", fmt.Errorf("found target SelectExpr which was neither ColName nor FuncExpr: %+v", aliasedExpr)
 	}

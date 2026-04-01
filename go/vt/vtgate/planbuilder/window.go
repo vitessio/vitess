@@ -132,7 +132,7 @@ func isPartitionedByUniqueVindex(wf sqlparser.WindowFunc, tables []windowTableIn
 		if table.vTable.ColumnListAuthoritative {
 			columnSet = make(map[string]bool, len(table.vTable.Columns))
 			for _, col := range table.vTable.Columns {
-				columnSet[col.Name.Normalized()] = true
+				columnSet[col.Name.Lowered()] = true
 			}
 		}
 
@@ -151,7 +151,7 @@ func isPartitionedByUniqueVindex(wf sqlparser.WindowFunc, tables []windowTableIn
 
 			// Validate column exists in schema if authoritative - O(1) lookup instead of O(c)
 			if columnSet != nil {
-				if !columnSet[colName.Name.Normalized()] {
+				if !columnSet[colName.Name.Lowered()] {
 					if !colName.Qualifier.IsEmpty() || len(tables) == 1 {
 						return false
 					}
@@ -159,12 +159,12 @@ func isPartitionedByUniqueVindex(wf sqlparser.WindowFunc, tables []windowTableIn
 				}
 			}
 
-			coveredCols[colName.Name.Normalized()] = true
+			coveredCols[colName.Name.Lowered()] = true
 		}
 
 		checkVindex := func(vindex *vindexes.ColumnVindex) bool {
 			for _, vCol := range vindex.Columns {
-				if !coveredCols[vCol.Normalized()] {
+				if !coveredCols[vCol.Lowered()] {
 					return false
 				}
 			}

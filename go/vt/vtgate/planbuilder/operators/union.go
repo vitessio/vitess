@@ -101,7 +101,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
 		}
-		offsets[sqlparser.NewIdentifierCI(ae.ColumnName()).Normalized()] = i
+		offsets[sqlparser.NewIdentifierCI(ae.ColumnName()).Lowered()] = i
 	}
 
 	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
@@ -131,7 +131,7 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 				return
 			}
 
-			idx, ok := offsets[col.Name.Normalized()]
+			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
 				panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
 			}

@@ -852,7 +852,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.FuncExpr:
-		switch inner.Name.Normalized() {
+		switch inner.Name.Lowered() {
 		case "keyspace_id":
 			// This function is used internally to route queries and records properly
 			// in sharded keyspaces using vindexes.

@@ -92,7 +92,7 @@ func (c *ColumnDefinitionEntity) Name() string {
 }
 
 func (c *ColumnDefinitionEntity) NameLowered() string {
-	return c.ColumnDefinition.Name.Normalized()
+	return c.ColumnDefinition.Name.Lowered()
 }
 
 func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {

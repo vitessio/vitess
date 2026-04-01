@@ -2058,8 +2058,8 @@ func (cached *IdentifierCI) CachedSize(alloc bool) int64 {
 	}
 	// field val string
 	size += hack.RuntimeAllocSize(int64(len(cached.val)))
-	// field normalized string
-	size += hack.RuntimeAllocSize(int64(len(cached.normalized)))
+	// field lowered string
+	size += hack.RuntimeAllocSize(int64(len(cached.lowered)))
 	return size
 }
 

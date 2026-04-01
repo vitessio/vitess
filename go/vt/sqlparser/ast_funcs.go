@@ -380,7 +380,7 @@ func (node *VindexSpec) ParseParams() (string, map[string]string) {
 	var owner string
 	params := map[string]string{}
 	for _, p := range node.Params {
-		if p.Key.Normalized() == VindexOwnerStr {
+		if p.Key.Lowered() == VindexOwnerStr {
 			owner = p.Val
 		} else {
 			params[p.Key.String()] = p.Val
@@ -737,9 +737,10 @@ func (node *ColName) Equal(c *ColName) bool {
 
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
+	str = identSanitize(str)
 	return IdentifierCI{
-		val:        str,
-		normalized: identNormalize(str),
+		val:     str,
+		lowered: identNormalize(str),
 	}
 }
 
@@ -1039,20 +1040,25 @@ func (node IdentifierCI) CompliantName() string {
 	return compliantName(node.val)
 }
 
-// Normalized returns the identifier normalized using the utf8mb4_general_ci
-// collation, matching MySQL's case-insensitive identifier comparison behavior.
-// The result is lowercased and accent-stripped (e.g., "café" → "cafe").
-func (node IdentifierCI) Normalized() string {
-	return node.normalized
+// Lowered returns a lowercased identifier name, using the utf8mb3_general_ci
+// unicase ToLower tables to match MySQL's case-insensitive, accent-sensitive
+// identifier comparison.
+//
+// WARNING: The result may differ from strings.ToLower for non-ASCII characters.
+// MySQL's unicase tables use an older Unicode version with different case
+// mappings for some codepoints (e.g., İ (U+0130) → i in MySQL, unchanged
+// in Go). Do not compare Lowered() output against strings.ToLower output.
+func (node IdentifierCI) Lowered() string {
+	return node.lowered
 }
 
-// Equal performs a case-insensitive compare using utf8mb4_general_ci collation.
+// Equal performs a case-insensitive compare matching MySQL's identifier rules.
 func (node IdentifierCI) Equal(in IdentifierCI) bool {
-	return node.normalized == in.normalized
+	return node.lowered == in.lowered
 }
 
-// EqualString performs a case-insensitive compare with str using
-// utf8mb4_general_ci collation, without allocating.
+// EqualString performs a case-insensitive compare with str matching MySQL's
+// identifier rules, without allocating.
 func (node IdentifierCI) EqualString(str string) bool {
 	return identEqual(node.val, str)
 }
@@ -1074,8 +1080,8 @@ func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	node.val = result
-	node.normalized = identNormalize(result)
+	node.val = identSanitize(result)
+	node.lowered = identNormalize(node.val)
 	return nil
 }
 

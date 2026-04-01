@@ -406,17 +406,17 @@ func KeyAtLeastConstrainedAs(
 	sourceKeyLengths := map[string]int{}
 	for _, col := range sourceUniqueKey.IndexDefinition.Columns {
 		if col.Length == nil {
-			sourceKeyLengths[col.Column.Normalized()] = math.MaxInt64
+			sourceKeyLengths[col.Column.Lowered()] = math.MaxInt64
 		} else {
-			sourceKeyLengths[col.Column.Normalized()] = *col.Length
+			sourceKeyLengths[col.Column.Lowered()] = *col.Length
 		}
 	}
 	targetKeyLengths := map[string]int{}
 	for _, col := range targetUniqueKey.IndexDefinition.Columns {
 		if col.Length == nil {
-			targetKeyLengths[col.Column.Normalized()] = math.MaxInt64
+			targetKeyLengths[col.Column.Lowered()] = math.MaxInt64
 		} else {
-			targetKeyLengths[col.Column.Normalized()] = *col.Length
+			targetKeyLengths[col.Column.Lowered()] = *col.Length
 		}
 	}
 	// source is more constrained than target if every column in source is also in target, order is immaterial

@@ -54,7 +54,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		args = append(args, convertedExpr)
 	}
 
-	method := fn.Name.Normalized()
+	method := fn.Name.Lowered()
 	call := CallExpr{Arguments: args, Method: method}
 
 	switch method {
@@ -806,7 +806,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 
 		cexpr := CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
-		switch call.Name.Normalized() {
+		switch call.Name.Lowered() {
 		case "current_time", "curtime":
 			onlyTime = true
 		case "utc_time":

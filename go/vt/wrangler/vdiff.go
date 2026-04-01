@@ -512,8 +512,8 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
-				td.compareCols[i].collation = columnCollations[sqlparser.NewIdentifierCI(colname).Normalized()]
-				td.compareCols[i].values = columnValues[sqlparser.NewIdentifierCI(colname).Normalized()]
+				td.compareCols[i].collation = columnCollations[sqlparser.NewIdentifierCI(colname).Lowered()]
+				td.compareCols[i].values = columnValues[sqlparser.NewIdentifierCI(colname).Lowered()]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -584,14 +584,14 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
-			columnCollations[column.Name.Normalized()] = collations.Unknown
+			columnCollations[column.Name.Lowered()] = collations.Unknown
 			continue
 		}
-		columnCollations[column.Name.Normalized()] = getColumnCollation(column)
+		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
 		if len(column.Type.EnumValues) == 0 {
 			continue
 		}
-		columnValues[column.Name.Normalized()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
+		columnValues[column.Name.Lowered()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
 	return columnCollations, columnValues, nil
 }
@@ -612,7 +612,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 		case *sqlparser.AliasedExpr:
 			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 				var convertTZFuncExpr *sqlparser.FuncExpr
-				colName := colAs.Name.Normalized()
+				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
@@ -643,9 +643,9 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 	var colname string
 	switch t := expr.(type) {
 	case *sqlparser.ColName:
-		colname = t.Name.Normalized()
+		colname = t.Name.Lowered()
 	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
-		colname = aliasedExpr.As.Normalized()
+		colname = aliasedExpr.As.Lowered()
 	default:
 		return "", fmt.Errorf("found target SelectExpr which was neither ColName or FuncExpr: %+v", aliasedExpr)
 	}
@@ -716,7 +716,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 	fields := make(map[string]querypb.Type)
 	for _, field := range table.Fields {
-		fields[sqlparser.NewIdentifierCI(field.Name).Normalized()] = field.Type
+		fields[sqlparser.NewIdentifierCI(field.Name).Lowered()] = field.Type
 	}
 
 	targetSelect.SelectExprs.Exprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs.Exprs, fields)

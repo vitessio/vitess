@@ -547,8 +547,8 @@ func TestIdentifierCI(t *testing.T) {
 	if str.String() != "Ab" {
 		t.Errorf("Val=%s, want Ab", str.String())
 	}
-	if str.Normalized() != "ab" {
-		t.Errorf("Val=%s, want ab", str.Normalized())
+	if str.Lowered() != "ab" {
+		t.Errorf("Val=%s, want ab", str.Lowered())
 	}
 	if !str.Equal(NewIdentifierCI("aB")) {
 		t.Error("str.Equal(NewIdentifierCI(aB))=false, want true")
@@ -557,8 +557,8 @@ func TestIdentifierCI(t *testing.T) {
 		t.Error("str.EqualString(ab)=false, want true")
 	}
 	str = NewIdentifierCI("")
-	if str.Normalized() != "" {
-		t.Errorf("Val=%s, want \"\"", str.Normalized())
+	if str.Lowered() != "" {
+		t.Errorf("Val=%s, want \"\"", str.Lowered())
 	}
 }
 
@@ -598,18 +598,18 @@ func TestIdentifierCI_CaseFolding(t *testing.T) {
 			assert.Equal(t, tt.equal, idA.Equal(idB), "Equal(%q, %q)", tt.a, tt.b)
 			assert.Equal(t, tt.equal, idA.EqualString(tt.b), "EqualString(%q, %q)", tt.a, tt.b)
 			if tt.equal {
-				assert.Equal(t, idA.Normalized(), idB.Normalized(),
+				assert.Equal(t, idA.Lowered(), idB.Lowered(),
 					"Normalized forms should match for equal identifiers: %q vs %q", tt.a, tt.b)
 			}
 		})
 	}
 
 	// Verify Normalized() produces lowercase, accent-preserving output
-	assert.Equal(t, "café", NewIdentifierCI("café").Normalized())
-	assert.Equal(t, "café", NewIdentifierCI("CAFÉ").Normalized())
-	assert.Equal(t, "piñata", NewIdentifierCI("piñata").Normalized())
-	assert.Equal(t, "primary", NewIdentifierCI("primary").Normalized())
-	assert.Equal(t, "primary", NewIdentifierCI("PRIMARY").Normalized())
+	assert.Equal(t, "café", NewIdentifierCI("café").Lowered())
+	assert.Equal(t, "café", NewIdentifierCI("CAFÉ").Lowered())
+	assert.Equal(t, "piñata", NewIdentifierCI("piñata").Lowered())
+	assert.Equal(t, "primary", NewIdentifierCI("primary").Lowered())
+	assert.Equal(t, "primary", NewIdentifierCI("PRIMARY").Lowered())
 }
 
 func TestIdentifierCIMarshal(t *testing.T) {

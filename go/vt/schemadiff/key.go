@@ -41,7 +41,7 @@ func (i *IndexDefinitionEntity) Name() string {
 }
 
 func (i *IndexDefinitionEntity) NameLowered() string {
-	return i.IndexDefinition.Info.Name.Normalized()
+	return i.IndexDefinition.Info.Name.Lowered()
 }
 
 // Clone returns a copy of this list, with copies of all the entities.

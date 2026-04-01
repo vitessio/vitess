@@ -472,7 +472,7 @@ func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity
 	entities := make([]*ColumnDefinitionEntity, len(c.TableSpec.Columns))
 	for i := range c.TableSpec.Columns {
 		col := c.TableSpec.Columns[i]
-		_, inPK := pkColumnsMaps[col.Name.Normalized()]
+		_, inPK := pkColumnsMaps[col.Name.Lowered()]
 		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
 	}
 	return entities
@@ -501,7 +501,7 @@ func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
 	for i, key := range keys {
 		colEntities := []*ColumnDefinitionEntity{}
 		for _, keyCol := range key.Columns {
-			colEntity, ok := colMap[keyCol.Column.Normalized()]
+			colEntity, ok := colMap[keyCol.Column.Lowered()]
 			if !ok {
 				// This can happen if the index is on an expression, e.g. `KEY idx1 ((id + 1))`.
 				continue
@@ -869,7 +869,7 @@ func (c *CreateTableEntity) normalizeKeys() {
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, key := range c.TableSpec.Indexes {
-		if name := key.Info.Name.Normalized(); name != "" {
+		if name := key.Info.Name.Lowered(); name != "" {
 			keyNameExists[name] = true
 		}
 	}
@@ -925,7 +925,7 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 	constraintNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, constraint := range c.TableSpec.Constraints {
-		if name := constraint.Name.Normalized(); name != "" {
+		if name := constraint.Name.Lowered(); name != "" {
 			constraintNameExists[name] = true
 		}
 	}
@@ -1790,11 +1790,11 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 
 	t1SharedColNames := make([]any, 0, len(t1SharedColumns))
 	for _, col := range t1SharedColumns {
-		t1SharedColNames = append(t1SharedColNames, col.Name.Normalized())
+		t1SharedColNames = append(t1SharedColNames, col.Name.Lowered())
 	}
 	t2SharedColNames := make([]any, 0, len(t2SharedColumns))
 	for _, col := range t2SharedColumns {
-		t2SharedColNames = append(t2SharedColNames, col.Name.Normalized())
+		t2SharedColNames = append(t2SharedColNames, col.Name.Lowered())
 	}
 
 	lcs := golcs.New(t1SharedColNames, t2SharedColNames)
@@ -1803,7 +1803,7 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 		lcsNames[v.(string)] = true
 	}
 	for i, t2Col := range t2SharedColumns {
-		t2ColName := t2Col.Name.Normalized()
+		t2ColName := t2Col.Name.Lowered()
 		// see if this column is in the longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
 		if _, ok := lcsNames[t2ColName]; !ok {
 			minimalColumnReordering[t2ColName] = i
@@ -1825,13 +1825,13 @@ func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) 
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.CurTimeFuncExpr:
-			switch node.Name.Normalized() {
+			switch node.Name.Lowered() {
 			case "sysdate":
 				foundFunction = node.Name.String()
 				return false, nil
 			}
 		case *sqlparser.FuncExpr:
-			switch node.Name.Normalized() {
+			switch node.Name.Lowered() {
 			case "uuid", "uuid_short", "rand", "random_bytes":
 				foundFunction = node.Name.String()
 				return false, nil
@@ -1866,7 +1866,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 				prevCol.nextCol = colDetails
 			}
 			prevCol = colDetails
-			m[col.Name.Normalized()] = colDetails
+			m[col.Name.Lowered()] = colDetails
 		}
 		return m
 	}
@@ -1882,7 +1882,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// evaluate dropped columns
 	//
 	for _, t1Col := range t1Columns {
-		if _, ok := t2ColumnsMap[t1Col.Name.Normalized()]; ok {
+		if _, ok := t2ColumnsMap[t1Col.Name.Lowered()]; ok {
 			t1SharedColumns = append(t1SharedColumns, t1Col)
 		} else {
 			// column exists in t1 but not in t2, hence it is dropped
@@ -1898,7 +1898,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// shared columns, by order of appearance in t2
 	var t2SharedColumns []*sqlparser.ColumnDefinition
 	for _, t2Col := range t2Columns {
-		if _, ok := t1ColumnsMap[t2Col.Name.Normalized()]; ok {
+		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; ok {
 			// column exists in both tables
 			t2SharedColumns = append(t2SharedColumns, t2Col)
 		}
@@ -1909,7 +1909,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	var modifyColumns []*sqlparser.ModifyColumn
 	columnReordering := evaluateColumnReordering(t1SharedColumns, t2SharedColumns)
 	for _, t2Col := range t2SharedColumns {
-		t2ColName := t2Col.Name.Normalized()
+		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
 		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, false, t1cc)
@@ -1958,7 +1958,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	var addColumns []*sqlparser.AddColumns
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
-		if _, ok := t1ColumnsMap[t2Col.Name.Normalized()]; !ok {
+		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; !ok {
 			// column exists in t2 but not in t1, hence it is added
 			addColumn := &sqlparser.AddColumns{
 				Columns: []*sqlparser.ColumnDefinition{t2Col},
@@ -2031,13 +2031,13 @@ func heuristicallyDetectColumnRenames(
 		// the function returns 'false' if it is unable to heuristically find a RENAME.
 		for iDrop, dropCol1 := range dropColumns {
 			for iAdd, addCol2 := range addColumns {
-				col1Details := t1ColumnsMap[dropCol1.Name.Name.Normalized()]
+				col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
 				if !col1Details.identicalOtherThanName(addCol2.Columns[0]) {
 					continue
 				}
 				// columns look alike, other than their names, which we know are different.
 				// are these two columns otherwise appear to be in same position?
-				col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Normalized()]
+				col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Lowered()]
 				if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
 					dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
 					addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
@@ -2078,7 +2078,7 @@ func (c *CreateTableEntity) primaryKeyColumnsMap() map[string]*sqlparser.IndexCo
 	columns := c.primaryKeyColumns()
 	m := make(map[string]*sqlparser.IndexColumn, len(columns))
 	for _, col := range columns {
-		m[col.Column.Normalized()] = col
+		m[col.Column.Lowered()] = col
 	}
 	return m
 }
@@ -2239,7 +2239,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 
 	columnExists := map[string]bool{}
 	for _, col := range c.TableSpec.Columns {
-		columnExists[col.Name.Normalized()] = true
+		columnExists[col.Name.Lowered()] = true
 	}
 
 	// apply a single AlterOption; only supported types are those generated by Diff()
@@ -2355,7 +2355,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				if strings.EqualFold(col.Name.String(), opt.Name.Name.String()) {
 					found = true
 					c.TableSpec.Columns = append(c.TableSpec.Columns[0:i], c.TableSpec.Columns[i+1:]...)
-					delete(columnExists, col.Name.Normalized())
+					delete(columnExists, col.Name.Lowered())
 					break
 				}
 			}
@@ -2385,7 +2385,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
 				return err
 			}
-			columnExists[addedCol.Name.Normalized()] = true
+			columnExists[addedCol.Name.Lowered()] = true
 		case *sqlparser.ModifyColumn:
 			// we expect the column to exist
 			found := false
@@ -2429,8 +2429,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					found = true
 					// redefine. see if we need to position it anywhere other than end of table
 					c.TableSpec.Columns[i].Name = opt.NewName.Name
-					delete(columnExists, opt.OldName.Name.Normalized())
-					columnExists[opt.NewName.Name.Normalized()] = true
+					delete(columnExists, opt.OldName.Name.Lowered())
+					columnExists[opt.NewName.Name.Lowered()] = true
 					break
 				}
 			}
@@ -2584,13 +2584,13 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	// (a column may have been removed)postApplyNormalize
 	columnExists := map[string]bool{}
 	for _, col := range c.TableSpec.Columns {
-		columnExists[col.Name.Normalized()] = true
+		columnExists[col.Name.Lowered()] = true
 	}
 	var nonEmptyIndexes []*sqlparser.IndexDefinition
 
 	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
-		if keyCol.Column.Normalized() != "" {
-			if !columnExists[keyCol.Column.Normalized()] {
+		if keyCol.Column.Lowered() != "" {
+			if !columnExists[keyCol.Column.Lowered()] {
 				return true
 			}
 		}
@@ -2634,7 +2634,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		}
 
 		referencedColumn := referencedColumns[0]
-		if columnExists[sqlparser.NewIdentifierCI(referencedColumn).Normalized()] {
+		if columnExists[sqlparser.NewIdentifierCI(referencedColumn).Lowered()] {
 			keptConstraints = append(keptConstraints, constraint)
 		}
 	}
@@ -2653,7 +2653,7 @@ func getNodeColumns(node sqlparser.SQLNode) (colNames map[string]bool) {
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
-				colNames[node.Name.Normalized()] = true
+				colNames[node.Name.Lowered()] = true
 			}
 			return true, nil
 		}, node)
@@ -2664,7 +2664,7 @@ func getNodeColumns(node sqlparser.SQLNode) (colNames map[string]bool) {
 func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool) {
 	colNames = map[string]bool{}
 	for _, col := range key.Columns {
-		if colName := col.Column.Normalized(); colName != "" {
+		if colName := col.Column.Lowered(); colName != "" {
 			colNames[colName] = true
 		}
 		for name := range getNodeColumns(col.Expression) {
@@ -2716,10 +2716,10 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 	keyNames := map[string]bool{}
 	for _, key := range c.TableSpec.Indexes {
 		name := key.Info.Name
-		if _, ok := keyNames[name.Normalized()]; ok {
+		if _, ok := keyNames[name.Lowered()]; ok {
 			return &DuplicateKeyNameError{Table: c.Name(), Key: name.String()}
 		}
-		keyNames[name.Normalized()] = true
+		keyNames[name.Lowered()] = true
 	}
 	return nil
 }
@@ -2729,7 +2729,7 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 func (c *CreateTableEntity) validate() error {
 	columnExists := map[string]bool{}
 	for _, col := range c.TableSpec.Columns {
-		colName := col.Name.Normalized()
+		colName := col.Name.Lowered()
 		if columnExists[colName] {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
@@ -2751,7 +2751,7 @@ func (c *CreateTableEntity) validate() error {
 			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
 		}
 		for _, col := range fk.Source {
-			if !columnExists[col.Normalized()] {
+			if !columnExists[col.Lowered()] {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}
 		}
@@ -2779,7 +2779,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Normalized()] {
+				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 					return &InvalidColumnInGeneratedColumnError{Table: c.Name(), Column: referencedColName, GeneratedColumn: col.Name.String()}
 				}
 			}
@@ -2800,7 +2800,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Normalized()] {
+				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
 			}
@@ -2824,7 +2824,7 @@ func (c *CreateTableEntity) validate() error {
 			return err
 		}
 		for _, referencedColName := range referencedColumns {
-			if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Normalized()] {
+			if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
@@ -2838,10 +2838,10 @@ func (c *CreateTableEntity) validate() error {
 		// validate no two partitions have same name
 		partitionExists := map[string]bool{}
 		for _, p := range partition.Definitions {
-			if partitionExists[p.Name.Normalized()] {
+			if partitionExists[p.Name.Lowered()] {
 				return &ApplyDuplicatePartitionError{Table: c.Name(), Partition: p.Name.String()}
 			}
-			partitionExists[p.Name.Normalized()] = true
+			partitionExists[p.Name.Lowered()] = true
 		}
 		// validate columns referenced by partitions do in fact exist
 		// also, validate that all unique keys include partitioned columns
@@ -2859,7 +2859,7 @@ func (c *CreateTableEntity) validate() error {
 
 		for _, partitionColName := range partitionColNames {
 			// Validate columns exists in table:
-			if !columnExists[sqlparser.NewIdentifierCI(partitionColName).Normalized()] {
+			if !columnExists[sqlparser.NewIdentifierCI(partitionColName).Lowered()] {
 				return &InvalidColumnInPartitionError{Table: c.Name(), Column: partitionColName}
 			}
 

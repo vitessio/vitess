@@ -293,12 +293,12 @@ var (
 func init() {
 	for _, cols := range schemaColName57 {
 		for _, col := range cols {
-			schemaColumns57[sqlparser.NewIdentifierCI(col).Normalized()] = nil
+			schemaColumns57[sqlparser.NewIdentifierCI(col).Lowered()] = nil
 		}
 	}
 	for _, cols := range schemaColName80 {
 		for _, col := range cols {
-			schemaColumns80[sqlparser.NewIdentifierCI(col).Normalized()] = nil
+			schemaColumns80[sqlparser.NewIdentifierCI(col).Lowered()] = nil
 		}
 	}
 }
@@ -328,7 +328,7 @@ func isDbNameCol(col *sqlparser.ColName, version string) bool {
 		schemaColumns = schemaColumns80
 	}
 
-	_, found := schemaColumns[col.Name.Normalized()]
+	_, found := schemaColumns[col.Name.Lowered()]
 	return found
 }
 

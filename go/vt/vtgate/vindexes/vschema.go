@@ -765,7 +765,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		colNames := make(map[string]bool)
 		for _, col := range table.Columns {
 			name := sqlparser.NewIdentifierCI(col.Name)
-			if colNames[name.Normalized()] {
+			if colNames[name.Lowered()] {
 				return vterrors.Errorf(
 					vtrpcpb.Code_INVALID_ARGUMENT,
 					"duplicate column name '%v' for table: %s",
@@ -786,7 +786,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			if col.Nullable != nil {
 				nullable = *col.Nullable
 			}
-			colNames[name.Normalized()] = true
+			colNames[name.Lowered()] = true
 			t.Columns = append(t.Columns, Column{
 				Name:          name,
 				Type:          col.Type,

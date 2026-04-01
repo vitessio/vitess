@@ -482,7 +482,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 				break
 			}
 
-			item, found := aliases[col.Name.Normalized()]
+			item, found := aliases[col.Name.Lowered()]
 			if !found {
 				break
 			}
@@ -553,7 +553,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 			return
 		}
 
-		item, found := aliases[col.Name.Normalized()]
+		item, found := aliases[col.Name.Lowered()]
 		if aggrTrack.insideAggr {
 			// inside aggregations, we want to first look for columns in the FROM clause
 			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
@@ -649,7 +649,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		var item exprContainer
 		var found bool
 
-		item, found = aliases[col.Name.Normalized()]
+		item, found = aliases[col.Name.Lowered()]
 		if !found {
 			// if there is no matching alias, there is no rewriting needed
 			return
@@ -742,9 +742,9 @@ func (r *earlyRewriter) getAliasMap(sel *sqlparser.Select) (aliases map[string]e
 
 		item := exprContainer{expr: ae.Expr}
 		if ae.As.NotEmpty() {
-			alias = ae.As.Normalized()
+			alias = ae.As.Lowered()
 		} else if col, ok := ae.Expr.(*sqlparser.ColName); ok {
-			alias = col.Name.Normalized()
+			alias = col.Name.Lowered()
 		}
 
 		if old, alreadyExists := aliases[alias]; alreadyExists && !sqlparser.Equals.Expr(old.expr, item.expr) {

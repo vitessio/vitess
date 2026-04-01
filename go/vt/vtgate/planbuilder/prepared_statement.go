@@ -33,7 +33,7 @@ import (
 var regexParams = regexp.MustCompile(`^v\d+`)
 
 func prepareStmt(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
-	stmtName := pStmt.Name.Normalized()
+	stmtName := pStmt.Name.Lowered()
 	vschema.ClearPrepareData(stmtName)
 
 	var pQuery string
@@ -42,7 +42,7 @@ func prepareStmt(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlpar
 	case *sqlparser.Literal:
 		pQuery = expr.Val
 	case *sqlparser.Variable:
-		pQuery, err = fetchUDVValue(vschema, expr.Name.Normalized())
+		pQuery, err = fetchUDVValue(vschema, expr.Name.Lowered())
 	case *sqlparser.Argument:
 		udv, _ := strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
 		pQuery, err = fetchUDVValue(vschema, udv)
@@ -82,7 +82,7 @@ func fetchUDVValue(vschema plancontext.VSchema, udv string) (string, error) {
 }
 
 func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStmt *sqlparser.ExecuteStmt) (*planResult, error) {
-	stmtName := eStmt.Name.Normalized()
+	stmtName := eStmt.Name.Lowered()
 	prepareData := vschema.GetPrepareData(stmtName)
 	if prepareData == nil {
 		return nil, vterrors.VT09011(stmtName, "EXECUTE")
@@ -109,7 +109,7 @@ func dropPreparedStatement(
 	vschema plancontext.VSchema,
 	stmt *sqlparser.DeallocateStmt,
 ) (*planResult, error) {
-	stmtName := stmt.Name.Normalized()
+	stmtName := stmt.Name.Lowered()
 	prepareData := vschema.GetPrepareData(stmtName)
 	if prepareData == nil {
 		return nil, vterrors.VT09011(stmtName, "DEALLOCATE PREPARE")
