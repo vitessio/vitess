@@ -949,6 +949,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
+		// This handles both changing the address and starting replication.
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
 			return err
 		}
