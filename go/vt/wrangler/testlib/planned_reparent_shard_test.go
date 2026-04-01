@@ -600,7 +600,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	}{
 		{
 			name: "relay log info",
-			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaRelayLogInfoInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 		},
 		{
 			name: "master info",
@@ -609,10 +609,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		{
 			name: "connection metadata",
 			err:  sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
-		},
-		{
-			name: "applier metadata",
-			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 		},
 	}
 
@@ -707,7 +703,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	}{
 		{
 			name: "relay log info",
-			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaRelayLogInfoInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 		},
 		{
 			name: "master info",
@@ -716,10 +712,6 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 		{
 			name: "connection metadata",
 			err:  sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
-		},
-		{
-			name: "applier metadata",
-			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
 		},
 	}
 
