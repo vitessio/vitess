@@ -961,10 +961,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 				return err
 			}
 		}
-		if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-				return err
-			}
+		if err := tm.startReplicationRecoverable(ctx); err != nil {
+			return err
 		}
 	}
 
