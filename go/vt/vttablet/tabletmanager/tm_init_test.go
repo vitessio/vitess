@@ -1309,12 +1309,16 @@ func TestInitReplicationRecovery(t *testing.T) {
 	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
 
-	// Make SetReplicationSource return a recoverable init error and expect the
-	// startup path to self-heal by restarting replication.
+	// Make StartReplication return a recoverable init error and expect the
+	// startup path to self-heal by restarting replication. SetReplicationSource
+	// is called with startReplicationAfter=false so recovery only applies to
+	// the separate StartReplication call.
 	fakeMysqlDaemon.SetPrimaryPositionLocked(pos)
 	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
-	fakeMysqlDaemon.SetReplicationSourceError = recoverableReplicationInitError()
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
 		"STOP REPLICA",
 		"RESET REPLICA",
 		"START REPLICA",

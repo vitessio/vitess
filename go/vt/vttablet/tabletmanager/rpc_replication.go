@@ -524,10 +524,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
-		if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-			return err
-		}
+
+	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
+		return err
 	}
 
 	// wait until we get the replicated row, or our context times out
@@ -950,11 +949,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
-		// This handles both changing the address and starting replication.
-		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
-			if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-				return err
-			}
+		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+			return err
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
@@ -1241,12 +1237,76 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 
 // startReplicationRecoverable starts replication and handles recoverable errors by resetting replication.
 func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error {
-	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
-		if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-			return err
-		}
+	err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	if err == nil {
+		return nil
 	}
+
+	// Try to recover from the error.
+	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// setReplicationSourceRecoverable configures the requested replication source and optionally starts
+// replication afterward. If possible, certain errors are recovered by restarting replication.
+func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, wasReplicating bool, shouldStartReplication bool) error {
+	// Create a helper to set the replication without starting replication afterward. This is used so we can better
+	// handle errors in each stage.
+	setReplicationSource := func(stopReplicationBefore bool) error {
+		return tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, stopReplicationBefore, false)
+	}
+
+	// Let's first try to apply the requested source without starting replication. If the replica was replicating
+	// before, we tell the helper to stop replication first.
+	err := setReplicationSource(wasReplicating)
+	if err == nil {
+		// If we succeeded, let's start replication but only if it was requested.
+		if !shouldStartReplication {
+			return nil
+		}
+
+		return tm.startReplicationRecoverable(ctx)
+	}
+
+	// Next, if the error is not one of the recoverable ones, return it.
+	if !isRecoverableReplicationInitializationError(err) {
+		return err
+	}
+
+	// Recovery is performed by restarting replication. If the replica was not previously replicating,
+	// let's not continue with the recovery so that we don't inadvertently enable replication.
+	if !wasReplicating {
+		return err
+	}
+
+	log.Warn(
+		"Encountered recoverable replication initialization error while changing replication source, restarting "+
+			"replication and reapplying source",
+		slog.String("source_host", host),
+		slog.Int("source_port", int(port)),
+		slog.Any("error", err),
+	)
+
+	// Recover from the error by restarting replication.
+	if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return err
+	}
+
+	// Now that we've recovered, let's try setting the replication source again. Since we've just
+	// restarted replication, we tell the helper to stop replication beforehand.
+	if err := setReplicationSource(true); err != nil {
+		return err
+	}
+
+	// The replication source has finally been set. Let's also start replication if it was requested.
+	if !shouldStartReplication {
+		return nil
+	}
+
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // recoverableReplicationInitializationErrorCodes is the set of replication initialization error
