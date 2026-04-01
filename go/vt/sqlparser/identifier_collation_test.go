@@ -170,8 +170,11 @@ func TestIdentSanitizeInvalidUTF8(t *testing.T) {
 		// Invalid lead bytes C0/C1 → '?' (not truncated, just invalid)
 		{"C0 at EOF", string([]byte{0xC0}), "?"},
 		{"C0 80 overlong", string([]byte{0xC0, 0x80}), "??"},
-		// 0xFF is not a valid lead byte → '?'
-		{"all 0xFF bytes", string([]byte{0xFF, 0xFF, 0xFF}), "???"},
+		// F5-FF at EOF are dropped (MySQL treats them like truncated leads)
+		{"0xFF at EOF", string([]byte{0xFF}), ""},
+		{"0xFF 0xFF 0xFF at EOF", string([]byte{0xFF, 0xFF, 0xFF}), ""},
+		// F5-FF mid-string → '?'
+		{"0xFF mid-string", string([]byte{0xFF, 'e', 'n', 'd'}), "?end"},
 		// Valid UTF-8 passes through unchanged
 		{"valid ASCII", "hello", "hello"},
 		{"valid Unicode", "café", "café"},

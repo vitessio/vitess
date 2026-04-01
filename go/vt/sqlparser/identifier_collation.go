@@ -61,9 +61,10 @@ func identSanitizeSlow(s string, firstNonASCII int) string {
 		}
 		r, size := utf8.DecodeRuneInString(s[i:])
 		if r == utf8.RuneError && size == 1 {
-			// If this invalid byte and everything after it form a
-			// truncated sequence at EOF, drop them (matching MySQL).
-			if isTrailingTruncatedUTF8(s[i:]) {
+			// If all remaining bytes are non-ASCII and don't form any
+			// valid UTF-8 characters, drop them (matching MySQL's
+			// behavior of stripping trailing invalid bytes at EOF).
+			if isTrailingInvalidUTF8(s[i:]) {
 				break
 			}
 			b[pos] = '?'
@@ -78,36 +79,23 @@ func identSanitizeSlow(s string, firstNonASCII int) string {
 	return string(b[:pos])
 }
 
-// isTrailingTruncatedUTF8 reports whether s is a truncated UTF-8 sequence:
-// a valid multi-byte lead byte (C2-F4) followed by zero or more continuation
-// bytes (80-BF), but fewer than the lead byte requires. MySQL silently drops
-// these when they appear at the end of an identifier.
-func isTrailingTruncatedUTF8(s string) bool {
-	if len(s) == 0 {
+// isTrailingInvalidUTF8 reports whether s consists entirely of non-ASCII bytes
+// (>= 0x80) that don't form any valid UTF-8 characters. MySQL silently drops
+// such trailing bytes from identifier names. Bytes < 0xC2 (continuation bytes
+// 80-BF and invalid leads C0-C1) are only dropped if preceded by a valid lead
+// byte (C2+); standalone they become '?' instead.
+func isTrailingInvalidUTF8(s string) bool {
+	if len(s) == 0 || s[0] < 0xC2 {
 		return false
 	}
-	lead := s[0]
-	var expectedLen int
-	switch {
-	case lead >= 0xC2 && lead <= 0xDF:
-		expectedLen = 2
-	case lead&0xF0 == 0xE0:
-		expectedLen = 3
-	case lead >= 0xF0 && lead <= 0xF4:
-		expectedLen = 4
-	default:
-		return false
-	}
-	if len(s) >= expectedLen {
-		return false // not truncated, enough bytes present
-	}
-	// Check all following bytes are continuations.
-	for j := 1; j < len(s); j++ {
-		if s[j]&0xC0 != 0x80 {
+	// All bytes must be non-ASCII.
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x80 {
 			return false
 		}
 	}
-	return true
+	// No valid UTF-8 characters in the remainder.
+	return !utf8.ValidString(s)
 }
 
 // identEqual reports whether a and b are equal under MySQL's identifier
