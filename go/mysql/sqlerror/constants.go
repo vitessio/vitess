@@ -139,7 +139,7 @@ const (
 	ERReplicaConnectionMetadataInitRepository = ErrorCode(1871)
 	ERReplicaApplierMetadataInitRepository    = ErrorCode(1872)
 
-	ERInnodbReadOnly                          = ErrorCode(1874)
+	ERInnodbReadOnly = ErrorCode(1874)
 
 	ERVectorConversion = ErrorCode(6138)
 
