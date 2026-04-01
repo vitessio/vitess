@@ -955,8 +955,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
-		// are taken into account
-		if err := tm.stopReplicationRecoverable(ctx); err != nil {
+		// are taken into account. We don't attempt to recover from the known recoverable errors here
+		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.
+		// If we error the first time, we're likely to error the second time as well.
+		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
@@ -1232,22 +1234,6 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	return nil
 }
 
-// stopReplicationRecoverable stops replication and handles recoverable errors
-// by resetting replication metadata.
-func (tm *TabletManager) stopReplicationRecoverable(ctx context.Context) error {
-	err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv())
-	if err == nil {
-		return nil
-	}
-
-	// Try to recover from the error.
-	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // startReplicationRecoverable starts replication and handles recoverable errors by resetting replication.
 func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error {
 	err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
@@ -1264,19 +1250,14 @@ func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error 
 }
 
 // setReplicationSourceRecoverable configures the requested replication source and optionally starts
-// replication afterward. If possible, certain errors are recovered by restarting replication.
+// replication afterward. When possible, certain errors are recovered by reinitializing replication
+// metadata.
 func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, wasReplicating bool, shouldStartReplication bool) error {
-	// Create a helper to set the replication without starting replication afterward. This is used so we can better
-	// handle errors in each stage.
-	setReplicationSource := func(stopReplicationBefore bool) error {
-		return tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, stopReplicationBefore, false)
-	}
-
-	// Let's first try to apply the requested source without starting replication. If the replica was replicating
-	// before, we tell the helper to stop replication first.
-	err := setReplicationSource(wasReplicating)
+	// Let's first try to apply the requested source without starting replication afterwards. If the
+	// replica was replicating before, we stop replication first.
+	err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, false)
 	if err == nil {
-		// If we succeeded, let's start replication but only if it was requested.
+		// We succeeded, let's start replication but only if it was requested.
 		if !shouldStartReplication {
 			return nil
 		}
@@ -1284,48 +1265,42 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 		return tm.startReplicationRecoverable(ctx)
 	}
 
-	// Next, if the error is not one of the recoverable ones, return it.
+	// We hit an error. If the error is not one of the recoverable ones, we can't recover and should return it.
 	if !isRecoverableReplicationInitializationError(err) {
 		return err
 	}
 
-	// Recovery is performed by restarting replication. If the replica was not previously replicating,
-	// let's not continue with the recovery so that we don't inadvertently enable replication.
-	if !wasReplicating {
-		return err
-	}
-
 	log.Warn(
-		"Encountered recoverable replication initialization error while changing replication source, restarting "+
-			"replication and reapplying source",
+		"Encountered recoverable replication initialization error while changing replication source, resetting "+
+			"replication parameters and reapplying source",
 		slog.String("source_host", host),
 		slog.Int("source_port", int(port)),
 		slog.Any("error", err),
 	)
 
-	// Recover from the error by restarting replication.
-	if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
+	// Recover from the error by reinitializing replication metadata through `RESET REPLICA ALL`.
+	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return err
 	}
 
-	// Now that we've recovered, let's try setting the replication source again. Since we've just
-	// restarted replication, we tell the helper to stop replication beforehand.
-	if err := setReplicationSource(true); err != nil {
+	// Now that we've reinitialized the replication metadata, try setting the source again.
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, false, false); err != nil {
 		return err
 	}
 
 	// The replication source has finally been set. Let's also start replication if it was requested.
-	if !shouldStartReplication {
-		return nil
+	if shouldStartReplication {
+		return tm.startReplicationRecoverable(ctx)
 	}
 
-	return tm.startReplicationRecoverable(ctx)
+	return nil
 }
 
 // recoverableReplicationInitializationErrorCodes is the set of replication initialization error
-// codes that can be recovered from by restarting replication. MySQL used 1871/1872 for master-info
-// and relay-log-info initialization errors through 8.0.32, and reassigned those numbers in 8.0.33
-// to connection-metadata and applier-metadata initialization errors.
+// codes that can be recovered from by reinitializing replication metadata.
+// MySQL used 1871/1872 for master-info and relay-log-info initialization errors
+// through 8.0.32, and reassigned those numbers in 8.0.33 to connection-metadata
+// and applier-metadata initialization errors.
 var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
 	sqlerror.ERMasterInfo:                              {},
 	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
@@ -1333,7 +1308,7 @@ var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]stru
 }
 
 // isRecoverableReplicationInitializationError reports whether an error can be recovered from by
-// restarting replication.
+// reinitializing replication metadata.
 func isRecoverableReplicationInitializationError(err error) bool {
 	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !ok || sqlErr == nil {
