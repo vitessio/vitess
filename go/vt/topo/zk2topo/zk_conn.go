@@ -59,8 +59,8 @@ var (
 
 	certPath, keyPath, caPath, authFile string
 
-	zkConnAcquisition = stats.NewGaugeDuration(
-		"ZkConnAcquisition",
+	zkLockAcquisition = stats.NewGaugeDuration(
+		"ZkLockAcquisition",
 		"Time to acquire a zookeeper lock")
 	zkConnAcquisitionRetry = stats.NewCounter(
 		"ZkConnAcquisitionRetry",
@@ -253,7 +253,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 		return err
 	}
 	duration := time.Since(start)
-	defer zkConnAcquisition.Set(duration)
+	zkLockAcquisition.Set(duration)
 	defer c.sem.Release(1)
 
 	for i := range maxAttempts {
