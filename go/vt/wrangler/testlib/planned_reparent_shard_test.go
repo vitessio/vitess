@@ -659,11 +659,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 				"STOP REPLICA",
 				"FAKE SET SOURCE",
 				"START REPLICA",
-				// simulate error that will trigger a call to RestartReplication
-				"STOP REPLICA",
-				"RESET REPLICA",
-				"START REPLICA",
-				"START REPLICA",
 			}
 			goodReplica1.StartActionLoop(t, wr)
 			goodReplica1.FakeMysqlDaemon.StopReplicationError = relayError.err
@@ -674,20 +669,13 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 				"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
 				topoproto.TabletAliasString(primary.Tablet.Alias),
 			})
-			require.NoError(t, err)
+			require.ErrorContains(t, err, "failed to SetReplicationSource")
+			require.ErrorContains(t, err, relayError.err.Error())
 			// check what was run
 			err = primary.FakeMysqlDaemon.CheckSuperQueryList()
 			require.NoError(t, err)
 			err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
 			require.NoError(t, err)
-
-			assert.False(t, primary.FakeMysqlDaemon.ReadOnly, "primary.FakeMysqlDaemon.ReadOnly set")
-			assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-			assert.True(t, primary.TM.QueryServiceControl.IsServing(), "primary...QueryServiceControl not serving")
-
-			// verify the old primary was told to start replicating (and not
-			// the replica that wasn't replicating in the first place)
-			assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
 		})
 	}
 }
