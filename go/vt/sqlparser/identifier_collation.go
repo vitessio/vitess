@@ -130,57 +130,61 @@ func identEqual(a, b string) bool {
 // tables, producing case-insensitive but accent-sensitive results. Input
 // is expected to be sanitized (valid UTF-8) via identSanitize.
 func identNormalize(s string) string {
-	for i := 0; i < len(s); i++ {
+	var b []byte
+
+	var i int
+	for i < len(s) {
 		c := s[i]
 		if c >= utf8.RuneSelf {
-			b := make([]byte, len(s))
+			b = make([]byte, len(s))
 			copy(b[:i], s[:i])
-			n := identNormalizeUnicode(b[i:], s[i:])
-			return string(b[:i+n])
+			goto unicode
 		}
-		if 'A' <= c && c <= 'Z' {
-			b := make([]byte, len(s))
-			copy(b[:i], s[:i])
-			n := identNormalizeASCII(b[i:], s[i:])
-			return string(b[:i+n])
-		}
-	}
-	return s
-}
 
-// identNormalizeASCII lowercases ASCII bytes from src into dst. Falls through
-// to identNormalizeUnicode if a non-ASCII byte is encountered.
-func identNormalizeASCII(dst []byte, src string) int {
-	for i := 0; i < len(src); i++ {
-		c := src[i]
+		if 'A' <= c && c <= 'Z' {
+			b = make([]byte, len(s))
+			copy(b[:i], s[:i])
+			goto ascii
+		}
+
+		i++
+	}
+
+	return s
+
+ascii:
+	// Fast path for all-ASCII identifiers: just lowercase A-Z.
+	for i < len(s) {
+		c := s[i]
 		if c >= utf8.RuneSelf {
-			return i + identNormalizeUnicode(dst[i:], src[i:])
+			goto unicode
 		}
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
 		}
-		dst[i] = c
+		b[i] = c
+		i++
 	}
-	return len(src)
-}
 
-// identNormalizeUnicode lowercases runes using the unicase ToLower tables.
-func identNormalizeUnicode(dst []byte, src string) int {
-	var pos, i int
-	for i < len(src) {
-		if src[i] < utf8.RuneSelf {
-			c := src[i]
+	return string(b)
+
+unicode:
+	pos := i
+	for i < len(s) {
+		if s[i] < utf8.RuneSelf {
+			c := s[i]
 			if 'A' <= c && c <= 'Z' {
 				c += 'a' - 'A'
 			}
-			dst[pos] = c
+			b[pos] = c
 			pos++
 			i++
 			continue
 		}
-		r, size := utf8.DecodeRuneInString(src[i:])
-		pos += utf8.EncodeRune(dst[pos:], unicase.ToLowerRune(r))
+		r, size := utf8.DecodeRuneInString(s[i:])
+		pos += utf8.EncodeRune(b[pos:], unicase.ToLowerRune(r))
 		i += size
 	}
-	return pos
+
+	return string(b)
 }
