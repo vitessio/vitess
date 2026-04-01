@@ -34,7 +34,7 @@ type tabletStats struct {
 	Tablet    tabletInfo   `json:"Tablet"`
 	Target    tabletTarget `json:"Target"`
 	Serving   bool         `json:"Serving"`
-	LastError *string      `json:"LastError"`
+	LastError any          `json:"LastError"`
 }
 
 type tabletCacheStatus struct {
@@ -156,7 +156,7 @@ func isHealthy(stats tabletStats) bool {
 	if stats.LastError == nil {
 		return true
 	}
-	return *stats.LastError == ""
+	return false
 }
 
 func getenv(key string, fallback string) string {

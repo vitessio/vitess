@@ -33,7 +33,7 @@ type (
 		Tablet    tabletInfo   `json:"Tablet"`
 		Target    tabletTarget `json:"Target"`
 		Serving   bool         `json:"Serving"`
-		LastError *string      `json:"LastError"`
+		LastError any          `json:"LastError"`
 	}
 
 	tabletCacheStatus struct {
@@ -190,7 +190,7 @@ func isTabletHealthy(s tabletStats) bool {
 	if s.LastError == nil {
 		return true
 	}
-	return *s.LastError == ""
+	return false
 }
 
 func poll(ctx context.Context, interval time.Duration, fn func() (bool, error)) error {
