@@ -6543,7 +6543,7 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: non-accented column does NOT match accented vindex column (accent-sensitive)",
+    "comment": "accented vindex column is not matched by non-accented reference",
     "query": "select * from accent_tbl where cafe = 1",
     "plan": {
       "Type": "Scatter",
@@ -6565,7 +6565,7 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: uppercase non-accented does NOT match accented vindex column (accent-sensitive)",
+    "comment": "accented vindex column is not matched by uppercase non-accented reference",
     "query": "select * from accent_tbl where CAFE = 1",
     "plan": {
       "Type": "Scatter",
@@ -6587,7 +6587,7 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: backtick-quoted accented matches accented vindex column",
+    "comment": "accented vindex column matched by backtick-quoted accented reference",
     "query": "select * from accent_tbl where `café` = 1",
     "plan": {
       "Type": "Passthrough",
@@ -6613,7 +6613,7 @@
     }
   },
   {
-    "comment": "utf8mb4_general_ci: backtick-quoted uppercase accented matches accented vindex column",
+    "comment": "accented vindex column matched by backtick-quoted uppercase accented reference",
     "query": "select * from accent_tbl where `CAFÉ` = 1",
     "plan": {
       "Type": "Passthrough",
@@ -6639,7 +6639,7 @@
     }
   },
   {
-    "comment": "unicase: İ (U+0130) vindex column matches i (MySQL unicase maps İ→i, but strings.ToLower does not)",
+    "comment": "İ (U+0130) vindex column matched by lowercase i",
     "query": "select * from unicase_tbl where i_id = 1",
     "plan": {
       "Type": "Passthrough",
@@ -6665,7 +6665,7 @@
     }
   },
   {
-    "comment": "unicase: İ (U+0130) vindex column matches I (standard case folding)",
+    "comment": "İ (U+0130) vindex column matched by uppercase I",
     "query": "select * from unicase_tbl where I_ID = 1",
     "plan": {
       "Type": "Passthrough",
