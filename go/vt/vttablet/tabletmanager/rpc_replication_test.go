@@ -445,6 +445,21 @@ func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
 
+func TestStopReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.StopReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.stopReplicationRecoverable(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
 // TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.
 func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)

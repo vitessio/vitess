@@ -956,10 +956,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account
-		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
-				return err
-			}
+		if err := tm.stopReplicationRecoverable(ctx); err != nil {
+			return err
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
 			return err
@@ -1231,6 +1229,22 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	if err := tm.startReplicationRecoverable(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to StartReplication")
 	}
+	return nil
+}
+
+// stopReplicationRecoverable stops replication and handles recoverable errors
+// by resetting replication metadata.
+func (tm *TabletManager) stopReplicationRecoverable(ctx context.Context) error {
+	err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv())
+	if err == nil {
+		return nil
+	}
+
+	// Try to recover from the error.
+	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+		return err
+	}
+
 	return nil
 }
 
