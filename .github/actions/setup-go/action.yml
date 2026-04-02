@@ -25,6 +25,6 @@ runs:
           ~/go/pkg/mod
           ~/.cache/go-build
         # Cache by version/arch/hash. Construct hash using same method as actions/setup-go.
-        key: go-${{ steps.setup-go.outputs.go-version }}-${{ runner.arch }}-${{ hashFiles('go.sum') }}
+        key: go-${{ steps.setup-go.outputs.go-version }}-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-${{ hashFiles('go.sum') }}
         restore-keys: |
-          go-${{ steps.setup-go.outputs.go-version }}-${{ runner.arch }}-
+          go-${{ steps.setup-go.outputs.go-version }}-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-
