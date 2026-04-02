@@ -81,11 +81,18 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 			if idx >= len(vals) {
 				return
 			}
+			val := vals[idx]
+			// In MySQL, if any referencing column in an FK is NULL, the FK
+			// constraint is not enforced for that row. Skip generating a
+			// writeset key in that case to avoid artificial conflicts.
+			if val.IsNull() {
+				return
+			}
 			if !first {
 				d.Write([]byte{','})
 			}
 			first = false
-			writesetDigestAddValue(&d, vals[idx])
+			writesetDigestAddValue(&d, val)
 		}
 		keySet[d.Sum64()] = struct{}{}
 	}

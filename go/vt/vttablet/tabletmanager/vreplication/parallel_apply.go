@@ -1013,7 +1013,10 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// set state on the main connection if stop position was reached.
 		if shouldStop && posReached {
 			if vp.saveStop {
-				if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+				vp.serialMu.Lock()
+				err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
+				vp.serialMu.Unlock()
+				if err != nil {
 					return err
 				}
 			}
