@@ -86,6 +86,8 @@ func (sqb *SubQueryBuilder) handleSubquery(
 		sqInner.ArgName = group.List
 	}
 	sqInner.NeedsScalar = sqInner.FilterType == opcode.PulloutValue
+	sqInner.NeedsList = sqInner.FilterType.NeedsListArg()
+	sqInner.NeedsHasValues = sqInner.FilterType.NeedsListArg() || sqInner.FilterType == opcode.PulloutExists || sqInner.FilterType == opcode.PulloutNotExists
 	sqb.Inner = append(sqb.Inner, sqInner)
 
 	return sqInner
@@ -413,6 +415,13 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 			if filterType == opcode.PulloutValue {
 				existing.NeedsScalar = true
 			}
+			if filterType.NeedsListArg() {
+				existing.NeedsList = true
+				existing.NeedsHasValues = true
+			}
+			if filterType == opcode.PulloutExists {
+				existing.NeedsHasValues = true
+			}
 			allSubqs = append(allSubqs, existing)
 			continue
 		}
@@ -422,6 +431,8 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		sqInner.ListArgName = group.List
 		sqInner.HasValuesArgName = group.HasValues
 		sqInner.NeedsScalar = filterType == opcode.PulloutValue
+		sqInner.NeedsList = filterType.NeedsListArg()
+		sqInner.NeedsHasValues = filterType.NeedsListArg() || filterType == opcode.PulloutExists
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
 	}

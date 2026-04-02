@@ -2296,8 +2296,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1_has_values",
-          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2343,8 +2341,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1_has_values",
-          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2391,8 +2387,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -2438,8 +2433,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -2513,8 +2507,7 @@
             "Variant": "PulloutSubquery",
             "PulloutVars": [
               "__sq1_has_values",
-              "__sq1_list",
-              "__sq1"
+              "__sq1_list"
             ],
             "Inputs": [
               {
@@ -3395,8 +3388,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq2_has_values",
-          "__sq2_list",
           "__sq2"
         ],
         "Inputs": [
@@ -3423,8 +3414,7 @@
             "Variant": "PulloutSubquery",
             "PulloutVars": [
               "__sq1_has_values",
-              "__sq1_list",
-              "__sq1"
+              "__sq1_list"
             ],
             "Inputs": [
               {

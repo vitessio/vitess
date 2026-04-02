@@ -279,14 +279,21 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
-		return &engine.UncorrelatedSubquery{
-			ScalarResult: op.ScalarArgName,
-			ListResult:   op.ListArgName,
-			HasValues:    op.HasValuesArgName,
-			NeedsScalar:  op.NeedsScalar,
-			Subquery:     inner,
-			Outer:        outer,
-		}, nil
+		usq := &engine.UncorrelatedSubquery{
+			NeedsScalar: op.NeedsScalar,
+			Subquery:    inner,
+			Outer:       outer,
+		}
+		if op.NeedsScalar {
+			usq.ScalarResult = op.ScalarArgName
+		}
+		if op.NeedsList {
+			usq.ListResult = op.ListArgName
+		}
+		if op.NeedsHasValues {
+			usq.HasValues = op.HasValuesArgName
+		}
+		return usq, nil
 	}
 
 	return &engine.SemiJoin{

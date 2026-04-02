@@ -118,8 +118,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -473,8 +472,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -744,8 +742,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -886,8 +883,7 @@
         "Variant": "PulloutSubquery",
         "PulloutVars": [
           "__sq1_has_values",
-          "__sq1_list",
-          "__sq1"
+          "__sq1_list"
         ],
         "Inputs": [
           {
@@ -1412,8 +1408,7 @@
             "Variant": "PulloutSubquery",
             "PulloutVars": [
               "__sq1_has_values",
-              "__sq1_list",
-              "__sq1"
+              "__sq1_list"
             ],
             "Inputs": [
               {

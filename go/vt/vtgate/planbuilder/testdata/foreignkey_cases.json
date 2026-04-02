@@ -3371,8 +3371,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1_has_values",
-          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -3433,8 +3431,6 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutSubquery",
         "PulloutVars": [
-          "__sq1_has_values",
-          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [

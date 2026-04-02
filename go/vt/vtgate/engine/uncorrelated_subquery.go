@@ -77,11 +77,17 @@ func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VC
 func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+3)
 	maps.Copy(combinedVars, bindVars)
-	combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
-	combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-	combinedVars[ps.ListResult] = &querypb.BindVariable{
-		Type:   querypb.Type_TUPLE,
-		Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+	if ps.ScalarResult != "" {
+		combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
+	}
+	if ps.HasValues != "" {
+		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
+	}
+	if ps.ListResult != "" {
+		combinedVars[ps.ListResult] = &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+		}
 	}
 	return ps.Outer.GetFields(ctx, vcursor, combinedVars)
 }
@@ -105,33 +111,51 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 
 	switch len(result.Rows) {
 	case 0:
-		combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
-		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-		combinedVars[ps.ListResult] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+		if ps.ScalarResult != "" {
+			combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
+		}
+		if ps.HasValues != "" {
+			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
+		}
+		if ps.ListResult != "" {
+			combinedVars[ps.ListResult] = &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+			}
 		}
 	case 1:
-		combinedVars[ps.ScalarResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
-		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
-		combinedVars[ps.ListResult] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{sqltypes.ValueToProto(result.Rows[0][0])},
+		if ps.ScalarResult != "" {
+			combinedVars[ps.ScalarResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
+		}
+		if ps.HasValues != "" {
+			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
+		}
+		if ps.ListResult != "" {
+			combinedVars[ps.ListResult] = &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: []*querypb.Value{sqltypes.ValueToProto(result.Rows[0][0])},
+			}
 		}
 	default:
 		if ps.NeedsScalar {
 			return nil, errSqRow
 		}
-		combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
-		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
-		values := &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: make([]*querypb.Value, len(result.Rows)),
+		if ps.ScalarResult != "" {
+			combinedVars[ps.ScalarResult] = sqltypes.NullBindVariable
 		}
-		for i, v := range result.Rows {
-			values.Values[i] = sqltypes.ValueToProto(v[0])
+		if ps.HasValues != "" {
+			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 		}
-		combinedVars[ps.ListResult] = values
+		if ps.ListResult != "" {
+			values := &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: make([]*querypb.Value, len(result.Rows)),
+			}
+			for i, v := range result.Rows {
+				values.Values[i] = sqltypes.ValueToProto(v[0])
+			}
+			combinedVars[ps.ListResult] = values
+		}
 	}
 
 	return combinedVars, nil
@@ -139,8 +163,19 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 
 func (ps *UncorrelatedSubquery) description() PrimitiveDescription {
 	other := map[string]any{}
-	pulloutVars := []string{ps.HasValues, ps.ListResult, ps.ScalarResult}
-	other["PulloutVars"] = pulloutVars
+	var pulloutVars []string
+	if ps.HasValues != "" {
+		pulloutVars = append(pulloutVars, ps.HasValues)
+	}
+	if ps.ListResult != "" {
+		pulloutVars = append(pulloutVars, ps.ListResult)
+	}
+	if ps.ScalarResult != "" {
+		pulloutVars = append(pulloutVars, ps.ScalarResult)
+	}
+	if len(pulloutVars) > 0 {
+		other["PulloutVars"] = pulloutVars
+	}
 
 	return PrimitiveDescription{
 		OperatorType: "UncorrelatedSubquery",

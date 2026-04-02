@@ -49,6 +49,8 @@ type SubQuery struct {
 	ListArgName      string // e.g. "__sq1_list" — tuple of values
 	HasValuesArgName string // e.g. "__sq1_has_values" — boolean flag
 	NeedsScalar      bool   // true when any usage is PulloutValue — enforces ≤1 row
+	NeedsList        bool   // true when any usage is PulloutIn/PulloutNotIn
+	NeedsHasValues   bool   // true when any usage is PulloutExists or PulloutIn/PulloutNotIn
 
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
