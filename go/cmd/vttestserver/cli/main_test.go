@@ -388,7 +388,11 @@ func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, *
 		"--data-dir=" + dir,
 	}...)
 	cluster, err := startCluster(flags...)
-	return cluster, pr, err
+	if err != nil {
+		pr.Unreserve()
+		return vttest.LocalCluster{}, nil, err
+	}
+	return cluster, pr, nil
 }
 
 var clusterKeyspaces = []string{
