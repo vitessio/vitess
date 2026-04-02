@@ -3,10 +3,7 @@ module vitess.io/vitess
 go 1.26.1
 
 tool (
-<<<<<<< HEAD
-=======
 	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
->>>>>>> e24573f328 (add the Antithesis SDK to the go module and install the instrumentor tool)
 	github.com/vitessio/goyacc
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
@@ -141,7 +138,6 @@ require (
 	github.com/DataDog/dd-trace-go/v2 v2.7.1 // indirect
 	github.com/DataDog/go-libddwaf/v4 v4.9.0 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20260217080614-b0f4edc38a6d // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.9 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect

@@ -360,7 +360,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15104:8080
     volumes:
@@ -477,7 +477,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15204:8080
     volumes:
@@ -594,7 +594,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15304:8080
     volumes:
