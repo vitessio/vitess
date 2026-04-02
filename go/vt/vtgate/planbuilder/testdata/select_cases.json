@@ -2836,6 +2836,28 @@
     "skip_e2e": true
   },
   {
+    "comment": "Backtick-quoted dual is a real table, not virtual dual",
+    "query": "select 1 from `dual`",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 1 from `dual`",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from `dual` where 1 != 1",
+        "Query": "select 1 from `dual`"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
     "comment": "subquery in select expression of derived table",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
