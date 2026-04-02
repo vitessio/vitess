@@ -116,9 +116,8 @@ jobs:
 
     - name: Set up Go
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      uses: ./.github/actions/setup-go
       with:
-        go-version-file: go.mod
         cache: false
 
     - name: Get dependencies for the next release
@@ -145,9 +144,8 @@ jobs:
 
     - name: Set up Go
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      uses: ./.github/actions/setup-go
       with:
-        go-version-file: go.mod
         cache: false
 
     - name: Get dependencies for this commit
