@@ -1,4 +1,4 @@
-//go:build unix
+//go:build linux || darwin || freebsd || openbsd || netbsd || dragonfly
 
 /*
 Copyright 2026 The Vitess Authors.
@@ -24,14 +24,14 @@ import (
 	"syscall"
 )
 
-func lockPortFile(f *os.File) {
+func lockPortFile(f *os.File) error {
 	for {
 		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
 		if err != syscall.EINTR {
 			if err != nil {
-				panic(fmt.Sprintf("osutil: failed to lock port file: %v", err))
+				return fmt.Errorf("osutil: failed to lock port file: %w", err)
 			}
-			return
+			return nil
 		}
 	}
 }

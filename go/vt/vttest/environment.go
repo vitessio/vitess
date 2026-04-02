@@ -208,7 +208,9 @@ func (env *LocalTestEnv) Directory() string {
 // TearDown implements TearDown for LocalTestEnv
 func (env *LocalTestEnv) TearDown() error {
 	if env.reservedPorts != nil {
-		osutil.UnreservePorts(env.reservedPorts)
+		if err := osutil.UnreservePorts(env.reservedPorts); err != nil {
+			return err
+		}
 	}
 	return os.RemoveAll(env.TmpPath)
 }
@@ -258,7 +260,12 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 
 	var reservedPorts *osutil.PortReservation
 	if basePort == 0 {
-		reservedPorts = osutil.GetPortReservation(6)
+		osutil.SetPortFilePath(path.Join(os.TempDir(), "vitess_vttest_ports.txt"))
+		var err error
+		reservedPorts, err = osutil.GetPortReservation(6)
+		if err != nil {
+			return nil, err
+		}
 		basePort = reservedPorts.Start
 	}
 

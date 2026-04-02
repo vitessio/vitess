@@ -29,6 +29,10 @@ const (
 	// portFileTimeout is how long port reservations remain valid in the port file.
 	// Acts as a safety net for processes that crash without calling UnreservePorts.
 	portFileTimeout = 1 * time.Hour
+
+	// maxPortRetries is the maximum number of attempts to find available ports
+	// before giving up. Prevents infinite loops under extreme port pressure.
+	maxPortRetries = 1000
 )
 
 // PortReservation represents an inclusive range of reserved TCP ports.
@@ -59,11 +63,11 @@ func hasRangeOverlap(ranges []*PortReservation, from, to int) bool {
 	return false
 }
 
-func readPortFile(f *os.File) []*PortReservation {
+func readPortFile(f *os.File) ([]*PortReservation, error) {
 	var ranges []*PortReservation
 	now := time.Now()
 	if _, err := f.Seek(0, 0); err != nil {
-		panic(fmt.Sprintf("osutil: failed to seek port file: %v", err))
+		return nil, fmt.Errorf("osutil: failed to seek port file: %w", err)
 	}
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -81,41 +85,44 @@ func readPortFile(f *os.File) []*PortReservation {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		panic(fmt.Sprintf("osutil: failed to read port file: %v", err))
+		return nil, fmt.Errorf("osutil: failed to read port file: %w", err)
 	}
-	return ranges
+	return ranges, nil
 }
 
-func writePortFile(f *os.File, ranges []*PortReservation) {
+func writePortFile(f *os.File, ranges []*PortReservation) error {
 	if err := f.Truncate(0); err != nil {
-		panic(fmt.Sprintf("osutil: failed to truncate port file: %v", err))
+		return fmt.Errorf("osutil: failed to truncate port file: %w", err)
 	}
 	if _, err := f.Seek(0, 0); err != nil {
-		panic(fmt.Sprintf("osutil: failed to seek port file: %v", err))
+		return fmt.Errorf("osutil: failed to seek port file: %w", err)
 	}
 	for _, r := range ranges {
 		if _, err := fmt.Fprintf(f, "%d %d %d\n", r.Start, r.End, r.allocated.Unix()); err != nil {
-			panic(fmt.Sprintf("osutil: failed to write port file: %v", err))
+			return fmt.Errorf("osutil: failed to write port file: %w", err)
 		}
 	}
+	return nil
 }
 
 // openAndLockPortFile opens and locks the port file if configured.
 // Returns nil if no port file is configured; caller must call cleanup when done.
-func openAndLockPortFile() (f *os.File, cleanup func()) {
+func openAndLockPortFile() (f *os.File, cleanup func(), err error) {
 	if portFilePath == "" {
-		return nil, func() {}
+		return nil, func() {}, nil
 	}
-	var err error
 	f, err = os.OpenFile(portFilePath, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		panic(fmt.Sprintf("osutil: failed to open port file: %v", err))
+		return nil, nil, fmt.Errorf("osutil: failed to open port file: %w", err)
 	}
-	lockPortFile(f)
+	if err := lockPortFile(f); err != nil {
+		f.Close()
+		return nil, nil, fmt.Errorf("osutil: failed to lock port file: %w", err)
+	}
 	return f, func() {
 		unlockPortFile(f)
 		f.Close()
-	}
+	}, nil
 }
 
 // pruneExpiredRanges removes expired entries from allocatedRanges.
@@ -131,25 +138,30 @@ func pruneExpiredRanges() {
 }
 
 // mergeFileRanges merges port file ranges into the in-memory list.
-func mergeFileRanges(f *os.File) {
+func mergeFileRanges(f *os.File) error {
 	if f == nil {
-		return
+		return nil
 	}
-	for _, r := range readPortFile(f) {
+	ranges, err := readPortFile(f)
+	if err != nil {
+		return err
+	}
+	for _, r := range ranges {
 		if !hasRangeOverlap(allocatedRanges, r.Start, r.End) {
 			allocatedRanges = append(allocatedRanges, r)
 		}
 	}
+	return nil
 }
 
-func randomPort() int {
+func randomPort() (int, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		panic(fmt.Sprintf("osutil: failed to listen: %v", err))
+		return 0, fmt.Errorf("osutil: failed to listen: %w", err)
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
-	return port
+	return port, nil
 }
 
 func portsAvailable(base, count int) bool {
@@ -168,21 +180,29 @@ func portsAvailable(base, count int) bool {
 // default, and persisted for cross-process coordination when SetPortFilePath is used. It does
 // not keep listeners open on the reserved ports, so other non-cooperating processes may still
 // bind to them after this call returns.
-func GetPortReservation(count int) *PortReservation {
+func GetPortReservation(count int) (*PortReservation, error) {
 	if count < 1 {
-		panic("osutil.GetPortReservation: count must be >= 1")
+		return nil, fmt.Errorf("osutil.GetPortReservation: count must be >= 1")
 	}
 
 	randomPortMu.Lock()
 	defer randomPortMu.Unlock()
 
-	f, cleanup := openAndLockPortFile()
+	f, cleanup, err := openAndLockPortFile()
+	if err != nil {
+		return nil, err
+	}
 	defer cleanup()
 	pruneExpiredRanges()
-	mergeFileRanges(f)
+	if err := mergeFileRanges(f); err != nil {
+		return nil, err
+	}
 
-	for {
-		base := randomPort()
+	for range maxPortRetries {
+		base, err := randomPort()
+		if err != nil {
+			return nil, err
+		}
 		if hasRangeOverlap(allocatedRanges, base, base+count-1) || !portsAvailable(base, count) {
 			continue
 		}
@@ -190,22 +210,30 @@ func GetPortReservation(count int) *PortReservation {
 		pr := &PortReservation{Start: base, End: base + count - 1, allocated: time.Now()}
 		allocatedRanges = append(allocatedRanges, pr)
 		if f != nil {
-			writePortFile(f, allocatedRanges)
+			if err := writePortFile(f, allocatedRanges); err != nil {
+				return nil, err
+			}
 		}
-		return pr
+		return pr, nil
 	}
+	return nil, fmt.Errorf("osutil.GetPortReservation: failed to find %d consecutive available ports after %d attempts", count, maxPortRetries)
 }
 
 // UnreservePorts releases a previously reserved port range.
-func UnreservePorts(pr *PortReservation) {
+func UnreservePorts(pr *PortReservation) error {
 	randomPortMu.Lock()
 	defer randomPortMu.Unlock()
 
-	f, cleanup := openAndLockPortFile()
+	f, cleanup, err := openAndLockPortFile()
+	if err != nil {
+		return err
+	}
 	defer cleanup()
 
 	if f != nil {
-		mergeFileRanges(f)
+		if err := mergeFileRanges(f); err != nil {
+			return err
+		}
 	}
 
 	filtered := allocatedRanges[:0]
@@ -218,6 +246,9 @@ func UnreservePorts(pr *PortReservation) {
 	allocatedRanges = filtered
 
 	if f != nil {
-		writePortFile(f, allocatedRanges)
+		if err := writePortFile(f, allocatedRanges); err != nil {
+			return err
+		}
 	}
+	return nil
 }

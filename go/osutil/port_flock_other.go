@@ -1,4 +1,4 @@
-//go:build !unix
+//go:build !(linux || darwin || freebsd || openbsd || netbsd || dragonfly)
 
 /*
 Copyright 2026 The Vitess Authors.
@@ -18,12 +18,14 @@ limitations under the License.
 
 package osutil
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
-func lockPortFile(f *os.File) {
-	panic("osutil: port file locking is not supported on this platform")
+func lockPortFile(f *os.File) error {
+	return fmt.Errorf("osutil: port file locking is not supported on this platform")
 }
 
 func unlockPortFile(f *os.File) {
-	panic("osutil: port file locking is not supported on this platform")
 }

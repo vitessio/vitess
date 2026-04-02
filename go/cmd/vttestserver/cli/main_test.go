@@ -78,7 +78,7 @@ func TestPersistentMode(t *testing.T) {
 	dir := t.TempDir()
 
 	cluster, pr, err := startPersistentCluster(dir)
-	t.Cleanup(func() { osutil.UnreservePorts(pr) })
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
 	require.NoError(t, err)
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
@@ -114,7 +114,7 @@ func TestPersistentMode(t *testing.T) {
 	// reboot the persistent cluster
 	cluster.TearDown()
 	cluster, pr2, err := startPersistentCluster(dir)
-	t.Cleanup(func() { osutil.UnreservePorts(pr2) })
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr2) })
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
@@ -377,7 +377,10 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 }
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, *osutil.PortReservation, error) {
-	pr := osutil.GetPortReservation(6)
+	pr, err := osutil.GetPortReservation(6)
+	if err != nil {
+		return vttest.LocalCluster{}, nil, err
+	}
 	flags = append(flags, []string{
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
@@ -507,8 +510,9 @@ func consumeEventStream(stream logutil.EventStream) (string, error) {
 // Returns the exec.Cmd forked, and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string) {
 	// pick a random port to make sure things work with non-default port
-	pr := osutil.GetPortReservation(1)
-	t.Cleanup(func() { osutil.UnreservePorts(pr) })
+	pr, err := osutil.GetPortReservation(1)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
 	port := pr.Start
 
 	cmd := exec.Command("consul",

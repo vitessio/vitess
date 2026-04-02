@@ -27,21 +27,24 @@ import (
 )
 
 func TestGetPortReservation_Single(t *testing.T) {
-	pr := GetPortReservation(1)
-	t.Cleanup(func() { UnreservePorts(pr) })
+	pr, err := GetPortReservation(1)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, UnreservePorts(pr)) })
 	require.Greater(t, pr.Start, 0)
 	require.Less(t, pr.Start, 65536)
 	assert.Equal(t, pr.Start, pr.End)
 
 	// Second call returns a different port.
-	pr2 := GetPortReservation(1)
-	t.Cleanup(func() { UnreservePorts(pr2) })
+	pr2, err := GetPortReservation(1)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, UnreservePorts(pr2)) })
 	assert.NotEqual(t, pr.Start, pr2.Start)
 }
 
 func TestGetPortReservation_Consecutive(t *testing.T) {
-	pr := GetPortReservation(6)
-	t.Cleanup(func() { UnreservePorts(pr) })
+	pr, err := GetPortReservation(6)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, UnreservePorts(pr)) })
 	require.Greater(t, pr.Start, 0)
 	require.Less(t, pr.Start, 65536)
 	assert.Equal(t, pr.Start+5, pr.End)
@@ -54,12 +57,14 @@ func TestGetPortReservation_Consecutive(t *testing.T) {
 	}
 }
 
-func TestGetPortReservation_PanicsOnZero(t *testing.T) {
-	assert.Panics(t, func() { GetPortReservation(0) })
+func TestGetPortReservation_ErrorOnZero(t *testing.T) {
+	_, err := GetPortReservation(0)
+	assert.Error(t, err)
 }
 
-func TestGetPortReservation_PanicsOnNegative(t *testing.T) {
-	assert.Panics(t, func() { GetPortReservation(-1) })
+func TestGetPortReservation_ErrorOnNegative(t *testing.T) {
+	_, err := GetPortReservation(-1)
+	assert.Error(t, err)
 }
 
 func TestGetPortReservation_WithPortFile(t *testing.T) {
@@ -77,11 +82,15 @@ func TestGetPortReservation_WithPortFile(t *testing.T) {
 	allocatedRanges = nil
 	randomPortMu.Unlock()
 
-	pr := GetPortReservation(1)
-	require.Greater(t, pr.Start, 0)
+	pr, err := GetPortReservation(1)
+	require.NoError(t, err)
 
-	pr2 := GetPortReservation(1)
+	pr2, err := GetPortReservation(1)
+	require.NoError(t, err)
 	assert.NotEqual(t, pr.Start, pr2.Start)
+
+	require.NoError(t, UnreservePorts(pr))
+	require.NoError(t, UnreservePorts(pr2))
 }
 
 func TestUnreservePorts(t *testing.T) {
@@ -96,14 +105,15 @@ func TestUnreservePorts(t *testing.T) {
 	allocatedRanges = nil
 	randomPortMu.Unlock()
 
-	pr := GetPortReservation(6)
+	pr, err := GetPortReservation(6)
+	require.NoError(t, err)
 	require.Greater(t, pr.Start, 0)
 
 	randomPortMu.Lock()
 	require.Len(t, allocatedRanges, 1)
 	randomPortMu.Unlock()
 
-	UnreservePorts(pr)
+	require.NoError(t, UnreservePorts(pr))
 
 	randomPortMu.Lock()
 	assert.Empty(t, allocatedRanges)
@@ -125,14 +135,15 @@ func TestUnreservePorts_WithPortFile(t *testing.T) {
 	allocatedRanges = nil
 	randomPortMu.Unlock()
 
-	pr := GetPortReservation(6)
+	pr, err := GetPortReservation(6)
+	require.NoError(t, err)
 	require.Greater(t, pr.Start, 0)
 
 	randomPortMu.Lock()
 	require.Len(t, allocatedRanges, 1)
 	randomPortMu.Unlock()
 
-	UnreservePorts(pr)
+	require.NoError(t, UnreservePorts(pr))
 
 	randomPortMu.Lock()
 	assert.Empty(t, allocatedRanges)

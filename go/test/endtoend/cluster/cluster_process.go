@@ -1138,7 +1138,9 @@ func (cluster *LocalProcessCluster) Teardown() {
 	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
 
 	if cluster.reservedPorts != nil {
-		osutil.UnreservePorts(cluster.reservedPorts)
+		if err := osutil.UnreservePorts(cluster.reservedPorts); err != nil {
+			log.Error(fmt.Sprintf("Error unreserving ports: %v", err))
+		}
 	}
 
 	cluster.teardownCompleted = true
@@ -1211,14 +1213,33 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
 		if *forcePortStart > 0 {
-			cluster.nextPortForProcess = *forcePortStart
+			cluster.nextPortForProcess = *forcePortStart - 1
 		} else {
 			osutil.SetPortFilePath(path.Join(os.TempDir(), portFileName))
-			cluster.reservedPorts = osutil.GetPortReservation(200)
+			pr, err := osutil.GetPortReservation(200)
+			if err != nil {
+				panic(fmt.Sprintf("GetAndReservePort: %v", err))
+			}
+			cluster.reservedPorts = pr
 			cluster.nextPortForProcess = cluster.reservedPorts.Start - 1
 		}
 	}
 	cluster.nextPortForProcess++
+	if cluster.reservedPorts != nil && cluster.nextPortForProcess > cluster.reservedPorts.End {
+		panic(fmt.Sprintf("GetAndReservePort: port %d exceeds reserved range %d-%d", cluster.nextPortForProcess, cluster.reservedPorts.Start, cluster.reservedPorts.End))
+	}
+	// When using --force-port-start, check that the port is actually available.
+	if *forcePortStart > 0 {
+		for {
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", cluster.nextPortForProcess))
+			if err != nil {
+				cluster.nextPortForProcess++
+				continue
+			}
+			ln.Close()
+			break
+		}
+	}
 	return cluster.nextPortForProcess
 }
 
