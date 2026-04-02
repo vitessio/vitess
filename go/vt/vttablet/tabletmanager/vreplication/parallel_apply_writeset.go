@@ -51,10 +51,73 @@ func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
 // fkConstraintRef represents one foreign key constraint on a table.
 // It maps one or more child columns to a parent table, allowing the
 // parallel apply writeset to include FK reference keys that conflict
-// with the parent table's PK keys.
+// with the parent table's writeset keys.
 type fkConstraintRef struct {
-	ParentTable      string   // referenced parent table name
-	ChildColumnNames []string // child column names, in FK ordinal order
+	ParentTable           string   // referenced parent table name
+	ChildColumnNames      []string // child column names, in FK ordinal order
+	ReferencedColumnNames []string // parent column names, in FK ordinal order
+}
+
+// parentFKRef represents a foreign key constraint from the parent table's
+// perspective. When a parent row changes, we generate writeset keys using the
+// referenced column values so they conflict with child-side FK keys.
+type parentFKRef struct {
+	ParentTable           string   // the parent table name (same as the table being modified)
+	ReferencedColumnNames []string // parent column names referenced by the FK
+}
+
+// buildParentFKRefs builds a reverse map from parent table name to the FK
+// constraints that reference it. This allows parent-side rows to generate
+// writeset keys that match child-side FK keys.
+func buildParentFKRefs(fkRefs map[string][]fkConstraintRef) map[string][]parentFKRef {
+	if len(fkRefs) == 0 {
+		return nil
+	}
+	result := make(map[string][]parentFKRef)
+	for _, refs := range fkRefs {
+		for _, ref := range refs {
+			result[ref.ParentTable] = append(result[ref.ParentTable], parentFKRef{
+				ParentTable:           ref.ParentTable,
+				ReferencedColumnNames: ref.ReferencedColumnNames,
+			})
+		}
+	}
+	return result
+}
+
+// writesetKeysForParentFKRef generates writeset keys for a parent table row
+// based on foreign key constraints that reference this table. The hash uses
+// parentTable:referencedColValues, matching the child-side FK key hash.
+func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) {
+	appendKey := func(vals []sqltypes.Value) {
+		if len(vals) == 0 {
+			return
+		}
+		var d xxhash.Digest
+		writesetDigestInit(&d, ref.ParentTable)
+		first := true
+		for _, colName := range ref.ReferencedColumnNames {
+			idx, ok := fieldIdx[colName]
+			if !ok {
+				return
+			}
+			if idx >= len(vals) {
+				return
+			}
+			val := vals[idx]
+			if val.IsNull() {
+				return
+			}
+			if !first {
+				d.Write([]byte{','})
+			}
+			first = false
+			writesetDigestAddValue(&d, val)
+		}
+		keySet[d.Sum64()] = struct{}{}
+	}
+	appendKey(beforeVals)
+	appendKey(afterVals)
 }
 
 // writesetKeysForFKRef generates writeset keys based on a foreign key constraint.
@@ -104,7 +167,7 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 // fieldIdxCache is an optional cache of field-name→index maps, shared
 // across transactions on the same scheduler goroutine. Pass nil to
 // use a local cache (e.g. in tests).
-func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, events []*binlogdatapb.VEvent, fieldIdxCaches ...map[string]map[string]int) ([]uint64, error) {
+func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, events []*binlogdatapb.VEvent, fieldIdxCaches ...map[string]map[string]int) ([]uint64, error) {
 	// Pre-estimate capacity to avoid map rehashing during key insertion.
 	// Each row change can produce ~2 keys (before + after).
 	estimated := 0
@@ -133,9 +196,10 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
 		}
 		refs := fkRefs[rowEvent.TableName]
-		// Build fieldIdx once per table for FK ref lookups.
+		pRefs := parentRefs[rowEvent.TableName]
+		// Build fieldIdx once per table for FK ref lookups (child or parent side).
 		var fieldIdx map[string]int
-		if len(refs) > 0 {
+		if len(refs) > 0 || len(pRefs) > 0 {
 			var ok bool
 			fieldIdx, ok = fieldIdxCache[rowEvent.TableName]
 			if !ok {
@@ -160,6 +224,11 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			}
 			for i := range refs {
 				writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet)
+			}
+			// Parent-side: generate FK-aware keys using the referenced columns
+			// so parent row changes conflict with child FK keys.
+			for i := range pRefs {
+				writesetKeysForParentFKRef(&pRefs[i], fieldIdx, beforeVals, afterVals, keySet)
 			}
 		}
 	}
@@ -246,7 +315,7 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 // parent table's PK-based writeset keys.
 func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintRef, error) {
 	query := fmt.Sprintf(
-		"SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME "+
+		"SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME "+
 			"FROM information_schema.KEY_COLUMN_USAGE "+
 			"WHERE TABLE_SCHEMA = %s AND REFERENCED_TABLE_NAME IS NOT NULL "+
 			"ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION",
@@ -270,9 +339,10 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		constraintName string
 	}
 	type constraintEntry struct {
-		key         constraintKey
-		parentTable string
-		cols        []string // child column names in ordinal order
+		key            constraintKey
+		parentTable    string
+		cols           []string // child column names in ordinal order
+		referencedCols []string // parent column names in ordinal order
 	}
 
 	// Use a slice to preserve order; there are typically very few FK constraints.
@@ -284,16 +354,19 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		constraintName := row[1].ToString()
 		colName := row[2].ToString()
 		parentTable := row[3].ToString()
+		referencedColName := row[4].ToString()
 
 		k := constraintKey{childTable: childTable, constraintName: constraintName}
 		if i, ok := idx[k]; ok {
 			constraints[i].cols = append(constraints[i].cols, colName)
+			constraints[i].referencedCols = append(constraints[i].referencedCols, referencedColName)
 		} else {
 			idx[k] = len(constraints)
 			constraints = append(constraints, constraintEntry{
-				key:         k,
-				parentTable: parentTable,
-				cols:        []string{colName},
+				key:            k,
+				parentTable:    parentTable,
+				cols:           []string{colName},
+				referencedCols: []string{referencedColName},
 			})
 		}
 	}
@@ -301,8 +374,9 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 	result := make(map[string][]fkConstraintRef, len(constraints))
 	for _, c := range constraints {
 		result[c.key.childTable] = append(result[c.key.childTable], fkConstraintRef{
-			ParentTable:      c.parentTable,
-			ChildColumnNames: c.cols,
+			ParentTable:           c.parentTable,
+			ChildColumnNames:      c.cols,
+			ReferencedColumnNames: c.referencedCols,
 		})
 	}
 	return result, nil

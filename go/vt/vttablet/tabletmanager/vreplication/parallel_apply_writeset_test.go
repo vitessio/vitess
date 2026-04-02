@@ -55,7 +55,7 @@ func TestBuildTxnWritesetSinglePK(t *testing.T) {
 	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
 
-	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, []*binlogdatapb.VEvent{vevent})
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
 	expected := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
 	require.Equal(t, []uint64{expected}, keys)
@@ -73,7 +73,7 @@ func TestBuildTxnWritesetUsesBeforeAndAfter(t *testing.T) {
 	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
 
-	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, []*binlogdatapb.VEvent{vevent})
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
 	h1 := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
@@ -92,7 +92,7 @@ func TestBuildTxnWritesetNoPK(t *testing.T) {
 	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
 
-	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, []*binlogdatapb.VEvent{vevent})
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
 	require.Nil(t, keys)
 }
@@ -230,14 +230,14 @@ func TestBuildTxnWritesetMissingTablePlan(t *testing.T) {
 	}
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
 
-	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, []*binlogdatapb.VEvent{vevent})
+	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.Error(t, err)
 	require.Nil(t, keys)
 }
 
 func TestBuildTxnWritesetNoRows(t *testing.T) {
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_BEGIN}
-	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, []*binlogdatapb.VEvent{vevent})
+	keys, err := buildTxnWriteset(map[string]*TablePlan{}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
 	require.Nil(t, keys)
 }
@@ -299,9 +299,10 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 	}
 	fkRefs := map[string][]fkConstraintRef{
 		"child": {
-			{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}},
+			{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}},
 		},
 	}
+	parentRefs := buildParentFKRefs(fkRefs)
 	tablePlans := map[string]*TablePlan{
 		"parent": parentPlan,
 		"child":  childPlan,
@@ -324,13 +325,13 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 	}
 
 	// Build writeset for parent txn
-	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, []*binlogdatapb.VEvent{parentEvent})
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
 	require.NoError(t, err)
 	parentHash := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
 	require.Equal(t, []uint64{parentHash}, parentKeys)
 
 	// Build writeset for child txn — should have both child PK hash and parent FK ref hash
-	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, []*binlogdatapb.VEvent{childEvent})
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
 	require.NoError(t, err)
 	require.Len(t, childKeys, 2)
 	childPKHash := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))

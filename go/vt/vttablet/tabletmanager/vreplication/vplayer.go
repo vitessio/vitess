@@ -108,6 +108,11 @@ type vplayer struct {
 	// Used by the parallel applier to generate writeset keys that
 	// create conflicts between child and parent table transactions.
 	fkRefs map[string][]fkConstraintRef
+	// parentFKRefs is the reverse map: parent table name → FK constraints
+	// that reference it. Used to generate parent-side writeset keys that
+	// match child FK keys, ensuring correct conflict detection even when
+	// FKs reference non-PK unique keys.
+	parentFKRefs map[string][]parentFKRef
 
 	// idStr is vp.idStr, cached to avoid repeated
 	// conversions on every lag gauge update.

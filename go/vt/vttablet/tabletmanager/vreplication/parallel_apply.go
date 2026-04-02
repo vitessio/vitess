@@ -190,13 +190,14 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	if len(fkRefs) > 0 {
 		for table, refs := range fkRefs {
 			for _, ref := range refs {
-				log.Info("Parallel apply: FK ref", slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("cols", ref.ChildColumnNames))
+				log.Info("Parallel apply: FK ref", slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("childCols", ref.ChildColumnNames), slog.Any("referencedCols", ref.ReferencedColumnNames))
 			}
 		}
 	} else {
 		log.Info("Parallel apply: no FK refs found", slog.String("db", vp.vr.dbClient.DBName()))
 	}
 	vp.fkRefs = fkRefs
+	vp.parentFKRefs = buildParentFKRefs(fkRefs)
 
 	var wg sync.WaitGroup
 	for i := range workerCount {
@@ -235,6 +236,11 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	wg.Wait()
 	close(commitCh)
 	<-commitDone
+
+	// Now that commitLoop is done, it's safe to rollback any leftover
+	// transaction on the main connection. This must happen after commitDone
+	// because commitOnlyTxn in the commitLoop also uses the main connection.
+	vp.vr.dbClient.Rollback()
 
 	// Drain all errors and prioritize real failures over io.EOF/context.Canceled.
 	// Both scheduleLoop and commitLoop may send to applyErr, so we must drain
@@ -291,7 +297,10 @@ drainApplyErrs:
 // through scheduleItems. It also handles idle-timeout position saves and
 // throttle-lag estimation. Runs on the main goroutine of applyEventsParallel.
 func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler *applyScheduler) error {
-	defer vp.vr.dbClient.Rollback()
+	// Note: do NOT defer vp.vr.dbClient.Rollback() here. The main connection
+	// is shared with commitLoop (via commitOnlyTxn), which may still be running
+	// when scheduleLoop returns. The rollback is deferred in applyEventsParallel
+	// after commitLoop has finished.
 	workerCount := vp.vr.workflowConfig.ParallelReplicationWorkers
 	// Compute the max number of source transactions to batch into one
 	// mega-transaction. With parallel workers, we need enough separate
@@ -474,7 +483,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				state.fieldIdxCache = make(map[string]map[string]int)
 				state.fieldIdxCacheVersion = state.cachedPlanVersion
 			}
-			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, state.curEvents, state.fieldIdxCache)
+			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, vp.parentFKRefs, state.curEvents, state.fieldIdxCache)
 			if err != nil {
 				txn.forceGlobal = true
 			} else {
@@ -614,6 +623,11 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					// whose commitParent references this sequence are not
 					// blocked. The events will be flushed with the final
 					// transaction in this batch.
+					//
+					// This is safe even though the batch hasn't committed yet:
+					// the commitLoop enforces strict commit ordering, so a later
+					// transaction cannot commit before this batch regardless of
+					// when its worker finishes applying.
 					if state.curHasCommitMeta {
 						scheduler.advanceCommittedSequence(state.curSequence)
 					}
@@ -1059,6 +1073,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		if err := vp.applyEvent(ctx, payload.events[0], payload.mustSave); err != nil {
 			return err
+		}
+		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
+		// changes are reflected in subsequent writeset conflict detection.
+		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
+			if newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName()); err == nil {
+				vp.fkRefs = newRefs
+				vp.parentFKRefs = buildParentFKRefs(newRefs)
+			}
 		}
 		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
 			vp.numAccumulatedHeartbeats++
