@@ -399,7 +399,7 @@ func rewriteColNameToArgument(
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		var sq1, sq2 *SubQuery
 		for _, sq := range se {
-			if sq.ArgName == s || sq.HasValuesName == s ||
+			if sq.ArgName == s ||
 				sq.ScalarArgName == s || sq.ListArgName == s || sq.HasValuesArgName == s {
 				sq1 = sq
 				break

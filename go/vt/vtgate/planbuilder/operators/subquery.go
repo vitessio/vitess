@@ -43,9 +43,6 @@ type SubQuery struct {
 	ArgName           string               // This is the name of the ColName or Argument used to replace the subquery
 	TopLevel          bool                 // will be false if the subquery is deeply nested
 	JoinColumns       []applyJoinColumn    // Broken up join predicates.
-	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
-	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
-
 	// Deterministic bind variable names for the three output types.
 	// Set at creation time from ReserveSubQueryGroup().
 	ScalarArgName    string // e.g. "__sq1" — scalar value
@@ -228,7 +225,6 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 			// this means that we have a correlated subquery on our hands
 			panic(correlatedSubqueryErr)
 		}
-		sq.SubqueryValueName = sq.ArgName
 		return outer
 	}
 	return sq.settleFilter(ctx, outer)
@@ -253,7 +249,6 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		return outer
 	}
 
-	sq.HasValuesName = sq.HasValuesArgName
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		// For IN and NOT IN type filters, we have to add a Expression that checks if we got any rows back or not
@@ -303,13 +298,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		} else {
 			predicates = append(predicates, rhsPred)
 		}
-		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutNotIn:
 		predicates = append(predicates, rhsPred)
-		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)
-		sq.SubqueryValueName = sq.ArgName
 	}
 	return newFilter(outer, predicates...)
 }
