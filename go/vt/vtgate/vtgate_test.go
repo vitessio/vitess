@@ -271,7 +271,8 @@ func TestVTGateStreamExecute(t *testing.T) {
 	want := []*sqltypes.Result{{
 		Fields: sandboxconn.StreamRowResult.Fields,
 	}, {
-		Rows: sandboxconn.StreamRowResult.Rows,
+		Fields: sandboxconn.StreamRowResult.Fields,
+		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
 	if !proto.Equal(sbc.Options[0], executeOptions) {

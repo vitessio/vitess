@@ -374,6 +374,51 @@ func TestHighNumberOfParams(t *testing.T) {
 	require.Equal(t, 5, count)
 }
 
+// TestPreparedStatementInOLAP verifies that streaming prepared statements
+// return correct binary-encoded rows when result fields are only sent in the
+// first chunk.
+func TestPreparedStatementInOLAP(t *testing.T) {
+	_, closer := start(t)
+	defer closer()
+
+	// Use the binary protocol by disabling client-side parameter interpolation.
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s?interpolateParams=false", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Pin a single connection so the session variable persists across operations.
+	conn, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Seed test data and switch to OLAP streaming mode.
+	_, err = conn.ExecContext(t.Context(), "delete from t1")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "insert into t1(id1, id2) values (1, 2)")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "set workload = olap")
+	require.NoError(t, err)
+
+	// Select 7 columns: the null bitmap crosses a byte boundary at this count,
+	// making corruption from missing fields visible.
+	stmt, err := conn.PrepareContext(t.Context(), "select id1, id2, id1, id2, id1, id2, id1 from t1 where id1 = ?")
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	// Verify every column decoded correctly; corruption would show as NULL or
+	// wrong values.
+	var c1, c2, c3, c4, c5, c6, c7 int64
+	err = stmt.QueryRow(1).Scan(&c1, &c2, &c3, &c4, &c5, &c6, &c7)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), c1)
+	require.Equal(t, int64(2), c2)
+	require.Equal(t, int64(1), c3)
+	require.Equal(t, int64(2), c4)
+	require.Equal(t, int64(1), c5)
+	require.Equal(t, int64(2), c6)
+	require.Equal(t, int64(1), c7)
+}
+
 func TestPrepareStatements(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
