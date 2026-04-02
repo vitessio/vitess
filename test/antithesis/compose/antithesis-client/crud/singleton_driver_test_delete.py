@@ -28,31 +28,39 @@ def run_test():
     config = helper.get_config()
     log(f"Starting delete test against {config['host']}:{config['port']}")
     log(f"Keyspace: {config['keyspace']}")
-    
+
     # Track expected state: {id: msg}
     expected_state = {}
-    
-    # Connect to vtgate
-    conn = helper.get_connection()
 
-    # Setup table
-    success, error = helper.setup_test_table(conn, TABLE_NAME)
+    # Connect to vtgate with retry
+    conn = helper.get_connection_with_retry()
+
+    # Setup table with retry
+    result, conn = helper.retry_with_reconnect(
+        lambda c: helper.setup_test_table(c, TABLE_NAME), conn
+    )
+    success, error = result
     sometimes(success, "Successful table creation", {"error":error})
 
     if not success:
-        log(f"Table '{TABLE_NAME}' creation failed")    
-        conn.close()
-        sys.exit(0)
-        return False
+        log(f"Table '{TABLE_NAME}' creation failed after retries")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        sys.exit(1)
     else:
         log(f"Table '{TABLE_NAME}' ready")
 
-    
+
     # Phase 1: Perform inserts
     log(f"Inserting {NUM_INSERTS} rows...")
     for i in range(NUM_INSERTS):
         msg = helper.generate_random_string()
-        success, error, lastrowid = helper.insert_msg(conn, msg, TABLE_NAME)
+        result, conn = helper.retry_with_reconnect(
+            lambda c, _msg=msg: helper.insert_msg(c, _msg, TABLE_NAME), conn
+        )
+        success, error, lastrowid = result
         sometimes(success, "Successful insert query", {"error": error})
         if success:
             row_id = lastrowid
@@ -65,7 +73,10 @@ def run_test():
     deleted_ids = []
     log(f"Deleting {len(expected_state)} rows...")
     for row_id in list(expected_state.keys()):
-        success, error, rows_affected = helper.delete_msg(conn, row_id, TABLE_NAME)
+        result, conn = helper.retry_with_reconnect(
+            lambda c, _rid=row_id: helper.delete_msg(c, _rid, TABLE_NAME), conn
+        )
+        success, error, rows_affected = result
         sometimes(success, "Successful delete query", {"error": error})
         if success:
             deleted_ids.append(row_id)
@@ -74,23 +85,33 @@ def run_test():
             log(f"  Delete row id={row_id} failed.")
 
     # Phase 3: Verify all deleted rows no longer exist
+    # Note: get_msg returns (False, {"type":"NotFound",...}, None) for missing rows.
+    # That's the EXPECTED outcome here, but retry_with_reconnect treats result[0]==False
+    # as failure and would burn all retries. We wrap get_msg so NotFound counts as success.
     log("Verifying deleted rows...")
     verification_passed = True
-    
+
     for row_id in deleted_ids:
-        success, error, result = helper.get_msg(conn, row_id, TABLE_NAME)
+        def verify_deleted(c, _rid=row_id):
+            success, error, result = helper.get_msg(c, _rid, TABLE_NAME)
+            if not success and error.get("type") == "NotFound":
+                return (True, {"type": "NotFound"}, None)
+            return (success, error, result)
+
+        result, conn = helper.retry_with_reconnect(verify_deleted, conn)
+        success, error, query_result = result
+
         sometimes(success, "Get request successful", {"error": error})
 
         if not success:
             log(f"  Get request failed for {row_id}")
-            # verification_passed = False
             continue
 
-        if result is None:
+        if query_result is None:
             log(f"  Verified row id={row_id} deleted: OK")
         else:
             verification_passed = False
-            actual_id, actual_msg = result
+            actual_id, actual_msg = query_result
             log(f"  FAILED row id={row_id} still exists: msg='{actual_msg}'")
             unreachable(
                 "Row still exists after delete",
@@ -98,14 +119,16 @@ def run_test():
             )
 
     # Cleanup
-    conn.close()
+    try:
+        conn.close()
+    except Exception:
+        pass
     log("Connection closed")
-    
+
     if verification_passed:
         log("TEST PASSED")
     else:
         log("TEST FAILED")
-    
     return verification_passed
 
 
