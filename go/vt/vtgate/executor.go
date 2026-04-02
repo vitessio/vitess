@@ -1573,7 +1573,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
 	if concurrency <= 0 {
-		return nil
+		return semaphore.NewWeighted(0)
 	}
 	return semaphore.NewWeighted(int64(concurrency) * engine.WarmingReadsBaseWeight)
 }

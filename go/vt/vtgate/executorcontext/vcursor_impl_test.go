@@ -436,6 +436,66 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 
 var _ ResultsObserver = (*fakeObserver)(nil)
 
+func TestSetPriority(t *testing.T) {
+	tests := []struct {
+		name         string
+		priority     string
+		wantPriority string
+	}{
+		{
+			name:         "empty priority",
+			priority:     "",
+			wantPriority: "",
+		},
+		{
+			name:         "priority 0",
+			priority:     "0",
+			wantPriority: "0",
+		},
+		{
+			name:         "priority 50",
+			priority:     "50",
+			wantPriority: "50",
+		},
+		{
+			name:         "priority 100",
+			priority:     "100",
+			wantPriority: "100",
+		},
+		{
+			name:         "negative priority clamped to 0",
+			priority:     "-10",
+			wantPriority: "0",
+		},
+		{
+			name:         "priority above max clamped to 100",
+			priority:     "999",
+			wantPriority: "100",
+		},
+		{
+			name:         "invalid priority ignored",
+			priority:     "not_a_number",
+			wantPriority: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			vc := &VCursorImpl{
+				SafeSession: NewSafeSession(&vtgatepb.Session{}),
+			}
+			vc.SetPriority(tc.priority)
+			if tc.wantPriority == "" {
+				if vc.SafeSession.Options != nil {
+					require.Empty(t, vc.SafeSession.Options.Priority)
+				}
+			} else {
+				require.Equal(t, tc.wantPriority, vc.SafeSession.Options.Priority)
+			}
+		})
+	}
+}
+
 func TestGetQueryPriority(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -466,16 +526,6 @@ func TestGetQueryPriority(t *testing.T) {
 		{
 			name:       "priority 100",
 			options:    &querypb.ExecuteOptions{Priority: "100"},
-			wantResult: 100,
-		},
-		{
-			name:       "negative priority clamped to 0",
-			options:    &querypb.ExecuteOptions{Priority: "-10"},
-			wantResult: 0,
-		},
-		{
-			name:       "priority above max clamped to 100",
-			options:    &querypb.ExecuteOptions{Priority: "999"},
 			wantResult: 100,
 		},
 		{

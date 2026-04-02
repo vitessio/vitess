@@ -549,7 +549,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	weight := int64(WarmingReadsBaseWeight + priority)
 
 	sem := vcursor.GetWarmingReadsSemaphore()
-	if sem != nil && !sem.TryAcquire(weight) {
+	if !sem.TryAcquire(weight) {
 		log.Warn("Failed to execute warming replica read as pool is full")
 		replicaWarmingReadsDropped.Add([]string{route.Keyspace.Name}, 1)
 		return
@@ -557,9 +557,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	go func(replicaVCursor VCursor) {
-		if sem != nil {
-			defer sem.Release(weight)
-		}
+		defer sem.Release(weight)
 		warmingCtx, cancel := replicaVCursor.WarmingReadsContext(ctx)
 		defer cancel()
 		rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)

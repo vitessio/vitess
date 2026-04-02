@@ -128,7 +128,7 @@ type (
 		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
 		GetWarmingReadsPercent() int
 
-		// GetWarmingReadsSemaphore returns the semaphore for limiting concurrent warming reads, or nil if unlimited
+		// GetWarmingReadsSemaphore returns the semaphore for limiting concurrent warming reads
 		GetWarmingReadsSemaphore() *semaphore.Weighted
 
 		// GetQueryPriority returns the current session's query priority as an int, defaulting to 0 if unset

@@ -1219,7 +1219,12 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 
 func (vc *VCursorImpl) SetPriority(priority string) {
 	if priority != "" {
-		vc.SafeSession.GetOrCreateOptions().Priority = priority
+		intPriority, err := strconv.Atoi(priority)
+		if err != nil {
+			return
+		}
+		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
+		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
 	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
 		vc.SafeSession.Options.Priority = ""
 	}
@@ -1664,7 +1669,7 @@ func (vc *VCursorImpl) GetQueryPriority() (int, error) {
 		if err != nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
 		}
-		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+		return priority, nil
 	}
 	return 0, nil
 }
