@@ -371,8 +371,8 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 
 	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
 	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
-	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
-	if !ok || sqlErr.Num != sqlerror.CRConnectionError {
+	var sqlErr *sqlerror.SQLError
+	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
 		return false
 	}
 
