@@ -1083,15 +1083,18 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
 		// changes are reflected in subsequent writeset conflict detection.
-		// The write must be guarded by serialMu since scheduleLoop reads
-		// these fields concurrently.
+		// Release serialMu for the DB round-trip, then re-acquire to swap.
 		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
-			if newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName()); err == nil {
-				newParentRefs := buildParentFKRefs(newRefs)
-				vp.serialMu.Lock()
+			vp.serialMu.Unlock()
+			newRefs, fkErr := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
+			var newParentRefs map[string][]parentFKRef
+			if fkErr == nil {
+				newParentRefs = buildParentFKRefs(newRefs)
+			}
+			vp.serialMu.Lock()
+			if fkErr == nil {
 				vp.fkRefs = newRefs
 				vp.parentFKRefs = newParentRefs
-				vp.serialMu.Unlock()
 			}
 		}
 		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
