@@ -18,6 +18,7 @@ package osutil
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -182,7 +183,7 @@ func portsAvailable(base, count int) bool {
 // bind to them after this call returns.
 func GetPortReservation(count int) (*PortReservation, error) {
 	if count < 1 {
-		return nil, fmt.Errorf("osutil.GetPortReservation: count must be >= 1")
+		return nil, errors.New("osutil.GetPortReservation: count must be >= 1")
 	}
 
 	randomPortMu.Lock()

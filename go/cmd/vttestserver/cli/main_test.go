@@ -519,7 +519,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 		"agent",
 		"-dev",
 		"-http-port", strconv.Itoa(port))
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start consul: %v", err)
 	}
