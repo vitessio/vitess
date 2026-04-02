@@ -393,9 +393,17 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 			}
 			// Same subquery AST but different pullout context (e.g., scalar vs IN).
 			// We need a distinct bind variable name to avoid conflicts.
+			oldName := argName
 			newName := ctx.ReservedVars.ReserveSubQuery()
-			sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
+			sqe.new = replaceSubqueryArgName(sqe.new, oldName, newName, isDML)
 			argName = newName
+			// Keep sqe.cols in sync so later iterations with the same
+			// old name and opcode reuse this renamed bind variable.
+			for j := idx + 1; j < len(sqe.cols); j++ {
+				if sqe.cols[j] == oldName && sqe.pullOutCode[j] == filterType {
+					sqe.cols[j] = newName
+				}
+			}
 		}
 		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
