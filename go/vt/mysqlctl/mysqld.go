@@ -343,7 +343,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 // IsMySQLLocal returns true if the DBA connection uses a local unix socket.
 func (mysqld *Mysqld) IsMySQLLocal() bool {
 	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	return err == nil && params.UnixSocket != ""
+	return err == nil && strings.TrimSpace(params.UnixSocket) != ""
 }
 
 // IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
@@ -353,7 +353,7 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	// Returns false (not down) on param failure — conservative to avoid false
 	// positives that could trigger unnecessary demotions.
 	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if err != nil || params.UnixSocket == "" {
+	if err != nil || strings.TrimSpace(params.UnixSocket) == "" {
 		return false
 	}
 
@@ -371,8 +371,8 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 
 	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
 	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
-	var sqlErr *sqlerror.SQLError
-	if !errors.As(err, &sqlErr) || sqlErr.Num != sqlerror.CRConnectionError {
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	if !ok || sqlErr.Num != sqlerror.CRConnectionError {
 		return false
 	}
 
@@ -711,21 +711,6 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return nil
 	}
 
-	// Stop replication before shutting down to avoid a brief race in
-	// MySQL's close_connections() (mysqld.cc) where close_listener()
-	// removes the unix socket before end_slave() stops replication
-	// threads. Best-effort with a 5s timeout — may be interrupted if
-	// STOP REPLICA blocks on a large in-flight event, but that's
-	// acceptable since we're shutting down regardless.
-	stopCtx, stopCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer stopCancel()
-	if conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool); err == nil {
-		if stopCmd := conn.Conn.StopReplicationCommand(); stopCmd != "" && stopCmd != "unsupported" {
-			mysqld.executeSuperQueryListConn(stopCtx, conn, []string{stopCmd})
-		}
-		conn.Recycle()
-	}
-
 	// try the preflight mysqld shutdown hook, if any
 	h := hook.NewSimpleHook("preflight_mysqld_shutdown")
 	hr := h.ExecuteContext(ctx)
@@ -744,7 +729,14 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 	case hook.HOOK_DOES_NOT_EXIST:
-		// hook doesn't exist, try mysqladmin
+		// When no shutdown hook is configured, we own the full shutdown
+		// path. Stop replication before shutting down to avoid a brief
+		// race in MySQL's close_connections() (mysqld.cc) where
+		// close_listener() removes the unix socket before end_slave()
+		// stops replication threads. Best-effort with a 5s timeout.
+		// When a hook IS configured, the operator is responsible for
+		// handling STOP REPLICA in their hook if desired.
+		mysqld.stopReplicationBeforeShutdown(ctx)
 		log.Info("No mysqld_shutdown hook, running mysqladmin directly")
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
@@ -804,6 +796,25 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		}
 	}
 	return nil
+}
+
+// stopReplicationBeforeShutdown issues a best-effort STOP REPLICA before
+// MySQL shutdown to avoid a brief race in MySQL's close_connections() where
+// close_listener() removes the unix socket before end_slave() stops
+// replication threads. Uses a 5s timeout.
+func (mysqld *Mysqld) stopReplicationBeforeShutdown(ctx context.Context) {
+	stopCtx, stopCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer stopCancel()
+	conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool)
+	if err != nil {
+		return
+	}
+	defer conn.Recycle()
+	stopCmd := conn.Conn.StopReplicationCommand()
+	if stopCmd == "" || stopCmd == "unsupported" {
+		return
+	}
+	mysqld.executeSuperQueryListConn(stopCtx, conn, []string{stopCmd})
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.

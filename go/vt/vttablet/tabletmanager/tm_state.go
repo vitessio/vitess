@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"syscall"
@@ -290,7 +291,7 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 			ts.mu.Lock()
 			defer ts.mu.Unlock()
 			if updateErr := ts.updateLocked(context.Background()); updateErr != nil {
-				log.Warn(fmt.Sprintf("Deferred updateLocked failed (will retry): %v", updateErr))
+				log.Warn("Deferred updateLocked failed (will retry)", slog.Any("error", updateErr))
 			}
 		}()
 	} else {
