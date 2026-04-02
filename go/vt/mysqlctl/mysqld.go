@@ -470,10 +470,9 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		if err != nil {
 			return err
 		}
-		args := []string{
-			"--defaults-file=" + cnf.Path,
-			"--basedir=" + mysqlBaseDir,
-		}
+		args := make([]string, 0, 2+len(mysqldArgs))
+		args = append(args, "--defaults-file="+cnf.Path,
+			"--basedir="+mysqlBaseDir)
 		args = append(args, mysqldArgs...)
 		env, err := buildLdPaths()
 		if err != nil {

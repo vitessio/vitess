@@ -175,7 +175,7 @@ func (d *JSONDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([]*
 
 func (d *JSONDiscovery) discoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
 	if len(tags) == 0 {
-		results := []*vtadminpb.VTGate{}
+		results := make([]*vtadminpb.VTGate, 0, len(d.gates.byName))
 		for _, g := range d.gates.byName {
 			results = append(results, g)
 		}
@@ -275,7 +275,7 @@ func (d *JSONDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([]*
 
 func (d *JSONDiscovery) discoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
 	if len(tags) == 0 {
-		results := []*vtadminpb.Vtctld{}
+		results := make([]*vtadminpb.Vtctld, 0, len(d.vtctlds.byName))
 		for _, v := range d.vtctlds.byName {
 			results = append(results, v)
 		}
