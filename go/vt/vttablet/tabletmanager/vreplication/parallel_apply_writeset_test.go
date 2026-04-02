@@ -194,12 +194,12 @@ func TestQueryFKRefs(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME",
-			"varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME",
+			"varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent",
-		"child|fk_child_parent|parent_id2|parent",
-		"other|fk_other_parent|parent_id|parent",
+		"child|fk_child_parent|parent_id|parent|id",
+		"child|fk_child_parent|parent_id2|parent|id2",
+		"other|fk_other_parent|parent_id|parent|id",
 	)
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
 	refs, err := queryFKRefs(client, "db")
@@ -208,6 +208,7 @@ func TestQueryFKRefs(t *testing.T) {
 	require.Len(t, refs["child"], 1)
 	require.Equal(t, "parent", refs["child"][0].ParentTable)
 	require.Equal(t, []string{"parent_id", "parent_id2"}, refs["child"][0].ChildColumnNames)
+	require.Equal(t, []string{"id", "id2"}, refs["child"][0].ReferencedColumnNames)
 }
 
 func TestQueryFKRefsError(t *testing.T) {
