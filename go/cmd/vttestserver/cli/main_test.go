@@ -78,8 +78,8 @@ func TestPersistentMode(t *testing.T) {
 	dir := t.TempDir()
 
 	cluster, pr, err := startPersistentCluster(dir)
-	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
@@ -114,12 +114,12 @@ func TestPersistentMode(t *testing.T) {
 	// reboot the persistent cluster
 	cluster.TearDown()
 	cluster, pr2, err := startPersistentCluster(dir)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = osutil.UnreservePorts(pr2) })
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
 	}()
-	require.NoError(t, err)
 
 	// rerun our sanity checks to make sure vschema is persisted correctly
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})

@@ -221,7 +221,11 @@ func GetPortReservation(count int) (*PortReservation, error) {
 }
 
 // UnreservePorts releases a previously reserved port range.
+// It is safe to call with a nil reservation (no-op).
 func UnreservePorts(pr *PortReservation) error {
+	if pr == nil {
+		return nil
+	}
 	randomPortMu.Lock()
 	defer randomPortMu.Unlock()
 
