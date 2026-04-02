@@ -384,11 +384,20 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 
 	for idx, subq := range sqe.subq {
 		argName := sqe.cols[idx]
+		filterType := sqe.pullOutCode[idx]
 		if existing := sqb.findByArgName(argName); existing != nil {
-			allSubqs = append(allSubqs, existing)
-			continue
+			if existing.FilterType == filterType {
+				// Same subquery, same context — reuse the existing operator.
+				allSubqs = append(allSubqs, existing)
+				continue
+			}
+			// Same subquery AST but different pullout context (e.g., scalar vs IN).
+			// We need a distinct bind variable name to avoid conflicts.
+			newName := ctx.ReservedVars.ReserveSubQuery()
+			sqe.new = replaceSubqueryArgName(sqe.new, argName, newName, isDML)
+			argName = newName
 		}
-		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, sqe.pullOutCode[idx], true)
+		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
 	}
@@ -438,6 +447,15 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	sqe := &subqueryExtraction{}
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
 		sqName := ctx.GetReservedArgumentFor(sq)
+		// If the same subquery AST appears in a different pullout context
+		// (e.g., scalar value vs IN), we need a distinct bind variable name
+		// to avoid conflicts when the engine produces different bind var types.
+		for i, existingName := range sqe.cols {
+			if existingName == sqName && sqe.pullOutCode[i] != t {
+				sqName = ctx.ReservedVars.ReserveSubQuery()
+				break
+			}
+		}
 		sqe.cols = append(sqe.cols, sqName)
 		if isDML {
 			if t.NeedsListArg() {
@@ -471,4 +489,29 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 	}
 	sqe.new = expr
 	return sqe
+}
+
+// replaceSubqueryArgName rewrites all references to oldName in the expression
+// to use newName. In non-DML mode subqueries are replaced with ColName nodes;
+// in DML mode they become Argument or ListArg nodes.
+func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML bool) sqlparser.Expr {
+	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		if isDML {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.Argument:
+				if node.Name == oldName {
+					cursor.Replace(sqlparser.NewArgument(newName))
+				}
+			case sqlparser.ListArg:
+				if string(node) == oldName {
+					cursor.Replace(sqlparser.NewListArg(newName))
+				}
+			}
+		} else {
+			if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
+				cursor.Replace(sqlparser.NewColName(newName))
+			}
+		}
+		return true
+	}).(sqlparser.Expr)
 }
