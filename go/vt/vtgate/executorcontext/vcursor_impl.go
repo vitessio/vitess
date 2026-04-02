@@ -1221,6 +1221,11 @@ func (vc *VCursorImpl) SetPriority(priority string) {
 	if priority != "" {
 		intPriority, err := strconv.Atoi(priority)
 		if err != nil {
+			// On invalid priority input, clear any existing priority to avoid
+			// unintentionally reusing a previous valid priority.
+			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+				vc.SafeSession.Options.Priority = ""
+			}
 			return
 		}
 		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
