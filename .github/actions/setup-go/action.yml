@@ -21,4 +21,4 @@ runs:
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/go/pkg/mod
-        key: go-${{ steps.setup-go.outputs.go-version }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
+        key: go-${{ steps.setup-go.outputs.go-version }}-${{ runner.arch }}-${{ hashFiles('go.sum') }}
