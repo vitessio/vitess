@@ -515,8 +515,11 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 		group := ctx.ReservedVars.ReserveSubQueryGroup()
 		// Pick the right name based on the pullout opcode context.
 		sqName := group.Scalar
-		if t.NeedsListArg() {
+		switch {
+		case t.NeedsListArg():
 			sqName = group.List
+		case t == opcode.PulloutExists:
+			sqName = group.HasValues
 		}
 		sqe.cols = append(sqe.cols, sqName)
 		sqe.groups = append(sqe.groups, group)
