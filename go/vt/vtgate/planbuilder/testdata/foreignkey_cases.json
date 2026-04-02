@@ -3369,8 +3369,10 @@
       "Original": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -3429,8 +3431,10 @@
       "Original": "update u_tbl1 set col1 = (select foo from u_tbl1 where id = 1) order by id desc",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [

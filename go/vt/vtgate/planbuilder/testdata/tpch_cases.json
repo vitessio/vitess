@@ -1488,8 +1488,10 @@
       "Original": "select ps_partkey, sum(ps_supplycost * ps_availqty) as value from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' group by ps_partkey  having sum(ps_supplycost * ps_availqty) > ( select sum(ps_supplycost * ps_availqty) * 0.00001000000 from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' ) order by value desc",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -1972,8 +1974,10 @@
       "Original": "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
+        "Variant": "PulloutSubquery",
         "PulloutVars": [
+          "__sq1_has_values",
+          "__sq1_list",
           "__sq1"
         ],
         "Inputs": [
@@ -2051,9 +2055,10 @@
                     "Inputs": [
                       {
                         "OperatorType": "UncorrelatedSubquery",
-                        "Variant": "PulloutNotIn",
+                        "Variant": "PulloutSubquery",
                         "PulloutVars": [
-                          "__sq_has_values",
+                          "__sq1_has_values",
+                          "__sq1_list",
                           "__sq1"
                         ],
                         "Inputs": [
@@ -2077,7 +2082,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where 1 != 1",
-                            "Query": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1"
+                            "Query": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where not :__sq1_has_values or ps_suppkey not in ::__sq1_list"
                           }
                         ]
                       },
@@ -2135,9 +2140,10 @@
             "Inputs": [
               {
                 "OperatorType": "UncorrelatedSubquery",
-                "Variant": "PulloutIn",
+                "Variant": "PulloutSubquery",
                 "PulloutVars": [
-                  "__sq_has_values",
+                  "__sq1_has_values",
+                  "__sq1_list",
                   "__sq1"
                 ],
                 "Inputs": [
@@ -2171,7 +2177,7 @@
                     "Inputs": [
                       {
                         "OperatorType": "Filter",
-                        "Predicate": ":__sq_has_values and o_orderkey in ::__sq1",
+                        "Predicate": ":__sq1_has_values and o_orderkey in ::__sq1_list",
                         "Inputs": [
                           {
                             "OperatorType": "Sort",
