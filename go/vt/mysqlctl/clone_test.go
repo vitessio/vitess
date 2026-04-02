@@ -157,6 +157,11 @@ func TestIsCloneConnError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "restart server failed (no supervisor)",
+			err:      sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+			expected: true,
+		},
+		{
 			name:     "access denied",
 			err:      accessDenied,
 			expected: false,
@@ -549,7 +554,7 @@ func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPo
 	return errors.New("ComBinlogDump not implemented")
 }
 
-func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return errors.New("ComBinlogDumpGTID not implemented")
 }
 

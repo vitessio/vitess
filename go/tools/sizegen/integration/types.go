@@ -75,3 +75,9 @@ type String1 struct {
 	field1 string
 	field2 uint64
 }
+
+type PtrToBasic struct {
+	field1 *bool
+	field2 *int
+	field3 *string
+}

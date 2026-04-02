@@ -18,6 +18,7 @@ package executorcontext
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -417,6 +418,28 @@ func (session *SafeSession) InTransaction() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InTransaction
+}
+
+// ShardSessionsForCleanup returns a snapshot of PreSessions, ShardSessions, and PostSessions for Rollback/Release.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
+}
+
+// ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	var lockSessions []*vtgatepb.Session_ShardSession
+	if session.LockSession != nil {
+		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
+	}
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
 }
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.

@@ -5559,6 +5559,61 @@
     }
   },
   {
+    "comment": "Duplicate uncorrelated subqueries should not be deduplicated in the projection",
+    "query": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq1 /* INT64 */ as `(select count(*) from user_extra)` from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
     "query": "select * from user where id = 1 or 1 = 0",
     "plan": {

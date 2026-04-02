@@ -103,9 +103,18 @@ type flavor interface {
 	// startSQLThreadCommand returns the command to start the replica's SQL thread only.
 	startSQLThreadCommand() string
 
-	// sendBinlogDumpCommand sends the packet required to start
-	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error
+	// sendBinlogDumpCommand sends the COM_BINLOG_DUMP packet to start
+	// dumping binlogs from the specified file and position.
+	// This is the original file/position-based protocol.
+	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint32) error
+
+	// sendBinlogDumpGTIDCommand sends the COM_BINLOG_DUMP_GTID packet to start
+	// dumping binlogs from the specified GTID position.
+	// binlogPos is the file position to start from (only used when binlogFilename
+	// is set and GTIDs are not provided).
+	// If nonBlock is true, the server will return EOF when it reaches the end
+	// of the binlog instead of blocking and waiting for new events.
+	sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, flags uint16) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -348,15 +357,24 @@ func (c *Conn) StartSQLThreadCommand() string {
 	return c.flavor.startSQLThreadCommand()
 }
 
-// SendBinlogDumpCommand sends the flavor-specific version of
-// the COM_BINLOG_DUMP command to start dumping raw binlog
+// SendBinlogDumpCommand sends the COM_BINLOG_DUMP command to start
+// dumping raw binlog events over a server connection, starting at
+// a given file and position. This is the original file/position-based protocol.
+func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, binlogPos uint32) error {
+	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, binlogPos)
+}
+
+// SendBinlogDumpGTIDCommand sends the flavor-specific version of
+// the COM_BINLOG_DUMP_GTID command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos replication.Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos)
+// flags is the raw 2-byte flags field from COM_BINLOG_DUMP_GTID
+// (e.g., BinlogDumpNonBlock = 0x01).
+func (c *Conn) SendBinlogDumpGTIDCommand(serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, flags uint16) error {
+	return c.flavor.sendBinlogDumpGTIDCommand(c, serverID, binlogFilename, binlogPos, startPos, flags)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used
-// in conjunction with SendBinlogDumpCommand.
+// in conjunction with SendBinlogDumpCommand or SendBinlogDumpGTIDCommand.
 func (c *Conn) ReadBinlogEvent() (BinlogEvent, error) {
 	return c.flavor.readBinlogEvent(c)
 }
