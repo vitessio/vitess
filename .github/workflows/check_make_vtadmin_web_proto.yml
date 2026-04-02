@@ -56,11 +56,8 @@ jobs:
             - 'web/vtadmin/package-lock.json'
 
     - name: Set up Go
-      uses: ./.github/actions/setup-go
       if: steps.changes.outputs.proto_changes == 'true'
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+      uses: ./.github/actions/setup-go
 
     - name: Setup Node
       if: steps.changes.outputs.proto_changes == 'true'

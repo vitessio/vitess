@@ -53,11 +53,8 @@ jobs:
       uses: ./.github/actions/tune-os
 
     - name: Set up Go
-      uses: ./.github/actions/setup-go
       if: steps.changes.outputs.vtadmin_changes == 'true'
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+      uses: ./.github/actions/setup-go
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'
