@@ -71,16 +71,16 @@ func TestGetPortReservation_WithPortFile(t *testing.T) {
 	origPath := portFilePath
 	origRanges := allocatedRanges
 	t.Cleanup(func() {
-		randomPortMu.Lock()
-		defer randomPortMu.Unlock()
+		portMu.Lock()
+		defer portMu.Unlock()
 		portFilePath = origPath
 		allocatedRanges = origRanges
 	})
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	portFilePath = filepath.Join(t.TempDir(), "test_ports.txt")
 	allocatedRanges = nil
-	randomPortMu.Unlock()
+	portMu.Unlock()
 
 	pr, err := GetPortReservation(1)
 	require.NoError(t, err)
@@ -96,56 +96,56 @@ func TestGetPortReservation_WithPortFile(t *testing.T) {
 func TestUnreservePorts(t *testing.T) {
 	origRanges := allocatedRanges
 	t.Cleanup(func() {
-		randomPortMu.Lock()
-		defer randomPortMu.Unlock()
+		portMu.Lock()
+		defer portMu.Unlock()
 		allocatedRanges = origRanges
 	})
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	allocatedRanges = nil
-	randomPortMu.Unlock()
+	portMu.Unlock()
 
 	pr, err := GetPortReservation(6)
 	require.NoError(t, err)
 	require.Greater(t, pr.Start, 0)
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	require.Len(t, allocatedRanges, 1)
-	randomPortMu.Unlock()
+	portMu.Unlock()
 
 	require.NoError(t, UnreservePorts(pr))
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	assert.Empty(t, allocatedRanges)
-	randomPortMu.Unlock()
+	portMu.Unlock()
 }
 
 func TestUnreservePorts_WithPortFile(t *testing.T) {
 	origPath := portFilePath
 	origRanges := allocatedRanges
 	t.Cleanup(func() {
-		randomPortMu.Lock()
-		defer randomPortMu.Unlock()
+		portMu.Lock()
+		defer portMu.Unlock()
 		portFilePath = origPath
 		allocatedRanges = origRanges
 	})
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	portFilePath = filepath.Join(t.TempDir(), "test_ports.txt")
 	allocatedRanges = nil
-	randomPortMu.Unlock()
+	portMu.Unlock()
 
 	pr, err := GetPortReservation(6)
 	require.NoError(t, err)
 	require.Greater(t, pr.Start, 0)
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	require.Len(t, allocatedRanges, 1)
-	randomPortMu.Unlock()
+	portMu.Unlock()
 
 	require.NoError(t, UnreservePorts(pr))
 
-	randomPortMu.Lock()
+	portMu.Lock()
 	assert.Empty(t, allocatedRanges)
-	randomPortMu.Unlock()
+	portMu.Unlock()
 }

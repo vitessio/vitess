@@ -65,7 +65,7 @@ import (
 const (
 	DefaultCell      = "zone1"
 	DefaultVttestEnv = "VTTEST=endtoend"
-	portFileName     = "vitess_endtoend_cluster_ports.txt"
+	portFileName     = osutil.DefaultPortFileName
 )
 
 var (

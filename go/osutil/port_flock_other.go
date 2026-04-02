@@ -18,13 +18,12 @@ limitations under the License.
 
 package osutil
 
-import (
-	"fmt"
-	"os"
-)
+import "os"
 
+// lockPortFile is a no-op on platforms without flock support.
+// Port coordination falls back to in-memory-only tracking.
 func lockPortFile(f *os.File) error {
-	return fmt.Errorf("osutil: port file locking is not supported on this platform")
+	return nil
 }
 
 func unlockPortFile(f *os.File) {

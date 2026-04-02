@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -27,6 +28,10 @@ import (
 )
 
 const (
+	// DefaultPortFileName is the shared port file name used for cross-process coordination.
+	// All subsystems should use the same file to avoid collisions.
+	DefaultPortFileName = "vitess_port_reservations.txt"
+
 	// portFileTimeout is how long port reservations remain valid in the port file.
 	// Acts as a safety net for processes that crash without calling UnreservePorts.
 	portFileTimeout = 1 * time.Hour
@@ -43,15 +48,15 @@ type PortReservation struct {
 }
 
 var (
-	randomPortMu    sync.Mutex
+	portMu          sync.Mutex
 	allocatedRanges []*PortReservation
 	portFilePath    string
 )
 
 // SetPortFilePath enables file-based port tracking with locking for cross-process coordination.
 func SetPortFilePath(path string) {
-	randomPortMu.Lock()
-	defer randomPortMu.Unlock()
+	portMu.Lock()
+	defer portMu.Unlock()
 	portFilePath = path
 }
 
@@ -67,7 +72,7 @@ func hasRangeOverlap(ranges []*PortReservation, from, to int) bool {
 func readPortFile(f *os.File) ([]*PortReservation, error) {
 	var ranges []*PortReservation
 	now := time.Now()
-	if _, err := f.Seek(0, 0); err != nil {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("osutil: failed to seek port file: %w", err)
 	}
 	scanner := bufio.NewScanner(f)
@@ -95,7 +100,7 @@ func writePortFile(f *os.File, ranges []*PortReservation) error {
 	if err := f.Truncate(0); err != nil {
 		return fmt.Errorf("osutil: failed to truncate port file: %w", err)
 	}
-	if _, err := f.Seek(0, 0); err != nil {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("osutil: failed to seek port file: %w", err)
 	}
 	for _, r := range ranges {
@@ -138,23 +143,6 @@ func pruneExpiredRanges() {
 	allocatedRanges = filtered
 }
 
-// mergeFileRanges merges port file ranges into the in-memory list.
-func mergeFileRanges(f *os.File) error {
-	if f == nil {
-		return nil
-	}
-	ranges, err := readPortFile(f)
-	if err != nil {
-		return err
-	}
-	for _, r := range ranges {
-		if !hasRangeOverlap(allocatedRanges, r.Start, r.End) {
-			allocatedRanges = append(allocatedRanges, r)
-		}
-	}
-	return nil
-}
-
 func randomPort() (int, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -166,12 +154,18 @@ func randomPort() (int, error) {
 }
 
 func portsAvailable(base, count int) bool {
+	listeners := make([]net.Listener, 0, count)
+	defer func() {
+		for _, ln := range listeners {
+			ln.Close()
+		}
+	}()
 	for i := range count {
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", base+i))
 		if err != nil {
 			return false
 		}
-		ln.Close()
+		listeners = append(listeners, ln)
 	}
 	return true
 }
@@ -186,8 +180,8 @@ func GetPortReservation(count int) (*PortReservation, error) {
 		return nil, errors.New("osutil.GetPortReservation: count must be >= 1")
 	}
 
-	randomPortMu.Lock()
-	defer randomPortMu.Unlock()
+	portMu.Lock()
+	defer portMu.Unlock()
 
 	f, cleanup, err := openAndLockPortFile()
 	if err != nil {
@@ -195,8 +189,13 @@ func GetPortReservation(count int) (*PortReservation, error) {
 	}
 	defer cleanup()
 	pruneExpiredRanges()
-	if err := mergeFileRanges(f); err != nil {
-		return nil, err
+
+	var fileRanges []*PortReservation
+	if f != nil {
+		fileRanges, err = readPortFile(f)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	for range maxPortRetries {
@@ -204,17 +203,20 @@ func GetPortReservation(count int) (*PortReservation, error) {
 		if err != nil {
 			return nil, err
 		}
-		if hasRangeOverlap(allocatedRanges, base, base+count-1) || !portsAvailable(base, count) {
+		end := base + count - 1
+		if hasRangeOverlap(allocatedRanges, base, end) || hasRangeOverlap(fileRanges, base, end) || !portsAvailable(base, count) {
 			continue
 		}
 
-		pr := &PortReservation{Start: base, End: base + count - 1, allocated: time.Now()}
-		allocatedRanges = append(allocatedRanges, pr)
+		pr := &PortReservation{Start: base, End: end, allocated: time.Now()}
 		if f != nil {
-			if err := writePortFile(f, allocatedRanges); err != nil {
+			// fileRanges already contains this process's previous reservations
+			// (from prior writes), so just append the new one.
+			if err := writePortFile(f, append(fileRanges, pr)); err != nil {
 				return nil, err
 			}
 		}
+		allocatedRanges = append(allocatedRanges, pr)
 		return pr, nil
 	}
 	return nil, fmt.Errorf("osutil.GetPortReservation: failed to find %d consecutive available ports after %d attempts", count, maxPortRetries)
@@ -226,8 +228,8 @@ func UnreservePorts(pr *PortReservation) error {
 	if pr == nil {
 		return nil
 	}
-	randomPortMu.Lock()
-	defer randomPortMu.Unlock()
+	portMu.Lock()
+	defer portMu.Unlock()
 
 	f, cleanup, err := openAndLockPortFile()
 	if err != nil {
@@ -235,15 +237,9 @@ func UnreservePorts(pr *PortReservation) error {
 	}
 	defer cleanup()
 
-	if f != nil {
-		if err := mergeFileRanges(f); err != nil {
-			return err
-		}
-	}
-
-	filtered := allocatedRanges[:0]
+	filtered := make([]*PortReservation, 0, len(allocatedRanges))
 	for _, r := range allocatedRanges {
-		if r.Start == pr.Start && r.End == pr.End {
+		if r == pr {
 			continue
 		}
 		filtered = append(filtered, r)
@@ -251,7 +247,19 @@ func UnreservePorts(pr *PortReservation) error {
 	allocatedRanges = filtered
 
 	if f != nil {
-		if err := writePortFile(f, allocatedRanges); err != nil {
+		// Re-read file ranges and remove the unreserved entry.
+		fileRanges, err := readPortFile(f)
+		if err != nil {
+			return err
+		}
+		filtered := make([]*PortReservation, 0, len(fileRanges))
+		for _, r := range fileRanges {
+			if r.Start == pr.Start && r.End == pr.End {
+				continue
+			}
+			filtered = append(filtered, r)
+		}
+		if err := writePortFile(f, filtered); err != nil {
 			return err
 		}
 	}

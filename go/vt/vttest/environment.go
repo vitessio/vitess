@@ -260,7 +260,7 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 
 	var reservedPorts *osutil.PortReservation
 	if basePort == 0 {
-		osutil.SetPortFilePath(path.Join(os.TempDir(), "vitess_vttest_ports.txt"))
+		osutil.SetPortFilePath(path.Join(os.TempDir(), osutil.DefaultPortFileName))
 		var err error
 		reservedPorts, err = osutil.GetPortReservation(6)
 		if err != nil {
