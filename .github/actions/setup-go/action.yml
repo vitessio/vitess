@@ -21,6 +21,8 @@ runs:
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         # Same path cached by actions/setup-go internally.
-        path: ~/go/pkg/mod
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
         # Cache by version/arch/hash. Construct hash using same method as actions/setup-go.
         key: go-${{ steps.setup-go.outputs.go-version }}-${{ runner.arch }}-${{ hashFiles('go.sum') }}
