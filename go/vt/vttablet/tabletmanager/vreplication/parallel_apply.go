@@ -444,6 +444,13 @@ type parallelScheduleState struct {
 // applyTxn structs into the scheduler. Empty transactions bypass the scheduler
 // and are saved via unsavedEvent / idle timeout.
 func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, items [][]*binlogdatapb.VEvent) error {
+	// Snapshot FK refs under serialMu so we have a consistent view for this
+	// relay fetch. The commitLoop may update these after DDL events.
+	vp.serialMu.Lock()
+	fkRefs := vp.fkRefs
+	parentFKRefs := vp.parentFKRefs
+	vp.serialMu.Unlock()
+
 	flush := func(commitOnly bool) error {
 		if len(state.curEvents) == 0 && !commitOnly {
 			return nil
@@ -483,7 +490,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				state.fieldIdxCache = make(map[string]map[string]int)
 				state.fieldIdxCacheVersion = state.cachedPlanVersion
 			}
-			writeset, err := buildTxnWriteset(planSnapshot, vp.fkRefs, vp.parentFKRefs, state.curEvents, state.fieldIdxCache)
+			writeset, err := buildTxnWriteset(planSnapshot, fkRefs, parentFKRefs, state.curEvents, state.fieldIdxCache)
 			if err != nil {
 				txn.forceGlobal = true
 			} else {
@@ -605,7 +612,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// Flushing each source transaction individually lets the
 				// scheduler detect truly independent transactions and run
 				// them in parallel.
-				hasFKRefs := len(vp.fkRefs) > 0
+				hasFKRefs := len(fkRefs) > 0
 				// With parallel workers, limit the mega-transaction size
 				// to ensure enough transactions for all workers. Without
 				// this limit, all consecutive commits in a relay fetch
@@ -1076,10 +1083,15 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
 		// changes are reflected in subsequent writeset conflict detection.
+		// The write must be guarded by serialMu since scheduleLoop reads
+		// these fields concurrently.
 		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
 			if newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName()); err == nil {
+				newParentRefs := buildParentFKRefs(newRefs)
+				vp.serialMu.Lock()
 				vp.fkRefs = newRefs
-				vp.parentFKRefs = buildParentFKRefs(newRefs)
+				vp.parentFKRefs = newParentRefs
+				vp.serialMu.Unlock()
 			}
 		}
 		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
