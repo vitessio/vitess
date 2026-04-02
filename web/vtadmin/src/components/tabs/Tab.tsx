@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import cx from 'classnames';
-import { LinkProps, NavLink } from 'react-router-dom';
+import { NavLink, To } from 'react-router-dom';
 import { Pip, PipState } from '../pips/Pip';
 
 import style from './Tab.module.scss';
@@ -25,14 +25,13 @@ interface Props {
     count?: number | null | undefined;
     status?: PipState;
     text: string;
-    to: LinkProps['to'];
+    to: To;
 }
 
 export const Tab = ({ activeClassName, className, count, status, text, to }: Props) => {
     return (
         <NavLink
-            activeClassName={cx(style.active, activeClassName)}
-            className={cx(style.tab, className)}
+            className={({ isActive }) => cx(style.tab, className, isActive && cx(style.active, activeClassName))}
             role="tab"
             to={to}
         >

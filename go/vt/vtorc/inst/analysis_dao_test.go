@@ -1169,7 +1169,7 @@ func TestStalePrimary(t *testing.T) {
 		},
 	}
 
-	var rowMaps []sqlutils.RowMap
+	rowMaps := make([]sqlutils.RowMap, 0, len(info))
 	for _, analysis := range info {
 		analysis.SetValuesFromTabletInfo()
 		rowMaps = append(rowMaps, analysis.ConvertToRowMap())

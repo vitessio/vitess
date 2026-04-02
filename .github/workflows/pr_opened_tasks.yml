@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
       - name: Generate GitHub App token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Generate GitHub App token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Generate GitHub App token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
@@ -103,13 +103,13 @@ jobs:
             --repo ${{ github.repository }} \
             --add-label "NeedsWebsiteDocsUpdate,NeedsDescriptionUpdate,NeedsIssue,NeedsBackportReason"
 
-   labeler:
-     if: github.repository == 'vitessio/vitess'
-     needs: add_initial_labels
-     permissions:
-       contents: read
-       pull-requests: write
-     runs-on: ubuntu-latest
-     steps:
-     - name: Run actions/labeler
-       uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+  labeler:
+    if: github.repository == 'vitessio/vitess'
+    needs: add_initial_labels
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run actions/labeler
+        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
