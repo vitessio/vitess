@@ -472,7 +472,7 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationPartialQueryCount",
 		"count of partial queries per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "workflow_type", "type"},
+		[]string{"source_keyspace", "source_shard", "workflow", "workflow_type", "counts", "type"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
@@ -487,7 +487,7 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationPartialQueryCacheSize",
 		"cache size for partial queries per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "workflow_type", "type"},
+		[]string{"source_keyspace", "source_shard", "workflow", "workflow_type", "counts", "type"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
@@ -527,7 +527,7 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationDDLActions",
 		"vreplication DDL processing actions per stream",
-		[]string{"workflow", "workflow_type", "action"},
+		[]string{"workflow", "workflow_type", "id", "action"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
