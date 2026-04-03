@@ -67,7 +67,7 @@ type controller struct {
 	workflow     string
 	workflowType int32
 	source       *binlogdatapb.BinlogSource
-	stopPos  string
+	stopPos      string
 
 	cancel context.CancelFunc
 	done   chan struct{}
