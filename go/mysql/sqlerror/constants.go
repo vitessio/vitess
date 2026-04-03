@@ -104,6 +104,7 @@ const (
 	ERDupUnique                     = ErrorCode(1169)
 	ERRequiresPrimaryKey            = ErrorCode(1173)
 	ERCantDoThisDuringAnTransaction = ErrorCode(1179)
+	ERMasterInfo                    = ErrorCode(1201)
 	ERReadOnlyTransaction           = ErrorCode(1207)
 	ERCannotAddForeign              = ErrorCode(1215)
 	ERNoReferencedRow               = ErrorCode(1216)
@@ -126,7 +127,17 @@ const (
 	ErNoReferencedRow2              = ErrorCode(1452)
 	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
-	ERInnodbReadOnly                = ErrorCode(1874)
+
+	// MySQL used 1871/1872 for master-info and relay-log-info initialization
+	// errors through 8.0.32, and reassigned those numbers in 8.0.33 to
+	// connection-metadata and applier-metadata initialization errors. These
+	// errnos therefore map to different metadata types depending on version.
+	ERReplicaMasterInfoInitRepository         = ErrorCode(1871)
+	ERReplicaRelayLogInfoInitRepository       = ErrorCode(1872)
+	ERReplicaConnectionMetadataInitRepository = ErrorCode(1871)
+	ERReplicaApplierMetadataInitRepository    = ErrorCode(1872)
+
+	ERInnodbReadOnly = ErrorCode(1874)
 
 	ERVectorConversion = ErrorCode(6138)
 
