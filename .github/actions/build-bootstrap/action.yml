@@ -1,0 +1,30 @@
+name: "Build Bootstrap Images"
+description: "Build Vitess bootstrap Docker images locally using docker buildx bake"
+
+inputs:
+  bootstrap-version:
+    description: "Bootstrap image version tag"
+    required: false
+    default: "ci"
+  bootstrap-flavor:
+    description: "Bootstrap image flavor (e.g. mysql84)"
+    required: false
+    default: "mysql84"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+    - name: Build bootstrap images
+      uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6.10.0
+      with:
+        files: docker/bootstrap/docker-bake.hcl
+        load: true
+        set: |
+          *.cache-from=type=gha
+          *.cache-to=type=gha,mode=max
+      env:
+        BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
+        BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}
