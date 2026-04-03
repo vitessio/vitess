@@ -436,6 +436,11 @@ type parallelScheduleState struct {
 	// merge into one mega-transaction. Set once based on the relay log
 	// max items and worker count.
 	maxBatchedCommits int
+	// mergedSequences tracks sequence numbers of transactions that were
+	// merged into the current batch. These are advanced in the scheduler
+	// when the batch is actually enqueued (not before), so that
+	// commit-parent dependencies aren't prematurely satisfied.
+	mergedSequences []int64
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -450,6 +455,12 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	fkRefs := vp.fkRefs
 	parentFKRefs := vp.parentFKRefs
 	vp.serialMu.Unlock()
+
+	// After DDL events that may change schema or FK topology, force all
+	// remaining transactions in this relay fetch to serialize. The
+	// commitLoop will refresh FK metadata when the DDL commits, so the
+	// next relay fetch will have updated snapshots.
+	forceSerialize := false
 
 	flush := func(commitOnly bool) error {
 		if len(state.curEvents) == 0 && !commitOnly {
@@ -478,7 +489,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		txn.commitParent = state.curCommitParent
 		txn.hasCommitMeta = state.curHasCommitMeta
 		txn.payload = payload
-		if state.curRowOnlySet && !state.curRowOnly {
+		if forceSerialize {
+			txn.forceGlobal = true
+		} else if state.curRowOnlySet && !state.curRowOnly {
 			txn.forceGlobal = true
 		} else if len(vp.copyState) != 0 {
 			txn.forceGlobal = true
@@ -500,6 +513,13 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
 		}
+		// Now that the batch is enqueued, advance any merged-away sequences.
+		// This is safe because the batch is ahead of them in the commit queue,
+		// so commit-parent dependencies will be satisfied in order.
+		for _, seq := range state.mergedSequences {
+			scheduler.advanceCommittedSequence(seq)
+		}
+		state.mergedSequences = state.mergedSequences[:0]
 		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
 		// pattern on the hot path. We can't reuse the old slice via [:0]
 		// because the payload still references the backing array.
@@ -625,18 +645,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					}
 				}
 				if !state.curMustSave && !hasFKRefs && hasAnotherCommit(items, i, j+1) {
-					// Advance lastCommittedSequence for this merged-away
-					// transaction so that future hasCommitMeta transactions
-					// whose commitParent references this sequence are not
-					// blocked. The events will be flushed with the final
-					// transaction in this batch.
-					//
-					// This is safe even though the batch hasn't committed yet:
-					// the commitLoop enforces strict commit ordering, so a later
-					// transaction cannot commit before this batch regardless of
-					// when its worker finishes applying.
+					// Track merged sequence numbers so they can be advanced
+					// when the batch actually commits. We must NOT advance
+					// lastCommittedSequence here because the batch hasn't
+					// committed yet. Empty-writeset transactions that depend
+					// on commit-parent ordering would otherwise become
+					// runnable too early.
 					if state.curHasCommitMeta {
-						scheduler.advanceCommittedSequence(state.curSequence)
+						state.mergedSequences = append(state.mergedSequences, state.curSequence)
 					}
 					// Reset only metadata — keep accumulated events and
 					// rowOnly state. The next GTID will set new metadata.
@@ -658,12 +674,11 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			case binlogdatapb.VEventType_FIELD:
 				// FIELD events carry table metadata (column definitions) and
 				// must be applied before the ROW events that follow them, but
-				// they are pure metadata — they don't modify user data and
-				// don't need to force serialization. Accumulate them like ROW
-				// events so they stay in the same applyTxn as the subsequent
-				// ROW events. Unlike the default case, we do NOT set
-				// curRowOnly=false because the ROW events determine the
-				// writeset; FIELD events are harmless for conflict detection.
+				// they are emitted routinely by MySQL at the start of each
+				// transaction — they do not indicate a schema change. The
+				// execution plan only actually changes after DDL, which
+				// already sets forceSerialize. Accumulate FIELD events like
+				// ROW events so they stay in the same applyTxn.
 				state.curEvents = append(state.curEvents, event)
 			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 				if err := flush(false); err != nil {
@@ -708,6 +723,12 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				txn.payload = payload
 				if err := scheduler.enqueue(txn); err != nil {
 					return err
+				}
+				// DDL may change schema or FK topology. Force all remaining
+				// transactions in this relay fetch to serialize so they don't
+				// use stale FK refs or table plans for writeset computation.
+				if event.Type == binlogdatapb.VEventType_DDL {
+					forceSerialize = true
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -1083,18 +1104,12 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
 		// changes are reflected in subsequent writeset conflict detection.
-		// Release serialMu for the DB round-trip, then re-acquire to swap.
+		// We hold serialMu for the DB round-trip here. DDL is rare, and
+		// the main connection must not be used concurrently by scheduleLoop.
 		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
-			vp.serialMu.Unlock()
-			newRefs, fkErr := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
-			var newParentRefs map[string][]parentFKRef
-			if fkErr == nil {
-				newParentRefs = buildParentFKRefs(newRefs)
-			}
-			vp.serialMu.Lock()
-			if fkErr == nil {
+			if newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName()); err == nil {
 				vp.fkRefs = newRefs
-				vp.parentFKRefs = newParentRefs
+				vp.parentFKRefs = buildParentFKRefs(newRefs)
 			}
 		}
 		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
