@@ -37,6 +37,8 @@
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
         - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
+    - **[Topology](#minor-changes-topology)**
+        - [ZooKeeper Connection Metrics](#topology-zk-connection-metrics)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -295,4 +297,18 @@ The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use
 **Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
 
 **Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
+
+### <a id="minor-changes-topology"/>Topology</a>
+
+#### <a id="topology-zk-connection-metrics"/>ZooKeeper Connection Metrics</a>
+
+Three new metrics have been added to the `zk2topo` package for monitoring ZooKeeper connections. These metrics appear in `/debug/vars` and help debug ZK connectivity issues:
+
+| Metric Name | Type | Description |
+|:------------|:-----|:------------|
+| `ZkLockAcquisition` | GaugeDuration | Time spent waiting to acquire the ZK connection semaphore |
+| `ZkConnAcquisitionRetry` | Counter | Number of connection retry attempts |
+| `ZkConnState` | CountersWithSingleLabel | ZK connection state transitions, labeled by state |
+
+These metrics provide visibility into connection contention (`ZkLockAcquisition`), retry behavior (`ZkConnAcquisitionRetry`), and connection state changes (`ZkConnState`), which are useful for diagnosing latency spikes and connectivity problems in ZooKeeper-backed topology deployments.
 
