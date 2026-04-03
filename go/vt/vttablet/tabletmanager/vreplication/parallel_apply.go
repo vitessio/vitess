@@ -955,6 +955,7 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		select {
 		case commitCh <- txn:
 		case <-ctx.Done():
+			worker.rollback()
 			return ctx.Err()
 		}
 
