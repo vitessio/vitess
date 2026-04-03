@@ -114,8 +114,11 @@ func (ct *controller) Stop() {
 
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Infof("Run finished for vdiff %s", ct.uuid)
+		log.Info("Run finished for vdiff " + ct.uuid)
+		// Unblock Stop() callers waiting on <-ct.done.
 		close(ct.done)
+		// Release gRPC connections held by this controller's tablet manager client.
+		ct.tmc.Close()
 	}()
 
 	dbClient := ct.vde.dbClientFactoryFiltered()
