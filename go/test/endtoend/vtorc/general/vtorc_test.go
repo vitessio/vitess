@@ -76,7 +76,7 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	var replica, otherReplica *cluster.Vttablet
@@ -135,7 +135,7 @@ func TestSingleKeyspace(t *testing.T) {
 
 	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
 	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
 }
 
@@ -153,7 +153,7 @@ func TestKeyspaceShard(t *testing.T) {
 
 	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
 	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
 }
 
@@ -176,7 +176,7 @@ func TestVTOrcRepairs(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	var replica, otherReplica *cluster.Vttablet
@@ -204,7 +204,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		// wait for repair
 		match := utils.WaitForReadOnlyValue(t, curPrimary, 0)
 		require.True(t, match)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, 1)
 	})
 
 	t.Run("ReplicaReadWrite", func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		// wait for repair
 		match := utils.WaitForReadOnlyValue(t, replica, 1)
 		require.True(t, match)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 1)
 	})
 
 	t.Run("StopReplication", func(t *testing.T) {
@@ -225,7 +225,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// check replication is setup correctly
 		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 2)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 2)
 
 		// Stop just the IO thread on the replica
 		_, err = utils.RunSQL(t, "STOP REPLICA IO_THREAD", replica, "")
@@ -233,7 +233,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// check replication is setup correctly
 		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 3)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 3)
 
 		// Stop just the SQL thread on the replica
 		_, err = utils.RunSQL(t, "STOP REPLICA SQL_THREAD", replica, "")
@@ -241,7 +241,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// check replication is setup correctly
 		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 4)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 4)
 	})
 
 	t.Run("ReplicationFromOtherReplica", func(t *testing.T) {
@@ -257,7 +257,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// wait until the source port is set back correctly by vtorc
 		utils.CheckSourcePort(t, replica, curPrimary, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 5)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 5)
 
 		// check that writes succeed
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
@@ -269,7 +269,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// wait until heart beat interval has been fixed by vtorc.
 		utils.CheckHeartbeatInterval(t, replica, 16.5, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 6)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 6)
 
 		// check that writes succeed
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
@@ -292,7 +292,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		// wait for repair
 		err = utils.WaitForReplicationToStop(t, curPrimary)
 		require.NoError(t, err)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, 1)
 		// check that the writes still succeed
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 10*time.Second)
 	})
@@ -472,6 +472,98 @@ func TestStalePrimary(t *testing.T) {
 	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
 
+// TestDemotePrimaryHang tests that when the `DemotePrimary` RPC hangs, VTOrc is not indefinitely blocked
+// on future recoveries.
+func TestDemotePrimaryHang(t *testing.T) {
+	ctx := t.Context()
+
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, 1, policy.DurabilitySemiSync)
+
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, curPrimary, "expected VTOrc to elect an initial primary")
+
+	var stalePrimary *cluster.Vttablet
+	var blockedReplica *cluster.Vttablet
+	var healthyReplica *cluster.Vttablet
+
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == curPrimary.Alias {
+			continue
+		}
+
+		if stalePrimary == nil {
+			stalePrimary = tablet
+			continue
+		}
+
+		if blockedReplica == nil {
+			blockedReplica = tablet
+			continue
+		}
+
+		healthyReplica = tablet
+	}
+
+	require.NotNil(t, stalePrimary, "expected a candidate tablet to mark as stale topo primary")
+	require.NotNil(t, blockedReplica, "expected a second replica to inject a separate failure")
+	require.NotNil(t, healthyReplica, "expected a healthy replica to keep normal replication coverage")
+
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{stalePrimary, blockedReplica, healthyReplica}, 15*time.Second)
+
+	// Hold the stale primary candidate's action queue for a long time. This guarantees that VTOrc's
+	// DemotePrimary RPC will block on the tablet lock.
+	sleepDuration := 90 * time.Second
+	go func() {
+		clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+			"SleepTablet",
+			stalePrimary.Alias,
+			sleepDuration.String(),
+		)
+	}()
+
+	// Make the tablet a stale primary by updating its type to PRIMARY and primary term start time
+	// to an older time than the current primary. This will trigger the StaleTopoPrimary recovery.
+	err := utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, stalePrimary, "")
+	require.NoError(t, err)
+
+	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, stalePrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now().Add(-1 * time.Minute))
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Wait until VTOrc has detected the stale topo primary.
+	utils.WaitForDetectedProblems(t, vtorc, string(inst.StaleTopoPrimary), stalePrimary.Alias, keyspace.Name, shard0.Name, 1)
+
+	// Inject a second problem on a different replica while the stale-primary recovery is still hanging.
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", blockedReplica.Alias)
+	require.NoError(t, err)
+
+	utils.WaitForDetectedProblems(t, vtorc, string(inst.ReplicationStopped), blockedReplica.Alias, keyspace.Name, shard0.Name, 1)
+
+	// If DemotePrimary is properly bounded by a context timeout, the stale primary recovery should
+	// fail, close the recovery row, and unblock the shard for further recoveries.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		vars := vtorc.GetVars()
+		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
+		require.True(c, ok, "RecoveriesCount metric not yet available")
+
+		mapKey := logic.DemoteStaleTopoPrimaryRecoveryName
+		count := utils.GetIntFromValue(recoveries[mapKey])
+		assert.GreaterOrEqual(c, count, 1)
+	}, 30*time.Second, time.Second, "expected VTOrc to attempt stale primary recovery")
+
+	// The FixReplica recovery should run once the stale primary recovery unblocks the shard.
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, 1)
+}
+
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
@@ -585,7 +677,7 @@ func TestVTOrcWithPrs(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find any replica tablet other than the current primary
@@ -611,13 +703,13 @@ func TestVTOrcWithPrs(t *testing.T) {
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	// Verify that VTOrc didn't run any other recovery
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 0)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, 0)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 0)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, 0)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, shard0.Vttablets, 10*time.Second)
 }
 
@@ -744,7 +836,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// Kill the current primary.
