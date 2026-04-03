@@ -264,8 +264,10 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(newPrimary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 
 	// check what was run
@@ -597,64 +599,6 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 }
 
 func TestPlannedReparentShardRelayLogError(t *testing.T) {
-<<<<<<< HEAD
-	delay := discovery.GetTabletPickerRetryDelay()
-	defer func() {
-		discovery.SetTabletPickerRetryDelay(delay)
-	}()
-	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(ctx, t, ts)
-	defer vp.Close()
-
-	// Create a primary, a couple good replicas
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
-	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-
-	// old primary
-	primary.FakeMysqlDaemon.ReadOnly = false
-	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
-		GTIDSet: replication.MariadbGTIDSet{
-			7: replication.MariadbGTID{
-				Domain:   7,
-				Server:   123,
-				Sequence: 990,
-			},
-||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
-	delay := discovery.GetTabletPickerRetryDelay()
-	defer func() {
-		discovery.SetTabletPickerRetryDelay(delay)
-	}()
-	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(ctx, t, ts)
-	defer vp.Close()
-
-	// Create a primary, a couple good replicas
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
-	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-
-	// old primary
-	primary.FakeMysqlDaemon.ReadOnly = false
-	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
-		GTIDSet: replication.MariadbGTIDSet{
-			7: replication.MariadbGTID{
-				Domain:   7,
-				Server:   123,
-				Sequence: 990,
-			},
-=======
 	relayErrors := []struct {
 		name string
 		err  error
@@ -670,7 +614,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		{
 			name: "connection metadata",
 			err:  sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
->>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
 		},
 	}
 
@@ -740,54 +683,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-<<<<<<< HEAD
-	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
-	defer goodReplica1.StopActionLoop(t)
-
-	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
-	require.NoError(t, err)
-	// check what was run
-	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-
-	assert.False(t, primary.FakeMysqlDaemon.ReadOnly, "primary.FakeMysqlDaemon.ReadOnly set")
-	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, primary.TM.QueryServiceControl.IsServing(), "primary...QueryServiceControl not serving")
-
-	// verify the old primary was told to start replicating (and not
-	// the replica that wasn't replicating in the first place)
-	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
-||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
-	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
-	defer goodReplica1.StopActionLoop(t)
-
-	// run PlannedReparentShard
-	err := vp.Run([]string{
-		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias),
-	})
-	require.NoError(t, err)
-	// check what was run
-	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-
-	assert.False(t, primary.FakeMysqlDaemon.ReadOnly, "primary.FakeMysqlDaemon.ReadOnly set")
-	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, primary.TM.QueryServiceControl.IsServing(), "primary...QueryServiceControl not serving")
-
-	// verify the old primary was told to start replicating (and not
-	// the replica that wasn't replicating in the first place)
-	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
-=======
->>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
 }
 
 // TestPlannedReparentShardRelayLogErrorStartReplication is similar to
@@ -795,66 +690,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 // is not replicating to start with (IO_Thread is not running) and we
 // simulate an error from the attempt to start replication
 func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
-<<<<<<< HEAD
-	delay := discovery.GetTabletPickerRetryDelay()
-	defer func() {
-		discovery.SetTabletPickerRetryDelay(delay)
-	}()
-	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(ctx, t, ts)
-	defer vp.Close()
-
-	// Create a primary, a couple good replicas
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
-	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
-
-	// old primary
-	primary.FakeMysqlDaemon.ReadOnly = false
-	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
-		GTIDSet: replication.MariadbGTIDSet{
-			7: replication.MariadbGTID{
-				Domain:   7,
-				Server:   123,
-				Sequence: 990,
-			},
-||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
-	delay := discovery.GetTabletPickerRetryDelay()
-	defer func() {
-		discovery.SetTabletPickerRetryDelay(delay)
-	}()
-	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(ctx, t, ts)
-	defer vp.Close()
-
-	// Create a primary, a couple good replicas
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
-	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
-
-	// old primary
-	primary.FakeMysqlDaemon.ReadOnly = false
-	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
-		GTIDSet: replication.MariadbGTIDSet{
-			7: replication.MariadbGTID{
-				Domain:   7,
-				Server:   123,
-				Sequence: 990,
-			},
-=======
 	relayErrors := []struct {
 		name string
 		err  error
@@ -870,7 +705,6 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 		{
 			name: "connection metadata",
 			err:  sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
->>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
 		},
 	}
 
@@ -959,54 +793,6 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 			assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
 		})
 	}
-<<<<<<< HEAD
-	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
-	defer goodReplica1.StopActionLoop(t)
-
-	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
-	require.NoError(t, err)
-	// check what was run
-	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-
-	assert.False(t, primary.FakeMysqlDaemon.ReadOnly, "primary.FakeMysqlDaemon.ReadOnly set")
-	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, primary.TM.QueryServiceControl.IsServing(), "primary...QueryServiceControl not serving")
-
-	// verify the old primary was told to start replicating (and not
-	// the replica that wasn't replicating in the first place)
-	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
-||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
-	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
-	defer goodReplica1.StopActionLoop(t)
-
-	// run PlannedReparentShard
-	err := vp.Run([]string{
-		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias),
-	})
-	require.NoError(t, err)
-	// check what was run
-	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-
-	assert.False(t, primary.FakeMysqlDaemon.ReadOnly, "primary.FakeMysqlDaemon.ReadOnly set")
-	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, primary.TM.QueryServiceControl.IsServing(), "primary...QueryServiceControl not serving")
-
-	// verify the old primary was told to start replicating (and not
-	// the replica that wasn't replicating in the first place)
-	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
-=======
->>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
 }
 
 // TestPlannedReparentShardPromoteReplicaFail simulates a failure of the PromoteReplica call
