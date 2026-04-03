@@ -15,6 +15,7 @@
         - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
+        - [New `workflow_type` label for VReplication Prometheus metrics](#vreplication-workflow-type-label)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -132,6 +133,19 @@ vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer 
 # Stop workflow on specific shards only
 vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
 ```
+
+#### <a id="vreplication-workflow-type-label"/>New `workflow_type` label for VReplication Prometheus metrics</a>
+
+All per-stream VReplication Prometheus metrics now include a `workflow_type` label indicating the type of workflow producing the metric. The label value is a human-readable string such as `MoveTables`, `Reshard`, `OnlineDDL`, `Materialize`, or `CreateLookupIndex`.
+
+This allows dashboards and alerts to filter and distinguish VReplication metrics by operation type. For example, you can create separate panels for OnlineDDL versus MoveTables streams, or alert on throttling only for specific workflow types.
+
+The label is added to all 18 per-stream VReplication metrics, including:
+- `vttablet_v_replication_copy_row_count`
+- `vttablet_v_replication_copy_loop_count`
+- `vttablet_v_replication_seconds_behind_primary`
+- `vttablet_v_replication_throttled_counts`
+- And other per-stream metrics
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
