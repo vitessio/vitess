@@ -156,7 +156,23 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSNoDB,
 		},
 		{
+<<<<<<< HEAD
 			err: fmt.Errorf("just some random text here"),
+||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
+			err: errors.New("just some random text here"),
+=======
+			err: errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			num: ERMasterInfo,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: errors.New("ERROR 1872 (HY000): Replica failed to initialize applier metadata structure from the repository"),
+			num: ERReplicaApplierMetadataInitRepository,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: errors.New("just some random text here"),
+>>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
 			num: ERUnknownError,
 			ss:  SSUnknownSQLState,
 		},
