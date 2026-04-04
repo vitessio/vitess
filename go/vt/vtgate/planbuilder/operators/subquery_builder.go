@@ -368,7 +368,13 @@ func createComparisonSubQuery(
 }
 
 // pullOutValueSubqueries extracts all subqueries from an expression and replaces them with arguments.
-// Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out. Returns the rewritten expression and extracted SubQuery operators.
+// Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out.
+// Returns the rewritten expression and extracted SubQuery operators.
+//
+// For each subquery found, the method resolves against existing operators in the builder:
+//   - Same subquery + same opcode → reuse the existing operator and its bind var name
+//   - Same subquery + different opcode → create a new operator with a fresh bind var name
+//   - New subquery → create a new operator
 func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
@@ -376,48 +382,56 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.Clone(expr)
-	sqe := extractSubQueries(ctx, expr, isDML)
-	if sqe == nil {
-		return nil, nil
-	}
 	var allSubqs []*SubQuery
 
-	for idx, subq := range sqe.subq {
-		argName := sqe.cols[idx]
-		filterType := sqe.pullOutCode[idx]
-		if existing := sqb.findByArgName(argName); existing != nil {
-			if existing.FilterType == filterType {
-				// Same subquery, same context — reuse the existing operator.
-				allSubqs = append(allSubqs, existing)
-				continue
-			}
-			// Same subquery AST but different pullout context (e.g., scalar vs IN).
-			// Check if we already have an operator for this (subquery, opcode) from
-			// a previous rename — reuse it instead of creating yet another operator.
-			if reused := sqb.findEquivalent(ctx, subq, filterType); reused != nil {
-				sqe.new = replaceSubqueryArgName(sqe.new, argName, reused.ArgName, isDML)
-				allSubqs = append(allSubqs, reused)
-				continue
-			}
-			// We need a distinct bind variable name to avoid conflicts.
-			oldName := argName
-			newName := ctx.ReservedVars.ReserveSubQuery()
-			sqe.new = replaceSubqueryArgName(sqe.new, oldName, newName, isDML)
-			argName = newName
-			// Keep sqe.cols in sync so later iterations with the same
-			// old name and opcode reuse this renamed bind variable.
-			for j := idx + 1; j < len(sqe.cols); j++ {
-				if sqe.cols[j] == oldName && sqe.pullOutCode[j] == filterType {
-					sqe.cols[j] = newName
-				}
-			}
+	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, filterType opcode.PulloutOpcode) {
+		// Check if an equivalent operator already exists in this builder.
+		if existing := sqb.findEquivalent(ctx, sq, filterType); existing != nil {
+			allSubqs = append(allSubqs, existing)
+			sqb.replaceSubqueryNode(cursor, existing.ArgName, filterType, isDML)
+			return
 		}
-		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, filterType, true)
+		// Reserve a fresh name — don't use GetReservedArgumentFor's cache,
+		// since the same subquery in a different opcode needs a distinct name.
+		argName := ctx.ReservedVars.ReserveSubQuery()
+		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
+		sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
 	}
 
-	return sqe.new, allSubqs
+	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Subquery:
+			t := getOpCodeFromParent(cursor.Parent())
+			if t == nil {
+				return true
+			}
+			replaceWithArg(cursor, node, *t)
+		case *sqlparser.ExistsExpr:
+			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
+		}
+		return true
+	}).(sqlparser.Expr)
+
+	if len(allSubqs) == 0 {
+		return nil, nil
+	}
+	return expr, allSubqs
+}
+
+// replaceSubqueryNode replaces the current cursor node with the appropriate
+// argument placeholder for the given bind var name and opcode.
+func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
+	if isDML {
+		if filterType.NeedsListArg() {
+			cursor.Replace(sqlparser.NewListArg(argName))
+		} else {
+			cursor.Replace(sqlparser.NewArgument(argName))
+		}
+	} else {
+		cursor.Replace(sqlparser.NewColName(argName))
+	}
 }
 
 // findEquivalent looks for an existing uncorrelated SubQuery in this builder
@@ -440,15 +454,6 @@ func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
 	return nil
 }
 
-// subqueryExtraction holds the result of extracting subqueries from an expression.
-// Contains the rewritten expression with arguments replacing subqueries, the extracted subquery nodes, their pullout opcodes, and generated argument names.
-type subqueryExtraction struct {
-	new         sqlparser.Expr
-	subq        []*sqlparser.Subquery
-	pullOutCode []opcode.PulloutOpcode
-	cols        []string
-}
-
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
 // Returns nil for EXISTS (handled separately) or the appropriate opcode for IN/NOT IN/value contexts.
 func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
@@ -465,79 +470,4 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 		}
 	}
 	return &code
-}
-
-// extractSubQueries recursively walks an expression tree to find and extract all subqueries.
-// Replaces subqueries with arguments (for DML) or column names (for SELECT). Returns nil if no subqueries found.
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
-	sqe := &subqueryExtraction{}
-	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
-		sqName := ctx.GetReservedArgumentFor(sq)
-		// If the same subquery AST appears in a different pullout context
-		// (e.g., scalar value vs IN), we need a distinct bind variable name
-		// to avoid conflicts when the engine produces different bind var types.
-		for i, existingName := range sqe.cols {
-			if existingName == sqName && sqe.pullOutCode[i] != t {
-				sqName = ctx.ReservedVars.ReserveSubQuery()
-				break
-			}
-		}
-		sqe.cols = append(sqe.cols, sqName)
-		if isDML {
-			if t.NeedsListArg() {
-				cursor.Replace(sqlparser.NewListArg(sqName))
-			} else {
-				cursor.Replace(sqlparser.NewArgument(sqName))
-			}
-		} else {
-			cursor.Replace(sqlparser.NewColName(sqName))
-		}
-		sqe.subq = append(sqe.subq, sq)
-	}
-
-	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.Subquery:
-			t := getOpCodeFromParent(cursor.Parent())
-			if t == nil {
-				return true
-			}
-			replaceWithArg(cursor, node, *t)
-			sqe.pullOutCode = append(sqe.pullOutCode, *t)
-		case *sqlparser.ExistsExpr:
-			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
-		}
-		return true
-	}).(sqlparser.Expr)
-	if len(sqe.subq) == 0 {
-		return nil
-	}
-	sqe.new = expr
-	return sqe
-}
-
-// replaceSubqueryArgName rewrites all references to oldName in the expression
-// to use newName. In non-DML mode subqueries are replaced with ColName nodes;
-// in DML mode they become Argument or ListArg nodes.
-func replaceSubqueryArgName(expr sqlparser.Expr, oldName, newName string, isDML bool) sqlparser.Expr {
-	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		if isDML {
-			switch node := cursor.Node().(type) {
-			case *sqlparser.Argument:
-				if node.Name == oldName {
-					cursor.Replace(sqlparser.NewArgument(newName))
-				}
-			case sqlparser.ListArg:
-				if string(node) == oldName {
-					cursor.Replace(sqlparser.NewListArg(newName))
-				}
-			}
-		} else {
-			if col, ok := cursor.Node().(*sqlparser.ColName); ok && col.Name.String() == oldName {
-				cursor.Replace(sqlparser.NewColName(newName))
-			}
-		}
-		return true
-	}).(sqlparser.Expr)
 }
