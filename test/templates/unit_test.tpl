@@ -123,7 +123,7 @@ jobs:
 
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
+      timeout-minutes: {{if .Race}}45{{else}}30{{end}}
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
