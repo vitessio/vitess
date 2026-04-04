@@ -97,8 +97,9 @@ var (
 	socketFile        string
 	mysqlCloneEnabled bool
 
-	replicationConnectRetry = 10 * time.Second
-	replicationRetryCount   = 0
+	replicationConnectRetry   = 10 * time.Second
+	replicationRetryCount     = 0
+	replicationRetryCountFlag *pflag.Flag
 
 	versionRegex = regexp.MustCompile(versionStringPrefix + "([0-9]+)\\.([0-9]+)\\.([0-9]+)")
 	// versionSQLQuery will return a version string directly from
@@ -149,7 +150,8 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
-	utils.SetFlagIntVar(fs, &replicationRetryCount, "replication-retry-count", replicationRetryCount, "how many times a replica should retry reconnecting to the primary before giving up. 0 leaves MySQL's default unchanged.")
+	utils.SetFlagIntVar(fs, &replicationRetryCount, "replication-retry-count", replicationRetryCount, "how many times a replica should retry reconnecting to the primary before giving up. 0 means unlimited retries. If unset, MySQL's default is used.")
+	replicationRetryCountFlag = fs.Lookup("replication-retry-count")
 }
 
 // MySQLCloneEnabled returns whether MySQL CLONE support is enabled.

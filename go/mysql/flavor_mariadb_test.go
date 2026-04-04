@@ -80,6 +80,29 @@ func TestMariadbSetReplicationSourceCommandRetryCount(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestMariadbSetReplicationSourceCommandRetryCountZero(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_RETRY_COUNT = 0,
+  MASTER_USE_GTID = current_pos`
+
+	flavor, _, canonicalVersion := GetFlavor("12.0.1-MariaDB", nil)
+	conn := &Conn{flavor: flavor, ServerVersion: canonicalVersion}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, 0)
+	assert.Equal(t, want, got)
+}
+
 func TestMariadbSetReplicationSourceCommandRetryCountUnsupportedVersion(t *testing.T) {
 	params := &ConnParams{
 		Uname: "username",

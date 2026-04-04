@@ -84,7 +84,7 @@ Even if a MySQL is external, you can still make vttablet perform some management
 ` +
 			"* `--unmanaged`: This flag indicates that this tablet is running in unmanaged mode. In this mode, any reparent or replica commands are not allowed. These are InitShardPrimary, PlannedReparentShard, EmergencyReparentShard, and ReparentTablet. You should use the TabletExternallyReparented command to inform vitess of the current primary.\n" +
 			"* `--replication-connect-retry`: This value is give to mysql when it connects a replica to the primary as the retry duration parameter.\n" +
-			"* `--replication-retry-count`: This value is given to mysql when it connects a replica to the primary as the retry count parameter.\n" +
+			"* `--replication-retry-count`: This value is given to mysql when it connects a replica to the primary as the retry count parameter. If unset, MySQL's default is used; 0 means unlimited retries.\n" +
 			"* `--heartbeat-enable` and `--heartbeat-interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.\n",
 		Example: `
 vttablet \

@@ -205,7 +205,7 @@ func (m mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host stri
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
 	}
-	if retryCount > 0 && m.supportsReplicationRetryCount() {
+	if retryCount >= 0 && m.supportsReplicationRetryCount() {
 		args = append(args, fmt.Sprintf("MASTER_RETRY_COUNT = %d", retryCount))
 	}
 	if params.SslEnabled() {

@@ -84,6 +84,29 @@ func TestMysql8SetReplicationSourceCommandRetryCount(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestMysql8SetReplicationSourceCommandRetryCountZero(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	want := `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'localhost',
+  SOURCE_PORT = 123,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 1234,
+  SOURCE_RETRY_COUNT = 0,
+  GET_SOURCE_PUBLIC_KEY = 1,
+  SOURCE_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor8{}}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, 0)
+	assert.Equal(t, want, got)
+}
+
 func TestMysql57SetReplicationSourceCommandRetryCount(t *testing.T) {
 	params := &ConnParams{
 		Uname: "username",
@@ -105,6 +128,29 @@ func TestMysql57SetReplicationSourceCommandRetryCount(t *testing.T) {
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, retryCount)
+	assert.Equal(t, want, got)
+}
+
+func TestMysql57SetReplicationSourceCommandRetryCountZero(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	host := "localhost"
+	port := int32(123)
+	connectRetry := 1234
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_RETRY_COUNT = 0,
+  GET_MASTER_PUBLIC_KEY = 1,
+  MASTER_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor57{}}
+	got := conn.SetReplicationSourceCommandWithRetry(params, host, port, 0, connectRetry, 0)
 	assert.Equal(t, want, got)
 }
 

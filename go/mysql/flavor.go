@@ -19,7 +19,6 @@ package mysql
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -197,8 +196,8 @@ func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavo
 		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
 		f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 	case strings.Contains(serverVersion, mariaDBVersionString):
-		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
-		if err != nil || mariadbVersion < 10.2 {
+		atLeast, err := capabilities.ServerVersionAtLeast(canonicalVersion, 10, 2, 0)
+		if err != nil || !atLeast {
 			f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 		} else {
 			f = mariadbFlavor102{mariadbFlavor{serverVersion: canonicalVersion}}
@@ -399,12 +398,16 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 
 // SetReplicationSourceCommand returns the command to use the provided host/port
 // as the new replication source (without changing any GTID position).
+// It preserves the historical behavior of omitting an explicit retry-count clause.
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
 func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
-	return c.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, connectRetry, 0)
+	return c.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, connectRetry, -1)
 }
 
+// SetReplicationSourceCommandWithRetry returns the command to use the provided host/port
+// as the new replication source (without changing any GTID position).
+// A negative retryCount omits the retry-count clause and leaves the server default unchanged.
 func (c *Conn) SetReplicationSourceCommandWithRetry(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
 	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, retryCount)
 }

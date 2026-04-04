@@ -494,9 +494,6 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
-	if replicationRetryCount < 0 {
-		return fmt.Errorf("--replication-retry-count must be non-negative; got %d", replicationRetryCount)
-	}
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -511,7 +508,14 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()), replicationRetryCount)
+	retryCount := -1
+	if replicationRetryCountFlag != nil && replicationRetryCountFlag.Changed {
+		if replicationRetryCount < 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--replication-retry-count must be >= 0, got %d", replicationRetryCount)
+		}
+		retryCount = replicationRetryCount
+	}
+	smc := conn.Conn.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()), retryCount)
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())

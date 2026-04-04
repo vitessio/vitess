@@ -233,7 +233,7 @@ func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host st
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
 	}
-	if retryCount > 0 {
+	if retryCount >= 0 {
 		args = append(args, fmt.Sprintf("MASTER_RETRY_COUNT = %d", retryCount))
 	}
 	if params.SslEnabled() {
