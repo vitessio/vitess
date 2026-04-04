@@ -392,6 +392,13 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 				continue
 			}
 			// Same subquery AST but different pullout context (e.g., scalar vs IN).
+			// Check if we already have an operator for this (subquery, opcode) from
+			// a previous rename — reuse it instead of creating yet another operator.
+			if reused := sqb.findEquivalent(ctx, subq, filterType); reused != nil {
+				sqe.new = replaceSubqueryArgName(sqe.new, argName, reused.ArgName, isDML)
+				allSubqs = append(allSubqs, reused)
+				continue
+			}
 			// We need a distinct bind variable name to avoid conflicts.
 			oldName := argName
 			newName := ctx.ReservedVars.ReserveSubQuery()
@@ -411,6 +418,17 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	}
 
 	return sqe.new, allSubqs
+}
+
+// findEquivalent looks for an existing uncorrelated SubQuery in this builder
+// that matches the given subquery expression and pullout opcode.
+func (sqb *SubQueryBuilder) findEquivalent(ctx *plancontext.PlanningContext, subq *sqlparser.Subquery, filterType opcode.PulloutOpcode) *SubQuery {
+	for _, sq := range sqb.Inner {
+		if sq.FilterType == filterType && !sq.correlated && ctx.SemTable.EqualsExpr(sq.originalSubquery, subq) {
+			return sq
+		}
+	}
+	return nil
 }
 
 func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
