@@ -37,15 +37,11 @@
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
         - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
-<<<<<<< HEAD
     - **[Metrics](#minor-changes-metrics)**
         - [Extended Go Runtime Metrics via Prometheus](#metrics-extended-go-runtime)
-||||||| 8edc85bdba
-=======
     - **[Backup and Restore](#minor-changes-backup-restore)**
         - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
         - [Restore Hook Improvements](#restore-hook-backup-engine-env)
->>>>>>> main
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -305,7 +301,6 @@ The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use
 
 **Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
 
-<<<<<<< HEAD
 ### <a id="minor-changes-metrics"/>Metrics</a>
 
 #### <a id="metrics-extended-go-runtime"/>Extended Go Runtime Metrics via Prometheus</a>
@@ -327,8 +322,6 @@ A new `go_info_ext` gauge is also added with `compiler`, `GOARCH`, and `GOOS` la
 
 **No configuration required** — the metrics appear automatically on the `/metrics` endpoint for all components using the Prometheus backend.
 
-||||||| 8edc85bdba
-=======
 ### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
 
 #### <a id="mysql-clone-support"/>MySQL CLONE Support for Replica Provisioning</a>
@@ -386,4 +379,3 @@ vtbackup \
 `TM_RESTORE_DATA_BACKUP_ENGINE` is only set when a restore reads from an actual backup—not for clone-based restores or when no backup is used. Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another engine.
 
 
->>>>>>> main
