@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"runtime"
 	"time"
 
@@ -525,14 +524,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-<<<<<<< HEAD
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, false, true); err != nil {
-||||||| parent of 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
-=======
-
-	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
->>>>>>> 4775281aca (vttablet: handle applier metadata init failures in relay-log recovery (#19560))
+	if err := tm.setReplicationSourceRecoverable(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
 
@@ -1273,12 +1265,11 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 		return err
 	}
 
-	log.Warn(
-		"Encountered recoverable replication initialization error while changing replication source, resetting "+
-			"replication parameters and reapplying source",
-		slog.String("source_host", host),
-		slog.Int("source_port", int(port)),
-		slog.Any("error", err),
+	log.Warningf(
+		"Encountered recoverable replication initialization error while changing replication source, resetting replication parameters and reapplying source: source_host=%s source_port=%d error=%v",
+		host,
+		port,
+		err,
 	)
 
 	// If the replica was running when the source-change attempt failed, stop it
@@ -1338,10 +1329,7 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
 	if isRecoverableReplicationInitializationError(err) {
-		log.Warn(
-			"Encountered recoverable replication initialization error, restarting replication",
-			slog.Any("error", err),
-		)
+		log.Warningf("Encountered recoverable replication initialization error, restarting replication: error=%v", err)
 
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
