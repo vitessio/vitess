@@ -15,6 +15,7 @@
         - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
+        - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -136,6 +137,14 @@ vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer 
 # Stop workflow on specific shards only
 vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
 ```
+
+#### <a id="vreplication-tablet-error-retry"/>Automatic tablet retry for tablet-specific errors</a>
+
+VReplication workflows now automatically retry with different tablets when encountering tablet-specific errors. Previously, workflows without a cell preference would default to the local cell and could get stuck retrying the same failing tablet indefinitely.
+
+When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
+
+This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
