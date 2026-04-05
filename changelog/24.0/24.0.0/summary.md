@@ -15,12 +15,8 @@
         - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
-<<<<<<< HEAD
         - [New `workflow_type` label for VReplication Prometheus metrics](#vreplication-workflow-type-label)
-||||||| 5e16002c28
-=======
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
->>>>>>> main
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -142,7 +138,6 @@ vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer 
 vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
 ```
 
-<<<<<<< HEAD
 #### <a id="vreplication-workflow-type-label"/>New `workflow_type` label for VReplication Prometheus metrics</a>
 
 All per-stream VReplication Prometheus metrics now include a `workflow_type` label indicating the type of workflow producing the metric. The label value is a human-readable string such as `MoveTables`, `Reshard`, `OnlineDDL`, `Materialize`, or `CreateLookupIndex`.
@@ -156,8 +151,6 @@ The label is added to all 18 per-stream VReplication metrics, including:
 - `vttablet_v_replication_throttled_counts`
 - And other per-stream metrics
 
-||||||| 5e16002c28
-=======
 #### <a id="vreplication-tablet-error-retry"/>Automatic tablet retry for tablet-specific errors</a>
 
 VReplication workflows now automatically retry with different tablets when encountering tablet-specific errors. Previously, workflows without a cell preference would default to the local cell and could get stuck retrying the same failing tablet indefinitely.
@@ -166,7 +159,6 @@ When a tablet encounters errors like binary log purging (MySQL error 1236 or 178
 
 This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
 
->>>>>>> main
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
 #### <a id="vtgate-removed-grpc-send-session-in-streaming"/>Removed `--grpc-send-session-in-streaming` flag</a>
