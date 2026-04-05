@@ -39,6 +39,8 @@
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
         - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
+    - **[Metrics](#minor-changes-metrics)**
+        - [Extended Go Runtime Metrics via Prometheus](#metrics-extended-go-runtime)
     - **[Backup and Restore](#minor-changes-backup-restore)**
         - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
         - [Restore Hook Improvements](#restore-hook-backup-engine-env)
@@ -326,6 +328,27 @@ The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use
 **Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
 
 **Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
+
+### <a id="minor-changes-metrics"/>Metrics</a>
+
+#### <a id="metrics-extended-go-runtime"/>Extended Go Runtime Metrics via Prometheus</a>
+
+Vitess now exposes the full set of Go runtime metrics via Prometheus. The default Prometheus `GoCollector` only exposes three `runtime/metrics` (`/gc/gogc:percent`, `/gc/gomemlimit:bytes`, `/sched/gomaxprocs:threads`) plus the legacy `go_memstats_*` set. Starting in v24, all Vitess components expose approximately 150 additional metrics from Go's `runtime/metrics` package.
+
+**New metrics include:**
+
+- Heap allocation histograms
+- GC cycle counts and pause histograms
+- Memory class breakdowns
+- Goroutine state breakdowns
+- Scheduler latency histograms
+- CPU time breakdowns by class (user, GC, scavenge, idle)
+
+A new `go_info_ext` gauge is also added with `compiler`, `GOARCH`, and `GOOS` labels, providing extended build environment information beyond the standard `go_info` metric.
+
+**Affected components**: vtgate, vttablet, vtctld, vtorc, vtbackup, mysqlctld
+
+**No configuration required** — the metrics appear automatically on the `/metrics` endpoint for all components using the Prometheus backend.
 
 ### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
 
