@@ -75,7 +75,7 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	if subq == nil {
 		return nil
 	}
-	argName := ctx.GetReservedArgumentFor(subq)
+	argName := ctx.ReservedVars.ReserveSubQuery()
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
