@@ -37,8 +37,15 @@
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
         - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
+<<<<<<< HEAD
     - **[Metrics](#minor-changes-metrics)**
         - [Extended Go Runtime Metrics via Prometheus](#metrics-extended-go-runtime)
+||||||| 8edc85bdba
+=======
+    - **[Backup and Restore](#minor-changes-backup-restore)**
+        - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
+        - [Restore Hook Improvements](#restore-hook-backup-engine-env)
+>>>>>>> main
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -298,6 +305,7 @@ The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use
 
 **Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
 
+<<<<<<< HEAD
 ### <a id="minor-changes-metrics"/>Metrics</a>
 
 #### <a id="metrics-extended-go-runtime"/>Extended Go Runtime Metrics via Prometheus</a>
@@ -319,3 +327,63 @@ A new `go_info_ext` gauge is also added with `compiler`, `GOARCH`, and `GOOS` la
 
 **No configuration required** — the metrics appear automatically on the `/metrics` endpoint for all components using the Prometheus backend.
 
+||||||| 8edc85bdba
+=======
+### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
+
+#### <a id="mysql-clone-support"/>MySQL CLONE Support for Replica Provisioning</a>
+
+VTTablet and VTBackup now support using MySQL's native [CLONE plugin](https://dev.mysql.com/doc/refman/8.0/en/clone-plugin.html) to provision new replicas by copying data directly from a donor tablet over the network. Physical-level data copying is significantly faster than logical backup and restore, especially for large datasets. Requires MySQL 8.0.17+ and InnoDB-only tables.
+
+**New Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--mysql-clone-enabled` | Enable the MySQL CLONE plugin and create the clone user during MySQL initialization. Required for all tablets that will participate in CLONE operations. |
+| `--clone-from-primary` | Clone data from the shard's primary tablet instead of restoring from backup. Mutually exclusive with `--clone-from-tablet`. |
+| `--clone-from-tablet` | Clone data from a specific tablet by alias (e.g., `zone1-123`) instead of restoring from backup. Mutually exclusive with `--clone-from-primary`. |
+| `--restore-with-clone` | Use MySQL CLONE for the restore phase instead of restoring from backup. Requires either `--clone-from-primary` or `--clone-from-tablet`. |
+| `--clone-restart-wait-timeout` | Timeout for waiting for MySQL to restart after CLONE REMOTE completes. Default: 5 minutes. |
+
+**Clone User Configuration:**
+
+| Flag | Description |
+|------|-------------|
+| `--db-clone-user` | MySQL username for CLONE operations (donor authentication). |
+| `--db-clone-password` | Password for the CLONE user. |
+| `--db-clone-use-ssl` | Use SSL when connecting to the donor for CLONE operations. |
+
+**Example Usage:**
+
+Clone from the shard's primary:
+
+```bash
+vttablet \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-primary \
+  ...
+```
+
+Clone from a specific tablet:
+
+```bash
+vtbackup \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-tablet=zone1-0000000100 \
+  ...
+```
+
+**Note:** All tablets participating in CLONE operations (both donors and recipients) must have `--mysql-clone-enabled` set during MySQL initialization to ensure the CLONE plugin is loaded and the clone user exists.
+
+#### <a id="restore-hook-backup-engine-env"/>Restore Hook Improvements</a>
+
+**Extended Hook Coverage**: The `vttablet_restore_done` hook now fires when restores are triggered via `vtctldclient RestoreFromBackup`. Previously, this hook only ran during tablet startup or clone operations.
+
+**New Environment Variable**: The hook now sets `TM_RESTORE_DATA_BACKUP_ENGINE` to indicate which backup engine was used. The value comes from the backup manifest's `BackupMethod` field.
+
+`TM_RESTORE_DATA_BACKUP_ENGINE` is only set when a restore reads from an actual backup—not for clone-based restores or when no backup is used. Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another engine.
+
+
+>>>>>>> main
