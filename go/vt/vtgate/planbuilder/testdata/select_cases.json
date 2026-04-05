@@ -6877,5 +6877,118 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "same subquery across SELECT (scalar + IN), WHERE (IN), and ORDER BY (scalar)",
+    "query": "select (select count(*) from user_extra) as a, 1 in (select count(*) from user_extra) as b from user where id in (select count(*) from user_extra) order by (select count(*) from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra) as a, 1 in (select count(*) from user_extra) as b from user where id in (select count(*) from user_extra) order by (select count(*) from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq3"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq2"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                    "Query": "select count(*) from user_extra"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count_star(0) AS count(*)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                        "Query": "select count(*) from user_extra"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select :__sq2 /* INT64 */ as a, 1 in ::__sq3 as b from `user` where 1 != 1",
+                    "Query": "select :__sq2 /* INT64 */ as a, 1 in ::__sq3 as b from `user` where :__sq_has_values and id in ::__vals",
+                    "Values": [
+                      "::__sq1"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
