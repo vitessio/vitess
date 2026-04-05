@@ -371,6 +371,14 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		if err := vp.scheduleItems(ctx, scheduler, state, items); err != nil {
 			return err
 		}
+		// If a DDL was in this fetch, wait for the commitLoop to process it
+		// (including FK metadata refresh) before starting the next fetch.
+		// Without this barrier, the next fetch would snapshot stale FK refs.
+		if state.ddlSeen {
+			if err := scheduler.waitForIdle(ctx); err != nil {
+				return err
+			}
+		}
 	}
 }
 
@@ -441,6 +449,11 @@ type parallelScheduleState struct {
 	// when the batch is actually enqueued (not before), so that
 	// commit-parent dependencies aren't prematurely satisfied.
 	mergedSequences []int64
+	// ddlSeen is set to true when a DDL event is seen in the current fetch.
+	// The scheduleLoop checks this after scheduleItems returns and waits
+	// for the commitLoop to drain (so FK refs are refreshed) before
+	// starting the next fetch. Reset at the start of each scheduleItems call.
+	ddlSeen bool
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -461,6 +474,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// commitLoop will refresh FK metadata when the DDL commits, so the
 	// next relay fetch will have updated snapshots.
 	forceSerialize := false
+	state.ddlSeen = false
 
 	flush := func(commitOnly bool) error {
 		if len(state.curEvents) == 0 && !commitOnly {
@@ -727,8 +741,11 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// DDL may change schema or FK topology. Force all remaining
 				// transactions in this relay fetch to serialize so they don't
 				// use stale FK refs or table plans for writeset computation.
+				// Also set state.ddlSeen so the scheduleLoop waits for the
+				// commitLoop to refresh FK metadata before the next fetch.
 				if event.Type == binlogdatapb.VEventType_DDL {
 					forceSerialize = true
+					state.ddlSeen = true
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -1107,11 +1124,15 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// changes are reflected in subsequent writeset conflict detection.
 		// We hold serialMu for the DB round-trip here. DDL is rare, and
 		// the main connection must not be used concurrently by scheduleLoop.
+		// Fail fast on refresh errors: stale FK topology after a schema
+		// change would silently compromise conflict detection.
 		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
-			if newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName()); err == nil {
-				vp.fkRefs = newRefs
-				vp.parentFKRefs = buildParentFKRefs(newRefs)
+			newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to refresh FK metadata after DDL")
 			}
+			vp.fkRefs = newRefs
+			vp.parentFKRefs = buildParentFKRefs(newRefs)
 		}
 		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
 			vp.numAccumulatedHeartbeats++

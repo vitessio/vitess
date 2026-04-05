@@ -211,7 +211,11 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			}
 		}
 		for _, change := range rowEvent.RowChanges {
-			// Decode Before/After row values once per change.
+			// Decode Before/After row values once per change. For partial
+			// row images (DataColumns/JsonPartialValues), absent columns
+			// decode to sqltypes.Value{} (NULL). PK columns are always
+			// included in the image so they're never absent. Absent FK
+			// columns are skipped by the NULL check in writesetKeysForFKRef.
 			var beforeVals, afterVals []sqltypes.Value
 			if change.Before != nil && plan.Fields != nil {
 				beforeVals = sqltypes.MakeRowTrusted(plan.Fields, change.Before)
