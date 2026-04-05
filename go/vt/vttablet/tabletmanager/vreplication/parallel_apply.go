@@ -454,6 +454,13 @@ type parallelScheduleState struct {
 	// for the commitLoop to drain (so FK refs are refreshed) before
 	// starting the next fetch. Reset at the start of each scheduleItems call.
 	ddlSeen bool
+	// postDDLFetchPending is set when a DDL was observed in the previous
+	// fetch. The NEXT fetch carries the new FIELD events that the workers
+	// will apply to update vp.tablePlans. Until that happens, the scheduler
+	// would build writesets from the stale plan. We force-serialize the
+	// entire first post-DDL fetch so workers apply the new FIELD events
+	// before any writeset-based parallel scheduling resumes.
+	postDDLFetchPending bool
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -473,7 +480,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// remaining transactions in this relay fetch to serialize. The
 	// commitLoop will refresh FK metadata when the DDL commits, so the
 	// next relay fetch will have updated snapshots.
-	forceSerialize := false
+	//
+	// If the previous fetch contained a DDL, the current fetch carries the
+	// new FIELD events that workers will use to refresh vp.tablePlans. Until
+	// those are applied, the plan snapshot used for writeset construction
+	// would still be the pre-DDL plan. Force-serialize this entire fetch so
+	// execution observes the new plan before any parallel scheduling resumes.
+	forceSerialize := state.postDDLFetchPending
+	state.postDDLFetchPending = false
 	state.ddlSeen = false
 
 	flush := func(commitOnly bool) error {
@@ -742,10 +756,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// transactions in this relay fetch to serialize so they don't
 				// use stale FK refs or table plans for writeset computation.
 				// Also set state.ddlSeen so the scheduleLoop waits for the
-				// commitLoop to refresh FK metadata before the next fetch.
+				// commitLoop to refresh FK metadata before the next fetch,
+				// and state.postDDLFetchPending so the next fetch (which
+				// carries the new FIELD events) is also force-serialized
+				// until workers apply those FIELDs and refresh the plan.
 				if event.Type == binlogdatapb.VEventType_DDL {
 					forceSerialize = true
 					state.ddlSeen = true
+					state.postDDLFetchPending = true
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -1117,6 +1135,13 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			return nil
 		}
+		// applyEvent handles position updates internally for DDL, OTHER,
+		// and JOURNAL events, and returns io.EOF when the stop position
+		// is reached or when a JOURNAL forces termination. We therefore
+		// do NOT call updatePos again below — doing so would produce a
+		// redundant _vt.vreplication write and create an awkward
+		// partial-failure window where applyEvent succeeded but a second
+		// position write could fail.
 		if err := vp.applyEvent(ctx, payload.events[0], payload.mustSave); err != nil {
 			return err
 		}
@@ -1134,22 +1159,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			vp.fkRefs = newRefs
 			vp.parentFKRefs = buildParentFKRefs(newRefs)
 		}
-		if payload.events[0].Type == binlogdatapb.VEventType_HEARTBEAT {
-			vp.numAccumulatedHeartbeats++
-			if err := vp.recordHeartbeat(); err != nil {
-				return err
-			}
-		}
-		posReached, err := vp.updatePos(ctx, payload.timestamp)
-		if err != nil {
-			return err
-		}
 		updateLag(payload)
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
-		}
-		if shouldStop && posReached {
-			return io.EOF
 		}
 		return nil
 	}
