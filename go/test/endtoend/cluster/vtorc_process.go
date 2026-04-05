@@ -137,6 +137,12 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
+	orcVer, versionErr := GetMajorVersion(orc.Binary)
+	if versionErr != nil {
+		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", orc.Binary, versionErr))
+	} else if orcVer >= 24 {
+		flags["--log-format"] = "text"
+	}
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {

@@ -96,9 +96,10 @@ var (
 )
 
 const (
-	defaultCutOverThreshold = 10 * time.Second
-	minCutOverThreshold     = 5 * time.Second
-	maxCutOverThreshold     = 30 * time.Second
+	defaultCutOverThreshold  = 10 * time.Second
+	minCutOverThreshold      = 5 * time.Second
+	maxCutOverThreshold      = 30 * time.Second
+	waitTimeoutDuringCutOver = 365 * 24 * time.Hour // maximum MySQL wait_timeout
 )
 
 func init() {
@@ -884,11 +885,26 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
 
+	renameWasSuccessful := false
 	lockConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
 	defer lockConn.Recycle()
+	defer func() {
+		// Always attempt UNLOCK TABLES first, as it releases locks immediately on this
+		// connection. Then kill the connection as a fallback to guarantee any held locks
+		// are released, even if UNLOCK TABLES were to fail.
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := lockConn.Conn.Exec(unlockCtx, sqlUnlockTables, 1, false); err != nil {
+			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
+			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+	}()
+
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 3*onlineDDL.CutOverThreshold)
@@ -896,19 +912,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
+	lockConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, lockConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on locking connection")
+	}
+	defer lockConnRestoreWaitTimeout()
 
 	renameCompleteChan := make(chan error)
-	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
-	}
-	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
-	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
 	defer renameConn.Recycle()
 	defer func() {
@@ -919,7 +932,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 		}
 	}()
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
+	}
 	defer renameConnRestoreLockWaitTimeout()
+	renameConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, renameConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
+	}
+	defer renameConnRestoreWaitTimeout()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
@@ -1210,22 +1234,47 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+// initConnectionSessionTimeout saves the current value of the given session variable, sets it to the given duration,
+// and returns a deferred restore function.
+func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	saveQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @%s=@@session.%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
 	}
-	timeoutSeconds := int64(lockWaitTimeout.Seconds())
-	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
+		return deferFunc, vterrors.Wrapf(err, "could not read %s", variable)
+	}
+	setQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=%%a", variable),
+		sqltypes.Int64BindVariable(int64(timeout.Seconds())),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
+	restoreQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=@%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Exec(restoreCtx, restoreQuery, 0, false)
 	}
 	return deferFunc, nil
+}
+
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function.
+func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
+	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
 }
 
 // initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
@@ -4096,6 +4145,11 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 		// with progress 87% or another value that is way off. But once we realize the migration is ready to complete,
 		// we know row copy is fully complete _and_ that vplayer is not far behind. So it's a better DX to report 100%.
 		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
+			return err
+		}
+		// We also set the ETA seconds to zero because progress is 100% and the migration is ready to complete, so ETA
+		// should also be zero.
+		if err = e.updateMigrationETASeconds(ctx, uuid, 0); err != nil {
 			return err
 		}
 	}

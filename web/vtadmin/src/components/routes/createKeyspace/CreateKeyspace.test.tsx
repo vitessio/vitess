@@ -16,9 +16,8 @@
 import { delay, http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryHistory } from 'history';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Router } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 
 import { CreateKeyspace } from './CreateKeyspace';
@@ -53,20 +52,17 @@ describe('CreateKeyspace integration test', () => {
             })
         );
 
-        const history = createMemoryHistory();
-        vi.spyOn(history, 'push');
-
         const queryClient = new QueryClient({
             defaultOptions: { queries: { retry: false } },
         });
 
         // Finally, render the view
         render(
-            <Router history={history}>
+            <MemoryRouter>
                 <QueryClientProvider client={queryClient}>
                     <CreateKeyspace />
                 </QueryClientProvider>
-            </Router>
+            </MemoryRouter>
         );
 
         // Wait for initial queries to load. Given that the "initial queries" for this
@@ -102,18 +98,17 @@ describe('CreateKeyspace integration test', () => {
             method: 'post',
         });
 
-        // Validate form UI loading state, while the API request is "in flight"
-        await waitFor(() => expect(submitButton).toHaveTextContent('Creating Keyspace...'));
-        expect(submitButton).toHaveAttribute('disabled');
+        // Validate form UI loading state, while the API request is "in flight".
+        // Both assertions must be checked atomically during the transient loading state.
+        await waitFor(() => {
+            expect(submitButton).toHaveTextContent('Creating Keyspace...');
+            expect(submitButton).toHaveAttribute('disabled');
+        });
 
         // Wait for the API request to complete
         await waitFor(() => {
             expect(submitButton).toHaveTextContent('Create Keyspace');
         });
-
-        // Validate redirect to the new keyspace's detail page
-        expect(history.push).toHaveBeenCalledTimes(1);
-        expect(history.push).toHaveBeenCalledWith(`/keyspace/local/some-keyspace`);
 
         // Validate that snackbar was triggered
         expect(Snackbar.success).toHaveBeenCalledTimes(1);

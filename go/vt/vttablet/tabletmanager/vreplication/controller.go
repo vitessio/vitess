@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
@@ -62,11 +63,10 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id           int32
-	workflow     string
-	source       *binlogdatapb.BinlogSource
-	stopPos      string
-	tabletPicker *discovery.TabletPicker
+	id       int32
+	workflow string
+	source   *binlogdatapb.BinlogSource
+	stopPos  string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -76,6 +76,18 @@ type controller struct {
 
 	lastWorkflowError *vterrors.LastError
 	WorkflowConfig    *vttablet.VReplicationConfig
+
+	// Used to ignore tablets with non-transient errors.
+	ignoreTablets []*topodatapb.TabletAlias
+
+	// Stores the last picked tablet so that it can be ignored if a non-transient error occurs.
+	lastPickedTablet *topodatapb.TabletAlias
+
+	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
+	tpTs             *topo.Server
+	tpCells          []string
+	tpTabletTypesStr string
+	tpOptions        discovery.TabletPickerOptions
 }
 
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
@@ -123,7 +135,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
-	log.Info(fmt.Sprintf("creating controller with id: %v, name: %v, cell: %v, tabletTypes: %v", ct.id, ct.workflow, cell, tabletTypesStr))
+	log.Info(fmt.Sprintf("%s creating controller, cell: %v, tabletTypes: %v", ct.logPrefix(), cell, tabletTypesStr))
 
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
 
@@ -159,11 +171,12 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, tpo)
-		if err != nil {
-			return nil, err
-		}
-		ct.tabletPicker = tp
+
+		// Store tablet picker params so we can create a picker with ignoreTablets in pickSourceTablet.
+		ct.tpTs = sourceTopo
+		ct.tpCells = cells
+		ct.tpTabletTypesStr = tabletTypesStr
+		ct.tpOptions = tpo
 	}
 
 	ctx, ct.cancel = context.WithCancel(ctx)
@@ -173,9 +186,14 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	return ct, nil
 }
 
+// Returns the shared prefix for log messages in the controller, includes workflow and stream ID.
+func (ct *controller) logPrefix() string {
+	return fmt.Sprintf("workflow %s, stream %d:", ct.workflow, ct.id)
+}
+
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Info(fmt.Sprintf("stream %v: stopped", ct.id))
+		log.Info(ct.logPrefix() + " stopped")
 		close(ct.done)
 	}()
 
@@ -188,17 +206,28 @@ func (ct *controller) run(ctx context.Context) {
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
-			log.Warn("context canceled: " + err.Error())
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
 			return
 		default:
 		}
 
+		// Check if we should ignore this tablet and try another one.
+		action := discovery.ShouldRetryTabletError(err)
+		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
+			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
+			log.Info(fmt.Sprintf("%s adding tablet %s to ignore list due to error: %v",
+				ct.logPrefix(), topoproto.TabletAliasString(ct.lastPickedTablet), err))
+		} else if action == discovery.TabletErrorActionFail {
+			// Retry for unrecoverable errors since some other process may change the state leading to this error.
+			log.Warn(fmt.Sprintf("%s potentially unrecoverable error, will retry: %v", ct.logPrefix(), err))
+		}
+
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, ct.WorkflowConfig.RetryDelay), err)
+		binlogplayer.LogError(fmt.Sprintf("%s error, will retry after %v", ct.logPrefix(), ct.WorkflowConfig.RetryDelay), err)
 		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
 		select {
 		case <-ctx.Done():
-			log.Warn("context canceled: " + err.Error())
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -242,7 +271,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
 		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 		if x := recover(); x != nil {
-			log.Error(fmt.Sprintf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4)))
+			log.Error(fmt.Sprintf("%s caught panic: %v\n%s", ct.logPrefix(), x, tb.Stack(4)))
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -314,7 +343,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
 				return err // yes, err and not errSetState.
 			}
-			log.Error(fmt.Sprintf("vreplication stream %d going into error state due to %+v", ct.id, err))
+			log.Error(fmt.Sprintf("%s going into error state due to %+v", ct.logPrefix(), err))
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err
@@ -342,10 +371,42 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if ct.source.GetExternalMysql() != "" {
 		return nil, nil
 	}
-	log.Info(fmt.Sprintf("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s", ct.id, ct.workflow))
+	if ct.tpTs == nil {
+		return nil, fmt.Errorf("no tablet picker configured for %s/%s", ct.source.Keyspace, ct.source.Shard)
+	}
+	log.Info(fmt.Sprintf("%s trying to find an eligible source tablet in %s/%s", ct.logPrefix(), ct.source.Keyspace, ct.source.Shard))
+
+	tablet, err := ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	// If we failed to find any tablet and we specified an ignore list, then clear the ignore list so that
+	// we can try tablets that were previously ignored(since some state may have changed since the last attempt).
+	if err != nil && len(ct.ignoreTablets) > 0 {
+		log.Info(fmt.Sprintf("%s clearing ignore list of %d tablets and retrying tablet picker",
+			ct.logPrefix(), len(ct.ignoreTablets)))
+		ct.ignoreTablets = nil
+		tablet, err = ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	}
+	if err != nil {
+		return tablet, err
+	}
+	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
+	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
+	ct.sourceTablet.Store(tablet.Alias)
+	ct.lastPickedTablet = tablet.Alias
+	return tablet, err
+}
+
+func (ct *controller) pickSourceTabletWithIgnoreList(ctx context.Context, dbClient binlogplayer.DBClient) (*topodatapb.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ctx, ct.tpTs, ct.tpCells, ct.vre.cell,
+		ct.source.Keyspace, ct.source.Shard, ct.tpTabletTypesStr, ct.tpOptions, ct.ignoreTablets...)
+	if err != nil {
+		ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+		ct.setMessage(dbClient, "Error creating tablet picker: "+err.Error())
+		return nil, err
+	}
+
 	tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
 	defer tpCancel()
-	tablet, err := ct.tabletPicker.PickForStreaming(tpCtx)
+	tablet, err := tp.PickForStreaming(tpCtx)
 	if err != nil {
 		select {
 		case <-ctx.Done():
@@ -353,12 +414,9 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
 			ct.setMessage(dbClient, "Error picking tablet: "+err.Error())
 		}
-		return tablet, err
+		return nil, err
 	}
-	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
-	log.Info(fmt.Sprintf("Found eligible source tablet %s for vreplication stream id %d for workflow %s", tablet.Alias.String(), ct.id, ct.workflow))
-	ct.sourceTablet.Store(tablet.Alias)
-	return tablet, err
+	return tablet, nil
 }
 
 // Stop stops the controller and optionally stops its stats. The stats

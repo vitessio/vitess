@@ -23,17 +23,19 @@ import (
 
 // DynamicViperConfig is a dynamic config that uses viper.
 type DynamicViperConfig struct {
-	onlineDDL viperutil.Value[bool]
-	directDDL viperutil.Value[bool]
-	txMode    viperutil.Value[vtgatepb.TransactionMode]
+	onlineDDL  viperutil.Value[bool]
+	directDDL  viperutil.Value[bool]
+	binlogDump viperutil.Value[bool]
+	txMode     viperutil.Value[vtgatepb.TransactionMode]
 }
 
 // NewDynamicViperConfig creates a new dynamic viper config
 func NewDynamicViperConfig() *DynamicViperConfig {
 	return &DynamicViperConfig{
-		onlineDDL: enableOnlineDDL,
-		directDDL: enableDirectDDL,
-		txMode:    transactionMode,
+		onlineDDL:  enableOnlineDDL,
+		directDDL:  enableDirectDDL,
+		binlogDump: enableBinlogDump,
+		txMode:     transactionMode,
 	}
 }
 
@@ -43,6 +45,10 @@ func (d *DynamicViperConfig) OnlineEnabled() bool {
 
 func (d *DynamicViperConfig) DirectEnabled() bool {
 	return d.directDDL.Get()
+}
+
+func (d *DynamicViperConfig) BinlogDumpEnabled() bool {
+	return d.binlogDump.Get()
 }
 
 func (d *DynamicViperConfig) TransactionMode() vtgatepb.TransactionMode {

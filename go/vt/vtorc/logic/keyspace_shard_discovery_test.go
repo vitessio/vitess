@@ -103,11 +103,11 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
-	verifyPrimaryAlias(t, "ks1", "-80", "zone_ks1-0000000100", "")
+	verifyPrimaryAlias(t, "ks1", "-80", &topodatapb.TabletAlias{Cell: "zone_ks1", Uid: 100}, "")
 	verifyKeyspaceInfo(t, "ks2", nil, "keyspace not found")
-	verifyPrimaryAlias(t, "ks2", "80-", "", "shard not found")
+	verifyPrimaryAlias(t, "ks2", "80-", nil, "shard not found")
 	verifyKeyspaceInfo(t, "ks3", keyspaceSnapshot, "")
-	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
+	verifyPrimaryAlias(t, "ks3", "80-", &topodatapb.TabletAlias{Cell: "zone_ks3", Uid: 101}, "")
 	verifyKeyspaceInfo(t, "ks4", nil, "keyspace not found")
 
 	// Set clusters to watch to watch all keyspaces
@@ -120,13 +120,13 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Verify that all the keyspaces are correctly reloaded
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilitySemiSync, "")
-	verifyPrimaryAlias(t, "ks1", "-80", "zone_ks1-0000000100", "")
+	verifyPrimaryAlias(t, "ks1", "-80", &topodatapb.TabletAlias{Cell: "zone_ks1", Uid: 100}, "")
 	verifyKeyspaceInfo(t, "ks2", keyspaceDurabilitySemiSync, "")
-	verifyPrimaryAlias(t, "ks2", "80-", "zone_ks2-0000000101", "")
+	verifyPrimaryAlias(t, "ks2", "80-", &topodatapb.TabletAlias{Cell: "zone_ks2", Uid: 101}, "")
 	verifyKeyspaceInfo(t, "ks3", keyspaceSnapshot, "")
-	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
+	verifyPrimaryAlias(t, "ks3", "80-", &topodatapb.TabletAlias{Cell: "zone_ks3", Uid: 101}, "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
-	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
+	verifyPrimaryAlias(t, "ks4", "80-", &topodatapb.TabletAlias{Cell: "zone_ks4", Uid: 101}, "")
 }
 
 func TestRefreshKeyspace(t *testing.T) {
@@ -259,7 +259,7 @@ func TestRefreshShard(t *testing.T) {
 		keyspaceName       string
 		shardName          string
 		shard              *topodatapb.Shard
-		primaryAliasWanted string
+		primaryAliasWanted *topodatapb.TabletAlias
 		err                string
 	}{
 		{
@@ -272,14 +272,14 @@ func TestRefreshShard(t *testing.T) {
 					Uid:  302,
 				},
 			},
-			primaryAliasWanted: "zone1-0000000302",
+			primaryAliasWanted: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 			err:                "",
 		}, {
 			name:               "Success with empty primaryAlias",
 			keyspaceName:       "ks1",
 			shardName:          "-80",
 			shard:              &topodatapb.Shard{},
-			primaryAliasWanted: "",
+			primaryAliasWanted: nil,
 			err:                "",
 		}, {
 			name:         "No shard found",
@@ -315,7 +315,7 @@ func TestRefreshShard(t *testing.T) {
 }
 
 // verifyPrimaryAlias verifies the correct primary alias is stored in the database for the given keyspace shard.
-func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAliasWanted string, errString string) {
+func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAliasWanted *topodatapb.TabletAlias, errString string) {
 	primaryAlias, _, err := inst.ReadShardPrimaryInformation(keyspaceName, shardName)
 	if errString != "" {
 		require.ErrorContains(t, err, errString)
