@@ -29,8 +29,12 @@ run_bench() {
 	# Setup cluster with specified worker count
 	PARALLEL_WORKERS=$workers ./bench_setup.sh || { echo "FAILED: setup for $label"; return 1; }
 
-	# Run benchmark
-	./bench_run.sh 2>&1 | tee "/tmp/bench_${workers}_workers.log"
+	# Run benchmark. Use pipefail so a bench_run.sh validation failure is not
+	# masked by tee's zero exit status.
+	(
+		set -o pipefail
+		./bench_run.sh 2>&1 | tee "/tmp/bench_${workers}_workers.log"
+	) || { echo "FAILED: bench_run for $label (validation or drain failure)"; return 1; }
 
 	echo ""
 	echo ">>> $label complete <<<"

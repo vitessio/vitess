@@ -311,18 +311,64 @@ if [ "$elapsed_s" -gt 0 ]; then
 fi
 echo "============================================"
 
-# Step 9: Validate row counts per table (only after drain, when target is idle)
+# Step 9: Validate source and target are semantically equivalent (only after
+# drain, when target is idle). COUNT(*) alone is too weak: reordering errors,
+# wrong-row updates, or corrupted values can preserve cardinality while changing
+# row content. We compute a content checksum per table that is order-independent
+# (BIT_XOR of CRC32 over all column values) so parallel apply reordering is
+# not flagged as divergence as long as the final state is equivalent.
 echo ""
-echo "Validating row counts..."
+echo "Validating row counts and content checksums..."
+validation_failed=0
+
+# Returns the column list for the given table. These must match
+# create_bench_schema.sql exactly — keep in sync. Using a function here
+# instead of an associative array for bash 3.2 compatibility (macOS).
+table_columns() {
+	case "$1" in
+		bench_orders)   echo "id,customer_name,product_sku,quantity,total_price,status,region,notes" ;;
+		bench_events)   echo "id,event_type,source,payload,severity,created_at,category" ;;
+		bench_accounts) echo "id,username,email,balance,region,bio,tier" ;;
+		bench_logs)     echo "id,level,message,component,error_code,trace_id,span_id" ;;
+	esac
+}
+
 for table in bench_orders bench_events bench_accounts bench_logs; do
-	source_count=$(source_mysql -N -e "SELECT COUNT(*) FROM commerce.$table" 2>/dev/null)
-	target_count=$(target_mysql -N -e "SELECT COUNT(*) FROM vt_customer.$table" 2>/dev/null)
+	cols="$(table_columns "$table")"
+	# Build CONCAT_WS over all columns with IFNULL so NULLs don't collapse the row.
+	concat_expr="CONCAT_WS('|'"
+	old_ifs="$IFS"
+	IFS=','
+	for col in $cols; do
+		concat_expr="$concat_expr,IFNULL($col,'\\0')"
+	done
+	IFS="$old_ifs"
+	concat_expr="$concat_expr)"
+	checksum_sql="SELECT COUNT(*), COALESCE(BIT_XOR(CAST(CRC32($concat_expr) AS UNSIGNED)), 0) FROM"
+
+	source_row=$(source_mysql -N -e "$checksum_sql commerce.$table" 2>/dev/null)
+	target_row=$(target_mysql -N -e "$checksum_sql vt_customer.$table" 2>/dev/null)
+	source_count=$(echo "$source_row" | awk '{print $1}')
+	source_cksum=$(echo "$source_row" | awk '{print $2}')
+	target_count=$(echo "$target_row" | awk '{print $1}')
+	target_cksum=$(echo "$target_row" | awk '{print $2}')
+
 	match="OK"
-	if [[ "$source_count" != "$target_count" ]]; then
+	if [[ "$source_count" != "$target_count" ]] || [[ "$source_cksum" != "$target_cksum" ]]; then
 		match="MISMATCH"
+		validation_failed=1
 	fi
-	echo "  $table: source=$source_count target=$target_count [$match]"
+	echo "  $table: source=(count=$source_count, cksum=$source_cksum) target=(count=$target_count, cksum=$target_cksum) [$match]"
 done
+
+if [[ "$validation_failed" -ne 0 ]]; then
+	echo ""
+	echo "ERROR: validation FAILED — source and target diverged. See mismatches above."
+	echo "=== Bench Run Failed ==="
+	# Still attempt workflow cleanup before exiting.
+	vtctldclient MoveTables --workflow bench_move --target-keyspace customer cancel 2>/dev/null
+	exit 1
+fi
 
 # Step 10: Cleanup workflow
 echo ""

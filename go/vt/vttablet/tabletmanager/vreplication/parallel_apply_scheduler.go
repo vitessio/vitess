@@ -52,6 +52,12 @@ type applyTxn struct {
 	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
 	// in the scheduler hot path, reducing GC pressure at high TPS.
 	writeset []uint64
+	// mergedSequences tracks sequence numbers of source transactions that
+	// were merged into this batched mega-transaction. They must be advanced
+	// in lastCommittedSequence only after this txn actually commits, so that
+	// later empty-writeset transactions whose commitParent references one of
+	// these sequences don't become runnable before the batch commits.
+	mergedSequences []int64
 	// payload carries the transaction's events and DB connection info.
 	// Pooled via applyTxnPayloadPool to reduce allocations.
 	payload *applyTxnPayload
@@ -192,6 +198,18 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	}
 	if txn.hasCommitMeta {
 		s.lastCommittedSequence = txn.sequenceNumber
+	}
+	// Advance any sequences that were batched (merged away) into this txn.
+	// These represent transactions whose events were merged into this batch
+	// but whose GTID sequence numbers must still become visible in
+	// lastCommittedSequence so that later empty-writeset commit-parent
+	// dependents can unblock. Doing this here (after commit) instead of at
+	// enqueue time preserves the invariant that commit-parent dependencies
+	// are only satisfied after the parent has actually committed.
+	for _, seq := range txn.mergedSequences {
+		if seq > s.lastCommittedSequence {
+			s.lastCommittedSequence = seq
+		}
 	}
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order

@@ -179,13 +179,15 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	// generate writeset keys that create conflicts between child and
 	// parent table transactions, preventing FK constraint violations
 	// during parallel apply.
+	//
+	// Fail closed: if we can't read FK metadata we cannot know whether
+	// the schema has FK constraints that require cross-table ordering.
+	// Continuing with fkRefs=nil would silently degrade to PK-only
+	// writeset scheduling and could reorder parent/child transactions.
+	// Return the error so the workflow retries via the normal retry path.
 	fkRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
 	if err != nil {
-		// Non-fatal: if we can't read FK info, parallel apply still works
-		// but may hit FK violations (which will cause a retry with
-		// forceGlobal serialization).
-		log.Error("Parallel apply: failed to query FK refs", slog.String("db", vp.vr.dbClient.DBName()), slog.Any("error", err))
-		fkRefs = nil
+		return vterrors.Wrapf(err, "parallel apply: failed to query FK metadata from %q", vp.vr.dbClient.DBName())
 	}
 	if len(fkRefs) > 0 {
 		for table, refs := range fkRefs {
@@ -538,16 +540,19 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				txn.writeset = writeset
 			}
 		}
+		// Attach any merged-away sequences to the txn so the scheduler can
+		// advance lastCommittedSequence for them when this batch actually
+		// commits (inside markCommitted), not now at enqueue time. Advancing
+		// at enqueue would satisfy commit-parent dependencies for later
+		// empty-writeset txns before the batch containing those sequences
+		// has actually committed.
+		if len(state.mergedSequences) > 0 {
+			txn.mergedSequences = append(txn.mergedSequences[:0], state.mergedSequences...)
+			state.mergedSequences = state.mergedSequences[:0]
+		}
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
 		}
-		// Now that the batch is enqueued, advance any merged-away sequences.
-		// This is safe because the batch is ahead of them in the commit queue,
-		// so commit-parent dependencies will be satisfied in order.
-		for _, seq := range state.mergedSequences {
-			scheduler.advanceCommittedSequence(seq)
-		}
-		state.mergedSequences = state.mergedSequences[:0]
 		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
 		// pattern on the hot path. We can't reuse the old slice via [:0]
 		// because the payload still references the backing array.

@@ -211,11 +211,21 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			}
 		}
 		for _, change := range rowEvent.RowChanges {
-			// Decode Before/After row values once per change. For partial
-			// row images (DataColumns/JsonPartialValues), absent columns
-			// decode to sqltypes.Value{} (NULL). PK columns are always
-			// included in the image so they're never absent. Absent FK
-			// columns are skipped by the NULL check in writesetKeysForFKRef.
+			// Partial row images (DataColumns/JsonPartialValues) omit columns
+			// from the binlog payload. PK columns are always present so PK
+			// hashing is safe, but FK columns can be omitted when they're
+			// BLOB/TEXT typed and AllowNoBlobBinlogRowImage is enabled.
+			// Skipping FK writeset keys for absent columns would turn
+			// "column omitted from image" into "no FK edge", which is not
+			// a valid equivalence — the scheduler would lose the parent/
+			// child conflict edge and could reorder FK-dependent txns.
+			// Fail closed: return an error so the caller forces global
+			// serialization for this transaction.
+			if (change.DataColumns != nil || change.JsonPartialValues != nil) &&
+				(len(refs) > 0 || len(pRefs) > 0) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "partial row image on FK-related table %s: forcing serialization", rowEvent.TableName)
+			}
+			// Decode Before/After row values once per change.
 			var beforeVals, afterVals []sqltypes.Value
 			if change.Before != nil && plan.Fields != nil {
 				beforeVals = sqltypes.MakeRowTrusted(plan.Fields, change.Before)
