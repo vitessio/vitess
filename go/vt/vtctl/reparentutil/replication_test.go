@@ -1504,6 +1504,28 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "io thread connecting without an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting with an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "dial tcp 127.0.0.1:3306: connect: connection refused",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
 			name: "only sql thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{

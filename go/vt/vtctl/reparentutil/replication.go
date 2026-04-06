@@ -207,8 +207,8 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
-// replicasWithStoppedIO returns the reachable replicas whose IO threads were
-// running before ERS stopped replication.
+// replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
+// stopped and should restart during cleanup.
 func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
 	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
 
@@ -230,14 +230,15 @@ func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.
 }
 
 // replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
-// that the replica had a running IO thread before it was stopped.
+// that ERS stopped a healthy IO thread that should restart during cleanup.
 func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
 	if stopStatus == nil || stopStatus.Before == nil {
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
-	return replStatus.IOState == replication.ReplicationStateRunning, nil
+
+	return replStatus.IOHealthy(), nil
 }
 
 // tabletAliasError wraps an error with the tablet alias that produced it.
