@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -114,6 +116,26 @@ func releaseApplyTxn(txn *applyTxn) {
 	// always creates a fresh done channel, so there's nothing to preserve.
 	*txn = applyTxn{}
 	applyTxnPool.Put(txn)
+}
+
+// extractDDLTable parses a DDL statement and returns the affected table name.
+// Returns "" if the table cannot be determined (e.g., complex multi-table DDL,
+// CREATE/DROP, or parse failure). The caller should fall back to a conservative
+// all-tables snapshot in that case.
+func extractDDLTable(sql string, parser *sqlparser.Parser) string {
+	stmt, err := parser.ParseStrictDDL(sql)
+	if err != nil {
+		return ""
+	}
+	ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+	if !ok {
+		return ""
+	}
+	table := ddlStmt.GetTable()
+	if table.IsEmpty() {
+		return ""
+	}
+	return table.Name.String()
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
@@ -827,14 +849,29 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					// Snapshot current plan pointers so we can detect when
-					// the DDL-affected table's plan is replaced by a new FIELD.
-					vp.tablePlansMu.RLock()
-					state.postDDLStalePlans = make(map[string]*TablePlan, len(vp.tablePlans))
-					for name, plan := range vp.tablePlans {
-						state.postDDLStalePlans[name] = plan
+					// Parse the DDL to identify the affected table, then
+					// snapshot only that table's plan pointer. The barrier
+					// clears when a FIELD event replaces that specific plan.
+					// This avoids both the "unrelated FIELD clears guard"
+					// problem (global version) and the "guard never clears"
+					// problem (all-tables snapshot).
+					ddlTable := extractDDLTable(event.Statement, vp.vr.vre.env.Parser())
+					if ddlTable != "" {
+						vp.tablePlansMu.RLock()
+						if stalePlan, ok := vp.tablePlans[ddlTable]; ok {
+							state.postDDLStalePlans = map[string]*TablePlan{ddlTable: stalePlan}
+						}
+						vp.tablePlansMu.RUnlock()
 					}
-					vp.tablePlansMu.RUnlock()
+					// If we can't identify the affected table (complex DDL,
+					// CREATE, DROP), snapshot all plans as a conservative
+					// fallback. The guard clears when any plan changes.
+					if state.postDDLStalePlans == nil {
+						vp.tablePlansMu.RLock()
+						state.postDDLStalePlans = make(map[string]*TablePlan, len(vp.tablePlans))
+						maps.Copy(state.postDDLStalePlans, vp.tablePlans)
+						vp.tablePlansMu.RUnlock()
+					}
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -1075,11 +1112,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// The commitLoop will commit the current txn on the old connection
 		// and signal txn.done when it's safe to reuse.
 		worker.rotate()
-		// Reset FK check state cache since the new connection may have
-		// different session state. Each worker connection starts with
-		// foreign_key_checks=0 (from clearFKCheck), but the cache may
-		// say it's already set to true from the previous connection.
-		vp2.foreignKeyChecksStateInitialized = false
+		// Do NOT reset foreignKeyChecksStateInitialized here. Both worker
+		// connections are initialized identically (same clearFKCheck setup),
+		// and the FK check session state is the same across rotate. Resetting
+		// forces a redundant SET @@session.foreign_key_checks on the first
+		// row event of every transaction, which adds avoidable overhead for
+		// the small-transaction workloads where parallelism helps most.
 	}
 }
 
@@ -1139,9 +1177,11 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 
 		// Briefly lock to update vp state that scheduleLoop reads.
+		// Do NOT clear vp.unsavedEvent here: a later empty transaction
+		// may have recorded a higher position that hasn't been flushed yet.
+		// The idle-timeout saver at the top of scheduleLoop will handle it.
 		vp.serialMu.Lock()
 		vp.numAccumulatedHeartbeats = 0
-		vp.unsavedEvent = nil
 		vp.timeLastSaved = time.Now()
 		shouldStop := vp.stopPos.GTIDSet != nil
 		posReached := !vp.stopPos.IsZero() && payload.pos.AtLeast(vp.stopPos)
