@@ -54,6 +54,7 @@ updates:
       - "/docker/vttestserver"
       - "/examples/compose/external_db/mysql"
       - "/go/mysql/collations/tools/colldump"
+      - "/test/antithesis/compose"
     schedule:
       interval: "weekly"
     cooldown:
