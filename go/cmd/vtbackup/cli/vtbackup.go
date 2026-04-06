@@ -359,17 +359,15 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
+
 	ctx, cancelCtx := context.WithCancel(ctx)
 	backgroundCtx, cancelBackgroundCtx := context.WithCancel(backgroundCtx)
 	defer func() {
 		cancelCtx()
 		cancelBackgroundCtx()
 	}()
-	mysqld.OnTerm(func() {
-		log.Warn("Cancelling vtbackup as MySQL has terminated")
-		cancelCtx()
-		cancelBackgroundCtx()
-	})
+	mysqlTermHandler := newMySQLTermHandler(cancelCtx, cancelBackgroundCtx)
+	mysqld.OnTerm(mysqlTermHandler.onTerm)
 
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
 	defer initCancel()
@@ -462,7 +460,13 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 
 	var restorePos replication.Position
 	if restoreWithClone {
-		restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, initKeyspace, initShard)
+		// CLONE intentionally restarts mysqld. Suppress the resulting OnTerm
+		// cancellation and pass mycnf so CloneFromDonor can restart mysqld
+		// itself if no process supervisor does.
+		err = mysqlTermHandler.ignoreTermsFor(func() error {
+			restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
+			return err
+		})
 		if err != nil {
 			return vterrors.Wrap(err, "restore with clone failed")
 		}
