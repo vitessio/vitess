@@ -328,8 +328,7 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		maxBatched = workerCount * 4
 	}
 	state := &parallelScheduleState{
-		maxBatchedCommits:  maxBatched,
-		postDDLPlanVersion: -1, // no active DDL barrier
+		maxBatchedCommits: maxBatched,
 	}
 	for {
 		if ctx.Err() != nil {
@@ -378,11 +377,12 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		// (including FK metadata refresh) before starting the next fetch.
 		// Without this barrier, the next fetch would snapshot stale FK refs.
 		//
-		// Also drain when the post-DDL version guard is active. This
+		// Also drain when the post-DDL stale-plan guard is active. This
 		// ensures that all serialized work (including FIELD events for the
 		// DDL-affected table) has been applied by workers before the next
-		// fetch's scheduleItems re-evaluates the guard condition.
-		if state.ddlSeen || state.postDDLPlanVersion >= 0 {
+		// fetch's scheduleItems re-evaluates the guard by comparing plan
+		// pointers.
+		if state.ddlSeen || state.postDDLStalePlans != nil {
 			if err := scheduler.waitForIdle(ctx); err != nil {
 				return err
 			}
@@ -462,20 +462,21 @@ type parallelScheduleState struct {
 	// for the commitLoop to drain (so FK refs are refreshed) before
 	// starting the next fetch. Reset at the start of each scheduleItems call.
 	ddlSeen bool
-	// postDDLPlanVersion records the tablePlansVersion at the time a DDL was
-	// observed. Parallel scheduling is force-serialized until workers apply
-	// a FIELD event that bumps tablePlansVersion past this value.
+	// postDDLStalePlans records a snapshot of the tablePlans entries at the
+	// time an executed DDL was observed. Parallel scheduling is force-
+	// serialized as long as any plan in this snapshot is still the same
+	// object in the live tablePlans map. When a FIELD event for the DDL-
+	// affected table arrives, vplayer.applyEvent builds a new *TablePlan
+	// and stores it in tablePlans, replacing the stale pointer. At that
+	// point the guard clears for that table.
 	//
-	// This is version-based rather than fetch-count-based because the DDL-
-	// affected table might not reappear in the stream until many fetches
-	// later. VStreamer emits FIELD events only for new or remapped table
-	// ids (not every transaction), so after DDL the changed table's FIELD
-	// only arrives when that table is next written to. A fetch-count guard
-	// would clear too early if intervening fetches contain only unrelated
-	// tables.
+	// This is per-table rather than global-version-based because vstreamer
+	// only emits FIELD on first-seen or remapped table ids. An unrelated
+	// table's FIELD would bump the global tablePlansVersion but not replace
+	// the DDL-affected table's plan pointer.
 	//
-	// A value of -1 means no DDL barrier is active.
-	postDDLPlanVersion int64
+	// nil means no DDL barrier is active.
+	postDDLStalePlans map[string]*TablePlan
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -497,17 +498,27 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// next relay fetch will have updated snapshots.
 	//
 	// If a previous DDL that was executed on the target changed the schema,
-	// force-serialize until tablePlansVersion advances past the DDL-time
-	// snapshot. VStreamer only emits FIELD events for new/remapped table
-	// ids, so the changed table's FIELD only arrives when it's next written
-	// to — which could be many fetches later if intervening fetches contain
-	// only unrelated tables. Version-based guarding handles this correctly.
-	forceSerialize := state.postDDLPlanVersion >= 0 &&
-		vp.tablePlansVersion.Load() <= state.postDDLPlanVersion
-	if state.postDDLPlanVersion >= 0 && !forceSerialize {
-		// Plan version has advanced past the DDL snapshot — the changed
-		// table's FIELD has been applied. Clear the guard.
-		state.postDDLPlanVersion = -1
+	// force-serialize until the DDL-affected table's plan pointer has been
+	// replaced by a new FIELD event. We check by comparing the live
+	// tablePlans pointers to the snapshot taken at DDL time. When the
+	// affected table's plan is replaced (new *TablePlan from FIELD), the
+	// stale pointer no longer matches and the guard clears.
+	forceSerialize := false
+	if state.postDDLStalePlans != nil {
+		vp.tablePlansMu.RLock()
+		stale := false
+		for name, oldPlan := range state.postDDLStalePlans {
+			if vp.tablePlans[name] == oldPlan {
+				stale = true
+				break
+			}
+		}
+		vp.tablePlansMu.RUnlock()
+		if stale {
+			forceSerialize = true
+		} else {
+			state.postDDLStalePlans = nil
+		}
 	}
 	state.ddlSeen = false
 
@@ -684,14 +695,23 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if !state.lastFlushTime.IsZero() && time.Since(state.lastFlushTime) > 500*time.Millisecond {
 					state.curMustSave = true
 				}
-				// When FK refs are present, skip batching to keep writesets
-				// small. Large batches merge many parent/child operations
-				// into a single writeset, causing nearly all batches to
-				// conflict on FK ref keys and serializing the workload.
-				// Flushing each source transaction individually lets the
-				// scheduler detect truly independent transactions and run
-				// them in parallel.
-				hasFKRefs := len(fkRefs) > 0
+				// When the current transaction touches FK-related tables,
+				// skip batching to keep writesets small. Merging parent/
+				// child operations into one mega-transaction would make
+				// nearly all batches conflict on FK ref keys, serializing
+				// the workload. Flushing each source transaction
+				// individually lets the scheduler detect truly independent
+				// transactions and run them in parallel. Transactions on
+				// unrelated tables can still batch normally.
+				hasFKRefs := false
+				for _, ev := range state.curEvents {
+					if ev.Type == binlogdatapb.VEventType_ROW && ev.RowEvent != nil {
+						if len(fkRefs[ev.RowEvent.TableName]) > 0 || len(parentFKRefs[ev.RowEvent.TableName]) > 0 {
+							hasFKRefs = true
+							break
+						}
+					}
+				}
 				// With parallel workers, limit the mega-transaction size
 				// to ensure enough transactions for all workers. Without
 				// this limit, all consecutive commits in a relay fetch
@@ -801,7 +821,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					state.postDDLPlanVersion = vp.tablePlansVersion.Load()
+					// Snapshot current plan pointers so we can detect when
+					// the DDL-affected table's plan is replaced by a new FIELD.
+					vp.tablePlansMu.RLock()
+					state.postDDLStalePlans = make(map[string]*TablePlan, len(vp.tablePlans))
+					for name, plan := range vp.tablePlans {
+						state.postDDLStalePlans[name] = plan
+					}
+					vp.tablePlansMu.RUnlock()
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
