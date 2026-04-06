@@ -31,12 +31,6 @@ func init() {
 	lowReplicationLag.Set(30 * time.Second)
 	highReplicationLagMinServing.Set(2 * time.Hour)
 	minNumTablets.Set(2)
-	legacyReplicationLagAlgorithm.Set(true)
-}
-
-// testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
-func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
-	legacyReplicationLagAlgorithm.Set(newLegacy)
 }
 
 // testSetMinNumTablets is a test helper function, if this is used by a production code path, something is wrong.
@@ -64,8 +58,6 @@ func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 
 func TestFilterByReplicationLag(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	// Use simplified logic
-	testSetLegacyReplicationLagAlgorithm(false)
 
 	cases := []struct {
 		description string
@@ -134,9 +126,6 @@ func TestFilterByReplicationLag(t *testing.T) {
 			}
 		}
 	}
-
-	// Reset to the default
-	testSetLegacyReplicationLagAlgorithm(true)
 }
 
 func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
