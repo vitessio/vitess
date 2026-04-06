@@ -22,15 +22,18 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
@@ -1912,6 +1915,150 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+// TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure verifies that ERS
+// restarts replication on replicas whose IO threads it stopped before
+// aborting during relay log application.
+func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			stoppedIOAlias   = "zone1-0000000101"
+			alreadyStoppedIO = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		alreadyStoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateStopped),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		defer mockController.Finish()
+
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Simulate the TabletManager RPC sequence for one dead primary, one replica whose IO thread
+		// ERS stops, and one replica whose IO thread was already stopped before ERS started.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(alreadyStoppedIOStatus, nil)
+
+		// Now simulate a replica that takes too long while applying relay logs.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
+			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
+				// Keep one candidate blocked until the wait context expires so ERS
+				// aborts before it starts repointing replicas.
+				<-ctx.Done()
+				return ctx.Err()
+			}).
+			Times(1)
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), relayLogPosition).
+			Return(nil).
+			Times(1)
+
+		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
+		// not the one that already had its IO thread stopped) to have replicaiton restarted.
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), false).
+			Return(nil).
+			Times(1)
+
+		// Build the test topology.
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		})
+
+		testutil.AddTablets(ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		// Trigger ERS and verify that the relay log wait timeout causes cleanup to
+		// restart replication only on the replica whose IO thread ERS stopped.
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: 50 * time.Millisecond,
+		})
+
+		require.ErrorContains(t, err, "could not apply all relay logs within the provided waitReplicasTimeout")
+	})
+}
+
+// tabletAliasMatcher matches tablets by alias string for gomock expectations.
+func tabletAliasMatcher(alias string) gomock.Matcher {
+	return gomock.Cond(func(tablet *topodatapb.Tablet) bool {
+		return tablet != nil && topoproto.TabletAliasString(tablet.Alias) == alias
+	})
 }
 
 func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
