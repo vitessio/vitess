@@ -302,7 +302,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Relay logs have been successfully applied and we're ready to start repointing replicas,
-	// so we no longer need to restart replication manuall in the event of an error.
+	// so we no longer need to restart replication manually in the event of an error.
 	replicasToRestart = nil
 
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
