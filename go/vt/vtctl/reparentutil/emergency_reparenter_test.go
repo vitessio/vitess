@@ -1979,8 +1979,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
 			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-				// Keep one candidate blocked until the wait context expires so ERS
-				// aborts before it starts repointing replicas.
+				// Block until the context expires so ERS aborts before it starts repointing replicas.
 				<-ctx.Done()
 				return ctx.Err()
 			}).
