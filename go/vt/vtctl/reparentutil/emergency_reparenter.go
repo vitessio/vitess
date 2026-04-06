@@ -175,6 +175,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
+		// We create a new context with a fresh timeout so that the parent context does not cancel early while
+		// we attempt to restart replication on the stopped replicas.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+		defer cancel()
+
 		// Make sure we still have the shard lock.
 		if lockErr := topo.CheckShardLocked(ctx, keyspace, shard); lockErr != nil {
 			erp.logger.Warningf("skipping replication restart cleanup because the shard lock was lost for %s/%s: %v", keyspace, shard, lockErr)
@@ -370,11 +375,6 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	replicas []*topodatapb.Tablet,
 	durability policy.Durabler,
 ) error {
-	// We create a new context with a fresh timeout so that the parent context does not cancel early while
-	// we restart replication on the stopped replicas.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
-	defer cancel()
-
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
