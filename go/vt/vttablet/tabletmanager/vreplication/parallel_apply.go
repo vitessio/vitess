@@ -328,7 +328,8 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		maxBatched = workerCount * 4
 	}
 	state := &parallelScheduleState{
-		maxBatchedCommits: maxBatched,
+		maxBatchedCommits:  maxBatched,
+		postDDLPlanVersion: -1, // no active DDL barrier
 	}
 	for {
 		if ctx.Err() != nil {
@@ -456,13 +457,15 @@ type parallelScheduleState struct {
 	// for the commitLoop to drain (so FK refs are refreshed) before
 	// starting the next fetch. Reset at the start of each scheduleItems call.
 	ddlSeen bool
-	// postDDLFetchPending is set when a DDL was observed in the previous
-	// fetch. The NEXT fetch carries the new FIELD events that the workers
-	// will apply to update vp.tablePlans. Until that happens, the scheduler
-	// would build writesets from the stale plan. We force-serialize the
-	// entire first post-DDL fetch so workers apply the new FIELD events
-	// before any writeset-based parallel scheduling resumes.
-	postDDLFetchPending bool
+	// postDDLPlanVersion records the tablePlansVersion at the time a DDL was
+	// observed. Parallel scheduling is force-serialized until workers apply
+	// new FIELD events that bump tablePlansVersion past this value. This
+	// is more robust than a boolean flag because it handles the case where
+	// the post-DDL fetch contains no FIELD events (only heartbeats or
+	// empty transactions): the guard persists across multiple fetches until
+	// the plan is actually refreshed.
+	// A value of -1 means no DDL barrier is active.
+	postDDLPlanVersion int64
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -483,13 +486,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// commitLoop will refresh FK metadata when the DDL commits, so the
 	// next relay fetch will have updated snapshots.
 	//
-	// If the previous fetch contained a DDL, the current fetch carries the
-	// new FIELD events that workers will use to refresh vp.tablePlans. Until
-	// those are applied, the plan snapshot used for writeset construction
-	// would still be the pre-DDL plan. Force-serialize this entire fetch so
-	// execution observes the new plan before any parallel scheduling resumes.
-	forceSerialize := state.postDDLFetchPending
-	state.postDDLFetchPending = false
+	// If a previous DDL that was executed on the target changed the schema,
+	// force-serialize until workers apply new FIELD events that bump
+	// tablePlansVersion past the version recorded at DDL time. This guard
+	// persists across multiple fetches until the plan is actually refreshed,
+	// handling the case where a post-DDL fetch contains only heartbeats.
+	forceSerialize := state.postDDLPlanVersion >= 0 &&
+		vp.tablePlansVersion.Load() <= state.postDDLPlanVersion
+	if state.postDDLPlanVersion >= 0 && !forceSerialize {
+		// Plan version has advanced past the DDL snapshot — clear the guard.
+		state.postDDLPlanVersion = -1
+	}
 	state.ddlSeen = false
 
 	flush := func(commitOnly bool) error {
@@ -624,13 +631,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.unsavedEvent = event
 						vp.serialMu.Unlock()
 					}
-					// Advance the scheduler's lastCommittedSequence for this
-					// empty transaction. Without this, hasCommitMeta transactions
-					// whose commitParent references this (skipped) sequence would
-					// be blocked forever waiting for lastCommittedSequence to
-					// reach their commitParent.
+					// Track this empty transaction's sequence so it can be
+					// advanced in lastCommittedSequence when the next non-empty
+					// txn commits. Advancing immediately would be unsafe: prior
+					// inflight commit-meta work may not have committed yet, and
+					// advancing the watermark prematurely would satisfy commit-
+					// parent dependencies for later empty-writeset txns too early.
 					if state.curHasCommitMeta {
-						scheduler.advanceCommittedSequence(state.curSequence)
+						state.mergedSequences = append(state.mergedSequences, state.curSequence)
 					}
 					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
@@ -757,18 +765,25 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if err := scheduler.enqueue(txn); err != nil {
 					return err
 				}
-				// DDL may change schema or FK topology. Force all remaining
+				// DDL that is actually executed on the target (EXEC, EXEC_IGNORE)
+				// may change schema or FK topology. Force all remaining
 				// transactions in this relay fetch to serialize so they don't
 				// use stale FK refs or table plans for writeset computation.
 				// Also set state.ddlSeen so the scheduleLoop waits for the
-				// commitLoop to refresh FK metadata before the next fetch,
-				// and state.postDDLFetchPending so the next fetch (which
-				// carries the new FIELD events) is also force-serialized
-				// until workers apply those FIELDs and refresh the plan.
-				if event.Type == binlogdatapb.VEventType_DDL {
+				// commitLoop to refresh FK metadata before the next fetch.
+				// Record the current tablePlansVersion so that force-
+				// serialization persists until workers apply new FIELD events
+				// that bump the version past this snapshot.
+				//
+				// IGNORE and STOP DDLs do not modify the target schema, so
+				// they don't need the barrier. STOP terminates the workflow
+				// entirely. IGNORE just advances the position.
+				if event.Type == binlogdatapb.VEventType_DDL &&
+					(vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC ||
+						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					state.postDDLFetchPending = true
+					state.postDDLPlanVersion = vp.tablePlansVersion.Load()
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -936,12 +951,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		payload := txn.payload
 		if payload.commitOnly {
-			// Must wait for any pending worker commit to complete before
-			// forwarding commitOnly txns, since they run on the main
-			// connection and strict ordering must be maintained.
-			if err := waitPending(); err != nil {
-				return err
-			}
+			// Forward commitOnly txns (DDL, OTHER, JOURNAL, position saves)
+			// to the commitLoop immediately without waiting for any pending
+			// worker commit. commitOnly work runs on the main connection, not
+			// the worker's connection, so it has no dependency on the prior
+			// row txn's commit. The commitLoop enforces strict ordering via
+			// nextOrder regardless of when the txn arrives in commitCh.
 			select {
 			case commitCh <- txn:
 			case <-ctx.Done():
