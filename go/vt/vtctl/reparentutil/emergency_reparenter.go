@@ -175,6 +175,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
+		// Make sure we still have the shard lock.
+		if lockErr := topo.CheckShardLocked(ctx, keyspace, shard); lockErr != nil {
+			erp.logger.Warningf("skipping replication restart cleanup because the shard lock was lost for %s/%s: %v", keyspace, shard, lockErr)
+			return
+		}
+
 		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, replicasToRestart, opts.durability)
 		if cleanupErr == nil {
 			return
