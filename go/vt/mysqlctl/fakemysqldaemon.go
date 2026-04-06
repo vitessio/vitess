@@ -64,6 +64,16 @@ type FakeMysqlDaemon struct {
 	// It is used by Shutdown.
 	ShutdownTime time.Duration
 
+	// WaitForExitTime is used to simulate mysqlds that take some time to
+	// disappear after shutting themselves down.
+	WaitForExitTime time.Duration
+
+	// WaitForExitError is used by WaitForExit.
+	WaitForExitError error
+
+	// WaitForExitCalls tracks how many times WaitForExit was called.
+	WaitForExitCalls int
+
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
 	MysqlPort atomic.Int32
@@ -194,6 +204,12 @@ type FakeMysqlDaemon struct {
 	// queries we expect.
 	ExpectedExecuteSuperQueryCurrent int
 
+	// ExecuteSuperQueryErrorMap maps query strings to errors. When a query
+	// matches a key in this map, the corresponding error is returned immediately,
+	// bypassing the normal ExpectedExecuteSuperQueryList validation. Useful for
+	// simulating errors on specific queries without consuming from the expected list.
+	ExecuteSuperQueryErrorMap map[string]error
+
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
@@ -303,6 +319,25 @@ func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error
 
 // Wait is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
+	return nil
+}
+
+// WaitForExit waits for mysqld to exit.
+func (fmd *FakeMysqlDaemon) WaitForExit(ctx context.Context, cnf *Mycnf) error {
+	fmd.mu.Lock()
+	fmd.WaitForExitCalls++
+	fmd.mu.Unlock()
+
+	if fmd.WaitForExitTime > 0 {
+		select {
+		case <-time.After(fmd.WaitForExitTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if fmd.WaitForExitError != nil {
+		return fmd.WaitForExitError
+	}
 	return nil
 }
 
@@ -627,6 +662,14 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 		fmd.ExecuteSuperQueryListCallback()
 	}
 	for _, query := range queryList {
+		// Return a specific error for this query if one is configured, bypassing
+		// the normal expected-query validation.
+		if fmd.ExecuteSuperQueryErrorMap != nil {
+			if err, ok := fmd.ExecuteSuperQueryErrorMap[query]; ok {
+				return err
+			}
+		}
+
 		// test we still have a query to compare
 		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
 			return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)

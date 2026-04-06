@@ -705,23 +705,36 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// didn't start.
 	if waitForMysqld {
 		log.Info(fmt.Sprintf("Mysqld.Shutdown: waiting for socket file (%v) and pid file (%v) to disappear", cnf.SocketFile, cnf.PidFile))
-
-		for {
-			select {
-			case <-ctx.Done():
-				return errors.New("gave up waiting for mysqld to stop")
-			default:
-			}
-
-			_, socketPathErr = os.Stat(cnf.SocketFile)
-			_, pidPathErr = os.Stat(cnf.PidFile)
-			if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
-				return nil
-			}
-			time.Sleep(100 * time.Millisecond)
+		if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// WaitForExit blocks until the mysqld process has fully exited, identified by
+// the disappearance of its socket and pid files. It is used when MySQL shuts
+// itself down (e.g. after a CLONE operation) and the caller needs to know when
+// it is safe to start a new mysqld process.
+func (mysqld *Mysqld) WaitForExit(ctx context.Context, cnf *Mycnf) error {
+	return waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile)
+}
+
+// waitForMysqldExit polls until both socketFile and pidFile have been removed,
+// which signals that the mysqld process has fully exited.
+func waitForMysqldExit(ctx context.Context, socketFile, pidFile string) error {
+	for {
+		_, socketErr := os.Stat(socketFile)
+		_, pidErr := os.Stat(pidFile)
+		if os.IsNotExist(socketErr) && os.IsNotExist(pidErr) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("gave up waiting for mysqld to stop")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.
