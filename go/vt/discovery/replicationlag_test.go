@@ -38,6 +38,49 @@ func testSetMinNumTablets(newMin int) {
 	minNumTablets.Set(newMin)
 }
 
+// TestLegacyReplicationLagAlgorithmFlagIsNoOp verifies that setting
+// --legacy-replication-lag-algorithm=true no longer changes the behaviour of
+// FilterStatsByReplicationLag. The flag is deprecated in v25 and will be
+// removed in v26 (https://github.com/vitessio/vitess/issues/18914).
+//
+// The input is chosen so that the simplified and legacy algorithms produce
+// different results: three tablets all sitting at 100s of replication lag.
+//   - Simplified picks exactly minNumTablets (2) tablets, because all three are
+//     above lowReplicationLag.
+//   - Legacy keeps all three, because each tablet's lag is identical to the
+//     mean and survives the 0.7*mean filter.
+//
+// With the flag set to true we must still get the simplified result; if a
+// future change reintroduces the legacy branch in production code, this test
+// will fail.
+func TestLegacyReplicationLagAlgorithmFlagIsNoOp(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+
+	legacyReplicationLagAlgorithm.Set(true)
+	defer legacyReplicationLagAlgorithm.Set(false)
+
+	lags := []uint32{100, 100, 100}
+	tablets := make([]*TabletHealth, len(lags))
+	for i, lag := range lags {
+		tablets[i] = &TabletHealth{
+			Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host%d", i+1)),
+			Serving: true,
+			Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: lag},
+		}
+	}
+
+	// Sanity check: confirm the two algorithms really do diverge on this
+	// input, otherwise the test below would be vacuous.
+	simplifiedWant := filterStatsByLag(tablets)
+	legacyResult := filterStatsByLagWithLegacyAlgorithm(tablets)
+	if len(simplifiedWant) == len(legacyResult) {
+		t.Fatalf("test setup is vacuous: simplified and legacy returned the same number of tablets (%d)", len(simplifiedWant))
+	}
+
+	got := FilterStatsByReplicationLag(tablets)
+	mustMatch(t, simplifiedWant, got, "FilterStatsByReplicationLag should always use the simplified algorithm, even with --legacy-replication-lag-algorithm=true")
+}
+
 func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	// 1 healthy serving tablet, 1 not healthy
