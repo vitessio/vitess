@@ -67,7 +67,9 @@ func registerCloneFlags(fs *pflag.FlagSet) {
 
 // CloneFromDonor clones data from the specified donor tablet using MySQL CLONE REMOTE.
 // It returns the GTID position of the cloned data.
-func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDaemon, keyspace, shard string) (replication.Position, error) {
+// If mycnf is non-nil, CloneFromDonor may use it to restart mysqld locally when
+// CLONE completes but MySQL cannot restart itself.
+func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDaemon, mycnf *Mycnf, keyspace, shard string) (replication.Position, error) {
 	var donorAlias *topodatapb.TabletAlias
 	var err error
 
@@ -116,6 +118,9 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		DonorUser:     cloneConfig.User,
 		DonorPassword: cloneConfig.Password,
 		UseSSL:        cloneConfig.UseSSL,
+		// Pass mycnf through so ExecuteClone can fall back to a local restart
+		// when CLONE succeeds but mysqld cannot restart itself.
+		Mycnf: mycnf,
 	}
 
 	log.Info(fmt.Sprintf("Clone executor configured for donor %s:%d", executor.DonorHost, executor.DonorPort))
@@ -127,8 +132,13 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
 	}
 
-	// Get the GTID position from the cloned data.
-	pos, err := mysqld.PrimaryPosition(ctx)
+	// Use a detached context for post-clone operations: the parent context may
+	// have been canceled by an OnTerm callback when MySQL exited during the
+	// clone-induced restart.
+	posCtx, posCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer posCancel()
+
+	pos, err := mysqld.PrimaryPosition(posCtx)
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("failed to get position after clone: %v", err)
 	}
@@ -150,6 +160,9 @@ type CloneExecutor struct {
 	DonorPassword string
 	// UseSSL indicates whether to use SSL for the clone connection.
 	UseSSL bool
+	// Mycnf, if set, is used to restart mysqld after a CLONE operation returns
+	// ERRestartServerFailed.
+	Mycnf *Mycnf
 }
 
 // validateRecipient checks that the recipient MySQL instance meets all prerequisites for cloning.
@@ -307,20 +320,52 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, wa
 	// Execute the clone command. When clone completes, MySQL restarts automatically
 	// which will cause the connection to drop. We ignore this error and verify
 	// success by checking clone_status after MySQL comes back up.
-	if err := mysqld.ExecuteSuperQuery(ctx, cloneCmd); err != nil {
-		if !isCloneConnError(err) {
-			return vterrors.Wrapf(err, "clone command failed")
-		}
-		log.Info(fmt.Sprintf("CLONE command returned (connection likely lost due to MySQL restart): %v", err))
+	cloneErr := mysqld.ExecuteSuperQuery(ctx, cloneCmd)
+	if cloneErr != nil && !isCloneConnError(cloneErr) {
+		return vterrors.Wrapf(cloneErr, "clone command failed")
 	}
 
-	// Wait for MySQL to restart and verify clone completed successfully
-	if err := c.waitForCloneComplete(ctx, mysqld, waitTimeout); err != nil {
+	verifyCtx, verifyCancel, err := c.prepareCloneVerification(ctx, mysqld, cloneErr, waitTimeout)
+	if err != nil {
+		return err
+	}
+	defer verifyCancel()
+
+	// Wait for MySQL to restart and verify clone completed successfully.
+	if err := c.waitForCloneComplete(verifyCtx, mysqld, waitTimeout); err != nil {
 		return vterrors.Wrapf(err, "clone success verification failed")
 	}
 
 	log.Info(fmt.Sprintf("CLONE REMOTE completed successfully from %s:%d", c.DonorHost, c.DonorPort))
 	return nil
+}
+
+// prepareCloneVerification returns the context used for the post-clone
+// verification phase. If the CLONE command caused mysqld to exit, it detaches
+// verification from the parent context so caller cancellation triggered by that
+// exit does not abort the success check. It also performs a manual restart when
+// CLONE completed but mysqld could not restart itself.
+func (c *CloneExecutor) prepareCloneVerification(ctx context.Context, mysqld MysqlDaemon, cloneErr error, waitTimeout time.Duration) (context.Context, context.CancelFunc, error) {
+	if cloneErr == nil {
+		return ctx, func() {}, nil
+	}
+
+	log.Info(fmt.Sprintf("CLONE command returned (connection likely lost due to MySQL restart): %v", cloneErr))
+
+	verifyCtx, verifyCancel := context.WithTimeout(context.WithoutCancel(ctx), waitTimeout)
+	if isRestartServerFailed(cloneErr) {
+		if c.Mycnf == nil {
+			verifyCancel()
+			return nil, nil, vterrors.Wrapf(cloneErr, "mysqld could not restart itself after clone and no my.cnf available for manual restart")
+		}
+		log.Info("MySQL could not restart itself after CLONE; restarting manually")
+		if err := restartMysqldAfterClone(verifyCtx, mysqld, c.Mycnf); err != nil {
+			verifyCancel()
+			return nil, nil, vterrors.Wrapf(err, "failed to restart MySQL after clone")
+		}
+	}
+
+	return verifyCtx, verifyCancel, nil
 }
 
 // buildCloneCommand constructs the CLONE INSTANCE SQL command.
@@ -352,6 +397,28 @@ func isCloneConnError(err error) bool {
 	default:
 		return false
 	}
+}
+
+// isRestartServerFailed reports whether err is an ERRestartServerFailed error,
+// meaning MySQL completed the clone but could not restart itself because it is
+// not managed by a process supervisor.
+func isRestartServerFailed(err error) bool {
+	var sqlErr *sqlerror.SQLError
+	return errors.As(err, &sqlErr) && sqlErr.Number() == sqlerror.ERRestartServerFailed
+}
+
+// restartMysqldAfterClone waits for the CLONE-induced mysqld shutdown to fully
+// complete before starting mysqld again. CLONE shuts MySQL down itself, so a
+// replacement process must not be started until the original process has really
+// exited and released its files.
+func restartMysqldAfterClone(ctx context.Context, mysqld MysqlDaemon, mycnf *Mycnf) error {
+	if err := mysqld.WaitForExit(ctx, mycnf); err != nil {
+		return fmt.Errorf("timed out waiting for mysqld to exit after clone: %w", err)
+	}
+	if err := mysqld.Start(ctx, mycnf); err != nil {
+		return fmt.Errorf("failed to start mysqld after clone: %w", err)
+	}
+	return nil
 }
 
 // checkClonePluginInstalled verifies that the clone plugin is loaded.

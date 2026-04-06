@@ -162,6 +162,16 @@ func TestIsCloneConnError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "restart server failed wrapped by executeSuperQueryListConn",
+			// Simulate exactly what executeSuperQueryListConn returns: a %v-redacted
+			// message with the underlying SQLError as the cause.
+			err: &execError{
+				msg:   "ExecuteFetch(CLONE INSTANCE FROM ...) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)",
+				cause: sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+			},
+			expected: true,
+		},
+		{
 			name:     "access denied",
 			err:      accessDenied,
 			expected: false,
@@ -593,8 +603,13 @@ func TestCloneFromDonor(t *testing.T) {
 		cloneFromPrimary bool
 		cloneFromTablet  string
 		setup            func(*testing.T, *cloneFromDonorTestEnv)
+		// mycnf controls whether CloneFromDonor may attempt a local mysqld
+		// restart after CLONE returns ERRestartServerFailed.
+		mycnf            *Mycnf
+		cancelCtxOnClone bool // cancel the ctx when the CLONE command executes
 		wantErr          bool
 		wantErrContains  string
+		assertResult     func(*testing.T, *cloneFromDonorTestEnv)
 	}{
 		{
 			name:             "both cloneFromPrimary and cloneFromTablet specified",
@@ -689,6 +704,76 @@ func TestCloneFromDonor(t *testing.T) {
 			cloneFromTablet: "cell1-100",
 			wantErr:         false,
 		},
+		{
+			name:            "ERRestartServerFailed triggers manual restart and succeeds",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
+				// Only SET GLOBAL is expected normally; CLONE returns error via error map.
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
+				}
+				callCount := 0
+				env.mysqld.ExecuteSuperQueryListCallback = func() {
+					callCount++
+					// ExecuteSuperQuery delegates to ExecuteSuperQueryList with a
+					// single query, so the 2nd callback corresponds to the CLONE
+					// command (after SET GLOBAL clone_valid_donor_list).
+					if callCount == 2 {
+						env.mysqld.Running = false
+					}
+				}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					cloneCmd: &execError{
+						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)", cloneCmd),
+						cause: sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+					},
+				}
+			},
+			mycnf:   &Mycnf{},
+			wantErr: false,
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.Equal(t, 1, env.mysqld.WaitForExitCalls)
+				assert.True(t, env.mysqld.Running)
+			},
+		},
+		{
+			name:            "ERRestartServerFailed without restart capability fails fast",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
+				}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					cloneCmd: &execError{
+						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)", cloneCmd),
+						cause: sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+					},
+				}
+			},
+			wantErr:         true,
+			wantErrContains: "no my.cnf available for manual restart",
+		},
+		{
+			name:            "ERRestartServerFailed succeeds even if parent ctx is canceled on MySQL exit",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
+				}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					cloneCmd: &execError{
+						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)", cloneCmd),
+						cause: sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+					},
+				}
+			},
+			mycnf:            &Mycnf{},
+			cancelCtxOnClone: true,
+			wantErr:          false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -717,8 +802,32 @@ func TestCloneFromDonor(t *testing.T) {
 				tc.setup(t, env)
 			}
 
+			ctx := env.ctx
+			if tc.cancelCtxOnClone {
+				// Simulate OnTerm canceling the context when MySQL exits during
+				// clone: cancel the context when the CLONE command executes.
+				// ExecuteSuperQuery delegates to ExecuteSuperQueryList with a
+				// single query, so the 2nd callback corresponds to CLONE.
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(env.ctx)
+				callCount := 0
+				oldCallback := env.mysqld.ExecuteSuperQueryListCallback
+				env.mysqld.ExecuteSuperQueryListCallback = func() {
+					if oldCallback != nil {
+						oldCallback()
+					}
+					callCount++
+					if callCount == 2 {
+						if tc.mycnf != nil {
+							env.mysqld.Running = false
+						}
+						cancel()
+					}
+				}
+			}
+
 			// Execute CloneFromDonor
-			pos, err := CloneFromDonor(env.ctx, env.ts, env.mysqld, env.keyspace, env.shard)
+			pos, err := CloneFromDonor(ctx, env.ts, env.mysqld, tc.mycnf, env.keyspace, env.shard)
 
 			// Verify results
 			if tc.wantErr {
@@ -729,6 +838,9 @@ func TestCloneFromDonor(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.NotEmpty(t, pos)
+				if tc.assertResult != nil {
+					tc.assertResult(t, env)
+				}
 			}
 		})
 	}
