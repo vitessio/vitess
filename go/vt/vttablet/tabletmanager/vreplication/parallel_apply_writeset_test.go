@@ -244,11 +244,15 @@ func TestBuildTxnWritesetNoRows(t *testing.T) {
 }
 
 func TestWritesetKeysForFKRefMissingColumn(t *testing.T) {
-	ref := &fkConstraintRef{ParentTable: "parent", ChildColumnNames: []string{"missing"}}
+	ref := &fkConstraintRef{ParentTable: "parent", ChildColumnNames: []string{"missing"}, ReferencedColumnNames: []string{"id"}}
 	fieldIdx := map[string]int{"id": 0}
 	vals := []sqltypes.Value{sqltypes.NewInt64(1)}
 	keySet := map[uint64]struct{}{}
-	writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet)
+	// When an FK column is missing from the streamed fields, the function
+	// should return an error (fail closed) instead of silently dropping the edge.
+	err := writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not in streamed fields")
 	require.Empty(t, keySet)
 }
 

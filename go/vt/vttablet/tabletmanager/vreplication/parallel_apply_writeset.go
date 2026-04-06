@@ -88,10 +88,12 @@ func buildParentFKRefs(fkRefs map[string][]fkConstraintRef) map[string][]parentF
 // writesetKeysForParentFKRef generates writeset keys for a parent table row
 // based on foreign key constraints that reference this table. The hash uses
 // parentTable:referencedColValues, matching the child-side FK key hash.
-func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) {
-	appendKey := func(vals []sqltypes.Value) {
+// Returns an error if the FK columns are missing from the streamed field list,
+// so the caller can force serialization instead of silently dropping the edge.
+func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+	appendKey := func(vals []sqltypes.Value) error {
 		if len(vals) == 0 {
-			return
+			return nil
 		}
 		var d xxhash.Digest
 		writesetDigestInit(&d, ref.ParentTable)
@@ -99,14 +101,14 @@ func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, befor
 		for _, colName := range ref.ReferencedColumnNames {
 			idx, ok := fieldIdx[colName]
 			if !ok {
-				return
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK referenced column %q not in streamed fields for parent table %s", colName, ref.ParentTable)
 			}
 			if idx >= len(vals) {
-				return
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK referenced column %q index %d out of range for parent table %s", colName, idx, ref.ParentTable)
 			}
 			val := vals[idx]
 			if val.IsNull() {
-				return
+				return nil
 			}
 			if !first {
 				d.Write([]byte{','})
@@ -115,9 +117,12 @@ func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, befor
 			writesetDigestAddValue(&d, val)
 		}
 		keySet[d.Sum64()] = struct{}{}
+		return nil
 	}
-	appendKey(beforeVals)
-	appendKey(afterVals)
+	if err := appendKey(beforeVals); err != nil {
+		return err
+	}
+	return appendKey(afterVals)
 }
 
 // writesetKeysForFKRef generates writeset keys based on a foreign key constraint.
@@ -125,13 +130,14 @@ func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, befor
 // a hash keyed on the parent table name and FK column values, which will conflict
 // with the parent table's PK-based writeset key, forcing serialization of
 // dependent txns.
-func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) {
+// Returns an error if FK columns are missing from the streamed field list.
+func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if ref == nil {
-		return
+		return nil
 	}
-	appendFKKey := func(vals []sqltypes.Value) {
+	appendFKKey := func(vals []sqltypes.Value) error {
 		if len(vals) == 0 {
-			return
+			return nil
 		}
 		var d xxhash.Digest
 		writesetDigestInit(&d, ref.ParentTable)
@@ -139,17 +145,17 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 		for _, colName := range ref.ChildColumnNames {
 			idx, ok := fieldIdx[colName]
 			if !ok {
-				return
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK child column %q not in streamed fields for table referencing %s", colName, ref.ParentTable)
 			}
 			if idx >= len(vals) {
-				return
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK child column %q index %d out of range for table referencing %s", colName, idx, ref.ParentTable)
 			}
 			val := vals[idx]
 			// In MySQL, if any referencing column in an FK is NULL, the FK
 			// constraint is not enforced for that row. Skip generating a
 			// writeset key in that case to avoid artificial conflicts.
 			if val.IsNull() {
-				return
+				return nil
 			}
 			if !first {
 				d.Write([]byte{','})
@@ -158,9 +164,12 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 			writesetDigestAddValue(&d, val)
 		}
 		keySet[d.Sum64()] = struct{}{}
+		return nil
 	}
-	appendFKKey(beforeVals)
-	appendFKKey(afterVals)
+	if err := appendFKKey(beforeVals); err != nil {
+		return err
+	}
+	return appendFKKey(afterVals)
 }
 
 // buildTxnWriteset builds writeset keys for the given events.
@@ -237,12 +246,16 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 				return nil, err
 			}
 			for i := range refs {
-				writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet)
+				if err := writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet); err != nil {
+					return nil, err
+				}
 			}
 			// Parent-side: generate FK-aware keys using the referenced columns
 			// so parent row changes conflict with child FK keys.
 			for i := range pRefs {
-				writesetKeysForParentFKRef(&pRefs[i], fieldIdx, beforeVals, afterVals, keySet)
+				if err := writesetKeysForParentFKRef(&pRefs[i], fieldIdx, beforeVals, afterVals, keySet); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

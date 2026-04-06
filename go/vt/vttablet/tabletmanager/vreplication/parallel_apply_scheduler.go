@@ -196,7 +196,7 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	if err := s.ctx.Err(); err != nil {
 		return err
 	}
-	if txn.hasCommitMeta {
+	if txn.hasCommitMeta && txn.sequenceNumber > s.lastCommittedSequence {
 		s.lastCommittedSequence = txn.sequenceNumber
 	}
 	// Advance any sequences that were batched (merged away) into this txn.

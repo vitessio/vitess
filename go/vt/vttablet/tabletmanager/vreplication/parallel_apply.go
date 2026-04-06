@@ -328,8 +328,7 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		maxBatched = workerCount * 4
 	}
 	state := &parallelScheduleState{
-		maxBatchedCommits:  maxBatched,
-		postDDLPlanVersion: -1, // no active DDL barrier
+		maxBatchedCommits: maxBatched,
 	}
 	for {
 		if ctx.Err() != nil {
@@ -377,7 +376,12 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		// If a DDL was in this fetch, wait for the commitLoop to process it
 		// (including FK metadata refresh) before starting the next fetch.
 		// Without this barrier, the next fetch would snapshot stale FK refs.
-		if state.ddlSeen {
+		//
+		// Also drain after the post-DDL serialized fetch so that workers
+		// have applied all FIELD events (including the DDL-affected table's
+		// new plan) before normal parallel scheduling resumes.
+		if state.ddlSeen || state.postDDLDrainNeeded {
+			state.postDDLDrainNeeded = false
 			if err := scheduler.waitForIdle(ctx); err != nil {
 				return err
 			}
@@ -457,15 +461,18 @@ type parallelScheduleState struct {
 	// for the commitLoop to drain (so FK refs are refreshed) before
 	// starting the next fetch. Reset at the start of each scheduleItems call.
 	ddlSeen bool
-	// postDDLPlanVersion records the tablePlansVersion at the time a DDL was
-	// observed. Parallel scheduling is force-serialized until workers apply
-	// new FIELD events that bump tablePlansVersion past this value. This
-	// is more robust than a boolean flag because it handles the case where
-	// the post-DDL fetch contains no FIELD events (only heartbeats or
-	// empty transactions): the guard persists across multiple fetches until
-	// the plan is actually refreshed.
-	// A value of -1 means no DDL barrier is active.
-	postDDLPlanVersion int64
+	// postDDLSerialize counts how many additional fetches must be fully
+	// serialized after a DDL that modified the target schema. The DDL fetch
+	// itself is serialized via forceSerialize. The NEXT fetch must also be
+	// serialized so workers apply new FIELD events for the DDL-affected
+	// table before writeset-based scheduling resumes.
+	// A value of 0 means no DDL barrier is active.
+	postDDLSerialize int
+	// postDDLDrainNeeded is set when a postDDLSerialize fetch was just
+	// processed. The scheduleLoop will waitForIdle after the fetch to
+	// ensure all FIELD events have been applied by workers before normal
+	// parallel scheduling resumes.
+	postDDLDrainNeeded bool
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -487,15 +494,15 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// next relay fetch will have updated snapshots.
 	//
 	// If a previous DDL that was executed on the target changed the schema,
-	// force-serialize until workers apply new FIELD events that bump
-	// tablePlansVersion past the version recorded at DDL time. This guard
-	// persists across multiple fetches until the plan is actually refreshed,
-	// handling the case where a post-DDL fetch contains only heartbeats.
-	forceSerialize := state.postDDLPlanVersion >= 0 &&
-		vp.tablePlansVersion.Load() <= state.postDDLPlanVersion
-	if state.postDDLPlanVersion >= 0 && !forceSerialize {
-		// Plan version has advanced past the DDL snapshot — clear the guard.
-		state.postDDLPlanVersion = -1
+	// force-serialize this fetch so workers apply new FIELD events for the
+	// DDL-affected table before writeset-based scheduling resumes.
+	// Set postDDLDrainNeeded so scheduleLoop drains the pipeline after this
+	// fetch, ensuring all FIELD events have been applied before resuming
+	// parallel scheduling.
+	forceSerialize := state.postDDLSerialize > 0
+	if forceSerialize {
+		state.postDDLSerialize--
+		state.postDDLDrainNeeded = true
 	}
 	state.ddlSeen = false
 
@@ -631,14 +638,20 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.unsavedEvent = event
 						vp.serialMu.Unlock()
 					}
-					// Track this empty transaction's sequence so it can be
-					// advanced in lastCommittedSequence when the next non-empty
-					// txn commits. Advancing immediately would be unsafe: prior
-					// inflight commit-meta work may not have committed yet, and
-					// advancing the watermark prematurely would satisfy commit-
-					// parent dependencies for later empty-writeset txns too early.
+					// Advance lastCommittedSequence immediately for this empty
+					// transaction. Empty txns have no data effects, so their
+					// commit-parent dependency is trivially satisfied. Deferring
+					// the advance (via mergedSequences) would deadlock: a later
+					// txn with commitParent=thisSequence and empty writeset would
+					// block forever waiting for lastCommittedSequence to reach
+					// its commitParent, but the deferred sequence only publishes
+					// when that later txn commits — a circular dependency.
+					//
+					// markCommitted() uses max() for lastCommittedSequence, so
+					// this early advance cannot regress the watermark when a
+					// later txn commits with a lower sequence number.
 					if state.curHasCommitMeta {
-						state.mergedSequences = append(state.mergedSequences, state.curSequence)
+						scheduler.advanceCommittedSequence(state.curSequence)
 					}
 					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
@@ -783,7 +796,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					state.postDDLPlanVersion = vp.tablePlansVersion.Load()
+					state.postDDLSerialize = 1 // serialize next fetch too
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.

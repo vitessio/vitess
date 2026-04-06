@@ -70,6 +70,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				HeartbeatUpdateInterval:                2,
 				StoreCompressedGTID:                    true,
 				ParallelInsertWorkers:                  4,
+				ParallelReplicationWorkers:             1, // flag default
 				VStreamPacketSize:                      1024,
 				VStreamDynamicPacketSize:               false,
 				VStreamBinlogRotationThreshold:         2048,
@@ -124,6 +125,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				HeartbeatUpdateInterval:          DefaultVReplicationConfig.HeartbeatUpdateInterval,
 				StoreCompressedGTID:              !DefaultVReplicationConfig.StoreCompressedGTID,
 				ParallelInsertWorkers:            DefaultVReplicationConfig.ParallelInsertWorkers,
+				ParallelReplicationWorkers:       DefaultVReplicationConfig.ParallelReplicationWorkers,
 				VStreamPacketSize:                DefaultVReplicationConfig.VStreamPacketSize,
 				VStreamDynamicPacketSize:         !DefaultVReplicationConfig.VStreamDynamicPacketSize,
 				VStreamBinlogRotationThreshold:   DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
