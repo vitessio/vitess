@@ -16,6 +16,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
+        - [VStream `max_stream_age_seconds` flag](#vstream-max-stream-age)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -146,6 +147,16 @@ VReplication workflows now automatically retry with different tablets when encou
 When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
 
 This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
+
+#### <a id="vstream-max-stream-age"/>VStream `max_stream_age_seconds` flag</a>
+
+VStream now supports a `max_stream_age_seconds` flag that limits how long a stream can run before automatic termination. When set to a non-zero value, the stream terminates with an `UNAVAILABLE` error after the specified duration. A random jitter of +/-10% spreads out reconnections across clients.
+
+This feature improves client-side load balancing when used with [gRPC ORCA metrics](https://github.com/vitessio/vitess/pull/18282). Long-running VStream connections can cause load imbalance across VTGate servers because ORCA metrics are only exchanged when connections are established. Setting a maximum stream age causes clients to periodically reconnect and receive updated load information, distributing traffic more evenly.
+
+**Usage**: Pass `max_stream_age_seconds` in the `VStreamFlags` when calling the VStream API. The default value is `0` (no maximum age, preserving existing behavior).
+
+See [#19800](https://github.com/vitessio/vitess/pull/19800) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
