@@ -100,7 +100,7 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.0",
+    "vite": "^8.0.5",
     "vite-plugin-eslint2": "^5.1.0",
     "vite-plugin-svgr": "^5.0.0",
     "vitest": "^4.1.0"
