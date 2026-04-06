@@ -57,6 +57,45 @@
     }
   },
   {
+    "comment": "update bypass with limit - query sent verbatim to all shards",
+    "query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set is_active = 0 where is_active = 1 limit 100",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set is_active = 0 where is_active = 1 limit 100",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "MultishardAutocommit": true,
+        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ `user` set is_active = 0 where is_active = 1 limit 100"
+      }
+    }
+  },
+  {
+    "comment": "delete bypass with limit - query sent verbatim to all shards",
+    "query": "delete from user where is_active = 1 limit 100",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "DELETE",
+      "Original": "delete from user where is_active = 1 limit 100",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "delete from `user` where is_active = 1 limit 100"
+      }
+    }
+  },
+  {
     "comment": "delete bypass",
     "query": "DELETE FROM USER WHERE ID = 42",
     "plan": {
