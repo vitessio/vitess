@@ -375,6 +375,8 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	replicas []*topodatapb.Tablet,
 	durability policy.Durabler,
 ) error {
+	erp.logger.Infof("restarting replication on %d replicas whose IO threads were stopped by ERS", len(replicas))
+
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
@@ -388,8 +390,9 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 		}
 
 		wg.Go(func() {
+			erp.logger.Infof("restarting replication on %q after failed ERS", alias)
 			if err := erp.tmc.StartReplication(ctx, replica, semiSync); err != nil {
-				err := vterrors.Wrapf(err, "failed to restart replication on %v after failed ERS", alias)
+				err := vterrors.Wrapf(err, "failed to restart replication on %q after failed ERS", alias)
 				rec.RecordError(err)
 			}
 		})
