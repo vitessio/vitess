@@ -459,6 +459,16 @@ var StreamExecuteQueryResult1 = sqltypes.Result{
 
 // StreamExecuteQueryResult2 is the second packet of a streaming result.
 var StreamExecuteQueryResult2 = sqltypes.Result{
+	Fields: []*querypb.Field{
+		{
+			Name: "field1",
+			Type: sqltypes.Int8,
+		},
+		{
+			Name: "field2",
+			Type: sqltypes.Char,
+		},
+	},
 	Rows: [][]sqltypes.Value{
 		{
 			sqltypes.TestValue(sqltypes.Int8, "1"),

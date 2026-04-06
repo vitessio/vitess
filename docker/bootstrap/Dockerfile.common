@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.24.12-bookworm@sha256:8972893fa12177951b8bd4118470f338eaecea133c323be84066cd64f844fc03
+FROM --platform=linux/amd64 golang:1.24.13-bookworm@sha256:98d673f18a1aac43da744209873cb79323e11706f909251bcfb131828b95559d
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -41,7 +41,8 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
 ARG GH_ACCESS_TOKEN
 ENV GH_ACCESS_TOKEN=${GH_ACCESS_TOKEN}
 ENV GOPRIVATE=github.com/slackhq/vitess-addons
-RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/ && \
+    su vitess -c "git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/"
 
 # Download vendored Go dependencies
 RUN cd /vt/src/vitess.io/vitess && \

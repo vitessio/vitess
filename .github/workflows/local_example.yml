@@ -8,9 +8,13 @@ on:
   pull_request:
     branches: '**'
 permissions: read-all
+
 env:
   GOPRIVATE: github.com/slackhq/vitess-addons
   GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
+  BOOTSTRAP_VERSION: "ci"
+  BOOTSTRAP_FLAVOR: "mysql84"
+
 jobs:
 
   build:
@@ -54,6 +58,12 @@ jobs:
             - 'examples/**'
             - '.github/workflows/local_example.yml'
 
+    - name: Build bootstrap images
+      if: steps.changes.outputs.examples == 'true'
+      uses: ./.github/actions/build-bootstrap
+      with:
+        gh-access-token: ${{ env.GH_ACCESS_TOKEN }}
+
     - name: Set up Go
       if: steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
@@ -91,7 +101,7 @@ jobs:
         if [ "${{matrix.os}}" = "macos-latest" ]; then
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
-        go run test.go -print-log -follow local_example
+        go run test.go -print-log -follow -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} local_example
 
   consul:
     name: Local example using consul on Ubuntu

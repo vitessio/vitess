@@ -657,6 +657,13 @@ func (be *BuiltinBackupEngine) backupFiles(
 		if err != nil {
 			return err
 		}
+		// Propagate retry results back to the original entries so the
+		// manifest records correct hashes and metadata.
+		for i, fe := range newFEs {
+			if fe.Name != "" {
+				fes[i] = fe
+			}
+		}
 	}
 
 	// Backup the MANIFEST file and apply retry logic.
@@ -1327,10 +1334,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		externalDecompressorCmd := ExternalDecompressorCmd
-		if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-			externalDecompressorCmd = bm.ExternalDecompressor
-		}
+		externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 		if externalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
 				deCompressionEngine = externalDecompressorCmd

@@ -135,7 +135,7 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 		return nil
 	}
 	return &Result{
-		Fields:              qr.Fields,
+		Fields:              fields,
 		RowsAffected:        qr.RowsAffected,
 		InsertID:            qr.InsertId,
 		InsertIDChanged:     qr.InsertIdChanged,

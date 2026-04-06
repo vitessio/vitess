@@ -110,6 +110,48 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 				require.Equal(t, cells, common.CreateOptions.Cells)
 			},
 		},
+		{
+			name: "invalid on-ddl value",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("INVALID"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid on-ddl normalizes to uppercase",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("exec"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: false,
+			checkFunc: func() {
+				require.Equal(t, "EXEC", common.CreateOptions.OnDDL)
+			},
+		},
+		{
+			name: "valid on-ddl EXEC_IGNORE",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("exec_ignore"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: false,
+			checkFunc: func() {
+				require.Equal(t, "EXEC_IGNORE", common.CreateOptions.OnDDL)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
