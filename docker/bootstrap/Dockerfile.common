@@ -41,7 +41,8 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
 ARG GH_ACCESS_TOKEN
 ENV GH_ACCESS_TOKEN=${GH_ACCESS_TOKEN}
 ENV GOPRIVATE=github.com/slackhq/vitess-addons
-RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/ && \
+    su vitess -c "git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/"
 
 # Download vendored Go dependencies
 RUN cd /vt/src/vitess.io/vitess && \

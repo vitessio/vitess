@@ -19,6 +19,7 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+  GOPRIVATE: "github.com/slackhq/vitess-addons"
 
 jobs:
   test:

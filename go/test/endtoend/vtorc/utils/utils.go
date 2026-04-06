@@ -996,7 +996,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
 		require.True(t, ok, "SuccessfulRecoveries metric not yet available")
-		successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
+		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
 		if successCount == countExpected {
 			return
 		}
@@ -1005,7 +1005,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
 	require.True(t, ok, "SuccessfulRecoveries metric not yet available")
-	successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
+	successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
 

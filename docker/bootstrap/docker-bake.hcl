@@ -18,6 +18,10 @@ variable "BOOTSTRAP_FLAVOR" {
   default = "mysql84"
 }
 
+variable "GH_ACCESS_TOKEN" {
+  default = ""
+}
+
 group "default" {
   targets = ["common", "flavor"]
 }
@@ -26,6 +30,9 @@ target "common" {
   context    = "."
   dockerfile = "docker/bootstrap/Dockerfile.common"
   tags       = ["vitess/bootstrap:${BOOTSTRAP_VERSION}-common"]
+  args = {
+    GH_ACCESS_TOKEN = GH_ACCESS_TOKEN
+  }
 }
 
 target "flavor" {
