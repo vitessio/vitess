@@ -1917,6 +1917,105 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}
 }
 
+// TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure verifies that ERS
+// restarts replication on replicas whose IO threads it stopped when encountering a partial
+// failure in the stop replication phase.
+func TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure(t *testing.T) {
+	ctx := t.Context()
+
+	const (
+		keyspace           = "testkeyspace"
+		shard              = "-"
+		primaryAlias       = "zone1-0000000100"
+		stoppedIOAlias     = "zone1-0000000101"
+		failedReplicaAlias = "zone1-0000000102"
+	)
+
+	stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			IoState:  int32(replication.ReplicationStateRunning),
+			SqlState: int32(replication.ReplicationStateRunning),
+		},
+		After: &replicationdatapb.Status{},
+	}
+
+	mockController := gomock.NewController(t)
+	tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+	// Simulate the TabletManager RPC sequence for one dead primary, one replica
+	// whose IO thread ERS stops successfully, and one replica that fails during
+	// the stop-replication phase. That leaves ERS with a partial stop snapshot,
+	// then forces haveRevoked to fail before relay log application begins.
+	tmc.EXPECT().
+		StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+		Return(nil, assert.AnError)
+
+	tmc.EXPECT().
+		StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+		Return(stoppedIOStatus, nil)
+
+	tmc.EXPECT().
+		StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(failedReplicaAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+		Return(nil, assert.AnError)
+
+	// ERS should still restart replication on the replica whose IO thread it
+	// already stopped before stopReplicationAndBuildStatusMaps returned.
+	tmc.EXPECT().
+		StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), false).
+		Return(nil).
+		Times(1)
+
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: keyspace,
+		Name:     shard,
+		Shard: &topodatapb.Shard{
+			PrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		},
+	})
+
+	testutil.AddTablets(ctx, t, ts, nil,
+		&topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Type:     topodatapb.TabletType_PRIMARY,
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+		&topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+		&topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+	)
+
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+	erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+	_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{})
+	require.ErrorContains(t, err, "failed to stop replication and build status maps")
+}
+
 // TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure verifies that ERS
 // restarts replication on replicas whose IO threads it stopped before
 // aborting during relay log application.
@@ -1957,8 +2056,6 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 		}
 
 		mockController := gomock.NewController(t)
-		defer mockController.Finish()
-
 		tmc := tmcmock.NewMockTabletManagerClient(mockController)
 
 		// Simulate the TabletManager RPC sequence for one dead primary, one replica whose IO thread

@@ -238,13 +238,19 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Stop replication on all the tablets and build their status map
 	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, shardInfo.PrimaryAlias, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+
+	// If stoppedReplicationSnapshot is not nil, it means we have stopped replication on at
+	// least one replica. We'll keep track of the replicas that had their IO threads stopped
+	// so we can restart them later in case of an error that causes us to return early and
+	// leaves replication stopped. We do this before checking the error so that we ensure we
+	// handle partial failures (where we've stopped some replicas but failed on others) correctly.
+	if stoppedReplicationSnapshot != nil {
+		replicasToRestart = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
+	}
+
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
-
-	// Keep track of the replicas that had their IO threads stopped, so we can restart them
-	// later in the case of an error.
-	replicasToRestart = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
 
 	// check that we still have the shard lock. If we don't then we can terminate at this point
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
