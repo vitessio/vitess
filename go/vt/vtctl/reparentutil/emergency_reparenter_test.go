@@ -1991,7 +1991,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			Times(1)
 
 		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
-		// not the one that already had its IO thread stopped) to have replicaiton restarted.
+		// not the one that already had its IO thread stopped) to have replication restarted.
 		tmc.EXPECT().
 			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), false).
 			Return(nil).
