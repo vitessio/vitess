@@ -505,19 +505,25 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// stale pointer no longer matches and the guard clears.
 	forceSerialize := false
 	if state.postDDLStalePlans != nil {
+		// Check whether ANY snapshotted plan pointer has been replaced.
+		// After DDL, the affected table gets a new *TablePlan when its
+		// FIELD event is applied. Unrelated tables keep the same pointer.
+		// If all pointers still match, no FIELD has refreshed any plan
+		// yet → keep serializing. If at least one differs, the DDL-
+		// affected table's plan was refreshed → clear the guard.
 		vp.tablePlansMu.RLock()
-		stale := false
+		anyRefreshed := false
 		for name, oldPlan := range state.postDDLStalePlans {
-			if vp.tablePlans[name] == oldPlan {
-				stale = true
+			if vp.tablePlans[name] != oldPlan {
+				anyRefreshed = true
 				break
 			}
 		}
 		vp.tablePlansMu.RUnlock()
-		if stale {
-			forceSerialize = true
-		} else {
+		if anyRefreshed {
 			state.postDDLStalePlans = nil
+		} else {
+			forceSerialize = true
 		}
 	}
 	state.ddlSeen = false
@@ -1241,17 +1247,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	pending := make(map[int64]*applyTxn)
 	nextOrder := int64(1)
 
-	// On error exit, signal done and release all remaining pending entries
-	// to prevent worker goroutines from blocking on txn.done and to return
-	// pool objects that would otherwise be leaked.
+	// On error exit, release all remaining pending entries to return pool
+	// objects that would otherwise be leaked. We intentionally do NOT
+	// signal txn.done here: workers unblock via ctx.Done() instead (the
+	// caller cancels the context on commitLoop error). Signaling done
+	// would tell the worker its old connection is safe to reuse, but
+	// the commit may have failed leaving the connection in a dirty state.
 	defer func() {
 		for _, txn := range pending {
-			if txn.payload != nil && !txn.payload.commitOnly {
-				select {
-				case txn.done <- struct{}{}:
-				default:
-				}
-			}
 			releaseApplyTxn(txn)
 		}
 	}()

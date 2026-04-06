@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -379,6 +380,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		FieldsToSkip:            fieldsToSkip,
 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
 		TablePlanBuilder:        tpb,
+		partialMu:               &sync.Mutex{},
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 		CollationEnv:            tpb.collationEnv,

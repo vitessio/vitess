@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
@@ -221,6 +222,11 @@ type TablePlan struct {
 	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
 	// This is when we use a binlog_row_image which is not "full". The key is a serialized bitmap of data columns
 	// which are sent as part of the RowEvent.
+	// partialMu protects PartialInserts and PartialUpdates from concurrent
+	// access when multiple parallel-apply workers process partial-row-image
+	// events for the same table simultaneously. Pointer to avoid copying
+	// the lock when TablePlan values are cloned in buildExecutionPlan.
+	partialMu      *sync.Mutex
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
