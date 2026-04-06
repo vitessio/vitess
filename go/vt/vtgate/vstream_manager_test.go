@@ -1974,6 +1974,68 @@ func TestVStreamLivenessChecks(t *testing.T) {
 	}
 }
 
+func TestVStreamMaxStreamAge(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	type testcase struct {
+		name                string
+		maxStreamAgeSeconds uint32
+		streamDuration      time.Duration
+		wantErr             string
+		wantErrCode         vtrpcpb.Code
+	}
+	testcases := []testcase{
+		{
+			name:                "no max age - stream runs until context timeout",
+			maxStreamAgeSeconds: 0,
+			streamDuration:      200 * time.Millisecond,
+			wantErr:             "context deadline exceeded",
+			wantErrCode:         vtrpcpb.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name:                "max age exceeded - stream terminated with UNAVAILABLE",
+			maxStreamAgeSeconds: 1,
+			streamDuration:      3 * time.Second,
+			wantErr:             "vstream exceeded maximum age",
+			wantErrCode:         vtrpcpb.Code_UNAVAILABLE,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.streamDuration)
+			defer vstreamCancel()
+
+			flags := &vtgatepb.VStreamFlags{
+				MaxStreamAgeSeconds: tcase.maxStreamAgeSeconds,
+			}
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+				return nil
+			})
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tcase.wantErr)
+			require.Equal(t, tcase.wantErrCode, vterrors.Code(err))
+		})
+	}
+}
+
 func TestKeyspaceHasBeenSharded(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

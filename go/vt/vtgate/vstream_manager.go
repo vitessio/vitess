@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
@@ -69,6 +70,16 @@ const tabletPickerContextTimeout = 90 * time.Second
 // stopOnReshardDelay is how long we wait, at a minimum, after sending a reshard journal event before
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
+
+// streamAgeJitterPct is the percentage of jitter (+/-) added to max stream age
+// to spread out reconnections.
+const streamAgeJitterPct = 10
+
+// StreamAgeJitterRange returns the jitter range for a given max age duration.
+// Jitter is +/- streamAgeJitterPct% of the max age.
+func StreamAgeJitterRange(maxAge time.Duration) time.Duration {
+	return maxAge * streamAgeJitterPct / 100
+}
 
 // livenessTimeout is the point at which we return an error to the client if the stream has received
 // no events, including heartbeats, from any of the shards.
@@ -148,6 +159,9 @@ type vstream struct {
 	// At what point, without any activity in the stream, should we consider it dead.
 	streamLivenessTimer *time.Timer
 
+	streamAgeTimer  *time.Timer
+	streamAgeJitter time.Duration
+
 	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous, chunked delivery.
 	// Smaller transactions are sent without locking for better parallelism.
 	transactionChunkSizeBytes int
@@ -207,8 +221,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	log.Info(fmt.Sprintf("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v", flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
-		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize))
+	log.Info(fmt.Sprintf("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v, max_stream_age_seconds=%v", flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
+		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize, flags.GetMaxStreamAgeSeconds()))
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -359,6 +373,14 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
+	if vs.streamAgeTimer == nil && vs.flags.GetMaxStreamAgeSeconds() > 0 {
+		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
+		vs.streamAgeJitter = time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+		vs.streamAgeTimer = time.NewTimer(maxAge + vs.streamAgeJitter)
+		defer vs.streamAgeTimer.Stop()
+	}
+
 	vs.wg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
@@ -393,6 +415,11 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 		heartbeat = timer.C
 		resetHeartbeat = func() { timer.Reset(d) }
+	}
+
+	var streamAgeExpired <-chan time.Time
+	if vs.streamAgeTimer != nil {
+		streamAgeExpired = vs.streamAgeTimer.C
 	}
 
 	send := func(evs []*binlogdatapb.VEvent) error {
@@ -442,6 +469,14 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			log.Info("Error in vstream: " + msg)
 			vs.once.Do(func() {
 				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream is fully throttled or otherwise hung")
+			})
+			return
+		case <-streamAgeExpired:
+			maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+			msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, vs.streamAgeJitter)
+			log.Info(msg)
+			vs.once.Do(func() {
+				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
 			})
 			return
 		}
