@@ -328,7 +328,8 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		maxBatched = workerCount * 4
 	}
 	state := &parallelScheduleState{
-		maxBatchedCommits: maxBatched,
+		maxBatchedCommits:  maxBatched,
+		postDDLPlanVersion: -1, // no active DDL barrier
 	}
 	for {
 		if ctx.Err() != nil {
@@ -377,11 +378,11 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 		// (including FK metadata refresh) before starting the next fetch.
 		// Without this barrier, the next fetch would snapshot stale FK refs.
 		//
-		// Also drain after the post-DDL serialized fetch so that workers
-		// have applied all FIELD events (including the DDL-affected table's
-		// new plan) before normal parallel scheduling resumes.
-		if state.ddlSeen || state.postDDLDrainNeeded {
-			state.postDDLDrainNeeded = false
+		// Also drain when the post-DDL version guard is active. This
+		// ensures that all serialized work (including FIELD events for the
+		// DDL-affected table) has been applied by workers before the next
+		// fetch's scheduleItems re-evaluates the guard condition.
+		if state.ddlSeen || state.postDDLPlanVersion >= 0 {
 			if err := scheduler.waitForIdle(ctx); err != nil {
 				return err
 			}
@@ -461,18 +462,20 @@ type parallelScheduleState struct {
 	// for the commitLoop to drain (so FK refs are refreshed) before
 	// starting the next fetch. Reset at the start of each scheduleItems call.
 	ddlSeen bool
-	// postDDLSerialize counts how many additional fetches must be fully
-	// serialized after a DDL that modified the target schema. The DDL fetch
-	// itself is serialized via forceSerialize. The NEXT fetch must also be
-	// serialized so workers apply new FIELD events for the DDL-affected
-	// table before writeset-based scheduling resumes.
-	// A value of 0 means no DDL barrier is active.
-	postDDLSerialize int
-	// postDDLDrainNeeded is set when a postDDLSerialize fetch was just
-	// processed. The scheduleLoop will waitForIdle after the fetch to
-	// ensure all FIELD events have been applied by workers before normal
-	// parallel scheduling resumes.
-	postDDLDrainNeeded bool
+	// postDDLPlanVersion records the tablePlansVersion at the time a DDL was
+	// observed. Parallel scheduling is force-serialized until workers apply
+	// a FIELD event that bumps tablePlansVersion past this value.
+	//
+	// This is version-based rather than fetch-count-based because the DDL-
+	// affected table might not reappear in the stream until many fetches
+	// later. VStreamer emits FIELD events only for new or remapped table
+	// ids (not every transaction), so after DDL the changed table's FIELD
+	// only arrives when that table is next written to. A fetch-count guard
+	// would clear too early if intervening fetches contain only unrelated
+	// tables.
+	//
+	// A value of -1 means no DDL barrier is active.
+	postDDLPlanVersion int64
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -494,15 +497,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// next relay fetch will have updated snapshots.
 	//
 	// If a previous DDL that was executed on the target changed the schema,
-	// force-serialize this fetch so workers apply new FIELD events for the
-	// DDL-affected table before writeset-based scheduling resumes.
-	// Set postDDLDrainNeeded so scheduleLoop drains the pipeline after this
-	// fetch, ensuring all FIELD events have been applied before resuming
-	// parallel scheduling.
-	forceSerialize := state.postDDLSerialize > 0
-	if forceSerialize {
-		state.postDDLSerialize--
-		state.postDDLDrainNeeded = true
+	// force-serialize until tablePlansVersion advances past the DDL-time
+	// snapshot. VStreamer only emits FIELD events for new/remapped table
+	// ids, so the changed table's FIELD only arrives when it's next written
+	// to — which could be many fetches later if intervening fetches contain
+	// only unrelated tables. Version-based guarding handles this correctly.
+	forceSerialize := state.postDDLPlanVersion >= 0 &&
+		vp.tablePlansVersion.Load() <= state.postDDLPlanVersion
+	if state.postDDLPlanVersion >= 0 && !forceSerialize {
+		// Plan version has advanced past the DDL snapshot — the changed
+		// table's FIELD has been applied. Clear the guard.
+		state.postDDLPlanVersion = -1
 	}
 	state.ddlSeen = false
 
@@ -796,7 +801,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					state.postDDLSerialize = 1 // serialize next fetch too
+					state.postDDLPlanVersion = vp.tablePlansVersion.Load()
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
