@@ -330,21 +330,28 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 }
 
 // checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
-// and if cross-keyspace joins are denied for either keyspace. If denied, it panics with an
-// error unless the ALLOW_CROSS_KEYSPACE_JOINS comment directive is set.
-// The opType parameter describes the operation (e.g. "join", "UNION") for the error message.
+// and if cross-keyspace joins are denied for any involved keyspace. Collects all keyspaces
+// from both operator trees to handle composite operators spanning multiple keyspaces.
 func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
-	lhsKs := operatorKeyspace(lhs)
-	rhsKs := operatorKeyspace(rhs)
-	if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+	lhsKeyspaces := operatorKeyspaces(lhs)
+	rhsKeyspaces := operatorKeyspaces(rhs)
+	if len(lhsKeyspaces) == 0 || len(rhsKeyspaces) == 0 {
 		return
 	}
 
-	// If either side is an AnyShardRouting (reference table) with an alternate in the
-	// other keyspace, this is not a true cross-keyspace operation — the planner can
-	// resolve it to a single keyspace via the alternate route.
-	// We must also check that the route is not a DML target, because alternates are not
-	// used for DML targets (see getRoutesOrAlternates in join_merging.go).
+	for _, lhsKs := range lhsKeyspaces {
+		for _, rhsKs := range rhsKeyspaces {
+			if lhsKs == rhsKs {
+				continue
+			}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+		}
+	}
+}
+
+// checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
+// unless an alternate route or the ALLOW_CROSS_KEYSPACE_JOINS directive allows it.
+func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
 	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
 		return
 	}
@@ -366,24 +373,14 @@ func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, o
 	}
 }
 
-// hasAlternateInKeyspace checks if an operator has a Route with AnyShardRouting that
-// has an alternate route in the given keyspace (e.g., a reference table available in
-// both keyspaces during a keyspace migration). It walks single-input wrapper operators
-// (Projection, Horizon, etc.) to find the underlying Route, consistent with operatorKeyspace.
-// Returns false if the route is a DML target, since alternates are not used for DML targets.
+// hasAlternateInKeyspace checks if op is a direct *Route with an AnyShardRouting alternate
+// in the given keyspace. Only checks direct routes because mergeJoinInputs (via operatorsToRoutes)
+// only uses alternates for direct *Route operators — wrapped routes won't be merged.
 func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
-	if op == nil {
-		return false
-	}
 	route, ok := op.(*Route)
 	if !ok {
-		inputs := op.Inputs()
-		if len(inputs) == 1 && inputs[0] != nil {
-			return hasAlternateInKeyspace(ctx, inputs[0], ks)
-		}
 		return false
 	}
-	// Alternates are not used for DML targets (see getRoutesOrAlternates).
 	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
 		return false
 	}
@@ -394,30 +391,29 @@ func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *v
 	return ref.AlternateInKeyspace(ks) != nil
 }
 
-// operatorKeyspace extracts the keyspace from an operator. For Route operators it returns
-// the routing keyspace directly. For single-input wrapper operators (e.g. Projection, Horizon),
-// it walks down to find the underlying Route's keyspace. For multi-input operators (e.g.
-// ApplyJoin, HashJoin), it returns the common keyspace if all inputs resolve to the same
-// keyspace, or nil if the keyspaces differ.
-func operatorKeyspace(op Operator) *vindexes.Keyspace {
+// operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
+// walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
+func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
 	if op == nil {
 		return nil
 	}
 	if route, ok := op.(*Route); ok {
-		return route.Routing.Keyspace()
-	}
-	inputs := op.Inputs()
-	if len(inputs) == 0 {
+		if ks := route.Routing.Keyspace(); ks != nil {
+			return []*vindexes.Keyspace{ks}
+		}
 		return nil
 	}
-	ks := operatorKeyspace(inputs[0])
-	for _, input := range inputs[1:] {
-		inputKs := operatorKeyspace(input)
-		if ks == nil || inputKs == nil || ks != inputKs {
-			return nil
+	var result []*vindexes.Keyspace
+	seen := make(map[*vindexes.Keyspace]bool)
+	for _, input := range op.Inputs() {
+		for _, ks := range operatorKeyspaces(input) {
+			if !seen[ks] {
+				seen[ks] = true
+				result = append(result, ks)
+			}
 		}
 	}
-	return ks
+	return result
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {

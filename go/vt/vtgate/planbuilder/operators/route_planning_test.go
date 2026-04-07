@@ -155,7 +155,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			},
 		},
 		{
-			name: "wrapped alternate in rhs keyspace still allowed",
+			name: "wrapped alternate in rhs keyspace denied (merge cant use wrapped alternates)",
 			lhs: &Projection{
 				unaryOperator: newUnaryOp(&Route{Routing: &AnyShardRouting{
 					keyspace: ks1,
@@ -168,6 +168,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			vschema: &mockVSchema{
 				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
 			},
+			expectPanic: true,
 		},
 		{
 			name: "composite same-keyspace lhs, cross-keyspace denied",
@@ -175,6 +176,15 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
 				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+			},
+			expectPanic: true,
+		},
+		{
+			name: "composite mixed-keyspace lhs, rhs denied",
+			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
+			rhs:  makeRoute(&vindexes.Keyspace{Name: "ks3"}),
+			vschema: &mockVSchema{
+				noCrossKeyspaceJoins: map[string]bool{"ks3": true},
 			},
 			expectPanic: true,
 		},
@@ -221,7 +231,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 	}
 }
 
-func TestOperatorKeyspace(t *testing.T) {
+func TestOperatorKeyspaces(t *testing.T) {
 	ks1 := &vindexes.Keyspace{Name: "ks1"}
 	ks2 := &vindexes.Keyspace{Name: "ks2"}
 
@@ -232,12 +242,12 @@ func TestOperatorKeyspace(t *testing.T) {
 	tests := []struct {
 		name     string
 		op       Operator
-		expected *vindexes.Keyspace
+		expected []*vindexes.Keyspace
 	}{
 		{
 			name:     "route operator",
 			op:       makeRoute(ks1),
-			expected: ks1,
+			expected: []*vindexes.Keyspace{ks1},
 		},
 		{
 			name:     "route with nil keyspace",
@@ -247,33 +257,38 @@ func TestOperatorKeyspace(t *testing.T) {
 		{
 			name:     "projection wrapping route",
 			op:       &Projection{unaryOperator: newUnaryOp(makeRoute(ks1))},
-			expected: ks1,
+			expected: []*vindexes.Keyspace{ks1},
 		},
 		{
 			name:     "deeply nested single-input operators",
 			op:       &Projection{unaryOperator: newUnaryOp(&Projection{unaryOperator: newUnaryOp(makeRoute(ks1))})},
-			expected: ks1,
+			expected: []*vindexes.Keyspace{ks1},
 		},
 		{
-			name:     "multi-input same keyspace returns common keyspace",
+			name:     "multi-input same keyspace returns single keyspace",
 			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
-			expected: ks1,
+			expected: []*vindexes.Keyspace{ks1},
 		},
 		{
-			name:     "multi-input different keyspaces returns nil",
+			name:     "multi-input different keyspaces returns both",
 			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
-			expected: nil,
+			expected: []*vindexes.Keyspace{ks1, ks2},
 		},
 		{
 			name:     "non-route with no inputs",
 			op:       &Projection{},
 			expected: nil,
 		},
+		{
+			name:     "nil operator",
+			op:       nil,
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, operatorKeyspace(tt.op))
+			assert.Equal(t, tt.expected, operatorKeyspaces(tt.op))
 		})
 	}
 }
