@@ -73,7 +73,7 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - Use `t.Context()` instead of `context.Background()` — it integrates with test cancellation
 - Use `t.Cleanup()` for test teardown
 - Use `assert.ErrorContains` / `require.ErrorContains` to check error messages
-- Mock and test-helper files should use the `_test.go` suffix so they are clearly test code
+- Use the `_test.go` suffix for mocks and test helpers that are only used by the current package's tests; if helpers or mocks need to be imported by other packages' tests or fuzz harnesses, put them in a normal reusable package such as `testlib` or `testutil`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
 
 ## :rotating_light: Error Handling Excellence
