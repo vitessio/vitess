@@ -733,7 +733,7 @@ func TestCloneFromDonor(t *testing.T) {
 			mycnf:   &Mycnf{},
 			wantErr: false,
 			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				assert.Equal(t, 1, env.mysqld.WaitForExitCalls)
+				assert.Equal(t, 1, env.mysqld.StartAfterExitCalls)
 				assert.True(t, env.mysqld.Running)
 			},
 		},

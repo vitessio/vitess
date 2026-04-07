@@ -712,12 +712,14 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	return nil
 }
 
-// WaitForExit blocks until the mysqld process has fully exited, identified by
-// the disappearance of its socket and pid files. It is used when MySQL shuts
-// itself down (e.g. after a CLONE operation) and the caller needs to know when
-// it is safe to start a new mysqld process.
-func (mysqld *Mysqld) WaitForExit(ctx context.Context, cnf *Mycnf) error {
-	return waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile)
+// StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
+// CLONE operation) to fully exit, then starts a new one. It polls for the
+// disappearance of the socket and pid files before calling Start.
+func (mysqld *Mysqld) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
+	if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+		return err
+	}
+	return mysqld.Start(ctx, cnf)
 }
 
 // waitForMysqldExit polls until both socketFile and pidFile have been removed,

@@ -341,7 +341,7 @@ func TestCloneRemote(t *testing.T) {
 		UseSSL:        false,
 	}
 
-	err = executor.ExecuteClone(ctx, recipientMysqld, 5*time.Minute)
+	err = executor.ExecuteClone(ctx, recipientMysqld, nil, 5*time.Minute)
 	require.NoError(t, err, "Clone operation failed")
 
 	// Connect to recipient and verify data

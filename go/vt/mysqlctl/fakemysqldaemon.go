@@ -64,15 +64,15 @@ type FakeMysqlDaemon struct {
 	// It is used by Shutdown.
 	ShutdownTime time.Duration
 
-	// WaitForExitTime is used to simulate mysqlds that take some time to
-	// disappear after shutting themselves down.
-	WaitForExitTime time.Duration
+	// StartAfterExitTime is used to simulate mysqlds that take some time to
+	// disappear after shutting themselves down before restarting.
+	StartAfterExitTime time.Duration
 
-	// WaitForExitError is used by WaitForExit.
-	WaitForExitError error
+	// StartAfterExitError is used by StartAfterExit.
+	StartAfterExitError error
 
-	// WaitForExitCalls tracks how many times WaitForExit was called.
-	WaitForExitCalls int
+	// StartAfterExitCalls tracks how many times StartAfterExit was called.
+	StartAfterExitCalls int
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
@@ -322,22 +322,23 @@ func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
-// WaitForExit waits for mysqld to exit.
-func (fmd *FakeMysqlDaemon) WaitForExit(ctx context.Context, cnf *Mycnf) error {
+// StartAfterExit simulates waiting for mysqld to exit and then restarting it.
+func (fmd *FakeMysqlDaemon) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
 	fmd.mu.Lock()
-	fmd.WaitForExitCalls++
+	fmd.StartAfterExitCalls++
 	fmd.mu.Unlock()
 
-	if fmd.WaitForExitTime > 0 {
+	if fmd.StartAfterExitTime > 0 {
 		select {
-		case <-time.After(fmd.WaitForExitTime):
+		case <-time.After(fmd.StartAfterExitTime):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-	if fmd.WaitForExitError != nil {
-		return fmd.WaitForExitError
+	if fmd.StartAfterExitError != nil {
+		return fmd.StartAfterExitError
 	}
+	fmd.Running = true
 	return nil
 }
 
