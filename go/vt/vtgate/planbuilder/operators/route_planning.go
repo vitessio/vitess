@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -330,9 +331,23 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 }
 
 // checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
-// and if cross-keyspace joins are denied for any involved keyspace. Collects all keyspaces
-// from both operator trees to handle composite operators spanning multiple keyspaces.
+// and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
+// Route/Route comparisons (no allocations), falls back to collecting all keyspaces from
+// both operator trees to handle composite operators spanning multiple keyspaces.
 func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
+	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
+	if lRoute, ok := lhs.(*Route); ok {
+		if rRoute, ok := rhs.(*Route); ok {
+			lhsKs := lRoute.Routing.Keyspace()
+			rhsKs := rRoute.Routing.Keyspace()
+			if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+				return
+			}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+			return
+		}
+	}
+
 	lhsKeyspaces := operatorKeyspaces(lhs)
 	rhsKeyspaces := operatorKeyspaces(rhs)
 	if len(lhsKeyspaces) == 0 || len(rhsKeyspaces) == 0 {
@@ -393,27 +408,34 @@ func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *v
 
 // operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
 // walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
+// Uses slice-based dedup instead of a map since the number of distinct keyspaces is very small.
 func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
+	var result []*vindexes.Keyspace
+	collectOperatorKeyspaces(op, &result)
+	return result
+}
+
+func collectOperatorKeyspaces(op Operator, result *[]*vindexes.Keyspace) {
 	if op == nil {
-		return nil
+		return
 	}
 	if route, ok := op.(*Route); ok {
-		if ks := route.Routing.Keyspace(); ks != nil {
-			return []*vindexes.Keyspace{ks}
-		}
-		return nil
+		addOperatorKeyspace(result, route.Routing.Keyspace())
+		return
 	}
-	var result []*vindexes.Keyspace
-	seen := make(map[*vindexes.Keyspace]bool)
 	for _, input := range op.Inputs() {
-		for _, ks := range operatorKeyspaces(input) {
-			if !seen[ks] {
-				seen[ks] = true
-				result = append(result, ks)
-			}
-		}
+		collectOperatorKeyspaces(input, result)
 	}
-	return result
+}
+
+func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
+	if ks == nil {
+		return
+	}
+	if slices.Contains(*result, ks) {
+		return
+	}
+	*result = append(*result, ks)
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {
