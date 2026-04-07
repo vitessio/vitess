@@ -339,12 +339,8 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 // clears out the connection record.
 func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 	for event := range session {
-<<<<<<< HEAD
-
-||||||| parent of 8edc85bdba (Add ZooKeeper connection metrics to zk2topo (#19757))
-=======
 		zkConnState.Add(event.State.String(), 1)
->>>>>>> 8edc85bdba (Add ZooKeeper connection metrics to zk2topo (#19757))
+
 		switch event.State {
 		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
 			c.mu.Lock()
