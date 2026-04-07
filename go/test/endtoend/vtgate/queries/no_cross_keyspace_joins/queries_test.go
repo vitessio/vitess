@@ -42,7 +42,7 @@ func TestNoCrossKeyspaceJoinsVSchemaSetting(t *testing.T) {
 
 	// Cross-keyspace join should fail because ks1 has no_cross_keyspace_joins: true in its vschema.
 	_, err := utils.ExecAllowError(t, conn, "select * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
-	require.ErrorContains(t, err, "cross-keyspace join")
+	require.ErrorContains(t, err, "cross-keyspace JOIN")
 
 	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
 	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
@@ -86,7 +86,7 @@ func TestNoCrossKeyspaceJoinsVTGateFlag(t *testing.T) {
 
 	// Cross-keyspace join should fail because the vtgate flag is set.
 	_, err := utils.ExecAllowError(t, conn, "select * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
-	require.ErrorContains(t, err, "cross-keyspace join")
+	require.ErrorContains(t, err, "cross-keyspace JOIN")
 
 	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the flag.
 	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")

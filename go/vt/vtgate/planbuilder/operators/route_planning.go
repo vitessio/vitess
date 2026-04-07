@@ -301,7 +301,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
-	checkCrossKeyspaceOp(ctx, lhs, rhs, "join")
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "JOIN")
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {

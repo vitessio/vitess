@@ -110,6 +110,7 @@ func mergeUnionInputs(
 ) (Operator, []sqlparser.SelectExpr) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 

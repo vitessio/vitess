@@ -220,11 +220,11 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			}
 			if tt.expectPanic {
 				assert.Panics(t, func() {
-					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "join")
+					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "JOIN")
 				})
 			} else {
 				assert.NotPanics(t, func() {
-					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "join")
+					checkCrossKeyspaceOp(ctx, tt.lhs, tt.rhs, "JOIN")
 				})
 			}
 		})
