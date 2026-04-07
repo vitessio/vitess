@@ -206,7 +206,8 @@ type Keyspace struct {
 	// multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
 	MultiTenantSpec *MultiTenantSpec `protobuf:"bytes,6,opt,name=multi_tenant_spec,json=multiTenantSpec,proto3" json:"multi_tenant_spec,omitempty"`
 	// If no_cross_keyspace_joins is true, the planner will reject queries that require
-	// joining tables across different keyspaces. Can be overridden per-query with the
+	// joining tables across different keyspaces or performing unions across different
+	// keyspaces. Can be overridden per-query with the
 	// /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ comment directive.
 	NoCrossKeyspaceJoins bool `protobuf:"varint,7,opt,name=no_cross_keyspace_joins,json=noCrossKeyspaceJoins,proto3" json:"no_cross_keyspace_joins,omitempty"`
 	unknownFields        protoimpl.UnknownFields
