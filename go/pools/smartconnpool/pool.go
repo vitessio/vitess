@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"sync"
@@ -40,6 +41,9 @@ var (
 	// ErrConnPoolClosed is returned when trying to get a connection from a closed conn pool
 	ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "connection pool is closed")
 
+	// ErrPoolWaiterCapReached is returned when the waiter cap has been reached
+	ErrPoolWaiterCapReached = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "connection pool waiter cap reached")
+
 	// PoolCloseTimeout is how long to wait for all connections to be returned to the pool during close
 	PoolCloseTimeout = 10 * time.Second
 )
@@ -53,6 +57,7 @@ type Metrics struct {
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
 	resetSetting         atomic.Int64
+	waiterCapRejected    atomic.Int64
 }
 
 func (m *Metrics) MaxLifetimeClosed() int64 {
@@ -87,6 +92,10 @@ func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
 }
 
+func (m *Metrics) WaiterCapRejected() int64 {
+	return m.waiterCapRejected.Load()
+}
+
 type (
 	Connector[C Connection] func(ctx context.Context) (C, error)
 	RefreshCheck            func() (bool, error)
@@ -98,6 +107,7 @@ type Config[C Connection] struct {
 	IdleTimeout     time.Duration
 	MaxLifetime     time.Duration
 	RefreshInterval time.Duration
+	MaxWaiters      int64
 	LogWait         func(time.Time)
 }
 
@@ -152,6 +162,9 @@ type ConnPool[C Connection] struct {
 		refreshInterval atomic.Int64
 		// logWait is called every time a client must block waiting for a connection
 		logWait func(time.Time)
+		// maxWaiters is the maximum number of clients that can be waiting for a connection;
+		// 0 means unlimited
+		maxWaiters int64
 	}
 
 	Metrics Metrics
@@ -168,7 +181,14 @@ func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool.config.idleTimeout.Store(config.IdleTimeout.Nanoseconds())
 	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
 	pool.config.logWait = config.LogWait
+	pool.config.maxWaiters = config.MaxWaiters
 	pool.wait.init()
+	pool.wait.onWait = func() {
+		pool.Metrics.waitCount.Add(1)
+	}
+	pool.wait.onWaiterCapReached = func() {
+		pool.Metrics.waiterCapRejected.Add(1)
+	}
 
 	return pool
 }
@@ -377,8 +397,7 @@ func (pool *ConnPool[D]) RefreshInterval() time.Duration {
 	return time.Duration(pool.config.refreshInterval.Load())
 }
 
-func (pool *ConnPool[C]) recordWait(start time.Time) {
-	pool.Metrics.waitCount.Add(1)
+func (pool *ConnPool[C]) recordWaitDuration(start time.Time) {
 	pool.Metrics.waitTime.Add(time.Since(start).Nanoseconds())
 	if pool.config.logWait != nil {
 		pool.config.logWait(start)
@@ -615,11 +634,14 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan)
+		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
 		if err != nil {
+			if errors.Is(err, ErrPoolWaiterCapReached) {
+				return nil, err
+			}
 			return nil, ErrTimeout
 		}
-		pool.recordWait(start)
+		pool.recordWaitDuration(start)
 	}
 	// no connections available and no connections to wait for (pool is closed)
 	if conn == nil {
@@ -678,11 +700,14 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan)
+		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
 		if err != nil {
+			if errors.Is(err, ErrPoolWaiterCapReached) {
+				return nil, err
+			}
 			return nil, ErrTimeout
 		}
-		pool.recordWait(start)
+		pool.recordWaitDuration(start)
 	}
 	// no connections available and no connections to wait for (pool is closed)
 	if conn == nil {
@@ -922,6 +947,9 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	})
 	stats.NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", func() int64 {
 		return pool.Metrics.GetSettingCount()
+	})
+	stats.NewCounterFunc(name+"WaiterCapRejected", "Tablet server conn pool waiter cap rejected", func() int64 {
+		return pool.Metrics.WaiterCapRejected()
 	})
 	stats.NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", func() int64 {
 		return pool.Metrics.DiffSettingCount()
