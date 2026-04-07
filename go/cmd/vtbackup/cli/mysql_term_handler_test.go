@@ -17,40 +17,32 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMySQLTermHandlerOnTermCancelsContexts(t *testing.T) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	backgroundCtx, cancelBackgroundCtx := context.WithCancel(context.Background())
-
-	handler := newMySQLTermHandler(cancelCtx, cancelBackgroundCtx)
+func TestMySQLTermHandlerOnTermCallsCallback(t *testing.T) {
+	called := false
+	handler := newMySQLTermHandler(func() { called = true })
 	handler.onTerm()
 
-	assert.ErrorIs(t, ctx.Err(), context.Canceled)
-	assert.ErrorIs(t, backgroundCtx.Err(), context.Canceled)
+	assert.True(t, called)
 }
 
-func TestMySQLTermHandlerIgnoreTermsForSuppressesCancellation(t *testing.T) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	backgroundCtx, cancelBackgroundCtx := context.WithCancel(context.Background())
+func TestMySQLTermHandlerIgnoreTermsForSuppressesCallback(t *testing.T) {
+	callCount := 0
+	handler := newMySQLTermHandler(func() { callCount++ })
 
-	handler := newMySQLTermHandler(cancelCtx, cancelBackgroundCtx)
 	err := handler.ignoreTermsFor(func() error {
 		handler.onTerm()
-		assert.NoError(t, ctx.Err())
-		assert.NoError(t, backgroundCtx.Err())
+		assert.Equal(t, 0, callCount)
 		return nil
 	})
 
 	assert.NoError(t, err)
-	assert.NoError(t, ctx.Err())
-	assert.NoError(t, backgroundCtx.Err())
+	assert.Equal(t, 0, callCount)
 
 	handler.onTerm()
-	assert.ErrorIs(t, ctx.Err(), context.Canceled)
-	assert.ErrorIs(t, backgroundCtx.Err(), context.Canceled)
+	assert.Equal(t, 1, callCount)
 }

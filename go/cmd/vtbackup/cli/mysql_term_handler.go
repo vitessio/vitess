@@ -17,23 +17,18 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 type mySQLTermHandler struct {
-	cancelCtx           context.CancelFunc
-	cancelBackgroundCtx context.CancelFunc
-	ignoreTerms         atomic.Bool
+	onTermFn    func()
+	ignoreTerms atomic.Bool
 }
 
-func newMySQLTermHandler(cancelCtx, cancelBackgroundCtx context.CancelFunc) *mySQLTermHandler {
-	return &mySQLTermHandler{
-		cancelCtx:           cancelCtx,
-		cancelBackgroundCtx: cancelBackgroundCtx,
-	}
+func newMySQLTermHandler(onTermFn func()) *mySQLTermHandler {
+	return &mySQLTermHandler{onTermFn: onTermFn}
 }
 
 func (h *mySQLTermHandler) ignoreTermsFor(fn func() error) error {
@@ -47,7 +42,5 @@ func (h *mySQLTermHandler) onTerm() {
 		log.Info("Ignoring expected MySQL termination during clone restart")
 		return
 	}
-	log.Warn("Cancelling vtbackup as MySQL has terminated")
-	h.cancelCtx()
-	h.cancelBackgroundCtx()
+	h.onTermFn()
 }

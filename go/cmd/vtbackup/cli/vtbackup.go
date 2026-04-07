@@ -366,7 +366,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		cancelCtx()
 		cancelBackgroundCtx()
 	}()
-	mysqlTermHandler := newMySQLTermHandler(cancelCtx, cancelBackgroundCtx)
+	mysqlTermHandler := newMySQLTermHandler(func() {
+		log.Warn("Cancelling vtbackup as MySQL has terminated")
+		cancelCtx()
+		cancelBackgroundCtx()
+	})
 	mysqld.OnTerm(mysqlTermHandler.onTerm)
 
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
