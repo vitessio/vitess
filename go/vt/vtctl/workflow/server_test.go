@@ -482,7 +482,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				// DeniedTables live.
 				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 					for _, shardName := range keyspace.ShardNames {
-						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil, false)
 					}
 				}
 			}
@@ -1043,8 +1043,11 @@ func TestWorkflowDelete(t *testing.T) {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
 						// So t1_2 and t1_3 do not exist in the denied table list when we go
 						// to remove t1, t1_2, and t1_3.
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"})
-						return err
+						return si.UpdateDeniedTables(lockCtx, topo.UpdateDeniedTablesOpts{
+							AllowCreate: true,
+							Tables:      []string{table1Name, "t2", "t3"},
+							TabletType:  topodatapb.TabletType_PRIMARY,
+						})
 					})
 					require.NoError(t, err)
 				}
@@ -1176,7 +1179,7 @@ func TestWorkflowDelete(t *testing.T) {
 				// DeniedTables live.
 				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 					for _, shardName := range keyspace.ShardNames {
-						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil, false)
 					}
 				}
 			}
@@ -1611,6 +1614,164 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	}
 }
 
+func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+
+	journalQR := &queryResult{
+		query:  "/select val from _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	}
+	lockTableQR := &queryResult{
+		query:  fmt.Sprintf("LOCK TABLES `%s` READ", tableName),
+		result: &querypb.QueryResult{},
+	}
+	cutoverQR := &queryResult{
+		query:  "/update _vt.vreplication set state='Stopped', message='stopped for cutover' where id=.*",
+		result: &querypb.QueryResult{},
+	}
+	deleteReverseWFQR := &queryResult{
+		query:  fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'", sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+		result: &querypb.QueryResult{},
+	}
+	createReverseWFQR := &queryResult{
+		query:  "/insert into _vt.vreplication.*_reverse.*",
+		result: &querypb.QueryResult{},
+	}
+	createJournalQR := &queryResult{
+		query:  "/insert into _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	}
+	freezeWFQR := &queryResult{
+		query: fmt.Sprintf("update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'", targetKeyspaceName, workflowName),
+		beforeReturnHook: func(context.Context, *topodatapb.Tablet, string) {
+			cancel()
+		},
+		returnContextErr: true,
+	}
+
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, cutoverQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, lockTableQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, lockTableQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, deleteReverseWFQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, createReverseWFQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, createJournalQR)
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, freezeWFQR)
+
+	ts, state, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	_, _, err = env.ws.switchWrites(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace: targetKeyspaceName,
+		Workflow: workflowName,
+	}, ts, state, time.Second, false)
+	require.NoError(t, err)
+
+	rules, err := topotools.GetRoutingRules(context.Background(), env.ts)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[tableName])
+	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[sourceKeyspaceName+"."+tableName])
+
+	sourceShard, err := env.ts.GetShard(context.Background(), sourceKeyspaceName, "0")
+	require.NoError(t, err)
+	require.Len(t, sourceShard.TabletControls, 1)
+	require.Equal(t, []string{tableName}, sourceShard.TabletControls[0].DeniedTables)
+
+	targetShard, err := env.ts.GetShard(context.Background(), targetKeyspaceName, "0")
+	require.NoError(t, err)
+	require.Empty(t, targetShard.TabletControls)
+
+	tsAfter, stateAfter, err := env.ws.getWorkflowState(context.Background(), targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
+	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
+}
+
+func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+
+	env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		},
+		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow:     workflowName,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: targetKeyspaceName,
+					Shard:    "0",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match: tableName,
+						}},
+					},
+				},
+			}},
+		},
+	})
+
+	_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Direction:   int32(DirectionForward),
+	})
+	require.EqualError(t, err, fmt.Sprintf("workflow %s.%s is invalid: MoveTables source keyspace matches target keyspace (%s)", targetKeyspaceName, workflowName, targetKeyspaceName))
+}
+
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -1681,13 +1842,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + sourceKeyspaceName,
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
+				"Lock keyspace " + targetKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + targetKeyspaceName,
 				"Unlock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + targetKeyspaceName,
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
@@ -1722,13 +1883,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + targetKeyspaceName,
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
+				"Lock keyspace " + sourceKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + sourceKeyspaceName,
 				"Unlock keyspace " + targetKeyspaceName,
 				"Lock keyspace " + targetKeyspaceName,
 				"Lock keyspace " + sourceKeyspaceName,
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					targetKeyspaceName, tablesStr, targetKeyspaceName, position, targetKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
@@ -1763,10 +1924,11 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + sourceKeyspaceName,
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
+				"Lock keyspace " + targetKeyspaceName,
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", sourceKeyspaceName),
+				"Unlock keyspace " + targetKeyspaceName,
 				"Unlock keyspace " + sourceKeyspaceName,
 			},
 		},
@@ -1858,8 +2020,13 @@ func TestMirrorTraffic(t *testing.T) {
 		targetKeyspace string
 		targetShards   []string
 
-		wantErr         string
-		wantMirrorRules map[string]map[string]float32
+		wantMirrorTrafficErr           string
+		wantMirrorRules                map[string]map[string]float32
+		wantDeniedTables               []string
+		wantAllowReadsFromDeniedTables bool
+		wantWorkflowStateErr           string
+		wantReadsMirrored              bool
+		wantWritesMirrored             bool
 	}{
 		{
 			name: "no such keyspace",
@@ -1869,8 +2036,8 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
-			wantErr:         "FindAllShardsInKeyspace(no_ks): List: node doesn't exist: keyspaces/no_ks/shards",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "FindAllShardsInKeyspace(no_ks): List: node doesn't exist: keyspaces/no_ks/shards",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "no such workflow",
@@ -1889,8 +2056,9 @@ func TestMirrorTraffic(t *testing.T) {
 					return nil, nil
 				}
 			},
-			wantErr:         "no streams found in keyspace target for no_workflow",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "no streams found in keyspace target for no_workflow",
+			wantMirrorRules:      make(map[string]map[string]float32),
+			wantWorkflowStateErr: "no streams found in keyspace target",
 		},
 		{
 			name: "cannot mirror traffic for migrate workflows",
@@ -1903,8 +2071,8 @@ func TestMirrorTraffic(t *testing.T) {
 			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
 				te.tmc.readVReplicationWorkflow = createReadVReplicationWorkflowFunc(t, binlogdatapb.VReplicationWorkflowType_Migrate, nil, te.tmc.keyspace, sourceShards, []string{table1, table2})
 			},
-			wantErr:         "invalid action for Migrate workflow: MirrorTraffic",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "invalid action for Migrate workflow: MirrorTraffic",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "cannot mirror traffic for reshard workflows",
@@ -1921,8 +2089,8 @@ func TestMirrorTraffic(t *testing.T) {
 			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
 				te.tmc.readVReplicationWorkflow = createReadVReplicationWorkflowFunc(t, binlogdatapb.VReplicationWorkflowType_Reshard, nil, sourceKs, []string{"-80", "80-"}, []string{table1, table2})
 			},
-			wantErr:         "invalid action for Reshard workflow: MirrorTraffic",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "invalid action for Reshard workflow: MirrorTraffic",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "cannot mirror rdonly traffic after switch rdonly traffic",
@@ -1936,8 +2104,8 @@ func TestMirrorTraffic(t *testing.T) {
 				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
 				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "cannot mirror replica traffic after switch replica traffic",
@@ -1951,8 +2119,8 @@ func TestMirrorTraffic(t *testing.T) {
 				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
 				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "cannot mirror write traffic after switch traffic",
@@ -1966,8 +2134,8 @@ func TestMirrorTraffic(t *testing.T) {
 				fmt.Sprintf("%s.%s", sourceKs, table1): {fmt.Sprintf("%s.%s", targetKs, table1)},
 				fmt.Sprintf("%s.%s", sourceKs, table2): {fmt.Sprintf("%s.%s", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "does not mirror traffic for partial move tables",
@@ -2007,10 +2175,10 @@ func TestMirrorTraffic(t *testing.T) {
 					}, nil
 				}
 			},
-			sourceShards:    []string{"-80", "80-"},
-			targetShards:    []string{"-80", "80-"},
-			wantErr:         "invalid action for partial migration: MirrorTraffic",
-			wantMirrorRules: make(map[string]map[string]float32),
+			sourceShards:         []string{"-80", "80-"},
+			targetShards:         []string{"-80", "80-"},
+			wantMirrorTrafficErr: "invalid action for partial migration: MirrorTraffic",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "does not mirror traffic for multi-tenant move tables",
@@ -2023,8 +2191,8 @@ func TestMirrorTraffic(t *testing.T) {
 			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
 				te.tmc.readVReplicationWorkflow = createReadVReplicationWorkflowFunc(t, binlogdatapb.VReplicationWorkflowType_MoveTables, &vtctldatapb.WorkflowOptions{TenantId: "123"}, te.tmc.keyspace, sourceShards, []string{table1, table2})
 			},
-			wantErr:         "invalid action for multi-tenant migration: MirrorTraffic",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "invalid action for multi-tenant migration: MirrorTraffic",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "does not mirror traffic for reverse move tables",
@@ -2034,8 +2202,8 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
-			wantErr:         "invalid action for reverse workflow: MirrorTraffic",
-			wantMirrorRules: make(map[string]map[string]float32),
+			wantMirrorTrafficErr: "invalid action for reverse workflow: MirrorTraffic",
+			wantMirrorRules:      make(map[string]map[string]float32),
 		},
 		{
 			name: "ok",
@@ -2044,6 +2212,9 @@ func TestMirrorTraffic(t *testing.T) {
 				Workflow:    workflow,
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
 			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
@@ -2066,6 +2237,85 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
 				},
 			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             true,
+		},
+		{
+			name: "ok @primary tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              false,
+			wantWritesMirrored:             true,
+		},
+		{
+			name: "ok @replica tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
+		},
+		{
+			name: "ok @rdonly tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
 		},
 		{
 			name: "percent zero preserves other mirror targets",
@@ -2092,6 +2342,45 @@ func TestMirrorTraffic(t *testing.T) {
 			},
 		},
 		{
+			name: "removing one read mirror type preserves AllowReads when another read type remains",
+			mirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 25.0,
+				},
+			},
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+				Percent:     0.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 25.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
+		},
+		{
 			name: "does not overwrite unrelated mirror rules",
 			mirrorRules: map[string]map[string]float32{
 				"other_source.table2": {
@@ -2103,6 +2392,9 @@ func TestMirrorTraffic(t *testing.T) {
 				Workflow:    workflow,
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
 			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
@@ -2128,6 +2420,10 @@ func TestMirrorTraffic(t *testing.T) {
 					targetKs + ".table2": 25.0,
 				},
 			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             true,
 		},
 		{
 			name: "does not overwrite when some but not all mirror rules already exist",
@@ -2149,7 +2445,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
-			wantErr: "wrong number of pre-existing mirror rules",
+			wantMirrorTrafficErr: "wrong number of pre-existing mirror rules",
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
@@ -2161,6 +2457,8 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
 				},
 			},
+			wantReadsMirrored:  true, // due to pre-existing mirror rules
+			wantWritesMirrored: true, // due to pre-existing mirror rules
 		},
 	}
 
@@ -2210,12 +2508,13 @@ func TestMirrorTraffic(t *testing.T) {
 			}
 
 			got, err := te.ws.WorkflowMirrorTraffic(ctx, tt.req)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
+			if tt.wantMirrorTrafficErr != "" {
+				require.EqualError(t, err, tt.wantMirrorTrafficErr)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
 			}
+
 			mr, err := topotools.GetMirrorRules(ctx, te.topoServ)
 			require.NoError(t, err)
 			wantMirrorRules := tt.mirrorRules
@@ -2223,7 +2522,44 @@ func TestMirrorTraffic(t *testing.T) {
 				wantMirrorRules = tt.wantMirrorRules
 			}
 			require.Equal(t, wantMirrorRules, mr)
+
+			for _, shard := range tt.targetShards {
+				checkDenyList(t, te.topoServ, tt.targetKeyspace, shard, tt.wantDeniedTables, tt.wantAllowReadsFromDeniedTables)
+			}
+
+			_, ws, err := te.ws.getWorkflowState(ctx, tt.targetKeyspace, workflow)
+			if tt.wantWorkflowStateErr != "" {
+				require.ErrorContains(t, err, tt.wantWorkflowStateErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.wantReadsMirrored, ws.ReadsMirrored)
+				require.Equal(t, tt.wantWritesMirrored, ws.WritesMirrored)
+			}
 		})
+	}
+}
+
+// setupDeniedTables creates denied table records on the target shards.
+// This simulates the state that would exist after MoveTables creates the workflow.
+func setupDeniedTables(t *testing.T, ctx context.Context, te *testMaterializerEnv, tables []string) {
+	t.Helper()
+	targetKs := te.ms.TargetKeyspace
+	lockCtx, unlock, lockErr := te.topoServ.LockKeyspace(ctx, targetKs, "test")
+	require.NoError(t, lockErr)
+	var unlockErr error
+	defer func() {
+		unlock(&unlockErr)
+		require.NoError(t, unlockErr)
+	}()
+	for _, shard := range te.targets {
+		_, err := te.topoServ.UpdateShardFields(lockCtx, targetKs, shard, func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(lockCtx, topo.UpdateDeniedTablesOpts{
+				AllowCreate: true,
+				Tables:      tables,
+				TabletType:  topodatapb.TabletType_PRIMARY,
+			})
+		})
+		require.NoError(t, err)
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -258,6 +259,7 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	}
 	return ts.logger
 }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
@@ -394,9 +396,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
-		for table, vtab := range ks.Tables {
-			vschema.Tables[table] = vtab
-		}
+		maps.Copy(vschema.Tables, ks.Tables)
 	} else {
 		if vschema.Sharded {
 			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
@@ -469,7 +469,11 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				Remove:     true,
+				Tables:     ts.Tables(),
+				TabletType: topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}
@@ -480,7 +484,7 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -493,7 +497,11 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				Remove:     true,
+				Tables:     ts.Tables(),
+				TabletType: topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}
@@ -504,7 +512,7 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -1088,7 +1096,12 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 	egrp.Go(func() error {
 		return ts.ForAllSources(func(source *MigrationSource) error {
 			if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, rmsource, ts.Tables())
+				return si.UpdateDeniedTables(ectx, topo.UpdateDeniedTablesOpts{
+					AllowCreate: true,
+					Remove:      rmsource,
+					Tables:      ts.Tables(),
+					TabletType:  topodatapb.TabletType_PRIMARY,
+				})
 			}); err != nil {
 				return err
 			}
@@ -1099,7 +1112,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1109,26 +1122,9 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 		})
 	})
 	egrp.Go(func() error {
-		return ts.ForAllTargets(func(target *MigrationTarget) error {
-			if _, err := ts.TopoServer().UpdateShardFields(ectx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, rmtarget, ts.Tables())
-			}); err != nil {
-				return err
-			}
-			rtbsCtx, cancel := context.WithTimeout(ectx, shardTabletRefreshTimeout)
-			defer cancel()
-			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
-			if isPartial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
-				if ts.force {
-					log.Warning(msg)
-					return nil
-				} else {
-					return errors.New(msg)
-				}
-			}
-			return err
+		return ts.setTargetDeniedTables(ectx, setTargetDeniedTablesOpts{
+			allowCreate: true,
+			remove:      rmtarget,
 		})
 	})
 	if err := egrp.Wait(); err != nil {
@@ -1385,7 +1381,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 
 			return nil
 		})
-
 		if err != nil {
 			return err
 		}
@@ -1548,7 +1543,7 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 	}
 
 	var numExisting int
-	for _, table := range ts.tables {
+	for _, table := range ts.Tables() {
 		for _, tabletType := range types {
 			fromTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
 			if tabletType != topodatapb.TabletType_PRIMARY {
@@ -1578,13 +1573,82 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 		}
 	}
 
-	if numExisting > 0 && numExisting != (len(types)*len(ts.tables)) {
+	if numExisting > 0 && numExisting != (len(types)*len(ts.Tables())) {
 		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "wrong number of pre-existing mirror rules")
 	}
 
 	if err := topotools.SaveMirrorRules(ctx, ts.TopoServer(), mrs); err != nil {
-		return err
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to save mirror rules: %v", err)
+	}
+
+	// Update allowReads on existing denied tables based on whether mirroring
+	// is enabled for this workflow. Don't create new denied table records -
+	// they should already exist from the MoveTables workflow setup.
+	//
+	// Mirrored queries are SELECT queries regardless of tablet type, so we need
+	// to allow reads to bypass denied tables whenever ANY mirroring is active
+	// for this workflow (PRIMARY, REPLICA, or RDONLY).
+	allowReads := false
+	for _, table := range ts.Tables() {
+		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+			fromTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			toTable := fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), table)
+			if targets, ok := mrs[fromTable]; ok {
+				if _, ok := targets[toTable]; ok {
+					allowReads = true
+					break
+				}
+			}
+		}
+		if allowReads {
+			break
+		}
+	}
+
+	if err := ts.setTargetDeniedTables(ctx, setTargetDeniedTablesOpts{
+		allowReads: allowReads,
+	}); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to update target denied tables: %v", err)
 	}
 
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
+}
+
+type setTargetDeniedTablesOpts struct {
+	allowCreate bool
+	allowReads  bool
+	remove      bool
+}
+
+func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, opts setTargetDeniedTablesOpts) error {
+	return ts.ForAllTargets(func(target *MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				AllowCreate: opts.allowCreate,
+				AllowReads:  opts.allowReads,
+				Remove:      opts.remove,
+				Tables:      ts.Tables(),
+				TabletType:  topodatapb.TabletType_PRIMARY,
+			})
+		}); err != nil {
+			return err
+		}
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		if isPartial {
+			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
+			if ts.force {
+				log.Warn(msg)
+				return nil
+			} else {
+				return errors.New(msg)
+			}
+		}
+		return err
+	})
 }

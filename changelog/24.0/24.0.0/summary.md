@@ -6,11 +6,18 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+        - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
+    - **[Breaking Changes](#breaking-changes)**
+        - [External Decompressor No Longer Read from Backup MANIFEST by Default](#vttablet-external-decompressor-manifest)
 - **[Minor Changes](#minor-changes)**
+    - **[Logging](#minor-changes-logging)**
+        - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
+        - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
@@ -21,10 +28,21 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+    - **[Tracing](#minor-changes-tracing)**
+        - [OpenTelemetry tracing support](#tracing-opentelemetry)
+        - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
     - **[VTOrc](#minor-changes-vtorc)**
-        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
-        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [New `--cell` Flag](#vtorc-cell-flag)
+        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
+        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
+        - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
+        - [Deprecated `/api/replication-analysis` Endpoint Removed](#vtorc-replication-analysis-api-removed)
+    - **[Metrics](#minor-changes-metrics)**
+        - [Extended Go Runtime Metrics via Prometheus](#metrics-extended-go-runtime)
+    - **[Backup and Restore](#minor-changes-backup-restore)**
+        - [MySQL CLONE Support for Replica Provisioning](#mysql-clone-support)
+        - [Restore Hook Improvements](#restore-hook-backup-engine-env)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -37,6 +55,35 @@ This release introduces an optimization that allows window functions to be pushe
 Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
+
+#### <a id="view-routing-rules"/>View Routing Rules</a>
+
+Vitess now supports routing rules for views, and can be applied the same as tables with `vtctldclient ApplyRoutingRules`. When a view routing rule is active, VTGate rewrites queries that reference the source view to use the target view's definition instead. For example, given this routing rule:
+
+```json
+{
+  "rules": [
+    {
+      "from_table": "source_ks.my_view",
+      "to_tables": ["target_ks.my_view"]
+    }
+  ]
+}
+```
+
+And this view definition:
+
+```sql
+CREATE VIEW target_ks.my_view AS SELECT id, name FROM user;
+```
+
+A query like `SELECT * FROM source_ks.my_view` would be internally rewritten to:
+
+```sql
+SELECT * FROM (SELECT id, name FROM target_ks.user) AS my_view;
+```
+
+View routing rules require the schema tracker to monitor views, which means VTGate must be started with the `--enable-views` flag and VTTablet with the `--queryserver-enable-views` flag. The target view must exist in the specified keyspace for the routing rule to function correctly. For more details, see the [Schema Routing Rules documentation](https://vitess.io/docs/24.0/reference/features/schema-routing-rules/).
 
 #### <a id="tablet-targeting"/>Tablet targeting via USE statement</a>
 
@@ -56,7 +103,25 @@ Once set, all subsequent queries in the session route to the specified tablet un
 
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
+### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="vttablet-external-decompressor-manifest"/>External Decompressor No Longer Read from Backup MANIFEST by Default</a>
+
+The external decompressor command stored in a backup's `MANIFEST` file is no longer used at restore time by default. Previously, when no `--external-decompressor` flag was provided, VTTablet would fall back to the command specified in the `MANIFEST`. This posed a security risk: an attacker with write access to backup storage could modify the `MANIFEST` to execute arbitrary commands on the tablet.
+
+Starting in v24, the `MANIFEST`-based decompressor is ignored unless you explicitly opt in with the new `--external-decompressor-use-manifest` flag. If you rely on this behavior, add the flag to your VTTablet configuration, but be aware of the security implications.
+
+See [#19460](https://github.com/vitessio/vitess/pull/19460) for details.
+
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-logging"/>Logging</a>
+
+#### <a id="structured-logging"/>Structured logging</a>
+
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
+
+`glog` is deprecated as of v24 and will be removed in v25.
 
 ### <a id="minor-changes-vreplication"/>VReplication</a>
 
@@ -74,7 +139,23 @@ vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer 
 vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
 ```
 
+#### <a id="vreplication-tablet-error-retry"/>Automatic tablet retry for tablet-specific errors</a>
+
+VReplication workflows now automatically retry with different tablets when encountering tablet-specific errors. Previously, workflows without a cell preference would default to the local cell and could get stuck retrying the same failing tablet indefinitely.
+
+When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
+
+This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
+
 ### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-removed-grpc-send-session-in-streaming"/>Removed `--grpc-send-session-in-streaming` flag</a>
+
+The VTGate flag `--grpc-send-session-in-streaming` has been removed. This flag was deprecated in v22 via [#17907](https://github.com/vitessio/vitess/pull/17907) and defaulted to `true`.
+
+The session is now always sent as the last packet in the streaming response for `StreamExecute` and `StreamExecuteMulti` RPCs. This behavior is required to support transactions in streaming and cannot be disabled.
+
+**Impact**: Remove any usage of the `--grpc-send-session-in-streaming` flag from VTGate startup scripts or configuration.
 
 #### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>New default for `--legacy-replication-lag-algorithm` flag</a>
 
@@ -151,21 +232,33 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
 
+### <a id="minor-changes-tracing"/>Tracing</a>
+
+#### <a id="tracing-opentelemetry"/>OpenTelemetry tracing support</a>
+
+Vitess now supports [OpenTelemetry](https://opentelemetry.io/) as a tracing backend. To use it, set `--tracer opentelemetry` on any Vitess binary. Traces are exported via OTLP/gRPC, configurable with the following flags:
+
+- `--otel-endpoint`: OpenTelemetry collector endpoint. If empty, the `OTEL_EXPORTER_OTLP_ENDPOINT` env var is used; if that is also unset, the OTel SDK defaults to `localhost:4317`.
+- `--otel-insecure` (default `false`): use insecure connection to the collector.
+- `--tracing-sampling-rate` (default `0.1`): sampling rate for traces (shared across all tracing backends).
+
+Any OTLP-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
+
+#### <a id="tracing-opentracing-deprecation"/>Deprecation of OpenTracing-based tracing backends</a>
+
+The following tracing backends are deprecated as of v24 and will be removed in v25:
+
+- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTLP-compatible Jaeger endpoint (v1.35+).
+- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTLP ingestion endpoint.
+
+The `--tracer opentracing-jaeger` and `--tracer opentracing-datadog` options continue to work in v24 but will log a deprecation warning at startup. The following Jaeger-specific flags are also deprecated and will be removed in v25:
+
+- `--jaeger-agent-host`
+- `--tracing-sampling-type`
+
+**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTLP (Jaeger v1.35+ listens on port 4317 by default).
+
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
-
-#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
-
-The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. This metric was deprecated in v23.
-
-**Migration**: Use `discoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
-
-**Impact**: Monitoring dashboards or alerting systems using `discoverInstanceTimings` must be updated to use `discoveryInstanceTimings`.
-
-#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
-
-VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
-
-This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
 
 #### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
 
@@ -176,3 +269,122 @@ When provided, VTOrc validates that the cell exists in the topology service on s
 This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
 
 **Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.
+
+#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
+
+VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
+
+This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
+
+VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+
+The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+
+See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
+
+#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
+
+The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
+
+**Migration**: Use `DiscoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
+
+**Impact**: Monitoring dashboards or alerting systems using `DiscoverInstanceTimings` must be updated to use `DiscoveryInstanceTimings`.
+
+#### <a id="vtorc-snapshot-topology-deprecation"/>Deprecation of Snapshot Topology feature</a>
+
+VTOrc's Snapshot Topology feature, which is enabled by setting `--snapshot-topology-interval` to a non-zero-value is deprecated as of v24 and the logic is planned for removal in v25.
+
+The lack of facilities to read the snapshots created by this feature coupled with the in-memory nature of VTOrc's backend means this logic has limited usefulness. This deprecation is explained and tracked in detail in https://github.com/vitessio/vitess/issues/18691.
+
+**Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
+
+**Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+
+#### <a id="vtorc-replication-analysis-api-removed"/>Deprecated `/api/replication-analysis` Endpoint Removed</a>
+
+The `/api/replication-analysis` endpoint has been removed from VTOrc in v24. Use `/api/detection-analysis` instead, which provides the same functionality.
+
+**Migration**: Update any scripts, monitoring systems, or automation that calls `/api/replication-analysis` to use `/api/detection-analysis` instead. The replacement endpoint accepts the same query parameters (`keyspace`, `shard`) and returns the same JSON response format.
+
+**Impact**: HTTP requests to `/api/replication-analysis` will return a 404 Not Found error.
+
+### <a id="minor-changes-metrics"/>Metrics</a>
+
+#### <a id="metrics-extended-go-runtime"/>Extended Go Runtime Metrics via Prometheus</a>
+
+Vitess now exposes the full set of Go runtime metrics via Prometheus. The default Prometheus `GoCollector` only exposes three `runtime/metrics` (`/gc/gogc:percent`, `/gc/gomemlimit:bytes`, `/sched/gomaxprocs:threads`) plus the legacy `go_memstats_*` set. Starting in v24, all Vitess components expose approximately 150 additional metrics from Go's `runtime/metrics` package.
+
+**New metrics include:**
+
+- Heap allocation histograms
+- GC cycle counts and pause histograms
+- Memory class breakdowns
+- Goroutine state breakdowns
+- Scheduler latency histograms
+- CPU time breakdowns by class (user, GC, scavenge, idle)
+
+A new `go_info_ext` gauge is also added with `compiler`, `GOARCH`, and `GOOS` labels, providing extended build environment information beyond the standard `go_info` metric.
+
+**Affected components**: vtgate, vttablet, vtctld, vtorc, vtbackup, mysqlctld
+
+**No configuration required** — the metrics appear automatically on the `/metrics` endpoint for all components using the Prometheus backend.
+
+### <a id="minor-changes-backup-restore"/>Backup and Restore</a>
+
+#### <a id="mysql-clone-support"/>MySQL CLONE Support for Replica Provisioning</a>
+
+VTTablet and VTBackup now support using MySQL's native [CLONE plugin](https://dev.mysql.com/doc/refman/8.0/en/clone-plugin.html) to provision new replicas by copying data directly from a donor tablet over the network. Physical-level data copying is significantly faster than logical backup and restore, especially for large datasets. Requires MySQL 8.0.17+ and InnoDB-only tables.
+
+**New Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--mysql-clone-enabled` | Enable the MySQL CLONE plugin and create the clone user during MySQL initialization. Required for all tablets that will participate in CLONE operations. |
+| `--clone-from-primary` | Clone data from the shard's primary tablet instead of restoring from backup. Mutually exclusive with `--clone-from-tablet`. |
+| `--clone-from-tablet` | Clone data from a specific tablet by alias (e.g., `zone1-123`) instead of restoring from backup. Mutually exclusive with `--clone-from-primary`. |
+| `--restore-with-clone` | Use MySQL CLONE for the restore phase instead of restoring from backup. Requires either `--clone-from-primary` or `--clone-from-tablet`. |
+| `--clone-restart-wait-timeout` | Timeout for waiting for MySQL to restart after CLONE REMOTE completes. Default: 5 minutes. |
+
+**Clone User Configuration:**
+
+| Flag | Description |
+|------|-------------|
+| `--db-clone-user` | MySQL username for CLONE operations (donor authentication). |
+| `--db-clone-password` | Password for the CLONE user. |
+| `--db-clone-use-ssl` | Use SSL when connecting to the donor for CLONE operations. |
+
+**Example Usage:**
+
+Clone from the shard's primary:
+
+```bash
+vttablet \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-primary \
+  ...
+```
+
+Clone from a specific tablet:
+
+```bash
+vtbackup \
+  --mysql-clone-enabled \
+  --restore-with-clone \
+  --clone-from-tablet=zone1-0000000100 \
+  ...
+```
+
+**Note:** All tablets participating in CLONE operations (both donors and recipients) must have `--mysql-clone-enabled` set during MySQL initialization to ensure the CLONE plugin is loaded and the clone user exists.
+
+#### <a id="restore-hook-backup-engine-env"/>Restore Hook Improvements</a>
+
+**Extended Hook Coverage**: The `vttablet_restore_done` hook now fires when restores are triggered via `vtctldclient RestoreFromBackup`. Previously, this hook only ran during tablet startup or clone operations.
+
+**New Environment Variable**: The hook now sets `TM_RESTORE_DATA_BACKUP_ENGINE` to indicate which backup engine was used. The value comes from the backup manifest's `BackupMethod` field.
+
+`TM_RESTORE_DATA_BACKUP_ENGINE` is only set when a restore reads from an actual backup—not for clone-based restores or when no backup is used. Hook scripts can use this to perform engine-specific actions based on whether the restore used `builtin`, `xtrabackup`, or another engine.
+
+

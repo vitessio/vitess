@@ -35,8 +35,8 @@ type Factory struct{}
 // If so, it returns the voting server address, the observer address, and true.
 // Otherwise, it returns false.
 func hasObservers(serverAddr string) (string, string, bool) {
-	if i := strings.Index(serverAddr, "|"); i != -1 {
-		return serverAddr[:i], serverAddr[i+1:], true
+	if before, after, ok := strings.Cut(serverAddr, "|"); ok {
+		return before, after, true
 	}
 	return "", "", false
 }
@@ -95,6 +95,7 @@ func (zs *Server) Close() {
 	zs.conn.Close()
 	zs.conn = nil
 }
+
 func init() {
 	topo.RegisterFactory("zk2", Factory{})
 }

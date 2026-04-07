@@ -67,7 +67,8 @@ func newLookupVindex(ws *Server) *lookupVindex {
 
 // prepareCreate performs the preparatory steps for creating a LookupVindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
+	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error,
+) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
 		sourceVSchemaTable *vschemapb.Table
@@ -592,7 +593,8 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 // getTargetVindex returns the targetVindex. We choose a primary vindex type
 // for the lookup table based on the source definition if one was not explicitly specified.
 func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition, sourceVindexColumn string, targetTable *vschemapb.Table) (
-	targetVindex *vschemapb.Vindex, err error) {
+	targetVindex *vschemapb.Vindex, err error,
+) {
 	var targetVindexType string
 	for _, field := range sourceTableDefinition.Fields {
 		if sourceVindexColumn == field.Name {

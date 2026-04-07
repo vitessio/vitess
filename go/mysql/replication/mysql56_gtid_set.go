@@ -533,7 +533,7 @@ func (set Mysql56GTIDSet) UnionInPlace(other GTIDSet) GTIDSet {
 		s1 := intervals
 		s2 := otherIntervals
 
-		var newIntervals = make([]interval, 0, len(s1)+len(s2)) // pre-allocation saves computation time later on
+		newIntervals := make([]interval, 0, len(s1)+len(s2)) // pre-allocation saves computation time later on
 		for popInterval(&nextInterval, &s1, &s2) {
 			if len(newIntervals) == 0 {
 				newIntervals = append(newIntervals, nextInterval)

@@ -18830,6 +18830,9 @@ export namespace topodata {
 
             /** TabletControl frozen */
             frozen?: (boolean|null);
+
+            /** TabletControl allow_reads */
+            allow_reads?: (boolean|null);
         }
 
         /** Represents a TabletControl. */
@@ -18852,6 +18855,9 @@ export namespace topodata {
 
             /** TabletControl frozen. */
             public frozen: boolean;
+
+            /** TabletControl allow_reads. */
+            public allow_reads: boolean;
 
             /**
              * Creates a new TabletControl instance using the specified properties.
@@ -20857,6 +20863,212 @@ export namespace vtorcdata {
 
         /**
          * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a PrimaryHealthEvent. */
+    interface IPrimaryHealthEvent {
+
+        /** PrimaryHealthEvent at_unix_nanos */
+        at_unix_nanos?: (number|Long|null);
+
+        /** PrimaryHealthEvent success */
+        success?: (boolean|null);
+    }
+
+    /** Represents a PrimaryHealthEvent. */
+    class PrimaryHealthEvent implements IPrimaryHealthEvent {
+
+        /**
+         * Constructs a new PrimaryHealthEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IPrimaryHealthEvent);
+
+        /** PrimaryHealthEvent at_unix_nanos. */
+        public at_unix_nanos: (number|Long);
+
+        /** PrimaryHealthEvent success. */
+        public success: boolean;
+
+        /**
+         * Creates a new PrimaryHealthEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrimaryHealthEvent instance
+         */
+        public static create(properties?: vtorcdata.IPrimaryHealthEvent): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @param message PrimaryHealthEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IPrimaryHealthEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @param message PrimaryHealthEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IPrimaryHealthEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Verifies a PrimaryHealthEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrimaryHealthEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrimaryHealthEvent
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.PrimaryHealthEvent;
+
+        /**
+         * Creates a plain object from a PrimaryHealthEvent message. Also converts values to other types if specified.
+         * @param message PrimaryHealthEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.PrimaryHealthEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrimaryHealthEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryHealthEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a PrimaryHealthState. */
+    interface IPrimaryHealthState {
+
+        /** PrimaryHealthState events */
+        events?: (vtorcdata.IPrimaryHealthEvent[]|null);
+
+        /** PrimaryHealthState unhealthy */
+        unhealthy?: (boolean|null);
+    }
+
+    /** Represents a PrimaryHealthState. */
+    class PrimaryHealthState implements IPrimaryHealthState {
+
+        /**
+         * Constructs a new PrimaryHealthState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IPrimaryHealthState);
+
+        /** PrimaryHealthState events. */
+        public events: vtorcdata.IPrimaryHealthEvent[];
+
+        /** PrimaryHealthState unhealthy. */
+        public unhealthy: boolean;
+
+        /**
+         * Creates a new PrimaryHealthState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrimaryHealthState instance
+         */
+        public static create(properties?: vtorcdata.IPrimaryHealthState): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Encodes the specified PrimaryHealthState message. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @param message PrimaryHealthState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IPrimaryHealthState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrimaryHealthState message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @param message PrimaryHealthState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IPrimaryHealthState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Verifies a PrimaryHealthState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrimaryHealthState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrimaryHealthState
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.PrimaryHealthState;
+
+        /**
+         * Creates a plain object from a PrimaryHealthState message. Also converts values to other types if specified.
+         * @param message PrimaryHealthState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.PrimaryHealthState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrimaryHealthState to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryHealthState
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -39473,7 +39685,8 @@ export namespace binlogdata {
         LASTPK = 18,
         SAVEPOINT = 19,
         COPY_COMPLETED = 20,
-        PREVIOUS_GTIDS = 21
+        PREVIOUS_GTIDS = 21,
+        ROWS_QUERY = 22
     }
 
     /** Properties of a RowChange. */
@@ -40830,6 +41043,9 @@ export namespace binlogdata {
 
         /** VStreamOptions no_timeouts */
         no_timeouts?: (boolean|null);
+
+        /** VStreamOptions event_types */
+        event_types?: (binlogdata.VEventType[]|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -40852,6 +41068,9 @@ export namespace binlogdata {
 
         /** VStreamOptions no_timeouts. */
         public no_timeouts: boolean;
+
+        /** VStreamOptions event_types. */
+        public event_types: binlogdata.VEventType[];
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -42098,6 +42317,236 @@ export namespace binlogdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a BinlogDumpGTIDRequest. */
+    interface IBinlogDumpGTIDRequest {
+
+        /** BinlogDumpGTIDRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target */
+        target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename */
+        binlog_filename?: (string|null);
+
+        /** BinlogDumpGTIDRequest binlog_position */
+        binlog_position?: (number|Long|null);
+
+        /** BinlogDumpGTIDRequest gtid_set */
+        gtid_set?: (string|null);
+
+        /** BinlogDumpGTIDRequest flags */
+        flags?: (number|null);
+    }
+
+    /** Represents a BinlogDumpGTIDRequest. */
+    class BinlogDumpGTIDRequest implements IBinlogDumpGTIDRequest {
+
+        /**
+         * Constructs a new BinlogDumpGTIDRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpGTIDRequest);
+
+        /** BinlogDumpGTIDRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename. */
+        public binlog_filename: string;
+
+        /** BinlogDumpGTIDRequest binlog_position. */
+        public binlog_position: (number|Long);
+
+        /** BinlogDumpGTIDRequest gtid_set. */
+        public gtid_set: string;
+
+        /** BinlogDumpGTIDRequest flags. */
+        public flags: number;
+
+        /**
+         * Creates a new BinlogDumpGTIDRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpGTIDRequest instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpGTIDRequest): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Verifies a BinlogDumpGTIDRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpGTIDRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpGTIDRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Creates a plain object from a BinlogDumpGTIDRequest message. Also converts values to other types if specified.
+         * @param message BinlogDumpGTIDRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpGTIDRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpGTIDRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpGTIDRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogDumpResponse. */
+    interface IBinlogDumpResponse {
+
+        /** BinlogDumpResponse raw */
+        raw?: (Uint8Array|null);
+    }
+
+    /** Represents a BinlogDumpResponse. */
+    class BinlogDumpResponse implements IBinlogDumpResponse {
+
+        /**
+         * Constructs a new BinlogDumpResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpResponse);
+
+        /** BinlogDumpResponse raw. */
+        public raw: Uint8Array;
+
+        /**
+         * Creates a new BinlogDumpResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpResponse instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpResponse): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Verifies a BinlogDumpResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Creates a plain object from a BinlogDumpResponse message. Also converts values to other types if specified.
+         * @param message BinlogDumpResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace query. */
@@ -42872,6 +43321,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout */
         transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result */
+        no_result?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -42930,6 +43382,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout. */
         public transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result. */
+        public no_result: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";

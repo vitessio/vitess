@@ -86,7 +86,7 @@ func UnescapeID(in string) (string, error) {
 
 	in = in[1 : l-1]
 
-	if idx := strings.IndexByte(in, '`'); idx == -1 {
+	if found := strings.Contains(in, "`"); !found {
 		return in, nil
 	}
 

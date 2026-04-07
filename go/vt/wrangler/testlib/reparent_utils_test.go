@@ -18,13 +18,13 @@ package testlib
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -47,8 +47,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -131,8 +130,7 @@ func TestReparentTablet(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -188,8 +186,7 @@ func TestReparentTablet(t *testing.T) {
 
 // TestSetReplicationSource tests that SetReplicationSource works as intended under various circumstances.
 func TestSetReplicationSource(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -215,41 +212,58 @@ func TestSetReplicationSource(t *testing.T) {
 	primary.StartActionLoop(t, wr)
 	defer primary.StopActionLoop(t)
 
-	// test when we receive a relay log error while starting replication
-	t.Run("Relay log error", func(t *testing.T) {
-		replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-		// replica loop
-		// We have to set the settings as replicating. Otherwise,
-		// the replication manager intervenes and tries to fix replication,
-		// which ends up making this test unpredictable.
-		replica.FakeMysqlDaemon.Replicating = true
-		replica.FakeMysqlDaemon.IOThreadRunning = true
-		replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
-		replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			// These 3 statements come from tablet startup
-			"STOP REPLICA",
-			"FAKE SET SOURCE",
-			"START REPLICA",
-			// We stop and reset the replication parameters because of relay log issues.
-			"STOP REPLICA",
-			"STOP REPLICA",
-			"RESET REPLICA",
-			"START REPLICA",
-		}
-		replica.StartActionLoop(t, wr)
-		defer replica.StopActionLoop(t)
+	relayErrors := []struct {
+		name string
+		err  error
+		uid  uint32
+	}{
+		{
+			name: "master info relay error",
+			err:  sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			uid:  2,
+		},
+		{
+			name: "applier metadata relay error",
+			err:  sqlerror.NewSQLError(sqlerror.ERReplicaApplierMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			uid:  5,
+		},
+	}
 
-		// Set the correct error message that indicates we have received a relay log error.
-		replica.FakeMysqlDaemon.StartReplicationError = errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log")
-		// run ReparentTablet
-		err = wr.SetReplicationSource(ctx, replica.Tablet)
-		require.NoError(t, err, "SetReplicationSource failed")
+	for _, relayError := range relayErrors {
+		t.Run(relayError.name, func(t *testing.T) {
+			replica := NewFakeTablet(t, wr, "cell1", relayError.uid, topodatapb.TabletType_REPLICA, nil)
+			// replica loop
+			// We have to set the settings as replicating. Otherwise,
+			// the replication manager intervenes and tries to fix replication,
+			// which ends up making this test unpredictable.
+			replica.FakeMysqlDaemon.Replicating = true
+			replica.FakeMysqlDaemon.IOThreadRunning = true
+			replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
+			replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+				// These 3 statements come from tablet startup
+				"STOP REPLICA",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+				// We stop and reset the replication parameters because of relay log issues.
+				"STOP REPLICA",
+				"STOP REPLICA",
+				"RESET REPLICA",
+				"START REPLICA",
+			}
+			replica.StartActionLoop(t, wr)
+			defer replica.StopActionLoop(t)
 
-		// check what was run
-		err = replica.FakeMysqlDaemon.CheckSuperQueryList()
-		require.NoError(t, err, "CheckSuperQueryList failed")
-		checkSemiSyncEnabled(t, false, true, replica)
-	})
+			// Set the correct error message that indicates we have received a relay log error.
+			replica.FakeMysqlDaemon.StartReplicationError = relayError.err
+			err := wr.SetReplicationSource(ctx, replica.Tablet)
+			require.NoError(t, err, "SetReplicationSource failed")
+
+			// check what was run
+			err = replica.FakeMysqlDaemon.CheckSuperQueryList()
+			require.NoError(t, err, "CheckSuperQueryList failed")
+			checkSemiSyncEnabled(t, false, true, replica)
+		})
+	}
 
 	t.Run("Errant GTIDs on the replica", func(t *testing.T) {
 		replica := NewFakeTablet(t, wr, "cell1", 4, topodatapb.TabletType_REPLICA, nil)

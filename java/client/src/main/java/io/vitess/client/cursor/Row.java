@@ -21,12 +21,10 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-
 import io.vitess.mysql.DateTime;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.Type;
-
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -39,7 +37,6 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**

@@ -243,7 +243,7 @@ func startCluster(t *testing.T) string {
 	tabletConfig := fmt.Sprintf(connFormat, productSocket, customerSocket)
 	fmt.Printf("tablet_config:\n%s\n", tabletConfig)
 	yamlFile := path.Join(clusterInstance.TmpDirectory, "external.yaml")
-	err = os.WriteFile(yamlFile, []byte(tabletConfig), 0644)
+	err = os.WriteFile(yamlFile, []byte(tabletConfig), 0o644)
 	require.NoError(t, err)
 	return yamlFile
 }
@@ -266,8 +266,8 @@ func populate(t *testing.T, socket, sql string) {
 	conn, err := mysql.Connect(context.Background(), params)
 	require.NoError(t, err)
 	defer conn.Close()
-	lines := strings.Split(sql, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(sql, "\n")
+	for line := range lines {
 		if line == "" {
 			continue
 		}

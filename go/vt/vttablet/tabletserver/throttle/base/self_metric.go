@@ -43,9 +43,7 @@ type SelfMetric interface {
 	Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric
 }
 
-var (
-	RegisteredSelfMetrics = make(map[MetricName]SelfMetric)
-)
+var RegisteredSelfMetrics = make(map[MetricName]SelfMetric)
 
 func registerSelfMetric(selfMetric SelfMetric) SelfMetric {
 	RegisteredSelfMetrics[selfMetric.Name()] = selfMetric

@@ -48,6 +48,7 @@ var TypeStrMap = map[VReplicationWorkflowType]Type{
 	ReshardWorkflow:    TypeReshard,
 	MigrateWorkflow:    TypeMigrate,
 }
+
 var TypeIntMap = map[Type]VReplicationWorkflowType{
 	TypeMoveTables: MoveTablesWorkflow,
 	TypeReshard:    ReshardWorkflow,
@@ -74,6 +75,9 @@ type State struct {
 	IsPartialMigration    bool
 	ShardsAlreadySwitched []string
 	ShardsNotYetSwitched  []string
+
+	ReadsMirrored  bool
+	WritesMirrored bool
 }
 
 func (s *State) String() string {

@@ -65,7 +65,8 @@ type tableStreamer struct {
 }
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
-	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions,
+) *tableStreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -117,8 +118,7 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
-	log.Infof("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v",
-		ts.config.NetReadTimeout, ts.config.NetWriteTimeout)
+	log.Info(fmt.Sprintf("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout))
 
 	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
@@ -131,26 +131,27 @@ func (ts *tableStreamer) Stream() error {
 			continue
 		}
 		if schema2.IsInternalOperationTableName(tableName) {
-			log.Infof("Skipping internal table %s", tableName)
+			log.Info("Skipping internal table " + tableName)
 			continue
 		}
 		ts.tables = append(ts.tables, tableName)
 	}
-	log.Infof("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", "))
+	log.Info(fmt.Sprintf("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", ")))
 	for _, tableName := range ts.tables {
-		log.Infof("Streaming table %s", tableName)
+		log.Info("Streaming table " + tableName)
 		if err := ts.streamTable(ts.ctx, tableName); err != nil {
-			log.Errorf("Streaming table %s failed: %v", tableName, err)
+			log.Error(fmt.Sprintf("Streaming table %s failed: %v", tableName, err))
 			return err
 		}
-		log.Infof("Finished streaming table %s", tableName)
+		log.Info("Finished streaming table " + tableName)
 	}
-	log.Infof("Finished streaming %d tables", len(ts.tables))
+	log.Info(fmt.Sprintf("Finished streaming %d tables", len(ts.tables)))
 	return nil
 }
 
 func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastpk []sqltypes.Value,
-	send func(*binlogdatapb.VStreamRowsResponse) error) (*rowStreamer, func(), error) {
+	send func(*binlogdatapb.VStreamRowsResponse) error,
+) (*rowStreamer, func(), error) {
 	vse := ts.vse
 	if atomic.LoadInt32(&vse.isOpen) == 0 {
 		return nil, nil, errors.New("VStreamer is not open")

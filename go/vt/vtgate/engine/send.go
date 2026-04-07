@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"maps"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -134,9 +135,7 @@ func (s *Send) canAutoCommit(vcursor VCursor, rss []*srvtopo.ResolvedShard) bool
 
 func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable, len(in)+1)
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 

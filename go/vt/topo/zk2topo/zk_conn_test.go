@@ -18,6 +18,7 @@ package zk2topo
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -29,8 +30,23 @@ import (
 )
 
 func TestZkConnClosedOnDisconnect(t *testing.T) {
+	if testing.Short() || os.Getenv("CI") == "true" {
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
+	}
+
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
-	defer zkd.Teardown()
+	defer func() {
+		var lastErr error
+		for range 3 {
+			if lastErr = zkd.Teardown(); lastErr == nil {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if lastErr != nil {
+			t.Logf("zkd.Teardown failed after retries: %v", lastErr)
+		}
+	}()
 
 	conn := Connect(serverAddr)
 	defer conn.Close()

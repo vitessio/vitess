@@ -113,11 +113,11 @@ func TestStatusHtml(t *testing.T) {
 	}
 	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  01,
+		Uid:  0o1,
 	})
 	testStats.controllers[2].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  02,
+		Uid:  0o2,
 	})
 	close(testStats.controllers[2].done)
 
@@ -149,7 +149,7 @@ func TestVReplicationStats(t *testing.T) {
 	}
 	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  01,
+		Uid:  0o1,
 	})
 
 	sleepTime := 1 * time.Millisecond
@@ -157,7 +157,7 @@ func TestVReplicationStats(t *testing.T) {
 		defer blpStats.PhaseTimings.Record(phase, time.Now())
 		time.Sleep(sleepTime)
 	}
-	want := int64(1.2 * float64(sleepTime)) //allow 10% overhead for recording timing
+	want := int64(1.2 * float64(sleepTime)) // allow 10% overhead for recording timing
 
 	record("fastforward")
 	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["fastforward"])

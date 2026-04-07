@@ -73,7 +73,7 @@ type (
 	}
 	// VSchemaViews provides access to view definitions within the VSchema.
 	VSchemaViews interface {
-		FindView(name TableName) TableStatement
+		FindView(name TableName) (TableStatement, *TableName)
 	}
 )
 
@@ -619,18 +619,38 @@ func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr
 	}
 
 	// Replace views with their underlying definitions.
+	nz.rewriteView(aliasTableName, node)
+}
+
+// rewriteView looks up viewName in the view definitions and, if found, replaces the table
+// reference with a derived table containing the view's SELECT. If a view routing rule matched
+// but the target view definition is missing, the table name is rewritten to the routed target
+// so that error messages reference the intended destination rather than the original source name.
+func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 	if nz.views == nil {
 		return
 	}
-	view := nz.views.FindView(aliasTableName)
-	if view == nil {
+
+	view, routedViewName := nz.views.FindView(viewName)
+
+	// If the view was found, substitute the view's SELECT as a derived table.
+	if view != nil {
+		node.Expr = &DerivedTable{Select: Clone(view)}
+
+		// If an alias wasn't already set, use the view name as the alias so that references to
+		// the view like `view.col` continue to resolve.
+		if node.As.IsEmpty() {
+			node.As = NewIdentifierCS(viewName.Name.String())
+		}
+
 		return
 	}
 
-	// Substitute the view with a derived table.
-	node.Expr = &DerivedTable{Select: Clone(view)}
-	if node.As.IsEmpty() {
-		node.As = NewIdentifierCS(tblName)
+	// The view definition was not found. If a routing rule was found, rewrite the view name
+	// to the target view name so any subsequent "table not found" error points the user at
+	// the routed destination and not the original source.
+	if routedViewName != nil {
+		node.Expr = *routedViewName
 	}
 }
 

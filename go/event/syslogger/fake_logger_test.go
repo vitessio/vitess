@@ -36,9 +36,9 @@ func TestGetLogsForNoLogs(t *testing.T) {
 
 func TestGetAllLogs(t *testing.T) {
 	tl := NewTestLogger()
-	tl.recordInfof("Test info log")
-	tl.recordErrorf("Test error log")
-	tl.recordWarningf("Test warning log")
+	tl.recordInfo("Test info log")
+	tl.recordError("Test error log")
+	tl.recordWarn("Test warning log")
 
 	want := []string{"INFO:Test info log", "ERROR:Test error log", "WARNING:Test warning log"}
 	loggerMsgs := tl.GetAllLogs()

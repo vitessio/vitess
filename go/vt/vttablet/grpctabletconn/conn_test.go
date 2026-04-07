@@ -58,8 +58,7 @@ func TestGRPCTabletConn(t *testing.T) {
 	go server.Serve(listener)
 	defer server.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
@@ -114,8 +113,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// run the test suite
 	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
@@ -177,6 +175,11 @@ func (m *mockQueryClient) VStreamResults(ctx context.Context, in *binlogdatapb.V
 }
 
 func (m *mockQueryClient) GetSchema(ctx context.Context, in *querypb.GetSchemaRequest, opts ...grpc.CallOption) (queryservicepb.Query_GetSchemaClient, error) {
+	m.lastCallCtx = ctx
+	return nil, errors.New("A general error")
+}
+
+func (m *mockQueryClient) BinlogDumpGTID(ctx context.Context, in *binlogdatapb.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (queryservicepb.Query_BinlogDumpGTIDClient, error) {
 	m.lastCallCtx = ctx
 	return nil, errors.New("A general error")
 }

@@ -19,6 +19,7 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,7 +30,8 @@ import (
 func pprofInit() {
 	prof, err := parseProfileFlag(pprofFlag)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	if prof != nil {
 		start, stop := prof.init()

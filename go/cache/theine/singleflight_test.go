@@ -80,9 +80,7 @@ func TestDoDupSuppress(t *testing.T) {
 	wg1.Add(1)
 	for range n {
 		wg1.Add(1)
-		wg2.Add(1)
-		go func() {
-			defer wg2.Done()
+		wg2.Go(func() {
 			wg1.Done()
 			v, err, _ := g.Do("key", fn)
 			if !assert.NoError(t, err) {
@@ -90,7 +88,7 @@ func TestDoDupSuppress(t *testing.T) {
 			}
 
 			assert.Equal(t, "bar", v)
-		}()
+		})
 	}
 	wg1.Wait()
 	// At least one goroutine is in fn now and all of them have at

@@ -18,6 +18,18 @@ package io.vitess.client;
 
 import java.io.File;
 
+/**
+ * RefreshableVTGateConnection is a VTGateConnection that can detect changes to the TLS keystore
+ * and truststore files used by the underlying client.
+ *
+ * <p>It keeps the file paths and last modification times for those stores. Each call to
+ * {@link #checkKeystoreUpdates()} compares the current timestamps to the cached values,
+ * updates the cached values when they advance, and reports whether a change was observed.
+ *
+ * <p>The caller is responsible for invoking this check and reloading credentials on its own
+ * schedule. This type does not reload certificates automatically and does not synchronize with
+ * the underlying RPC client.
+ */
 public class RefreshableVTGateConnection extends VTGateConnection {
 
   private final File keystoreFile;

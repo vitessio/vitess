@@ -119,7 +119,8 @@ func TestPlanKey(t *testing.T) {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
-			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}}},
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
+		},
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
 	}}
 	cfg := econtext.VCursorConfig{
@@ -1895,21 +1896,26 @@ func TestShowStatus(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
+	// Legacy syntax (SLAVE) is supported
 	sql1 := "show slave status"
 	_, err := executorExec(ctx, executor, session, sql1, nil)
-	require.NoError(t, err)
-
-	sql2 := "show replica status"
-	_, err = executorExec(ctx, executor, session, sql2, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           sql1,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
+	}}
+	assert.Equal(t, wantQueries, sbc1.Queries)
+
+	// Modern syntax (REPLICA) is supported
+	sql2 := "show replica status"
+	_, err = executorExec(ctx, executor, session, sql2, nil)
+	require.NoError(t, err)
+
+	wantQueries = append(wantQueries, &querypb.BoundQuery{
 		Sql:           sql2,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}}
+	})
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
@@ -2546,7 +2552,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
 		{Sql: "release savepoint a", BindVariables: emptyBV},
-		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV}}
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV},
+	}
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
@@ -3090,7 +3097,8 @@ func TestExecutorShowShards(t *testing.T) {
 				Fields: buildVarCharFields("Shards"),
 				Rows:   nil,
 			},
-		}, {
+		},
+		{
 			name: "No filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{
@@ -3182,7 +3190,8 @@ func TestExecutorShowShards(t *testing.T) {
 					buildVarCharRow("ks1/80-"),
 				},
 			},
-		}, {
+		},
+		{
 			name: "Shard filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{

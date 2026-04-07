@@ -396,7 +396,6 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -426,7 +425,6 @@ func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
-
 	if err != nil {
 		return err
 	}

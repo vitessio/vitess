@@ -19,10 +19,13 @@ import { query } from '../proto/vtadmin';
 /**
  * TRANSACTION_STATES maps numeric transaction state back to human readable strings.
  */
-export const TRANSACTION_STATES = Object.entries(invertBy(query.TransactionState)).reduce((acc, [k, vs]) => {
-    acc[k] = vs[0];
-    return acc;
-}, {} as { [k: string]: string });
+export const TRANSACTION_STATES = Object.entries(invertBy(query.TransactionState)).reduce(
+    (acc, [k, vs]) => {
+        acc[k] = vs[0];
+        return acc;
+    },
+    {} as { [k: string]: string }
+);
 
 export const formatTransactionState = (transaction: query.ITransactionMetadata) =>
     transaction.state && TRANSACTION_STATES[transaction.state];

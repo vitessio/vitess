@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -684,7 +686,7 @@ func TestParseBackupName(t *testing.T) {
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
-	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.NotNil(t, *bt, time.Date(2024, 0o3, 18, 18, 9, 11, 0, time.UTC))
 	assert.Equal(t, "cell1", al.Cell)
 	assert.Equal(t, uint32(42), al.Uid)
 	assert.NoError(t, err)
@@ -693,12 +695,14 @@ func TestParseBackupName(t *testing.T) {
 func TestShouldRestore(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	b, err := ShouldRestore(env.ctx, env.restoreParams)
+	b, err := ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
 	assert.Error(t, err)
 
 	env.restoreParams.DeleteBeforeRestore = true
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.True(t, b)
 	assert.NoError(t, err)
 	env.restoreParams.DeleteBeforeRestore = false
@@ -706,14 +710,16 @@ func TestShouldRestore(t *testing.T) {
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.NoError(t, err)
 	assert.True(t, b)
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
 	assert.NoError(t, err)
 }
@@ -924,7 +930,120 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			wantErrString: "no timeout provided",
 			wantNoLogMsg:  true,
 		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+			},
+			wantErr:       true,
+			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
+		{
+			name: "SetSuperReadOnly ERUnknownSystemVariable with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, "", "Unknown system variable 'super_read_only'")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Server does not support super_read_only",
+		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError false",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: false,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Failed to disable super_read_only for init SQL queries",
+		},
 	}
+
+	// Test that super_read_only is disabled before query execution and reset after.
+	t.Run("super_read_only disabled and reset after queries", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+		superReadOnlyDuringQueries := true
+		mysqld.ExecuteSuperQueryListCallback = func() {
+			superReadOnlyDuringQueries = mysqld.SuperReadOnly.Load()
+		}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(context.Background(), params)
+		require.NoError(t, err)
+		assert.False(t, superReadOnlyDuringQueries, "super_read_only should be disabled during query execution")
+		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
+	})
+
+	// Test that super_read_only is not reset when it was already off.
+	t.Run("super_read_only already off no reset needed", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(false)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(context.Background(), params)
+		require.NoError(t, err)
+		assert.False(t, mysqld.SuperReadOnly.Load(), "super_read_only should remain false")
+	})
 
 	// Test case for context cancellation during query execution.
 	t.Run("parent context canceled with query failure", func(t *testing.T) {

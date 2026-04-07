@@ -192,7 +192,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				lhs, lhsOK := cmp.Left.(*sqlparser.ColName)
 				rhs, rhsOK := cmp.Right.(*sqlparser.ColName)
 
-				var output = &filterColumns
+				output := &filterColumns
 				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
 					// If the columns are from different tables, they are considered join columns
 					output = &joinColumns

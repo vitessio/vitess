@@ -37,8 +37,7 @@ import (
 
 func TestCellInfo(t *testing.T) {
 	cell := "cell1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
@@ -138,11 +137,10 @@ func TestCellInfo(t *testing.T) {
 }
 
 func TestExpandCells(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	var cells []string
 	var err error
-	var allCells = "cell1,cell2,cell3"
+	allCells := "cell1,cell2,cell3"
 	type testCase struct {
 		name      string
 		cellsIn   string
@@ -233,8 +231,7 @@ func TestExpandCells(t *testing.T) {
 }
 
 func TestDeleteCellInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "unreachable")
 	defer ts.Close()
 

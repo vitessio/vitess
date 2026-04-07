@@ -542,7 +542,7 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 	require.NoError(b, err)
 	pos := Position{GTIDSet: gtidSet}
 
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:6",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:13",
@@ -558,9 +558,8 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 		gtids[i] = gtid
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, gtid := range gtids {
 			pos.GTIDSet = pos.GTIDSet.AddGTID(gtid)
 		}
@@ -568,7 +567,7 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 }
 
 func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
@@ -586,9 +585,8 @@ func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
 	}
 	var pos Position
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, p := range positions {
 			pos.GTIDSet = p.GTIDSet.UnionInPlace(pos.GTIDSet)
 		}
@@ -596,7 +594,7 @@ func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
 }
 
 func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12-15:17-20",
@@ -610,11 +608,10 @@ func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
 		require.NoError(b, err)
 		positions[i] = Position{GTIDSet: gtid}
 	}
-	var pos = Position{GTIDSet: Mysql56GTIDSet{}}
+	pos := Position{GTIDSet: Mysql56GTIDSet{}}
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, p := range positions {
 			pos.GTIDSet = pos.GTIDSet.UnionInPlace(p.GTIDSet)
 		}
@@ -740,7 +737,7 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 }
 
 func BenchmarkMySQL56GTIDParsing(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
@@ -752,9 +749,8 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		for _, input := range Inputs {
 			_, _ = ParseMysql56GTIDSet(input)
 		}

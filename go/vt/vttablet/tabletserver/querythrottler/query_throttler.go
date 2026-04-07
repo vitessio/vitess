@@ -19,6 +19,7 @@ package querythrottler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -142,7 +143,7 @@ func (qt *QueryThrottler) Shutdown() {
 //   - Missing critical throttling rules during high-load periods
 func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 	qt.keyspace = keyspace
-	log.Infof("QueryThrottler: initialized with keyspace=%s", keyspace)
+	log.Info("QueryThrottler: initialized with keyspace=" + keyspace)
 
 	// Start the topo server watch post the keyspace is set.
 	qt.startSrvKeyspaceWatch()
@@ -199,7 +200,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// If dry-run mode is enabled, log the decision but don't throttle
 	if tCfg.GetDryRun() {
-		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
+		log.Warn(fmt.Sprintf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue))
 		return nil
 	}
 
@@ -222,7 +223,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	// Pre-flight validation: ensure required fields are set
 	if qt.srvTopoServer == nil || qt.keyspace == "" {
-		log.Errorf("QueryThrottler: cannot start SrvKeyspace watch, srvTopoServer=%v, keyspace=%s", qt.srvTopoServer != nil, qt.keyspace)
+		log.Error(fmt.Sprintf("QueryThrottler: cannot start SrvKeyspace watch, srvTopoServer=%v, keyspace=%s", qt.srvTopoServer != nil, qt.keyspace))
 		return
 	}
 
@@ -231,10 +232,10 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	// TODO(Siddharth) add retry for this initial load
 	srvKS, err := qt.srvTopoServer.GetSrvKeyspace(qt.ctx, qt.cell, qt.keyspace)
 	if err != nil {
-		log.Warningf("QueryThrottler: failed to load initial config for keyspace=%s (GetSrvKeyspace): %v", qt.keyspace, err)
+		log.Warn(fmt.Sprintf("QueryThrottler: failed to load initial config for keyspace=%s (GetSrvKeyspace): %v", qt.keyspace, err))
 	}
 	if srvKS == nil {
-		log.Warningf("QueryThrottler: srv keyspace fetched is nil for keyspace=%s ", qt.keyspace)
+		log.Warn(fmt.Sprintf("QueryThrottler: srv keyspace fetched is nil for keyspace=%s ", qt.keyspace))
 	}
 	qt.HandleConfigUpdate(srvKS, nil)
 
@@ -243,7 +244,7 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 
 	// Only start the watch once (protected by atomic flag)
 	if !qt.watchStarted.CompareAndSwap(false, true) {
-		log.Infof("QueryThrottler: SrvKeyspace watch already started for keyspace=%s", qt.keyspace)
+		log.Info("QueryThrottler: SrvKeyspace watch already started for keyspace=" + qt.keyspace)
 		return
 	}
 	watchCtx, cancel := context.WithCancel(qt.ctx)
@@ -257,7 +258,7 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.HandleConfigUpdate)
 	}()
 
-	log.Infof("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell)
+	log.Info(fmt.Sprintf("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell))
 }
 
 // extractWorkloadName extracts the workload name from ExecuteOptions.
@@ -290,7 +291,7 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil || optionsPriority < 0 || optionsPriority > 100 {
-		log.Warningf("Invalid priority value '%s' in ExecuteOptions, expected integer 0-100, using default priority %d", options.Priority, defaultPriority)
+		log.Warn(fmt.Sprintf("Invalid priority value '%s' in ExecuteOptions, expected integer 0-100, using default priority %d", options.Priority, defaultPriority))
 		return defaultPriority
 	}
 
@@ -317,24 +318,24 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	if err != nil {
 		// Keyspace deleted from topology - stop watching
 		if topo.IsErrType(err, topo.NoNode) {
-			log.Warningf("HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", qt.keyspace)
+			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", qt.keyspace))
 			return false
 		}
 
 		// Context canceled or interrupted - graceful shutdown, stop watching
 		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Infof("HandleConfigUpdate: watch stopped (context canceled or interrupted)")
+			log.Info("HandleConfigUpdate: watch stopped (context canceled or interrupted)")
 			return false
 		}
 
 		// Transient error (network, temporary topo server issue) - keep watching
 		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warningf("HandleConfigUpdate: transient topo watch error (will retry): %v", err)
+		log.Warn(fmt.Sprintf("HandleConfigUpdate: transient topo watch error (will retry): %v", err))
 		return true
 	}
 
 	if srvks == nil {
-		log.Warningf("HandleConfigUpdate: srvks is nil")
+		log.Warn("HandleConfigUpdate: srvks is nil")
 		return true
 	}
 
@@ -378,7 +379,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		oldStrategyInstance.Stop()
 	}
 
-	log.Infof("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled())
+	log.Info(fmt.Sprintf("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled()))
 	return true
 }
 

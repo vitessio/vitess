@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -39,10 +41,8 @@ func SupplyProjection(eVindexFunc *engine.VindexFunc, expr *sqlparser.AliasedExp
 	}
 
 	if reuse {
-		for _, col := range eVindexFunc.Cols {
-			if col == enum {
-				return nil
-			}
+		if slices.Contains(eVindexFunc.Cols, enum) {
+			return nil
 		}
 	}
 

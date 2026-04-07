@@ -262,7 +262,7 @@ func (tp *TestPattern) Test(t testing.TB) bool {
 
 	matcher := re.Match(tp.Input)
 	var isMatch bool
-	var findCount = tp.Options.FindCount
+	findCount := tp.Options.FindCount
 	if findCount == 0 {
 		findCount = 1
 	}
@@ -367,7 +367,7 @@ func TestICUExtended(t *testing.T) {
 }
 
 func TestCornerCases(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		Pattern string
 		Input   string
 		Flags   icuregex.RegexpFlag

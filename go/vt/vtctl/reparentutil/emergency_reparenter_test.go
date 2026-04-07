@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1563,6 +1564,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone2",
 						Uid:  100,
 					},
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Hostname: "failed previous primary",
@@ -1688,6 +1690,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone2",
 						Uid:  100,
 					},
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Hostname: "failed previous primary",
@@ -1867,8 +1870,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
@@ -2338,8 +2340,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{ShardInfo: topo.ShardInfo{
 				Shard: &topodatapb.Shard{
@@ -2741,8 +2742,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	keyspace := "testkeyspace"
 	shard := "-"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
@@ -3434,7 +3434,8 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			keyspace:  "testkeyspace",
 			shard:     "-",
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                 "single replica failing to SetReplicationSource does not fail the promotion",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -3577,14 +3578,13 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 					Shard: &topodatapb.Shard{
 						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone1",
-							Uid:  000,
+							Uid:  0o00,
 						},
 					},
 				},
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
@@ -3718,7 +3718,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -3739,7 +3740,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -3848,7 +3850,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					},
 				},
 			},
-		}, {
+		},
+		{
 			name:                 "success - only 2 tablets and they error",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -3963,7 +3966,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -4033,7 +4037,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -4155,8 +4160,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
 
@@ -4664,16 +4668,18 @@ func getRelayLogPosition(gtidSets ...string) string {
 
 	res := "MySQL56/"
 	first := true
+	var resSb4673 strings.Builder
 	for idx, set := range gtidSets {
 		if set == "" {
 			continue
 		}
 		if !first {
-			res += ","
+			resSb4673.WriteString(",")
 		}
 		first = false
-		res += uuids[idx] + ":" + set
+		resSb4673.WriteString(uuids[idx] + ":" + set)
 	}
+	res += resSb4673.String()
 	return res
 }
 

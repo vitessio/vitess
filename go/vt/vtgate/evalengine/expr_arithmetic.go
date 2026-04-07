@@ -46,12 +46,14 @@ type (
 
 var _ IR = (*ArithmeticExpr)(nil)
 
-var _ opArith = (*opArithAdd)(nil)
-var _ opArith = (*opArithSub)(nil)
-var _ opArith = (*opArithMul)(nil)
-var _ opArith = (*opArithDiv)(nil)
-var _ opArith = (*opArithIntDiv)(nil)
-var _ opArith = (*opArithMod)(nil)
+var (
+	_ opArith = (*opArithAdd)(nil)
+	_ opArith = (*opArithSub)(nil)
+	_ opArith = (*opArithMul)(nil)
+	_ opArith = (*opArithDiv)(nil)
+	_ opArith = (*opArithIntDiv)(nil)
+	_ opArith = (*opArithMod)(nil)
+)
 
 func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
 	left, err := b.Left.eval(env)

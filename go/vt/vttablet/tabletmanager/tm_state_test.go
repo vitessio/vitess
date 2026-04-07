@@ -42,9 +42,7 @@ import (
 )
 
 func TestStateOpenClose(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 
@@ -66,8 +64,7 @@ func TestStateOpenClose(t *testing.T) {
 }
 
 func TestStateRefreshFromTopo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -77,8 +74,7 @@ func TestStateRefreshFromTopo(t *testing.T) {
 }
 
 func TestStateResharding(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -105,40 +101,76 @@ func TestStateResharding(t *testing.T) {
 }
 
 func TestStateDenyList(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	defer tm.Stop()
-
-	fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
-	fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name: "t1",
-		}},
-	}
-	si := &topo.ShardInfo{
-		Shard: &topodatapb.Shard{
-			TabletControls: []*topodatapb.Shard_TabletControl{{
+	tests := []struct {
+		name                           string
+		tableDefinitions               []*tabletmanagerdatapb.TableDefinition
+		tabletControls                 []*topodatapb.Shard_TabletControl
+		wantDeniedTables               map[topodatapb.TabletType][]string
+		wantAllowReadsFromDeniedTables map[topodatapb.TabletType]bool
+		wantQueryRules                 string
+	}{
+		{
+			name: "replica denied table",
+			tableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name: "t1",
+			}},
+			tabletControls: []*topodatapb.Shard_TabletControl{{
 				TabletType:   topodatapb.TabletType_REPLICA,
 				Cells:        []string{"cell1"},
 				DeniedTables: []string{"t1"},
 			}},
+			wantDeniedTables:               map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
+			wantAllowReadsFromDeniedTables: map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: false},
+			wantQueryRules:                 `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
+		},
+		{
+			name: "replica denied table with allow reads",
+			tableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name: "t1",
+			}},
+			tabletControls: []*topodatapb.Shard_TabletControl{{
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: []string{"t1"},
+				AllowReads:   true,
+			}},
+			wantDeniedTables:               map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
+			wantAllowReadsFromDeniedTables: map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true},
+			wantQueryRules:                 `[{"Description":"enforce denied tables","Name":"denied_table","Plans":["Nextval","Insert","InsertMessage","Update","UpdateLimit","Delete","DeleteLimit","DDL","Set","OtherRead","OtherAdmin","MessageStream","Savepoint","Release","RollbackSavepoint","Show","Load","Flush","UnlockTables","CallProcedure","AlterMigration","RevertMigration","ShowMigrations","ShowMigrationLogs","ShowThrottledApps","ShowThrottlerStatus"],"TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
 		},
 	}
-	tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
-	tm.tmState.mu.Lock()
-	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.deniedTables)
-	tm.tmState.mu.Unlock()
 
-	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
-	assert.Equal(t, `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			defer tm.Stop()
+
+			fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: tt.tableDefinitions,
+			}
+			si := &topo.ShardInfo{
+				Shard: &topodatapb.Shard{
+					TabletControls: tt.tabletControls,
+				},
+			}
+			tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
+			tm.tmState.mu.Lock()
+			assert.Equal(t, tt.wantDeniedTables, tm.tmState.deniedTables)
+			assert.Equal(t, tt.wantAllowReadsFromDeniedTables, tm.tmState.allowReadsFromDeniedTables)
+			tm.tmState.mu.Unlock()
+
+			qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+			b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
+			assert.Equal(t, tt.wantQueryRules, string(b))
+		})
+	}
 }
 
 func TestStateTabletControls(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -166,8 +198,7 @@ func TestStateTabletControls(t *testing.T) {
 }
 
 func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -338,8 +369,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 }
 
 func TestStateNonServing(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -355,8 +385,7 @@ func TestStateNonServing(t *testing.T) {
 }
 
 func TestStateChangeTabletType(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
@@ -397,8 +426,7 @@ func TestStateChangeTabletType(t *testing.T) {
 the new table type
 */
 func TestStateChangeTabletTypeWithFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
 	// create TM with replica and put a hook to return error during SetServingType
@@ -530,8 +558,7 @@ func TestPublishStateNew(t *testing.T) {
 	// we can't do using memorytopo, but we do test the retry
 	// code path.
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 42, "ks", "0", nil)
 	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
@@ -577,8 +604,7 @@ func TestPublishStateNew(t *testing.T) {
 }
 
 func TestPublishDeleted(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
 	defer tm.Stop()

@@ -1,14 +1,12 @@
 {
 	"extends": [
-		"stylelint-config-standard-scss",
-		"stylelint-config-prettier"
+		"stylelint-config-standard-scss"
 	],
 	"rules": {
 		"alpha-value-notation": "number",
-		"color-function-notation": "legacy",
+		"color-function-notation": "modern",
 		"custom-property-pattern": null,
 		"declaration-block-no-redundant-longhand-properties": null,
-		"scss/at-import-partial-extension": null,
 		"scss/at-rule-no-unknown": null,
 		"scss/dollar-variable-pattern": null,
 		"selector-class-pattern": null,

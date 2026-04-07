@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -28,7 +29,10 @@ func init() {
 	config.MarkConfigurationLoaded()
 }
 
-var instance1 = Instance{InstanceAlias: "zone1-100"}
+var instance1 = Instance{InstanceAlias: &topodatapb.TabletAlias{
+	Cell: "zone1",
+	Uid:  100,
+}}
 
 func TestReplicationThreads(t *testing.T) {
 	{
@@ -41,7 +45,7 @@ func TestReplicationThreads(t *testing.T) {
 		require.True(t, instance1.ReplicationThreadsStopped())
 	}
 	{
-		i := Instance{InstanceAlias: "zone1-100", ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
+		i := Instance{InstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
 		require.False(t, i.ReplicationThreadsExist())
 	}
 }

@@ -50,7 +50,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
-%struct {
+%union {
   empty         struct{}
   LengthScaleOption LengthScaleOption
   tableName     TableName
@@ -64,9 +64,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
-}
 
-%union {
   statement       Statement
   statements      []Statement
   selStmt         SelectStatement
@@ -228,6 +226,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   jtOnResponse	*JtOnResponse
   variables      []*Variable
   variable       *Variable
+  userOrRole     *UserOrRole
+  userOrRoles    []UserOrRole
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -390,8 +390,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> PURGE BEFORE
 
 // SHOW tokens
-%token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
-%token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
+%token <str> BINLOG CODE COLLATION COLUMNS DATABASES ENGINES ERRORS EVENT EVENTS EXTENDED FIELDS FULL FUNCTION GRANTS GTID_EXECUTED
+%token <str> KEYSPACES LOG MASTER MUTEX OPEN PLUGINS PRIVILEGES PROCESSLIST PROFILE PROFILES RELAYLOG REPLICA REPLICAS SCHEMAS SLAVE TABLES TRIGGERS USER
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA VITESS_THROTTLED_APPS
 
 // SET tokens
@@ -534,7 +534,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
 %type <intervalType> interval timestampadd_interval
-%type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
+%type <str> cache_opt separator_opt flush_option for_channel_opt show_for_channel_opt binlog_in_opt maxvalue
+%type <expr> binlog_from_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace local_opt
 %type <selectExprs> select_expression_list
@@ -606,13 +607,18 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt for_opt
+%type <userOrRole> user_or_role show_grants_opt
+%type <userOrRoles> user_or_role_list
+%type <strs> show_profile_types_opt show_profile_type_list
+%type <str> show_profile_type
+%type <literal> for_query_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
 %type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
-%type <empty> skip_to_end ddl_skip_to_end
+%type <empty> skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
 %type <convertType> convert_type returning_type_opt convert_type_weight_string
@@ -1245,13 +1251,21 @@ values_statement:
   }
 
 stream_statement:
-  STREAM comment_opt select_expression FROM table_name
+  STREAM comment_opt '*' FROM table_name
+  {
+    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: &StarExpr{}, Table: $5}
+  }
+| STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
-  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
+  VSTREAM comment_opt '*' FROM table_name where_expression_opt limit_opt
+  {
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: &StarExpr{}, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+  }
+| VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
     $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
@@ -1341,7 +1355,7 @@ view_name_list:
   }
 | view_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_name_list:
@@ -1351,7 +1365,7 @@ table_name_list:
   }
 | table_name_list ',' table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 delete_table_list:
@@ -1361,7 +1375,7 @@ delete_table_list:
   }
 | delete_table_list ',' delete_table_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 opt_partition_clause:
@@ -1582,7 +1596,7 @@ vindex_param_list:
   }
 | vindex_param_list ',' vindex_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 vindex_param:
@@ -1607,7 +1621,7 @@ json_object_param_list:
   }
 | json_object_param_list ',' json_object_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 json_object_param:
@@ -2792,7 +2806,7 @@ index_option_list:
   }
 | index_option_list index_option
   {
-    $$ = append($$, $2)
+    $$ = append($1, $2)
   }
 
 index_option:
@@ -2930,7 +2944,7 @@ index_column_list:
   }
 | index_column_list ',' index_column
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_column:
@@ -3500,7 +3514,7 @@ alter_option:
   }
 | DROP CONSTRAINT sql_id
   {
-    $$ = &DropKey{Type:CheckKeyType, Name:$3}
+    $$ = &DropKey{Type:ConstraintType, Name:$3}
   }
 | FORCE
   {
@@ -4613,9 +4627,9 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
   }
-| SHOW WARNINGS
+| SHOW WARNINGS limit_opt
   {
-    $$ = &Show{&ShowBasic{Command: Warnings}}
+    $$ = &Show{&ShowBasic{Command: Warnings, Limit: $3}}
   }
 | SHOW VITESS_SHARDS like_or_where_opt
   {
@@ -4629,44 +4643,105 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessTarget}}
   }
-/*
- * Catch-all for show statements without vitess keywords:
- */
-| SHOW ci_identifier ddl_skip_to_end
+| SHOW BINARY LOGS
   {
-    $$ = &Show{&ShowOther{Command: string($2.String())}}
+    $$ = &Show{&ShowBinaryLogs{}}
   }
-| SHOW CREATE USER ddl_skip_to_end
+| SHOW BINARY LOG STATUS
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
-   }
-| SHOW BINARY ci_identifier ddl_skip_to_end /* SHOW BINARY ... */
-  {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
+    $$ = &Show{&ShowReplicationSourceStatus{}}
   }
-| SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
+| SHOW MASTER STATUS
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+    $$ = &Show{&ShowReplicationSourceStatus{Legacy: true}}
   }
-| SHOW ENGINE ddl_skip_to_end
+| SHOW BINLOG EVENTS binlog_in_opt binlog_from_opt limit_opt
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = &Show{&ShowBinlogEvents{
+      IsRelaylog: false,
+      LogName:    $4,
+      Position:   $5,
+      Limit:      $6,
+    }}
+  }
+| SHOW RELAYLOG EVENTS binlog_in_opt binlog_from_opt limit_opt show_for_channel_opt
+  {
+    $$ = &Show{&ShowBinlogEvents{
+      IsRelaylog: true,
+      LogName:    $4,
+      Position:   $5,
+      Limit:      $6,
+      Channel:    $7,
+    }}
+  }
+| SHOW REPLICA STATUS show_for_channel_opt
+  {
+    $$ = &Show{&ShowReplicationStatus{Channel: $4}}
+  }
+| SHOW SLAVE STATUS show_for_channel_opt
+  {
+    $$ = &Show{&ShowReplicationStatus{Legacy: true, Channel: $4}}
+  }
+| SHOW REPLICAS
+  {
+    $$ = &Show{&ShowReplicas{}}
+  }
+| SHOW SLAVE HOSTS
+  {
+    $$ = &Show{&ShowReplicas{Legacy: true}}
+  }
+| SHOW ERRORS limit_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Errors, Limit: $3}}
+  }
+| SHOW EVENTS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Events, DbName: $3, Filter: $4}}
+  }
+| SHOW ENGINE ci_identifier STATUS
+  {
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "status"}}
+  }
+| SHOW ENGINE ci_identifier MUTEX
+  {
+    $$ = &Show{&ShowEngine{EngineName: $3.Lowered(), Action: "mutex"}}
   }
 | SHOW FUNCTION CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = &Show{&ShowBasic{Command: FunctionC, Tbl: $4}}
   }
 | SHOW PROCEDURE CODE table_name
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+    $$ = &Show{&ShowBasic{Command: ProcedureC, Tbl: $4}}
   }
-| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
+| SHOW full_opt PROCESSLIST
   {
-    $$ = &Show{&ShowOther{Command: string($3)}}
+    $$ = &Show{&ShowBasic{Full: $2, Command: ProcessList}}
   }
-| SHOW STORAGE ddl_skip_to_end
+| SHOW STORAGE ENGINES
   {
-    $$ = &Show{&ShowOther{Command: string($2)}}
+    $$ = &Show{&ShowBasic{Command: Engines}}
+  }
+| SHOW CREATE USER user_or_role
+  {
+    $$ = &Show{&ShowCreateUser{User: $4}}
+  }
+| SHOW GRANTS show_grants_opt
+  {
+    sg := &ShowGrants{User: $3}
+    $$ = &Show{sg}
+  }
+| SHOW GRANTS FOR user_or_role USING user_or_role_list
+  {
+    $$ = &Show{&ShowGrants{User: $4, UsingRole: $6}}
+  }
+| SHOW PROFILE show_profile_types_opt for_query_opt limit_opt
+  {
+    $$ = &Show{&ShowProfile{Types: $3, ForQuery: $4, Limit: $5}}
+  }
+| SHOW PROFILES
+  {
+    $$ = &Show{&ShowBasic{Command: Profiles}}
   }
 | SHOW TRANSACTION STATUS for_opt STRING
   {
@@ -4685,6 +4760,134 @@ for_opt:
   {}
 | FOR
   {}
+
+user_or_role:
+  STRING AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| STRING
+  {
+    $$ = &UserOrRole{Name: new(string($1))}
+  }
+| CURRENT_USER openb closeb
+  {
+    $$ = new(UserOrRole)
+  }
+| CURRENT_USER
+  {
+    $$ = new(UserOrRole)
+  }
+| ci_identifier AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| ci_identifier
+  {
+    $$ = &UserOrRole{Name: new(string($1.String()))}
+  }
+
+show_grants_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR user_or_role
+  {
+    $$ = $2
+  }
+
+user_or_role_list:
+  user_or_role
+  {
+    $$ = []UserOrRole{*$1}
+  }
+| user_or_role_list ',' user_or_role
+  {
+    $$ = append($1, *$3)
+  }
+
+show_profile_types_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| show_profile_type_list
+  {
+    $$ = $1
+  }
+
+show_profile_type_list:
+  show_profile_type
+  {
+    $$ = []string{$1}
+  }
+| show_profile_type_list ',' show_profile_type
+  {
+    $$ = append($1, $3)
+  }
+
+show_profile_type:
+  ALL
+  {
+    $$ = "all"
+  }
+| MEMORY
+  {
+    $$ = "memory"
+  }
+| ci_identifier
+  {
+    $$ = $1.String()
+  }
+| ci_identifier ci_identifier
+  {
+    $$ = $1.String() + " " + $2.String()
+  }
+
+for_query_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR QUERY INTEGRAL
+  {
+    $$ = NewIntLiteral($3)
+  }
+
+binlog_in_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| IN STRING
+  {
+    $$ = string($2)
+  }
+
+binlog_from_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FROM INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+
+show_for_channel_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FOR CHANNEL ci_identifier
+  {
+    $$ = $3.String()
+  }
+| FOR CHANNEL STRING
+  {
+    $$ = string($3)
+  }
 
 extended_opt:
   /* empty */
@@ -5335,7 +5538,11 @@ select_option:
   }
 
 select_expression_list:
-  select_expression
+  '*'
+  {
+    $$ = &SelectExprs{Exprs: []SelectExpr{&StarExpr{}}}
+  }
+| select_expression
   {
     $$ = &SelectExprs{Exprs: []SelectExpr{$1}}
   }
@@ -5347,11 +5554,7 @@ select_expression_list:
   }
 
 select_expression:
-  '*'
-  {
-    $$ = &StarExpr{}
-  }
-| expression as_ci_opt
+  expression as_ci_opt
   {
     $$ = &AliasedExpr{Expr: $1, As: $2}
   }
@@ -5406,7 +5609,7 @@ table_references:
   }
 | table_references ',' table_reference
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 table_reference:
@@ -5476,7 +5679,7 @@ column_list:
   }
 | column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 at_id_list:
@@ -5486,7 +5689,7 @@ at_id_list:
   }
 | at_id_list ',' user_defined_variable
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 index_list:
@@ -5500,11 +5703,11 @@ index_list:
   }
 | index_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | index_list ',' PRIMARY
   {
-    $$ = append($$, NewIdentifierCI(string($3)))
+    $$ = append($1, NewIdentifierCI(string($3)))
   }
 
 partition_list:
@@ -5514,7 +5717,7 @@ partition_list:
   }
 | partition_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 // There is a grammar conflict here:
@@ -8040,7 +8243,7 @@ proc_params_list:
   }
 | proc_params_list ',' proc_param
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 proc_param:
@@ -8355,11 +8558,11 @@ ins_column_list:
   }
 | ins_column_list ',' sql_id
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 | ins_column_list ',' sql_id '.' sql_id
   {
-    $$ = append($$, $5)
+    $$ = append($1, $5)
   }
 
 row_alias_opt:
@@ -8829,6 +9032,7 @@ non_reserved_keyword:
 | BEGIN
 | BIGINT
 | BIT
+| BINLOG
 | BIT_AND %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_OR %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_XOR %prec FUNCTION_CALL_NON_KEYWORD
@@ -8903,8 +9107,10 @@ non_reserved_keyword:
 | ENGINES
 | ENUM
 | ERROR
+| ERRORS
 | ESCAPED
 | EVENT
+| EVENTS
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
@@ -8935,6 +9141,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GET_SOURCE_PUBLIC_KEY
 | GLOBAL
+| GRANTS
 | GROUP_CONCAT %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_EXECUTED
 | GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
@@ -9005,12 +9212,14 @@ non_reserved_keyword:
 | LOCAL
 | LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
+| LOG
 | LOGS
 | LONGBLOB
 | LONGTEXT
 | LTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | MANUAL
 | MANIFEST
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -9032,6 +9241,7 @@ non_reserved_keyword:
 | MULTILINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
+| MUTEX
 | MYSQL_ERRNO
 | NAME
 | NAMES
@@ -9072,6 +9282,8 @@ non_reserved_keyword:
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESS
+| PROFILE
+| PROFILES
 | PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
@@ -9096,11 +9308,14 @@ non_reserved_keyword:
 | REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_SUBSTR %prec FUNCTION_CALL_NON_KEYWORD
 | RELAY
+| RELAYLOG
 | RELEASE_ALL_LOCKS %prec FUNCTION_CALL_NON_KEYWORD
 | RELEASE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | REMOVE
 | REORGANIZE
 | REPAIR
+| REPLICA
+| REPLICAS
 | REPEATABLE
 | RESTRICT
 | REQUIRE_ROW_FORMAT
@@ -9132,6 +9347,7 @@ non_reserved_keyword:
 | SIGNED
 | SIMPLE
 | SKIP
+| SLAVE
 | SLOW
 | SMALLINT
 | SNAPSHOT
@@ -9329,15 +9545,4 @@ skip_to_end:
   skipToEnd(yylex)
 }
 
-ddl_skip_to_end:
-  {
-    skipToEnd(yylex)
-  }
-| openb
-  {
-    skipToEnd(yylex)
-  }
-| reserved_sql_id
-  {
-    skipToEnd(yylex)
-  }
+

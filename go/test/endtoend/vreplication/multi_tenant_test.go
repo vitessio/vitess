@@ -257,7 +257,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	lastIndex = insertRows(lastIndex, targetKeyspace)
 
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
-	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
+	log.Info(fmt.Sprintf("Migration completed, total rows in target: %d", actualRowsInserted))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 
 	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
@@ -406,7 +406,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))
-	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
+	log.Info(fmt.Sprintf("Migration completed, total rows in target: %d", actualRowsInserted))
 }
 
 func confirmBothReadsAndWritesSwitched(t *testing.T) {
@@ -491,7 +491,7 @@ func TestMultiTenantComplex(t *testing.T) {
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
 		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
-		log.Infof("Migration completed, total rows inserted in target: %d", totalActualRowsInserted)
+		log.Info(fmt.Sprintf("Migration completed, total rows inserted in target: %d", totalActualRowsInserted))
 	})
 }
 
@@ -562,7 +562,7 @@ func getInitialTabletIdForTenant(tenantId int64) int {
 }
 
 func (mtm *multiTenantMigration) setup(tenantId int64) {
-	log.Infof("Creating MoveTables for tenant %d", tenantId)
+	log.Info(fmt.Sprintf("Creating MoveTables for tenant %d", tenantId))
 	mtm.setLastID(tenantId, 0)
 	sourceKeyspace := getSourceKeyspace(tenantId)
 	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema,

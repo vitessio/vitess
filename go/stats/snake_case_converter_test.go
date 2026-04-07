@@ -23,7 +23,7 @@ import (
 )
 
 func TestToSnakeCase(t *testing.T) {
-	var snakeCaseTest = []struct{ input, output string }{
+	snakeCaseTest := []struct{ input, output string }{
 		{"Camel", "camel"},
 		{"Camel", "camel"},
 		{"CamelCase", "camel_case"},
@@ -77,11 +77,11 @@ func TestSnakeCaseConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	errChan := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+			for range numIterations {
 				for _, input := range inputs {
 					result := GetSnakeName(input)
 					if result != expected[input] {

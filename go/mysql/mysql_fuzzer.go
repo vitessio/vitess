@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 /*
 Copyright 2021 The Vitess Authors.
@@ -272,7 +271,6 @@ func (th *fuzzTestHandler) NewConnection(c *Conn) {
 }
 
 func (th *fuzzTestHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-
 	return nil
 }
 
@@ -285,7 +283,6 @@ func (th *fuzzTestHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callbac
 }
 
 func (th *fuzzTestHandler) ComResetConnection(c *Conn) {
-
 }
 
 func (th *fuzzTestHandler) WarningCount(c *Conn) uint16 {

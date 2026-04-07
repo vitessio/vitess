@@ -61,6 +61,245 @@ func TestSortedTableSummariesEmpty(t *testing.T) {
 	require.Len(t, sorted, 0)
 }
 
+func TestBuildSummary(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "vdiff_state", Type: querypb.Type_VARBINARY},
+		{Name: "last_error", Type: querypb.Type_VARBINARY},
+		{Name: "table_name", Type: querypb.Type_VARBINARY},
+		{Name: "uuid", Type: querypb.Type_VARCHAR},
+		{Name: "table_state", Type: querypb.Type_VARBINARY},
+		{Name: "table_rows", Type: querypb.Type_INT64},
+		{Name: "started_at", Type: querypb.Type_TIMESTAMP},
+		{Name: "rows_compared", Type: querypb.Type_INT64},
+		{Name: "completed_at", Type: querypb.Type_TIMESTAMP},
+		{Name: "has_mismatch", Type: querypb.Type_INT64},
+		{Name: "report", Type: querypb.Type_JSON},
+	}
+
+	makeResult := func(rows ...[]string) *tabletmanagerdatapb.VDiffResponse {
+		qr := &querypb.QueryResult{Fields: fields}
+		for _, row := range rows {
+			qr.Rows = append(qr.Rows, &querypb.Row{
+				Lengths: func() []int64 {
+					lengths := make([]int64, len(row))
+					for i, v := range row {
+						lengths[i] = int64(len(v))
+					}
+					return lengths
+				}(),
+				Values: func() []byte {
+					var b []byte
+					for _, v := range row {
+						b = append(b, []byte(v)...)
+					}
+					return b
+				}(),
+			})
+		}
+		return &tabletmanagerdatapb.VDiffResponse{
+			Id:     1,
+			Output: qr,
+		}
+	}
+
+	testUUID := uuid.New().String()
+	startedAt := "2026-01-15 10:00:00"
+	completedAt := "2026-01-15 10:05:00"
+
+	t.Run("single shard completed verbose", func(t *testing.T) {
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"0": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "100",
+					startedAt, "100", completedAt, "0",
+					`{"TableName": "t1", "ProcessedRows": 100, "MatchingRows": 100, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, true)
+		require.NoError(t, err)
+		require.Equal(t, vdiff.CompletedState, summary.State)
+		require.Equal(t, int64(100), summary.RowsCompared)
+		require.False(t, summary.HasMismatch)
+
+		// ShardSummaries should be populated in verbose mode.
+		require.Len(t, summary.ShardSummaries, 1)
+		ss := summary.ShardSummaries["0"]
+		require.Equal(t, vdiff.CompletedState, ss.State)
+		require.Equal(t, startedAt, ss.StartedAt)
+		require.Equal(t, completedAt, ss.CompletedAt)
+		require.Empty(t, ss.LastError)
+		require.Len(t, ss.TableStates, 1)
+
+		ts := ss.TableStates["t1"]
+		require.Equal(t, "t1", ts.TableName)
+		require.Equal(t, vdiff.CompletedState, ts.State)
+		require.Equal(t, int64(100), ts.RowsCompared)
+		require.Equal(t, int64(100), ts.MatchingRows)
+		require.Equal(t, int64(0), ts.MismatchedRows)
+		require.False(t, ts.HasMismatch)
+	})
+
+	t.Run("single shard completed non-verbose no mismatch", func(t *testing.T) {
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"0": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "50",
+					startedAt, "50", completedAt, "0",
+					`{"TableName": "t1", "ProcessedRows": 50, "MatchingRows": 50, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, false)
+		require.NoError(t, err)
+		require.Equal(t, vdiff.CompletedState, summary.State)
+		require.False(t, summary.HasMismatch)
+
+		// ShardSummaries should be nil when non-verbose and no mismatch.
+		require.Nil(t, summary.ShardSummaries)
+		require.Nil(t, summary.TableSummaryMap)
+		require.Nil(t, summary.Reports)
+	})
+
+	t.Run("single shard with mismatch non-verbose", func(t *testing.T) {
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"0": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "10",
+					startedAt, "10", completedAt, "1",
+					`{"TableName": "t1", "ProcessedRows": 10, "MatchingRows": 8, "MismatchedRows": 2, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, false)
+		require.NoError(t, err)
+		require.True(t, summary.HasMismatch)
+
+		// ShardSummaries should be populated when there's a mismatch (even non-verbose).
+		require.Len(t, summary.ShardSummaries, 1)
+		ss := summary.ShardSummaries["0"]
+		require.True(t, ss.TableStates["t1"].HasMismatch)
+		require.Equal(t, int64(2), ss.TableStates["t1"].MismatchedRows)
+	})
+
+	t.Run("multiple shards completed", func(t *testing.T) {
+		shard1StartedAt := "2026-01-15 10:00:00"
+		shard1CompletedAt := "2026-01-15 10:03:00"
+		shard2StartedAt := "2026-01-15 10:01:00"
+		shard2CompletedAt := "2026-01-15 10:05:00"
+
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"-80": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "60",
+					shard1StartedAt, "60", shard1CompletedAt, "0",
+					`{"TableName": "t1", "ProcessedRows": 60, "MatchingRows": 60, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+				"80-": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "40",
+					shard2StartedAt, "40", shard2CompletedAt, "0",
+					`{"TableName": "t1", "ProcessedRows": 40, "MatchingRows": 40, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, true)
+		require.NoError(t, err)
+		require.Equal(t, vdiff.CompletedState, summary.State)
+		require.Equal(t, int64(100), summary.RowsCompared)
+		// Global timestamps should use earliest start and latest completion.
+		require.Equal(t, shard1StartedAt, summary.StartedAt)
+		require.Equal(t, shard2CompletedAt, summary.CompletedAt)
+
+		// Both shards should have their own summaries with correct per-shard timestamps.
+		require.Len(t, summary.ShardSummaries, 2)
+
+		ss1 := summary.ShardSummaries["-80"]
+		require.Equal(t, vdiff.CompletedState, ss1.State)
+		require.Equal(t, shard1StartedAt, ss1.StartedAt)
+		require.Equal(t, shard1CompletedAt, ss1.CompletedAt)
+		require.Equal(t, int64(60), ss1.TableStates["t1"].RowsCompared)
+
+		ss2 := summary.ShardSummaries["80-"]
+		require.Equal(t, vdiff.CompletedState, ss2.State)
+		require.Equal(t, shard2StartedAt, ss2.StartedAt)
+		require.Equal(t, shard2CompletedAt, ss2.CompletedAt)
+		require.Equal(t, int64(40), ss2.TableStates["t1"].RowsCompared)
+	})
+
+	t.Run("shard with error", func(t *testing.T) {
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"-80": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "60",
+					startedAt, "60", completedAt, "0",
+					`{"TableName": "t1", "ProcessedRows": 60, "MatchingRows": 60, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+				"80-": makeResult([]string{
+					"error", "some vdiff error", "t1", testUUID, "error", "40",
+					startedAt, "20", "", "0",
+					`{"TableName": "t1", "ProcessedRows": 20, "MatchingRows": 20, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, true)
+		require.NoError(t, err)
+		require.Equal(t, vdiff.ErrorState, summary.State)
+		require.Equal(t, "some vdiff error", summary.Errors["80-"])
+
+		// ShardSummaries should capture the error state per shard.
+		ss := summary.ShardSummaries["80-"]
+		require.Equal(t, vdiff.ErrorState, ss.State)
+		require.Equal(t, "some vdiff error", ss.LastError)
+		require.Equal(t, vdiff.ErrorState, ss.TableStates["t1"].State)
+
+		// The healthy shard should still have its own correct summary.
+		ss1 := summary.ShardSummaries["-80"]
+		require.Equal(t, vdiff.CompletedState, ss1.State)
+		require.Empty(t, ss1.LastError)
+	})
+
+	t.Run("multiple tables per shard", func(t *testing.T) {
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"0": makeResult(
+					[]string{
+						"completed", "", "t1", testUUID, "completed", "50",
+						startedAt, "50", completedAt, "0",
+						`{"TableName": "t1", "ProcessedRows": 50, "MatchingRows": 50, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+					},
+					[]string{
+						"completed", "", "t2", testUUID, "completed", "30",
+						startedAt, "30", completedAt, "1",
+						`{"TableName": "t2", "ProcessedRows": 30, "MatchingRows": 28, "MismatchedRows": 2, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+					},
+				),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, true)
+		require.NoError(t, err)
+		require.Equal(t, vdiff.CompletedState, summary.State)
+		require.Equal(t, int64(80), summary.RowsCompared)
+		require.True(t, summary.HasMismatch)
+
+		// The single shard should have both tables in its TableStates.
+		ss := summary.ShardSummaries["0"]
+		require.Len(t, ss.TableStates, 2)
+
+		require.Equal(t, int64(50), ss.TableStates["t1"].RowsCompared)
+		require.False(t, ss.TableStates["t1"].HasMismatch)
+
+		require.Equal(t, int64(30), ss.TableStates["t2"].RowsCompared)
+		require.Equal(t, int64(2), ss.TableStates["t2"].MismatchedRows)
+		require.True(t, ss.TableStates["t2"].HasMismatch)
+	})
+}
+
 func TestBuildProgressReport(t *testing.T) {
 	now := time.Now()
 	type args struct {

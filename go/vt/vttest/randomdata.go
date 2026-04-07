@@ -59,7 +59,7 @@ const batchInsertSize = 1000
 func (db *LocalCluster) batchInsert(dbname, table string, fields []string, rows [][]string) error {
 	var (
 		fieldNames = strings.Join(fields, ",")
-		values     []string
+		values     = make([]string, 0, len(rows))
 		sql        string
 	)
 
@@ -95,7 +95,7 @@ func (db *LocalCluster) populateTable(dbname, table string) error {
 		fieldNames []string
 	)
 
-	for i := 0; i < numRows; i++ {
+	for range numRows {
 		var fields []string
 		for _, row := range fieldInfo.Rows {
 			fieldName := row[0].ToString()

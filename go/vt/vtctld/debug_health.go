@@ -19,9 +19,8 @@ limitations under the License.
 package vtctld
 
 import (
-	"net/http"
-
 	"context"
+	"net/http"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/servenv"

@@ -91,8 +91,7 @@ func TestRefreshAllInformation(t *testing.T) {
 	require.False(t, discoveredOnce)
 
 	// Test success
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
+	ctx2 := t.Context()
 	require.NoError(t, refreshAllInformation(ctx2))
 	require.True(t, process.FirstDiscoveryCycleComplete.Load())
 	_, discoveredOnce = process.HealthTest()

@@ -299,12 +299,6 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 }
 
 func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
-	callerId := callerid.EffectiveCallerIDFromContext(ctx)
-	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
-
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
-	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
-
 	v := &VCursorImpl{
 		config:         vc.config,
 		SafeSession:    NewAutocommitSession(vc.SafeSession.Session),
@@ -315,7 +309,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		executor:       vc.executor,
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
-		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		logStats:       &logstats.LogStats{},
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
@@ -327,8 +321,22 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+	v.SafeSession.GetOrCreateOptions().NoResult = true
 
 	return v
+}
+
+func (vc *VCursorImpl) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	baseCtx := context.WithoutCancel(ctx)
+	timedCtx, cancel := context.WithTimeout(baseCtx, vc.config.WarmingReadsTimeout)
+	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
+
+	vc.logStats = &logstats.LogStats{Ctx: clonedCtx}
+
+	return clonedCtx, cancel
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
@@ -469,15 +477,15 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.BaseTable,
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	if ks == "" {
 		ks = vc.keyspace
 	}
-	return vc.vschema.FindView(ks, name.Name.String())
+	return vc.vschema.FindRoutedView(ks, name.Name.String(), vc.tabletType)
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.BaseTable, error) {
@@ -714,7 +722,7 @@ func (vc *VCursorImpl) TargetString() string {
 const MaxBufferingRetries = 3
 
 func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, vc, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -757,7 +765,7 @@ func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, newVC, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -790,7 +798,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 func (vc *VCursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	callback = vc.wrapCallback(callback, primitive)
 
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -805,7 +813,7 @@ func (vc *VCursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, pri
 
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, newVC, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -1351,6 +1359,7 @@ func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
 	return vc.bindVars
 }
+
 func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
 	vc.bindVars = m
 }

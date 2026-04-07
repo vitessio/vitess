@@ -49,6 +49,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
+
 func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -63,6 +64,7 @@ func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
 	size += cached.AlterVschemaDDL.CachedSize(true)
 	return size
 }
+
 func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -72,7 +74,9 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 		size += int64(48)
 	}
 	// field WsCol *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.WsCol != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
@@ -104,6 +108,7 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Condition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -118,6 +123,7 @@ func (cached *Condition) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.B)))
 	return size
 }
+
 func (cached *DBDDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -130,6 +136,7 @@ func (cached *DBDDL) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
+
 func (cached *DDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -156,6 +163,7 @@ func (cached *DDL) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *DML) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -236,6 +244,7 @@ func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Delete) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -248,6 +257,7 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.DML.CachedSize(true)
 	return size
 }
+
 func (cached *Distinct) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -269,6 +279,7 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ExecStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -290,6 +301,7 @@ func (cached *ExecStmt) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Filter) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -312,6 +324,7 @@ func (cached *Filter) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *FkCascade) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -337,6 +350,7 @@ func (cached *FkCascade) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *FkChild) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -364,6 +378,7 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *FkVerify) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -385,6 +400,7 @@ func (cached *FkVerify) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Generate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -403,6 +419,7 @@ func (cached *Generate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -421,6 +438,7 @@ func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
+
 func (cached *HashJoin) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -457,6 +475,7 @@ func (cached *HashJoin) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Insert) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -506,6 +525,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
 	return size
 }
+
 func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -538,6 +558,7 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -594,6 +615,7 @@ func (cached *Join) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Limit) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -616,6 +638,7 @@ func (cached *Limit) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Lock) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -641,6 +664,7 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LockFunc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -657,6 +681,7 @@ func (cached *LockFunc) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *MStream) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -675,6 +700,7 @@ func (cached *MStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	return size
 }
+
 func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -700,6 +726,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -726,6 +753,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -738,6 +766,7 @@ func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.UpdateExprBvName)))
 	return size
 }
+
 func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -762,6 +791,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -790,6 +820,7 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Plan) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -824,6 +855,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	size += cached.QueryHints.CachedSize(false)
 	return size
 }
+
 func (cached *PlanSwitcher) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -849,6 +881,7 @@ func (cached *PlanSwitcher) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Projection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -906,6 +939,7 @@ func (cached *RecurseCTE) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RenameFields) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -931,6 +965,7 @@ func (cached *RenameFields) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ReplaceVariables) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -945,6 +980,7 @@ func (cached *ReplaceVariables) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -965,16 +1001,21 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Route) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field QueryStatement vitess.io/vitess/go/vt/sqlparser.Statement
+	if cc, ok := cached.QueryStatement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
@@ -1038,6 +1079,7 @@ func (cached *RoutingParameters) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Rows) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1067,6 +1109,7 @@ func (cached *Rows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1085,6 +1128,7 @@ func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ScalarAggregate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1133,6 +1177,7 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Send) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1151,6 +1196,7 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	return size
 }
+
 func (cached *Sequential) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1170,6 +1216,7 @@ func (cached *Sequential) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SessionPrimitive) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1182,6 +1229,7 @@ func (cached *SessionPrimitive) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
+
 func (cached *Set) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1205,6 +1253,7 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ShowExec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1217,6 +1266,7 @@ func (cached *ShowExec) CachedSize(alloc bool) int64 {
 	size += cached.ShowFilter.CachedSize(true)
 	return size
 }
+
 func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1242,6 +1292,7 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SysVarCheckAndIgnore) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1262,6 +1313,7 @@ func (cached *SysVarCheckAndIgnore) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expr)))
 	return size
 }
+
 func (cached *SysVarIgnore) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1276,6 +1328,7 @@ func (cached *SysVarIgnore) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expr)))
 	return size
 }
+
 func (cached *SysVarReservedConn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1296,6 +1349,7 @@ func (cached *SysVarReservedConn) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expr)))
 	return size
 }
+
 func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1312,6 +1366,7 @@ func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1326,6 +1381,7 @@ func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	size += cached.ThrottledAppRule.CachedSize(true)
 	return size
 }
+
 func (cached *TransactionStatus) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1340,6 +1396,7 @@ func (cached *TransactionStatus) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
 	return size
 }
+
 func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1384,6 +1441,7 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UpdateTarget) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1396,6 +1454,7 @@ func (cached *UpdateTarget) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Target)))
 	return size
 }
+
 func (cached *Upsert) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1413,6 +1472,7 @@ func (cached *Upsert) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1429,6 +1489,7 @@ func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *VExplain) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1443,6 +1504,7 @@ func (cached *VExplain) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *VStream) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1463,6 +1525,7 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
 	return size
 }
+
 func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1498,6 +1561,7 @@ func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Verify) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1514,6 +1578,7 @@ func (cached *Verify) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Typ)))
 	return size
 }
+
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1543,6 +1608,7 @@ func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *VindexLookup) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1603,6 +1669,7 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1617,6 +1684,7 @@ func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
+
 func (cached *percentBasedMirror) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1663,6 +1731,7 @@ func (cached *shardRoute) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *upsert) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

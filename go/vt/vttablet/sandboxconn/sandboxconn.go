@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,6 +117,10 @@ type SandboxConn struct {
 	VStreamCh         chan *binlogdatapb.VEvent
 	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
 
+	// BinlogDump expectations.
+	BinlogDumpResponses []*binlogdatapb.BinlogDumpResponse
+	BinlogDumpError     error
+
 	// transaction id generator
 	TransactionID atomic.Int64
 
@@ -132,7 +137,7 @@ type SandboxConn struct {
 	EphemeralShardErr error
 
 	// if this is not nil, any calls will panic the tablet
-	panicThis interface{}
+	panicThis any
 
 	NotServing bool
 
@@ -237,6 +242,33 @@ func (sbc *SandboxConn) appendToQueries(q *querypb.BoundQuery) {
 	sbc.Queries = append(sbc.Queries, q)
 }
 
+// GetOptions gets the Options from sandboxconn.
+func (sbc *SandboxConn) GetOptions() []*querypb.ExecuteOptions {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	return sbc.Options
+}
+
+// ClearOptions clears the Options in sandboxconn.
+func (sbc *SandboxConn) ClearOptions() {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Options = nil
+}
+
+// appendToOptions appends to the Options in sandboxconn.
+func (sbc *SandboxConn) appendToOptions(o *querypb.ExecuteOptions) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Options = append(sbc.Options, o)
+}
+
 func (sbc *SandboxConn) getError() error {
 	for code, count := range sbc.MustFailCodes {
 		if count == 0 {
@@ -276,14 +308,12 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)
 	}
 	bv := make(map[string]*querypb.BindVariable)
-	for k, v := range bindVars {
-		bv[k] = v
-	}
+	maps.Copy(bv, bindVars)
 	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, options)
+	sbc.appendToOptions(options)
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -302,14 +332,12 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
-	for k, v := range bindVars {
-		bv[k] = v
-	}
+	maps.Copy(bv, bindVars)
 	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, options)
+	sbc.appendToOptions(options)
 	err := sbc.getError()
 	if err != nil {
 		sbc.sExecMu.Unlock()
@@ -575,7 +603,7 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	if sbc.StartPos != "" && sbc.StartPos != request.Position {
-		log.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
+		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
 	}
 	done := false
@@ -600,7 +628,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 				}}
 
 				if err := send(events); err != nil {
-					log.Infof("error sending event in test sandbox %s", err.Error())
+					log.Info("error sending event in test sandbox " + err.Error())
 					return err
 				}
 				lastTimestamp++
@@ -610,7 +638,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 					done = true
 				}
 				if err := send([]*binlogdatapb.VEvent{ev}); err != nil {
-					log.Infof("error sending event in test sandbox %s", err.Error())
+					log.Info("error sending event in test sandbox " + err.Error())
 					return err
 				}
 				lastTimestamp = ev.Timestamp
@@ -652,6 +680,19 @@ func (sbc *SandboxConn) VStreamTables(ctx context.Context, request *binlogdatapb
 // VStreamResults is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return errors.New("not implemented in test")
+}
+
+// BinlogDumpGTID is part of the QueryService interface.
+func (sbc *SandboxConn) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if sbc.BinlogDumpError != nil {
+		return sbc.BinlogDumpError
+	}
+	for _, response := range sbc.BinlogDumpResponses {
+		if err := send(response); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
@@ -885,7 +926,7 @@ var StreamRowResult = &sqltypes.Result{
 	}},
 }
 
-func (sbc *SandboxConn) SetPanic(i interface{}) {
+func (sbc *SandboxConn) SetPanic(i any) {
 	sbc.panicThis = i
 }
 

@@ -141,7 +141,7 @@ func TestComparisonSemantics(t *testing.T) {
 		return testInputs[i].Collation < testInputs[j].Collation
 	})
 
-	var testCases = []struct {
+	testCases := []struct {
 		name string
 		make func(left, right *TextWithCollation) RemoteCoercionTest
 	}{

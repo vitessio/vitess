@@ -18,6 +18,7 @@ package emergencyreparent
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"sync"
 	"testing"
@@ -46,14 +47,14 @@ func TestTrivialERS(t *testing.T) {
 	// is down, without issue
 	for i := 1; i <= 4; i++ {
 		out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
+		log.Info(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
 	// We should do the same for vtctl binary
 	for i := 1; i <= 4; i++ {
 		out, err := utils.ErsWithVtctldClient(clusterInstance)
-		log.Infof("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out)
+		log.Info(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
@@ -119,7 +120,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 	// Run forced reparent operation, this should now proceed unimpeded.
 	out, err := utils.Ers(clusterInstance, tablets[1], "60s", "30s")
-	log.Infof("EmergencyReparentShard Output: %v", out)
+	log.Info(fmt.Sprintf("EmergencyReparentShard Output: %v", out))
 	require.NoError(t, err)
 
 	// Check that old primary tablet is left around for human intervention.
@@ -150,8 +151,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
 		Host: clusterInstance.Hostname,
@@ -185,10 +185,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	// Try performing a write and ensure that it blocks.
 	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
 		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
@@ -208,14 +205,14 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		require.NotNil(t, vtgateVars)
 		require.NotNil(t, vtgateVars["QueryRoutes"])
 		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
-		require.EqualValues(t, map[string]interface{}{
+		require.EqualValues(t, map[string]any{
 			"DDL.DirectDDL.PRIMARY":      float64(1),
 			"INSERT.Passthrough.PRIMARY": float64(1),
 		}, vtgateVars["QueryRoutes"])
-		require.EqualValues(t, map[string]interface{}{
+		require.EqualValues(t, map[string]any{
 			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
 		}, vtgateVars["VtgateApiErrorCounts"])
-	}()
+	})
 
 	wg.Add(1)
 	waitReplicasTimeout := time.Second * 10
@@ -516,7 +513,7 @@ func TestERSForInitialization(t *testing.T) {
 	require.NoError(t, err)
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"zone1")
 	require.NoError(t, err)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, "zone1")
 		tablets = append(tablets, tablet)
 	}
@@ -524,7 +521,7 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 	}
@@ -538,11 +535,11 @@ func TestERSForInitialization(t *testing.T) {
 		require.NoError(t, err, out)
 	}
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -619,8 +616,7 @@ func TestERSFailFast(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 	// Context to be used in the go-routine to cleanly exit it after the test ends
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	strChan := make(chan string)
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs

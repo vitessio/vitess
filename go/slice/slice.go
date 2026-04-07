@@ -18,6 +18,8 @@ limitations under the License.
 // Some of this code is sourced from https://github.com/luraim/fun (Apache v2)
 package slice
 
+import "slices"
+
 // All returns true if all elements return true for given predicate
 func All[T any](s []T, fn func(T) bool) bool {
 	for _, e := range s {
@@ -30,12 +32,7 @@ func All[T any](s []T, fn func(T) bool) bool {
 
 // Any returns true if at least one element returns true for given predicate
 func Any[T any](s []T, fn func(T) bool) bool {
-	for _, e := range s {
-		if fn(e) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s, fn)
 }
 
 // Map applies a function to each element of a slice and returns a new slice

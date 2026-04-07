@@ -31,9 +31,9 @@ func TestAddWaiterCount(t *testing.T) {
 	var wgAdd sync.WaitGroup
 	var wgSub sync.WaitGroup
 
-	var concurrent = 1000
+	concurrent := 1000
 
-	for i := 0; i < concurrent; i++ {
+	for range concurrent {
 		wgAdd.Add(1)
 		wgSub.Add(1)
 		go func() {

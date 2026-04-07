@@ -68,7 +68,7 @@ func initShardArray(t *testing.T, shardingSpec string) []*topodatapb.ShardRefere
 }
 
 func TestDestinationExactKeyRange(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		keyspace string
 		keyRange string
 		shards   []string
@@ -155,7 +155,7 @@ func TestDestinationExactKeyRange(t *testing.T) {
 }
 
 func TestDestinationKeyRange(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		keyspace string
 		keyRange string
 		shards   []string

@@ -32,7 +32,7 @@ import (
 func validateCell(cell string) error {
 	if cell == "" {
 		// TODO: remove warning in v25+, make flag required.
-		log.Warning("WARNING: --cell will become a required vtorc flag in v25 and up")
+		log.Warn("WARNING: --cell will become a required vtorc flag in v25 and up")
 		return nil
 	}
 

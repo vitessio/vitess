@@ -199,28 +199,6 @@ func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }
 
-// ExtractMysqlComment extracts the version and SQL from a comment-only query
-// such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (string, string) {
-	sql = sql[3 : len(sql)-2]
-
-	digitCount := 0
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
-		digitCount++
-		return !unicode.IsDigit(c) || digitCount == 6
-	})
-	if endOfVersionIndex < 0 {
-		return "", ""
-	}
-	if endOfVersionIndex < 5 {
-		endOfVersionIndex = 0
-	}
-	version := sql[0:endOfVersionIndex]
-	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
-
-	return version, innerSQL
-}
-
 const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives
@@ -339,6 +317,7 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 		finalComment := "/*+"
 		keyPresent := false
 		pos := 4
+		var finalCommentSb342 strings.Builder
 		for pos < len(commentStr) {
 			// Go over the entire comment and extract an optimizer hint.
 			// We get back the final position of the cursor, along with the start and end of
@@ -360,18 +339,19 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 				// Otherwise we add the comment as is to our final comments and move on.
 				setVarName, _, isValid := strings.Cut(ohContent, "=")
 				if !isValid || !strings.EqualFold(strings.TrimSpace(setVarName), key) {
-					finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
+					finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v)", ohName, ohContent))
 					continue
 				}
 				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
 					keyPresent = true
-					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
+					finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value))
 				}
 			} else {
 				// If it doesn't match, we add it to our final comment and move on.
-				finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
+				finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v)", ohName, ohContent))
 			}
 		}
+		finalComment += finalCommentSb342.String()
 		// If we haven't found any SET_VAR optimizer hint with the matching variable,
 		// then we add a new optimizer hint to introduce this variable.
 		if !keyPresent {

@@ -53,6 +53,7 @@ func (c *cow) copyOnRewriteAST(n AST, parent AST) (out AST, changed bool) {
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteBytes(n Bytes, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -66,6 +67,7 @@ func (c *cow) copyOnRewriteBytes(n Bytes, parent AST) (out AST, changed bool) {
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteInterfaceContainer(n InterfaceContainer, parent AST) (out AST, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -75,6 +77,7 @@ func (c *cow) copyOnRewriteInterfaceContainer(n InterfaceContainer, parent AST) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteInterfaceSlice(n InterfaceSlice, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -98,6 +101,7 @@ func (c *cow) copyOnRewriteInterfaceSlice(n InterfaceSlice, parent AST) (out AST
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLeaf(n *Leaf, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -110,6 +114,7 @@ func (c *cow) copyOnRewriteRefOfLeaf(n *Leaf, parent AST) (out AST, changed bool
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteLeafSlice(n LeafSlice, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -133,6 +138,7 @@ func (c *cow) copyOnRewriteLeafSlice(n LeafSlice, parent AST) (out AST, changed 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNoCloneType(n *NoCloneType, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -145,6 +151,7 @@ func (c *cow) copyOnRewriteRefOfNoCloneType(n *NoCloneType, parent AST) (out AST
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRefContainer(n *RefContainer, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -169,6 +176,7 @@ func (c *cow) copyOnRewriteRefOfRefContainer(n *RefContainer, parent AST) (out A
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRefSliceContainer(n *RefSliceContainer, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -209,6 +217,7 @@ func (c *cow) copyOnRewriteRefOfRefSliceContainer(n *RefSliceContainer, parent A
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubImpl(n *SubImpl, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -231,6 +240,7 @@ func (c *cow) copyOnRewriteRefOfSubImpl(n *SubImpl, parent AST) (out AST, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteValueContainer(n ValueContainer, parent AST) (out AST, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -252,6 +262,7 @@ func (c *cow) copyOnRewriteValueContainer(n ValueContainer, parent AST) (out AST
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteValueSliceContainer(n ValueSliceContainer, parent AST) (out AST, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -281,6 +292,7 @@ func (c *cow) copyOnRewriteValueSliceContainer(n ValueSliceContainer, parent AST
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteSubIface(n SubIface, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -295,6 +307,7 @@ func (c *cow) copyOnRewriteSubIface(n SubIface, parent AST) (out AST, changed bo
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteBasicType(n BasicType, parent AST) (out AST, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -309,6 +322,7 @@ func (c *cow) copyOnRewriteBasicType(n BasicType, parent AST) (out AST, changed 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfInterfaceContainer(n *InterfaceContainer, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -321,6 +335,7 @@ func (c *cow) copyOnRewriteRefOfInterfaceContainer(n *InterfaceContainer, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfValueContainer(n *ValueContainer, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -345,6 +360,7 @@ func (c *cow) copyOnRewriteRefOfValueContainer(n *ValueContainer, parent AST) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfValueSliceContainer(n *ValueSliceContainer, parent AST) (out AST, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -377,6 +393,7 @@ func (c *cow) copyOnRewriteRefOfValueSliceContainer(n *ValueSliceContainer, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteVisitable(n Visitable, parent AST) (out AST, changed bool) {
 	if c.cursor.stop {
 		return n, false

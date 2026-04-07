@@ -135,7 +135,7 @@ func checkShardWithLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// As soon as we're unblocked, we try to lock the keyspace.
 	go func() {
 		<-unblock
-		var isUnLocked1 = false
+		isUnLocked1 := false
 		for time.Now().Before(waitUntil) {
 			_, unlock2, err := ts.TryLockShard(ctx, "test_keyspace", "b0-c0", "lock")
 			// TryLockShard will fail since we already have acquired lock for `test-keyspace`
