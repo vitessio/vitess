@@ -116,9 +116,9 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 }
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
-	for idx, order := range o.Order {
+	for idx := range o.Order {
 		for arg, sq := range ctx.MergedSubqueries {
-			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
+			expr := sqlparser.Rewrite(o.Order[idx].SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
 				switch expr := cursor.Node().(type) {
 				case *sqlparser.ColName:
 					if expr.Name.String() == arg {
