@@ -194,7 +194,7 @@ return user.NeedsMigration() && migrate(user) || user
 - **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
 - **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
 - **Use format verbs precisely** - Use `%s` for strings and `%d` for integers, not `%v` for everything
-- **Structured logging** - New log messages should use structured logging with `slog`-style fields (e.g., `log.Warn("message", slog.Any("error", err))`) rather than `log.Warningf` with format strings
+- **Structured logging** - New log messages should use structured logging with `slog`-style fields (e.g., `log.Warn("message", slog.Any("error", err))`) rather than printf-style logging with format strings
 - **Reuse existing helpers** - Before writing new parsing/validation code, check for existing utilities (e.g., `sqlerror` package for MySQL error codes, `mysqlctl.ParseVersionString()`, `strings.Split()`, `topoproto.TabletAliasString()` for formatting tablet aliases)
 
 ## :building_construction: Vitess-Specific Conventions
