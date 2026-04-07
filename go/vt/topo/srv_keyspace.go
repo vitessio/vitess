@@ -352,7 +352,7 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 						}
 
 						if found {
-							shardReferences := make([]*topodatapb.ShardReference, 0, len(shards))
+							shardReferences := make([]*topodatapb.ShardReference, 0, len(partition.GetShardReferences()))
 							for _, shardReference := range partition.GetShardReferences() {
 								// Use shard name rather than key range so it works
 								// for both range-based and non-range-based shards.
