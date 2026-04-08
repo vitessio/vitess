@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -88,15 +87,6 @@ var (
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
 
-	// binlogDumpRequests tracks binlog dump request counts by status
-	binlogDumpRequests = stats.NewCountersWithSingleLabel(
-		"VtgateBinlogDumpRequests",
-		"Vtgate binlog dump request counts",
-		"status",
-		"authorized", // successfully authorized requests
-		"denied",     // denied due to user ACL
-		"disabled",   // denied because feature is disabled
-	)
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {

@@ -246,6 +246,13 @@ var (
 
 	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameters unrecognized by Vindexes")
 
+	binlogDumpRequests = stats.NewCountersWithSingleLabel(
+		"BinlogDumpRequests",
+		"Binlog dump request counts",
+		"status",
+		"authorized", "denied", "disabled",
+	)
+
 	timings = stats.NewMultiTimings(
 		"VtgateApi",
 		"VtgateApi timings",
@@ -781,14 +788,18 @@ func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType
 // BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
 func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
 	if !enableBinlogDump.Get() {
+		binlogDumpRequests.Add("disabled", 1)
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
 	}
 
 	im := callerid.ImmediateCallerIDFromContext(ctx)
 	if !binlogacl.Authorized(im) {
+		binlogDumpRequests.Add("denied", 1)
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError,
 			"User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
 	}
+
+	binlogDumpRequests.Add("authorized", 1)
 
 	if req.Keyspace == "" || req.Shard == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
