@@ -45,6 +45,10 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	if err := rejectInternalTableDDL(ddlStatement); err != nil {
+		return nil, err
+	}
+
 	if vschema.ShardDestination() != nil {
 		return buildByPassPlan(sql, vschema, true)
 	}
