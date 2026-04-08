@@ -1481,6 +1481,97 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 }
 
+func TestReplicaIOThreadWasRunning(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
+	}{
+		{
+			name: "io thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateRunning),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting without an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting with an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "dial tcp 127.0.0.1:3306: connect: connection refused",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "only sql thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateRunning),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "no replication threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := replicaIOThreadWasRunning(tt.in)
+			if tt.shouldErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 // waitForRelayLogsToApplyTestTMClient implements just the WaitForPosition
 // method of the tmclient.TabletManagerClient interface for
 // TestWaitForRelayLogsToApply, with the necessary trackers to facilitate
