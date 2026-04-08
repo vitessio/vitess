@@ -16,6 +16,11 @@ services:
     ports:
       - "3306"
 
+  vtorc:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
+
   vtctld:
     build:
       context: ../../..
