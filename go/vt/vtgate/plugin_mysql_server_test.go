@@ -1013,7 +1013,7 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 		Flags: mysql.CapabilityClientMultiStatements,
 	}
 
-	conn, err := mysql.Connect(context.Background(), params)
+	conn, err := mysql.Connect(t.Context(), params)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -1062,7 +1062,7 @@ func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
 	}
 
 	seenOKOnly := false
-	session, err = vh.streamExecuteMultiQuery(context.Background(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; set autocommit = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	session, err = vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; set autocommit = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		if firstPacket && len(qr.QueryResult.Fields) == 0 {
 			seenOKOnly = true
 			assert.False(t, more)
