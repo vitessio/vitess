@@ -737,9 +737,10 @@ func (node *ColName) Equal(c *ColName) bool {
 
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
+	str = identSanitize(str)
 	return IdentifierCI{
 		val:     str,
-		lowered: strings.ToLower(str),
+		lowered: identNormalize(str),
 	}
 }
 
@@ -1039,21 +1040,27 @@ func (node IdentifierCI) CompliantName() string {
 	return compliantName(node.val)
 }
 
-// Lowered returns a lower-cased column name.
-// This function should generally be used only for optimizing
-// comparisons.
+// Lowered returns a lowercased identifier name, using the utf8mb3_general_ci
+// unicase ToLower tables to match MySQL's case-insensitive, accent-sensitive
+// identifier comparison.
+//
+// WARNING: The result may differ from strings.ToLower for non-ASCII characters.
+// MySQL's unicase tables use an older Unicode version with different case
+// mappings for some codepoints (e.g., İ (U+0130) → i in MySQL, unchanged
+// in Go). Do not compare Lowered() output against strings.ToLower output.
 func (node IdentifierCI) Lowered() string {
 	return node.lowered
 }
 
-// Equal performs a case-insensitive compare.
+// Equal performs a case-insensitive compare matching MySQL's identifier rules.
 func (node IdentifierCI) Equal(in IdentifierCI) bool {
-	return node.Lowered() == in.Lowered()
+	return node.lowered == in.lowered
 }
 
-// EqualString performs a case-insensitive compare with str.
+// EqualString performs a case-insensitive compare with str matching MySQL's
+// identifier rules, without allocating.
 func (node IdentifierCI) EqualString(str string) bool {
-	return node.Lowered() == strings.ToLower(str)
+	return identEqual(node.val, str)
 }
 
 // EqualsAnyString returns true if any of these strings match
@@ -1073,8 +1080,8 @@ func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	node.val = result
-	node.lowered = strings.ToLower(result)
+	node.val = identSanitize(result)
+	node.lowered = identNormalize(node.val)
 	return nil
 }
 

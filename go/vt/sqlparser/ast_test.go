@@ -562,6 +562,126 @@ func TestIdentifierCI(t *testing.T) {
 	}
 }
 
+func TestIdentifierCI_CaseFolding(t *testing.T) {
+	tests := []struct {
+		a, b  string
+		equal bool
+	}{
+		// Case-insensitive
+		{"hello", "HELLO", true},
+		{"Hello", "hELLO", true},
+		// Accented chars: case-insensitive (café == CAFÉ)
+		{"café", "CAFÉ", true},
+		{"résumé", "RÉSUMÉ", true},
+		{"über", "ÜBER", true},
+		{"piñata", "PIÑATA", true},
+		{"Ñ", "ñ", true},
+		// Accent-sensitive: accented != base (café != cafe)
+		{"café", "cafe", false},
+		{"café", "CAFE", false},
+		{"CAFÉ", "cafe", false},
+		{"piñata", "PINATA", false},
+		{"Ñ", "n", false},
+		{"résumé", "RESUME", false},
+		{"naïve", "NAIVE", false},
+		{"über", "UBER", false},
+		// Different characters should not be equal
+		{"hello", "world", false},
+		{"a", "b", false},
+		// Empty strings
+		{"", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.a+"_vs_"+tt.b, func(t *testing.T) {
+			idA := NewIdentifierCI(tt.a)
+			idB := NewIdentifierCI(tt.b)
+			assert.Equal(t, tt.equal, idA.Equal(idB), "Equal(%q, %q)", tt.a, tt.b)
+			assert.Equal(t, tt.equal, idA.EqualString(tt.b), "EqualString(%q, %q)", tt.a, tt.b)
+			if tt.equal {
+				assert.Equal(t, idA.Lowered(), idB.Lowered(),
+					"Normalized forms should match for equal identifiers: %q vs %q", tt.a, tt.b)
+			}
+		})
+	}
+
+	// Verify Lowered() produces lowercase, accent-preserving output
+	assert.Equal(t, "café", NewIdentifierCI("café").Lowered())
+	assert.Equal(t, "café", NewIdentifierCI("CAFÉ").Lowered())
+	assert.Equal(t, "piñata", NewIdentifierCI("piñata").Lowered())
+	assert.Equal(t, "primary", NewIdentifierCI("primary").Lowered())
+	assert.Equal(t, "primary", NewIdentifierCI("PRIMARY").Lowered())
+}
+
+// TestIdentifierCI_InvalidUTF8RoundTrip tests full parse → sanitize → format
+// round trips for SQL containing invalid UTF-8 in backtick-quoted identifiers.
+// MySQL replaces invalid bytes with '?' and drops trailing truncated sequences;
+// we verify that Vitess matches this behavior end-to-end.
+func TestIdentifierCI_InvalidUTF8RoundTrip(t *testing.T) {
+	parser, err := New(Options{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name:   "lone continuation byte in column",
+			input:  "select `col\x80` from t",
+			output: "select `col?` from t",
+		},
+		{
+			name:   "two different invalid bytes produce same alias",
+			input:  "select 1 as `a\x80`, 2 as `a\x81` from t",
+			output: "select 1 as `a?`, 2 as `a?` from t",
+		},
+		{
+			name:   "truncated 2-byte sequence at end of column",
+			input:  "select `col\xC3` from t",
+			output: "select col from t",
+		},
+		{
+			name:   "truncated 3-byte sequence at end of column",
+			input:  "select `col\xE4\x80` from t",
+			output: "select col from t",
+		},
+		{
+			name:   "invalid byte mid-identifier",
+			input:  "select `col\x80end` from t",
+			output: "select `col?end` from t",
+		},
+		{
+			name:   "overlong encoding",
+			input:  "select `col\xC0\x80` from t",
+			output: "select `col??` from t",
+		},
+		{
+			name:   "valid accented identifier preserved",
+			input:  "select `café` from t",
+			output: "select `café` from t",
+		},
+		{
+			name:   "uppercase accented preserved",
+			input:  "select `CAFÉ` from t",
+			output: "select `CAFÉ` from t",
+		},
+		{
+			name:   "İ preserved",
+			input:  "select `İ_col` from t",
+			output: "select `İ_col` from t",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := parser.Parse(tt.input)
+			require.NoError(t, err, "parse failed for %q", tt.input)
+			got := String(stmt)
+			assert.Equal(t, tt.output, got)
+		})
+	}
+}
+
 func TestIdentifierCIMarshal(t *testing.T) {
 	str := NewIdentifierCI("Ab")
 	b, err := json.Marshal(str)

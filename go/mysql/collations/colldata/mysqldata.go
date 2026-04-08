@@ -4073,13 +4073,11 @@ var collationsById = [...]Collation{
 	0x21: &Collation_unicode_general_ci{
 		id:      0x21,
 		name:    "utf8mb3_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf8mb3{},
 	},
 	0x23: &Collation_unicode_general_ci{
 		id:      0x23,
 		name:    "ucs2_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_ucs2{},
 	},
 	0x24: &Collation_8bit_simple_ci{
@@ -4219,7 +4217,6 @@ var collationsById = [...]Collation{
 	0x2d: &Collation_unicode_general_ci{
 		id:      0x2d,
 		name:    "utf8mb4_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf8mb4{},
 	},
 	0x2e: &Collation_unicode_bin{
@@ -4320,7 +4317,6 @@ var collationsById = [...]Collation{
 	0x36: &Collation_unicode_general_ci{
 		id:      0x36,
 		name:    "utf16_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf16{},
 	},
 	0x37: &Collation_unicode_bin{
@@ -4331,7 +4327,6 @@ var collationsById = [...]Collation{
 	0x38: &Collation_unicode_general_ci{
 		id:      0x38,
 		name:    "utf16le_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf16le{},
 	},
 	0x39: &Collation_8bit_simple_ci{
@@ -4381,7 +4376,6 @@ var collationsById = [...]Collation{
 	0x3c: &Collation_unicode_general_ci{
 		id:      0x3c,
 		name:    "utf32_general_ci",
-		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf32{},
 	},
 	0x3d: &Collation_unicode_bin{

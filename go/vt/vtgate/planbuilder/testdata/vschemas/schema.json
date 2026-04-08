@@ -452,6 +452,22 @@
         "pin_test": {
           "pinned": "80"
         },
+        "accent_tbl": {
+          "column_vindexes": [
+            {
+              "column": "café",
+              "name": "hash"
+            }
+          ]
+        },
+        "unicase_tbl": {
+          "column_vindexes": [
+            {
+              "column": "İ_id",
+              "name": "hash"
+            }
+          ]
+        },
         "weird`name": {
           "column_vindexes": [
             {

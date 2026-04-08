@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -51,11 +49,11 @@ func (r *RealTable) dependencies(colName string, org originable) (deps dependenc
 		ts := org.tableSetFor(r.ASTNode)
 		myID = &ts
 		for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
-			r.cache[strings.ToLower(info.Name)] = createCertain(ts, ts, info.Type)
+			r.cache[sqlparser.NewIdentifierCI(info.Name).Lowered()] = createCertain(ts, ts, info.Type)
 		}
 	}
 
-	if deps, ok := r.cache[strings.ToLower(colName)]; ok {
+	if deps, ok := r.cache[sqlparser.NewIdentifierCI(colName).Lowered()]; ok {
 		return deps, nil
 	}
 

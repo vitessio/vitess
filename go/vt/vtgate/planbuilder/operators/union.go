@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -102,7 +101,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
 		}
-		offsets[strings.ToLower(ae.ColumnName())] = i
+		offsets[sqlparser.NewIdentifierCI(ae.ColumnName()).Lowered()] = i
 	}
 
 	exprPerSource := u.predicatePerSource(ctx, expr, offsets)

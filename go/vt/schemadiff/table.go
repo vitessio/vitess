@@ -2634,7 +2634,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		}
 
 		referencedColumn := referencedColumns[0]
-		if columnExists[strings.ToLower(referencedColumn)] {
+		if columnExists[sqlparser.NewIdentifierCI(referencedColumn).Lowered()] {
 			keptConstraints = append(keptConstraints, constraint)
 		}
 	}
@@ -2779,7 +2779,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[strings.ToLower(referencedColName)] {
+				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 					return &InvalidColumnInGeneratedColumnError{Table: c.Name(), Column: referencedColName, GeneratedColumn: col.Name.String()}
 				}
 			}
@@ -2800,7 +2800,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[strings.ToLower(referencedColName)] {
+				if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
 			}
@@ -2824,7 +2824,7 @@ func (c *CreateTableEntity) validate() error {
 			return err
 		}
 		for _, referencedColName := range referencedColumns {
-			if !columnExists[strings.ToLower(referencedColName)] {
+			if !columnExists[sqlparser.NewIdentifierCI(referencedColName).Lowered()] {
 				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
@@ -2859,7 +2859,7 @@ func (c *CreateTableEntity) validate() error {
 
 		for _, partitionColName := range partitionColNames {
 			// Validate columns exists in table:
-			if !columnExists[strings.ToLower(partitionColName)] {
+			if !columnExists[sqlparser.NewIdentifierCI(partitionColName).Lowered()] {
 				return &InvalidColumnInPartitionError{Table: c.Name(), Column: partitionColName}
 			}
 
