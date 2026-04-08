@@ -336,9 +336,9 @@ func isGTIDBasedShard(tabletMap map[string]*topo.TabletInfo, candidateInfoMap ma
 func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, candidateInfoMap map[string]*CandidateInfo,
 	logger logutil.Logger,
 ) (map[string]*RelayLogPositions, error) {
-	isGTIDBasedShard := isGTIDBasedShard(tabletMap, candidateInfoMap)
+	shardUsesGTID := isGTIDBasedShard(tabletMap, candidateInfoMap)
 	// Fail early if 100% of candidates are not GTID-based. GTIDs is a requirement of Vitess.
-	if len(tabletMap) > 0 && !isGTIDBasedShard {
+	if len(tabletMap) > 0 && !shardUsesGTID {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shards without GTID-based candidates are unsupported")
 	}
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)

@@ -1012,8 +1012,11 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the current status. It is primarily
-// used for EmergencyReparentShard operations and requires tablets that use MySQL GTIDs. An error is
-// returned on tablets using other replication.Position implementations.
+// used for EmergencyReparentShard operations and requires tablets that use MySQL GTIDs (the only
+// supported GTID flavor). On tablets that do not use MySQL GTIDs (e.g. file-based or MariaDB GTID
+// replication), the Before status is returned with After set to nil, signaling that replication was
+// not stopped. This allows the caller to inspect the Before status (e.g. for semi-sync state)
+// without the side effect of stopping replication on a tablet that will be ignored.
 func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
 	log.Info(fmt.Sprintf("StopReplicationAndGetStatus: mode: %v", stopReplicationMode))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -1038,25 +1041,27 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
 	before.BackupRunning = tm.IsBackupRunning()
 
-	// Validate we are using MySQL GTIDs using the "before" status.
-	status := &replicationdatapb.StopReplicationStatus{
-		Before: before,
-	}
+	// Check if this tablet uses MySQL GTIDs (the only supported GTID flavor for ERS).
+	// If not, return the Before status with After set to nil to signal that replication
+	// was not stopped. This avoids stopping replication on non-GTID tablets that will
+	// be ignored by ERS.
 	if before.RelayLogPosition == "" {
 		return StopReplicationAndGetStatusResponse{
-			Status: status,
-		}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+			Status: &replicationdatapb.StopReplicationStatus{
+				Before: before,
+			},
+		}, nil
 	}
 	pos, err := replication.DecodePosition(before.RelayLogPosition)
 	if err != nil {
-		return StopReplicationAndGetStatusResponse{
-			Status: status,
-		}, vterrors.Wrap(err, "failed to decode relay log position")
+		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "failed to decode relay log position")
 	}
 	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
 		return StopReplicationAndGetStatusResponse{
-			Status: status,
-		}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+			Status: &replicationdatapb.StopReplicationStatus{
+				Before: before,
+			},
+		}, nil
 	}
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {

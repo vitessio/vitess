@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -85,6 +84,8 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// CandidateInfo holds metadata about a candidate tablet used during emergency reparent
+// to determine GTID support and semi-sync state.
 type CandidateInfo struct {
 	IsGTIDBased       bool
 	IsSemiSyncReplica bool
@@ -103,6 +104,9 @@ func FindPositionsOfAllCandidates(
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
+		if statuspb.After == nil {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "tablet %v has nil After status in statusMap; this should have been filtered by stopReplicationAndBuildStatusMaps", alias)
+		}
 		beforeStatus := replication.ProtoToReplicationStatus(statuspb.Before)
 		afterStatus := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMapBefore[alias] = &beforeStatus
@@ -130,7 +134,7 @@ func FindPositionsOfAllCandidates(
 	for alias, afterStatus := range replicationStatusMapAfter {
 		candidateInfo, ok := candidateInfoMap[alias]
 		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica && !candidateInfo.IsGTIDBased {
-			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without gtid positions is unsupported")
+			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without GTID positions is unsupported")
 		}
 
 		if afterStatus.RelayLogPosition.IsZero() {
@@ -312,33 +316,39 @@ func stopReplicationAndBuildStatusMaps(
 				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 				m.Unlock()
 			} else {
-				// Check if this is a file-based replica that doesn't support MySQL GTID
-				if vterrors.Code(err) == vtrpc.Code_FAILED_PRECONDITION &&
-					strings.Contains(err.Error(), "does not support MySQL GTID") {
-					logger.Warningf("tablet %v does not support MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
-					err = nil // Don't treat this as a fatal error
-					return
-				}
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
-		} else {
-			isTakingBackup := false
+			return
+		}
 
-			// Prefer the most up-to-date information regarding whether the tablet is taking a backup from the After
-			// replication status, but fall back to the Before status if After is nil.
-			if stopReplicationStatus.After != nil {
-				isTakingBackup = stopReplicationStatus.After.BackupRunning
-			} else if stopReplicationStatus.Before != nil {
-				isTakingBackup = stopReplicationStatus.Before.BackupRunning
+		// After == nil means the tablet does not use MySQL GTIDs and replication was not stopped.
+		// Check semi-sync state from Before and skip or fail accordingly.
+		if stopReplicationStatus.After == nil {
+			if stopReplicationStatus.Before != nil {
+				beforeStatus := replication.ProtoToReplicationStatus(stopReplicationStatus.Before)
+				if beforeStatus.IsSemiSyncAcker() {
+					err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+						"tablet %v is a non-GTID replica with semi-sync enabled; this is unsupported in a GTID-based shard", alias)
+					return
+				}
 			}
-
+			// The tablet was successfully contacted, so count it as reachable for the
+			// haveRevoked safety check, even though it won't be a candidate.
 			m.Lock()
-			res.tabletsBackupState[alias] = isTakingBackup
-			res.statusMap[alias] = stopReplicationStatus
 			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 			m.Unlock()
+			logger.Warningf("tablet %v does not use MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
+			return
 		}
+
+		isTakingBackup := stopReplicationStatus.After.BackupRunning
+
+		m.Lock()
+		res.tabletsBackupState[alias] = isTakingBackup
+		res.statusMap[alias] = stopReplicationStatus
+		res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+		m.Unlock()
 	}
 
 	// For the tablets that we want to get a response from necessarily, we

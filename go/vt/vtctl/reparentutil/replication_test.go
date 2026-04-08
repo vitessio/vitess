@@ -1385,23 +1385,24 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name:       "Handle nil replication status After. No segfaulting when determining backup status, and fall back to Before status",
+			name:       "non-GTID replicas with nil After are skipped",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Err        error
 				}{
+					// GTID-based replica with valid After
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), BackupRunning: true},
-							After:  nil,
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5"},
 						},
 					},
+					// Non-GTID replica — After is nil, signaling replication was not stopped
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), BackupRunning: true},
-							After:  nil,
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 						},
 					},
 				},
@@ -1427,32 +1428,82 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			},
 			ignoredTablets: sets.New[string](),
+			// Only the GTID-based replica should be in the status map
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
-					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), BackupRunning: true},
-					After:  nil,
-				},
-				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), BackupRunning: true},
-					After:  nil,
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5"},
 				},
 			},
-			expectedTakingBackup:     map[string]bool{"zone1-0000000100": true, "zone1-0000000101": true},
+			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			expectedTabletsReachable: []*topodatapb.Tablet{{
-				Type: topodatapb.TabletType_REPLICA,
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
+			expectedTabletsReachable: []*topodatapb.Tablet{
+				{
+					Type: topodatapb.TabletType_REPLICA,
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
 				},
-			}, {
-				Type: topodatapb.TabletType_REPLICA,
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  101,
+				{
+					// Non-GTID replica is still reachable (contacted successfully),
+					// just not a candidate.
+					Type: topodatapb.TabletType_REPLICA,
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
 				},
-			}},
+			},
 			shouldErr: false,
+		},
+		{
+			name:       "non-GTID semi-sync replica with nil After fails ERS",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5"},
+						},
+					},
+					// Non-GTID replica with semi-sync enabled — should fail ERS
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								SemiSyncReplicaEnabled: true,
+								SemiSyncReplicaStatus:  true,
+							},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			ignoredTablets: sets.New[string](),
+			shouldErr:      true,
 		},
 	}
 

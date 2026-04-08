@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/mysql"
@@ -46,7 +45,6 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestNewEmergencyReparenter(t *testing.T) {
@@ -5937,13 +5935,11 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 							},
 						},
 					},
-					// File-based replica - returns error and should be ignored
+					// File-based replica - After is nil, signaling replication was not stopped
 					"zone1-0000000103": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
 							Before: &replicationdatapb.Status{},
-							After:  &replicationdatapb.Status{},
 						},
-						Error: vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID"),
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -5994,7 +5990,6 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Hostname: "most up-to-date position, wins election",
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6010,7 +6005,7 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 			shard:              "-",
 			cells:              []string{"zone1"},
 			shouldErr:          false,
-			expectedNewPrimary: "zone1-0000000100", // Note: In this test configuration, tablet 100 is selected
+			expectedNewPrimary: "zone1-0000000100",
 		},
 		{
 			name:                 "file-based replica with semi-sync fails ERS",
@@ -6063,7 +6058,8 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 							},
 						},
 					},
-					// File-based replica with semi-sync enabled - should cause ERS to fail
+					// File-based replica with semi-sync enabled - After is nil (non-GTID),
+					// Before has semi-sync state. Should cause ERS to fail.
 					"zone1-0000000103": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
 							Before: &replicationdatapb.Status{
@@ -6071,9 +6067,7 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 								SemiSyncReplicaEnabled: true,
 								SemiSyncReplicaStatus:  true,
 							},
-							After: &replicationdatapb.Status{},
 						},
-						Error: vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID"),
 					},
 				},
 			},
