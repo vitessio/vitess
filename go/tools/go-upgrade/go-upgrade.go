@@ -423,7 +423,7 @@ func replaceGolangImageReferencesInFile(fileToChange string, goVersion *version.
 		return err
 	}
 
-	return os.WriteFile(fileToChange, []byte(content), 0o600)
+	return os.WriteFile(fileToChange, []byte(content), 0o644)
 }
 
 // replaceGolangImageReferences rewrites pinned Go image references while preserving each matched distro.
@@ -541,7 +541,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o644)
 	if err != nil {
 		return err
 	}
@@ -603,7 +603,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o644)
 	if err != nil {
 		return err
 	}
