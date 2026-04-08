@@ -948,7 +948,7 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	stats.NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", func() int64 {
 		return pool.Metrics.GetSettingCount()
 	})
-	stats.NewCounterFunc(name+"WaiterCapRejected", "Tablet server conn pool waiter cap rejected", func() int64 {
+	stats.NewCounterFunc(name+"WaiterCapRejected", "Number of times a request was rejected due to hitting connection pool waiter capacity", func() int64 {
 		return pool.Metrics.WaiterCapRejected()
 	})
 	stats.NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", func() int64 {

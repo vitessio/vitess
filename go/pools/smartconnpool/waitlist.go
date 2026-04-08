@@ -56,7 +56,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
-	if maxWaiters > 0 && wl.list.Len() >= int(maxWaiters) {
+	if wl.aboveWaiterCap(maxWaiters) {
 		if wl.onWaiterCapReached != nil {
 			wl.onWaiterCapReached()
 		}
@@ -68,7 +68,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	}
 
 	wl.mu.Lock()
-	if maxWaiters > 0 && wl.list.Len() >= int(maxWaiters) {
+	if wl.aboveWaiterCap(maxWaiters) {
 		wl.mu.Unlock()
 		if wl.onWaiterCapReached != nil {
 			wl.onWaiterCapReached()
@@ -129,6 +129,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	case conn := <-elem.Value.conn:
 		return conn, nil
 	}
+}
+
+func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
+	return maxWaiters > 0 && wl.list.Len() >= int(maxWaiters)
 }
 
 func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
