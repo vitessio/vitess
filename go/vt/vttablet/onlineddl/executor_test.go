@@ -36,10 +36,12 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -338,6 +340,36 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+func TestShouldPreBufferWaitForParallelApply(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 1
+	require.False(t, shouldPreBufferWaitForParallelApply(nil))
+
+	config.ParallelReplicationWorkers = 2
+	require.True(t, shouldPreBufferWaitForParallelApply(nil))
+}
+
+func TestShouldPreBufferWaitForParallelApplyPrefersWorkflowOverride(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 1
+
+	stream := &VReplStream{}
+	stream.bls = &binlogdatapb.BinlogSource{}
+	stream.options = `{"config":{"vreplication-parallel-replication-workers":"2"}}`
+
+	require.True(t, shouldPreBufferWaitForParallelApply(stream))
 }
 
 type fakeTabletManagerClient struct {

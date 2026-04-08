@@ -34,6 +34,10 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -322,8 +326,8 @@ func TestApplySchedulerClose(t *testing.T) {
 	require.Error(t, err) // returns io.EOF
 
 	s.mu.Lock()
-	assert.Equal(t, 0, s.pendingCount)
-	assert.Nil(t, s.pending)
+	assert.Equal(t, 2, s.pendingCount)
+	assert.Len(t, s.pending, 2)
 	assert.Equal(t, 0, s.pendingOff)
 	s.mu.Unlock()
 }
@@ -455,7 +459,8 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 	stats.VReplicationLagGauges.Stop()
 	t.Cleanup(stats.Stop)
 
-	config := vttablet.InitVReplicationConfigDefaults()
+	config, err := vttablet.NewVReplicationConfig(nil)
+	require.NoError(t, err)
 	vr := &vreplicator{
 		id:             1,
 		stats:          stats,
@@ -486,6 +491,51 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 	return vp, mockDB
 }
 
+func TestTestVPlayerDoesNotMutateDefaultWorkflowConfig(t *testing.T) {
+	defaults := vttablet.InitVReplicationConfigDefaults()
+	savedWorkers := defaults.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		defaults.ParallelReplicationWorkers = savedWorkers
+	})
+	defaults.ParallelReplicationWorkers = 1
+
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	config, err := vttablet.NewVReplicationConfig(nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, config.ParallelReplicationWorkers)
+}
+
+// publishExecutedDDLBarrier mirrors commitLoop's post-DDL publication so the
+// scheduler tests can model only DDLs that actually executed on the target.
+func publishExecutedDDLBarrier(t *testing.T, vp *vplayer, statement string) {
+	t.Helper()
+	vp.serialMu.Lock()
+	defer vp.serialMu.Unlock()
+	vp.tablePlansMu.RLock()
+	renameTargets := extractDDLRenameTargets(statement, vp.vr.vre.env.Parser())
+	retargetPostDDLStalePlans(vp.postDDLStalePlans, renameTargets, vp.tablePlans)
+	ddlStalePlans, conservative := extractDDLAffectedTables(statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
+	ddlStalePlans = unresolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, ddlStalePlans)
+	vp.tablePlansMu.RUnlock()
+	vp.postDDLStalePlans = mergePostDDLStalePlans(vp.postDDLStalePlans, ddlStalePlans)
+	vp.postDDLConservative = vp.postDDLConservative || conservative
+	vp.postDDLDroppedTables = mergeDroppedTables(vp.postDDLDroppedTables, extractDroppedTables(statement, vp.vr.vre.env.Parser()))
+}
+
+// commitScheduledExecutedDDL models a commitLoop DDL commit and then syncs the
+// resulting barrier into scheduler state the way the next fetch would observe it.
+func commitScheduledExecutedDDL(t *testing.T, ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, vp *vplayer) {
+	t.Helper()
+	ddlTxn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
+	publishExecutedDDLBarrier(t, vp, ddlTxn.payload.events[0].Statement)
+	require.NoError(t, scheduler.markCommitted(ddlTxn))
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))
+}
+
 func TestApplyEventsParallelCanceledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
 
@@ -510,11 +560,22 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.sql_mode", &sqltypes.Result{})
 	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
+	mockDB.AddInvariant("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1", sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables))
+	mockDB.AddInvariant("select @@session.sql_mode as sql_mode", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("sql_mode", "varchar"),
+		"STRICT_TRANS_TABLES",
+	))
+	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	))
 	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
 		"4194304",
 	))
+	mockDB.AddInvariant("rollback", &sqltypes.Result{})
 
 	if vp.vr.vre == nil {
 		vp.vr.vre = &Engine{}
@@ -532,6 +593,57 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 
 	err := vp.applyEventsParallel(ctx, relay)
 	require.Error(t, err)
+}
+
+func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing.T) {
+	vp, mockDB := testVPlayer(t)
+	ctx := testCtx(t)
+
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	vp.vr.workflowConfig.StoreCompressedGTID = false
+
+	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.sql_mode", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.foreign_key_checks", &sqltypes.Result{})
+	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
+	mockDB.AddInvariant("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1", sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables))
+	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	))
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
+	mockDB.ExpectRequestRE("update _vt\\.vreplication set pos=", &sqltypes.Result{}, nil)
+	mockDB.AddInvariant("rollback", &sqltypes.Result{})
+	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		return vp.dbClient.Execute(sql)
+	}
+	vp.commit = vp.dbClient.Commit
+
+	if vp.vr.vre == nil {
+		vp.vr.vre = &Engine{}
+	}
+	if vp.vr.vre.throttlerClient == nil {
+		vp.vr.vre.throttlerClient = throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope)
+	}
+	if vp.vr.vre.dbClientFactoryFiltered == nil {
+		vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return mockDB }
+	}
+
+	relay := newRelayLog(ctx, 10, 100)
+	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
+	otherEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_OTHER, Timestamp: 100}
+	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
+	require.NoError(t, relay.Send([]*binlogdatapb.VEvent{validGTID, otherEvent, invalidGTID}))
+
+	err := vp.applyEventsParallel(ctx, relay)
+	require.Error(t, err)
+	mockDB.Wait()
 }
 
 func TestApplyEventsParallelCancelledContext(t *testing.T) {
@@ -747,6 +859,33 @@ func TestScheduleItems_EmptyTransaction(t *testing.T) {
 	vp.serialMu.Unlock()
 }
 
+func TestScheduleItems_VERSIONIsIgnoredLikeEmptyTransaction(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	}
+	versionEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_VERSION,
+		Timestamp: 100,
+	}
+	commitEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_COMMIT,
+		Timestamp: 100,
+	}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{gtidEvent, versionEvent, commitEvent}})
+	require.NoError(t, err)
+
+	vp.serialMu.Lock()
+	assert.Equal(t, commitEvent, vp.unsavedEvent)
+	vp.serialMu.Unlock()
+}
+
 func TestScheduleItems_EmptyTxnWithCommitMeta_AdvancesSequence(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
@@ -824,6 +963,8 @@ func TestScheduleItems_DDLIsForceGlobal(t *testing.T) {
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
 	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
 
 	gtidEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_GTID,
@@ -844,6 +985,1166 @@ func TestScheduleItems_DDLIsForceGlobal(t *testing.T) {
 	assert.True(t, got.payload.commitOnly)
 	assert.Len(t, got.payload.events, 1)
 	assert.Equal(t, binlogdatapb.VEventType_DDL, got.payload.events[0].Type)
+}
+
+func TestScheduleItems_PostDDLComplexDDLDoesNotClearOnUnrelatedPlanRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	staleT1 := &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	staleT2 := &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	staleT3 := &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t1"] = staleT1
+	vp.tablePlans["t2"] = staleT2
+	vp.tablePlans["t3"] = staleT3
+	vp.tablePlansVersion.Store(1)
+
+	ddlItems := [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new, t2 to t2_new", Timestamp: 200},
+	}}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, ddlItems))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t2")
+	require.NotContains(t, state.postDDLStalePlans, "t3")
+
+	// Simulate an unrelated plan refresh while plans for DDL-affected tables remain stale.
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansMu.Unlock()
+
+	rowItems := [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, rowItems))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	assert.NotNil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLRenameClearsAfterRenamedTableFieldRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName: "t1",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{
+		TargetName: "t1_new",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1_new",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLUnknownDDLRetainsConservativeBarrier(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	staleT1 := &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	staleT2 := &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t1"] = staleT1
+	vp.tablePlans["t2"] = staleT2
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	assert.NotNil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLDropDoesNotClearOnUnrelatedPlanRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {TargetName: "t1", Insert: sqlparser.BuildParsedQuery("insert into t1 values (:a)")},
+	}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	assert.Nil(t, state.postDDLStalePlans)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLDropClearsAfterDroppedTableSatisfied(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {TargetName: "t1", Insert: sqlparser.BuildParsedQuery("insert into t1 values (:a)")},
+	}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	assert.Nil(t, state.postDDLStalePlans)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLDroppedTablesSnapshotDoesNotAliasVPlayer(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	vp.postDDLDroppedTables = map[string]struct{}{"t1": {}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))
+	require.Equal(t, map[string]struct{}{"t1": {}}, state.postDDLDroppedTables)
+
+	delete(vp.postDDLDroppedTables, "t1")
+	vp.postDDLDroppedTables["t2"] = struct{}{}
+
+	require.Equal(t, map[string]struct{}{"t1": {}}, state.postDDLDroppedTables)
+}
+
+func TestScheduleItems_PostDDLAlterRenameClearsAfterRenamedTableFieldRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 rename to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{TargetName: "t1_new", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1_new",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLAlterClearsAfterSameTableFieldRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 add column c1 int", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLSecondDDLDoesNotReplaceEarlierUnresolvedBarrier(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t2 add column c1 int", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t2")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t3",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.Contains(t, state.postDDLStalePlans, "t1")
+}
+
+func TestScheduleItems_PostDDLUnknownSecondDDLExpandsBarrierConservatively(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.NotContains(t, state.postDDLStalePlans, "t2")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t2")
+	require.Contains(t, state.postDDLStalePlans, "t3")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.Contains(t, state.postDDLStalePlans, "t1")
+}
+
+func TestScheduleItems_PostDDLRenameThenUnknownStillBlocksAfterRenamedTableRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {TargetName: "t1", Insert: sqlparser.BuildParsedQuery("insert into t1 values (:a)")},
+	}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{TargetName: "t1_new", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1_new",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.Contains(t, state.postDDLStalePlans, "t1")
+}
+
+func TestScheduleItems_PostDDLRenameRetiresOldNameFromLaterUnknownBarrier(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{TargetName: "t1_new", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1_new",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 250},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	require.NoError(t, scheduler.markCommitted(got))
+	assert.Nil(t, state.postDDLStalePlans)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 300},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.NotContains(t, state.postDDLStalePlans, "t1")
+	assert.Contains(t, state.postDDLStalePlans, "t1_new")
+	assert.Contains(t, state.postDDLStalePlans, "t2")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{TargetName: "t1_new", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 350},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLRenameRetiresOldNameEvenWhenAnotherBarrierRemains(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t1_new", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t3 add column c1 int", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t3")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1_new"] = &TablePlan{TargetName: "t1_new", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1_new",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	require.NoError(t, scheduler.markCommitted(got))
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.NotContains(t, state.postDDLStalePlans, "t1")
+	assert.Contains(t, state.postDDLStalePlans, "t3")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 350},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.NotContains(t, state.postDDLStalePlans, "t1")
+	assert.Contains(t, state.postDDLStalePlans, "t1_new")
+	assert.Contains(t, state.postDDLStalePlans, "t3")
+}
+
+func TestScheduleItems_PostDDLRenameSwapRequiresBothTablesToRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t2, t2 to t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+}
+
+func TestScheduleItems_PostDDLCreateTableDoesNotBlockUnrelatedTable(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "create table t3(id bigint primary key)", Timestamp: 200},
+	}}))
+
+	ddlTxn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
+	_, err = vp.applyDDLEvent(ctx, ddlTxn.payload.events[0], nil)
+	require.NoError(t, err)
+	require.NoError(t, scheduler.markCommitted(ddlTxn))
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+}
+
+func TestScheduleItems_PostDDLDropTableDoesNotBlockUnrelatedTable(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+
+	ddlTxn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
+	require.NoError(t, scheduler.markCommitted(ddlTxn))
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+}
+
+func TestScheduleItems_PostDDLExecIgnoreFailureDoesNotBlockAffectedTable(t *testing.T) {
+	vp, mockDB := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC_IGNORE
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	mockDB.AddInvariant("update _vt.vreplication set", &sqltypes.Result{})
+	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		if sql == "alter table t1 add column c1 int" {
+			return nil, errors.New("ddl failed")
+		}
+		return &sqltypes.Result{}, nil
+	}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 add column c1 int", Timestamp: 200},
+	}}))
+
+	ddlTxn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
+	require.NoError(t, vp.applyEvent(ctx, ddlTxn.payload.events[0], ddlTxn.payload.mustSave))
+	require.NoError(t, scheduler.markCommitted(ddlTxn))
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+}
+
+func TestScheduleItems_PostDDLDropThenUnknownStillClearsAfterDropSatisfaction(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	assert.Nil(t, state.postDDLStalePlans)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.NotContains(t, state.postDDLStalePlans, "t1")
+	assert.Contains(t, state.postDDLStalePlans, "t2")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLRecreatedDroppedTableIsTrackedAgain(t *testing.T) {
+	vp, mockDB := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	mockDB.AddInvariant("begin", &sqltypes.Result{})
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {TargetName: "t1", Insert: sqlparser.BuildParsedQuery("insert into t1 values (:a)")},
+	}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Nil(t, state.postDDLStalePlans)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.NotContains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t2")
+
+	fieldEvent := &binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "c1", Type: querypb.Type_INT64},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: fieldEvent}, false))
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "this is not valid ddl", Timestamp: 300},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.Contains(t, state.postDDLStalePlans, "t1")
+	assert.Contains(t, state.postDDLStalePlans, "t2")
+}
+
+func TestScheduleItems_PostDDLDropThenCreateSameTableBlocksUntilFieldRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	staleT1 := &TablePlan{
+		TargetName:              "t1",
+		Fields:                  []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:               []bool{true},
+		IdentityColumns:         []string{"id"},
+		HasExtraUniqueSecondary: false,
+	}
+	vp.tablePlans["t1"] = staleT1
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Nil(t, state.postDDLStalePlans)
+	require.Contains(t, vp.postDDLDroppedTables, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "create table t1(id bigint primary key, email bigint unique)", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NotNil(t, state.postDDLStalePlans)
+	assert.Contains(t, state.postDDLStalePlans, "t1")
+	require.NoError(t, scheduler.markCommitted(got))
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName:              "t1",
+		Fields:                  []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "email", Type: querypb.Type_INT64}},
+		PKIndices:               []bool{true, false},
+		IdentityColumns:         []string{"id"},
+		HasExtraUniqueSecondary: true,
+	}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 350},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLDropThenRenameToDroppedNameBlocksUntilFieldRefresh(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Nil(t, state.postDDLStalePlans)
+	require.Contains(t, vp.postDDLDroppedTables, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t2 to t1", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t2")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NoError(t, scheduler.markCommitted(got))
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t3",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 350},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLRenameThenCreateSameNameRequiresBothFieldRefreshes(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t2", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "create table t1(id bigint primary key)", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t2",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 300},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NoError(t, scheduler.markCommitted(got))
+	require.NotNil(t, state.postDDLStalePlans)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "email", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("11"), Lengths: []int64{1, 1}}}},
+		}, Timestamp: 350},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal)
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLDropCreateRenameRetargetsBarrierToFinalName(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "drop table t1", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "create table t1(id bigint primary key)", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t2", Timestamp: 300},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestScheduleItems_PostDDLRenameChainRetargetsBarrierToFinalName(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t1 to t2", Timestamp: 200},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_DDL, Statement: "rename table t2 to t3", Timestamp: 250},
+	}}))
+	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
+	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.Contains(t, state.postDDLStalePlans, "t2")
+
+	vp.tablePlansMu.Lock()
+	vp.tablePlans["t3"] = &TablePlan{TargetName: "t3", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
+	vp.tablePlansVersion.Add(1)
+	vp.tablePlansMu.Unlock()
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))
+	assert.Nil(t, state.postDDLStalePlans)
+}
+
+func TestMergeDroppedTables_DoesNotMutateInput(t *testing.T) {
+	original := map[string]struct{}{"t1": {}}
+	merged := mergeDroppedTables(original, map[string]struct{}{"t2": {}})
+
+	assert.Equal(t, map[string]struct{}{"t1": {}}, original)
+	assert.Equal(t, map[string]struct{}{"t1": {}, "t2": {}}, merged)
+}
+
+func TestRetargetPostDDLStalePlans_RenameSwapUsesOriginalRefreshNames(t *testing.T) {
+	t1Old := &TablePlan{TargetName: "t1"}
+	t2Old := &TablePlan{TargetName: "t2"}
+	t1New := &TablePlan{TargetName: "t1"}
+	t2New := &TablePlan{TargetName: "t2"}
+
+	stalePlans := map[string]postDDLStalePlan{
+		"barrier": {
+			stalePlan: t1Old,
+			refreshedPlans: map[string]*TablePlan{
+				"t1": t1Old,
+				"t2": t2Old,
+			},
+		},
+	}
+
+	retargetPostDDLStalePlans(stalePlans, map[string]string{"t1": "t2", "t2": "t1"}, map[string]*TablePlan{"t1": t1New, "t2": t2New})
+
+	require.Contains(t, stalePlans, "barrier")
+	assert.Equal(t, map[string]*TablePlan{"t1": t1New, "t2": t2New}, stalePlans["barrier"].refreshedPlans)
 }
 
 func TestScheduleItems_OTHERIsForceGlobal(t *testing.T) {
@@ -913,6 +2214,769 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 	assert.True(t, got.forceGlobal)
 }
 
+func TestScheduleItems_ExtraUniqueSecondaryIndexForcesGlobal(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName: tableName,
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("1a"), Lengths: []int64{1, 1}},
+			}},
+		}, Timestamp: 100},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}})
+	require.NoError(t, err)
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+}
+
+func TestScheduleItems_UnsupportedWritesetMappingForcesGlobal(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	env := vtenv.NewTestEnv()
+	plan, err := (&vreplicator{workflowConfig: vp.vr.workflowConfig}).buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select a + b as c1, c as c2 from t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {{Name: "c1", IsPK: true}, {Name: "c2"}}},
+		nil,
+		vp.vr.stats,
+		env.CollationEnv(),
+		env.Parser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "a", Type: querypb.Type_INT64},
+			{Name: "b", Type: querypb.Type_INT64},
+			{Name: "c", Type: querypb.Type_INT64},
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, tplan.HasUnsupportedWritesetMapping)
+
+	vp.tablePlans["t1"] = tplan
+	vp.tablePlansVersion.Store(1)
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("123"), Lengths: []int64{1, 1, 1}}}},
+		}, Timestamp: 100},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal)
+	require.NoError(t, scheduler.markCommitted(got))
+}
+
+func TestApplyEvent_FIELDMarksExtraUniqueSecondaryIndex(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_field_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDCachesExtraUniqueSecondaryLookup(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_cached_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	vp.vr.mysqld = nil
+
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDCachesNoExtraUniqueSecondaryLookup(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_cached_no_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), key idx_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.Contains(t, vp.tablePlans, tableName)
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	vp.vr.mysqld = nil
+
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDMarksNullableExtraUniqueSecondaryIndex(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_field_nullable_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+
+	tableName := "parallel_apply_field_refresh_after_unique_ddl"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), key idx_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	ddlEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_DDL,
+		Statement: "alter table " + tableName + " add unique key uk_email(email)",
+		Timestamp: 100,
+	}
+	execStatements(t, []string{"alter table " + qualifiedTableName + " add unique key uk_email(email)"})
+	publishExecutedDDLBarrier(t, vp, ddlEvent.Statement)
+
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	vp.vr.mysqld = nil
+
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+
+	tableName := "parallel_apply_worker_field_refresh_after_unique_ddl"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), key idx_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	workerDB := &recordingDBClient{}
+	workerClient := newVDBClient(workerDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	worker := &applyWorker{
+		ctx:    ctx,
+		conns:  [2]*vdbClient{workerClient, workerClient},
+		client: workerClient,
+		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{}, nil
+		},
+		commit: func() error {
+			return nil
+		},
+	}
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 2)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+	}()
+
+	commitOnlyTxn := &applyTxn{
+		order: 1,
+		payload: &applyTxnPayload{
+			commitOnly: true,
+			events: []*binlogdatapb.VEvent{{
+				Type: binlogdatapb.VEventType_OTHER,
+			}},
+		},
+	}
+	require.NoError(t, scheduler.enqueue(commitOnlyTxn))
+	require.Same(t, commitOnlyTxn, <-commitCh)
+	require.NoError(t, scheduler.markCommitted(commitOnlyTxn))
+
+	execStatements(t, []string{"alter table " + qualifiedTableName + " add unique key uk_email(email)"})
+	publishExecutedDDLBarrier(t, vp, "alter table "+tableName+" add unique key uk_email(email)")
+
+	fieldTxn := &applyTxn{
+		order:      2,
+		noConflict: true,
+		payload: &applyTxnPayload{
+			events: []*binlogdatapb.VEvent{fieldEvent},
+		},
+	}
+	require.NoError(t, scheduler.enqueue(fieldTxn))
+	require.Same(t, fieldTxn, <-commitCh)
+
+	assert.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
+}
+
+func TestWorkerLoop_FIELDDoesNotMutatePublishedDroppedTablesBeforeCommit(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_worker_field_does_not_clear_dropped_state"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, primary key(id))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	vp.postDDLDroppedTables = map[string]struct{}{tableName: {}}
+	vp2 := *vp
+	vp2.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+
+	require.NoError(t, vp2.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	assert.Contains(t, vp.postDDLDroppedTables, tableName)
+}
+
+func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCache(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_field_refresh_target_unique_secondary_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	cachedPlan := &TablePlan{
+		TargetName:              tableName,
+		Fields:                  []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}, {Name: "email", Type: querypb.Type_VARCHAR}},
+		PKIndices:               []bool{true, false},
+		HasExtraUniqueSecondary: false,
+	}
+	vp.tablePlans[tableName] = cachedPlan
+	vp.postDDLStalePlans = map[string]postDDLStalePlan{
+		"old_" + tableName: {
+			stalePlan:      &TablePlan{TargetName: "old_" + tableName},
+			refreshedPlans: map[string]*TablePlan{tableName: cachedPlan},
+		},
+	}
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCacheAcrossMultipleBarriers(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "pa_field_refresh_multi_barrier_uniq_idx"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, email varchar(128) not null, primary key(id), unique key uk_email(email))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	cachedPlan := &TablePlan{
+		TargetName:              tableName,
+		Fields:                  []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}, {Name: "email", Type: querypb.Type_VARCHAR}},
+		PKIndices:               []bool{true, false},
+		HasExtraUniqueSecondary: false,
+	}
+	vp.tablePlans[tableName] = cachedPlan
+	vp.postDDLStalePlans = map[string]postDDLStalePlan{
+		"old_" + tableName: {
+			stalePlan:      &TablePlan{TargetName: "old_" + tableName},
+			refreshedPlans: map[string]*TablePlan{tableName: {TargetName: tableName}},
+		},
+		"other_old_" + tableName: {
+			stalePlan:      cachedPlan,
+			refreshedPlans: map[string]*TablePlan{tableName: cachedPlan},
+		},
+	}
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_FIELDWithoutParallelApplySkipsUniqueSecondaryLookup(t *testing.T) {
+	vp, mockDB := testVPlayer(t)
+	ctx := testCtx(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 1
+	mockDB.AddInvariant("begin", &sqltypes.Result{})
+
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {
+			TargetName:       "t1",
+			IdentityColumns:  []string{"id"},
+			Insert:           sqlparser.BuildParsedQuery("insert into t1 values (:a)"),
+			TablePlanBuilder: &tablePlanBuilder{},
+		},
+	}}
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "t1",
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+			},
+		},
+	}, false))
+
+	require.Contains(t, vp.tablePlans, "t1")
+	require.False(t, vp.tablePlans["t1"].HasExtraUniqueSecondary)
+}
+
+func TestApplyEvent_VERSIONIsIgnored(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+
+	gtid := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: gtid}, false))
+
+	versionEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_VERSION, Timestamp: 100}
+	require.NoError(t, vp.applyEvent(ctx, versionEvent, false))
+	require.False(t, vp.dbClient.InTransaction)
+	require.Nil(t, vp.unsavedEvent)
+
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 100}
+	require.NoError(t, vp.applyEvent(ctx, commitEvent, false))
+	require.Equal(t, commitEvent, vp.unsavedEvent)
+}
+
 func TestScheduleItems_FIELDEventDoesNotForceGlobal(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
@@ -950,6 +3014,21 @@ func TestScheduleItems_FIELDEventDoesNotForceGlobal(t *testing.T) {
 	// FIELD events have an explicit handler that does NOT set curRowOnly=false,
 	// so the transaction is scheduled normally with an empty writeset (noConflict).
 	assert.False(t, got.forceGlobal)
+}
+
+func TestScheduleItems_UnknownVEventTypeFailsFast(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType(12345)},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported vevent type")
 }
 
 func TestScheduleItems_TimestampTracking(t *testing.T) {
@@ -1039,13 +3118,13 @@ func TestScheduleItems_WritesetBuild(t *testing.T) {
 	assert.Equal(t, expected, got.writeset[0])
 }
 
-func TestScheduleItems_MissingTablePlanForcesGlobal(t *testing.T) {
+func TestScheduleItems_MissingTablePlanReturnsWritesetError(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
 	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
 
-	// No table plan for "t1" — writeset build should fail
+	// No table plan for "t1" — writeset build should fail closed.
 	vp.tablePlansVersion.Store(1)
 
 	gtidEvent := &binlogdatapb.VEvent{
@@ -1068,12 +3147,63 @@ func TestScheduleItems_MissingTablePlanForcesGlobal(t *testing.T) {
 
 	items := [][]*binlogdatapb.VEvent{{gtidEvent, rowEvent, commitEvent}}
 	err := vp.scheduleItems(ctx, scheduler, state, items)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Contains(t, err.Error(), "missing table plan for t1")
+}
 
-	got, err := scheduler.nextReady(ctx)
-	require.NoError(t, err)
-	// Missing table plan → writeset error → forceGlobal
-	assert.True(t, got.forceGlobal)
+func TestScheduleItems_PartialRowImageReturnsWritesetError(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "a", Type: querypb.Type_INT64},
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "b", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{false, true, false},
+	}
+	vp.tablePlansVersion.Store(1)
+
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	}
+	rowEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("23"), Lengths: []int64{1, 1}},
+				DataColumns: &binlogdatapb.RowChange_Bitmap{
+					Count: 3,
+					Cols:  []byte{0x06},
+				},
+			}},
+		},
+		Timestamp: 100,
+	}
+	commitEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_COMMIT,
+	}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{gtidEvent, rowEvent, commitEvent}})
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Contains(t, err.Error(), "partial row image on table t1")
+
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	assert.Zero(t, scheduler.pendingCount)
+	assert.Zero(t, scheduler.inflightGlobal)
+	assert.Zero(t, scheduler.inflightMissingMeta)
+	assert.Zero(t, scheduler.inflightCommitMeta)
+	assert.Empty(t, scheduler.pending)
+	assert.Empty(t, scheduler.inflightWriteset)
 }
 
 func TestScheduleItems_CommitMeta(t *testing.T) {
@@ -1116,6 +3246,52 @@ func TestScheduleItems_CommitMeta(t *testing.T) {
 	assert.True(t, got.hasCommitMeta)
 	assert.Equal(t, int64(10), got.sequenceNumber)
 	assert.Equal(t, int64(9), got.commitParent)
+}
+
+func TestScheduleItems_BatchingMixedCommitMetaStaysMissingMeta(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	state.maxBatchedCommits = 2
+
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName: "t1",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	vp.tablePlansVersion.Store(1)
+
+	items := [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+		}, Timestamp: 100},
+		{Type: binlogdatapb.VEventType_COMMIT},
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6", SequenceNumber: 11, CommitParent: 10},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("2"), Lengths: []int64{1}}}},
+		}, Timestamp: 200},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, items))
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.False(t, got.hasCommitMeta)
+	assert.Zero(t, got.sequenceNumber)
+	assert.Zero(t, got.commitParent)
+	assert.Len(t, got.payload.events, 2)
+	assert.NotNil(t, got.writeset)
+	require.NoError(t, scheduler.markCommitted(got))
+	scheduler.mu.Lock()
+	assert.Equal(t, int64(11), scheduler.lastCommittedSequence)
+	scheduler.mu.Unlock()
 }
 
 func TestScheduleItems_HeartbeatSetsMustSave(t *testing.T) {
@@ -1225,8 +3401,11 @@ func TestScheduleItems_FKRefsDisableBatching(t *testing.T) {
 
 	vp.tablePlans["t1"] = &TablePlan{
 		TargetName: "t1",
-		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
-		PKIndices:  []bool{true},
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
 	}
 	vp.tablePlansVersion.Store(1)
 
@@ -1240,13 +3419,13 @@ func TestScheduleItems_FKRefsDisableBatching(t *testing.T) {
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
 			TableName:  "t1",
-			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("112"), Lengths: []int64{1, 2}}}},
 		}, Timestamp: 100},
 		{Type: binlogdatapb.VEventType_COMMIT},
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
 			TableName:  "t1",
-			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("2"), Lengths: []int64{1}}}},
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("223"), Lengths: []int64{1, 2}}}},
 		}, Timestamp: 200},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}}
@@ -1257,6 +3436,7 @@ func TestScheduleItems_FKRefsDisableBatching(t *testing.T) {
 	// With FK refs, batching is disabled — two separate transactions
 	got1, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
+	require.NoError(t, scheduler.markCommitted(got1))
 	got2, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
 
@@ -1915,6 +4095,8 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 			return nil
 		},
 	}
+	activeClient := newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	worker.client = activeClient
 
 	event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	payload := &applyTxnPayload{events: []*binlogdatapb.VEvent{event}}
@@ -1932,7 +4114,7 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 		require.NotNil(t, txn)
 		assert.NotNil(t, txn.payload.query)
 		assert.NotNil(t, txn.payload.commit)
-		assert.Nil(t, txn.payload.client)
+		assert.Same(t, activeClient, txn.payload.client)
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timed out waiting for commitCh")
 	}
@@ -1945,6 +4127,87 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timed out waiting for workerLoop exit")
 	}
+}
+
+func TestWorkerLoop_CapturesDoneChannelBeforeDispatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn)
+
+	worker := &applyWorker{ctx: ctx}
+	afterFirstSend := make(chan struct{})
+	allowFirstSendReturn := make(chan struct{})
+	beforeSecondWait := make(chan chan struct{}, 1)
+	allowSecondWait := make(chan struct{})
+
+	workerLoopTestHookAfterSend = func(txn *applyTxn) {
+		if txn.order != 1 {
+			return
+		}
+		close(afterFirstSend)
+		<-allowFirstSendReturn
+	}
+	workerLoopTestHookBeforeWaitPending = func(done chan struct{}) {
+		select {
+		case beforeSecondWait <- done:
+		default:
+		}
+		<-allowSecondWait
+	}
+	t.Cleanup(func() {
+		workerLoopTestHookAfterSend = nil
+		workerLoopTestHookBeforeWaitPending = nil
+	})
+
+	firstTxn := acquireApplyTxn()
+	firstTxn.order = 1
+	firstTxn.noConflict = true
+	firstTxn.payload = &applyTxnPayload{}
+	require.NoError(t, scheduler.enqueue(firstTxn))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+	}()
+
+	dispatchedFirst := <-commitCh
+	<-afterFirstSend
+	require.Same(t, firstTxn, dispatchedFirst)
+	originalDone := dispatchedFirst.done
+
+	releaseApplyTxn(dispatchedFirst)
+
+	replacementDone := make(chan struct{}, 1)
+	// Model the exact race directly: the commitLoop has released the dispatched
+	// object, and immediate reuse repurposes that same struct before workerLoop
+	// records pendingDone. This avoids depending on sync.Pool returning the same
+	// pointer while still proving the correctness invariant.
+	dispatchedFirst.done = replacementDone
+	dispatchedFirst.order = 2
+	dispatchedFirst.noConflict = true
+	dispatchedFirst.payload = &applyTxnPayload{}
+	require.NoError(t, scheduler.enqueue(dispatchedFirst))
+
+	// Pre-signal the replacement channel. The old workerLoop ordering can latch
+	// this reused channel after dispatching txn1, which incorrectly lets txn2 run
+	// before txn1's original done channel is signaled.
+	replacementDone <- struct{}{}
+	close(allowFirstSendReturn)
+
+	waitingOn := <-beforeSecondWait
+	require.True(t, originalDone == waitingOn)
+	require.True(t, replacementDone != waitingOn)
+
+	originalDone <- struct{}{}
+	close(allowSecondWait)
+
+	dispatchedSecond := <-commitCh
+	require.Same(t, dispatchedFirst, dispatchedSecond)
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
 func TestWorkerLoop_ErrorRollsBack(t *testing.T) {

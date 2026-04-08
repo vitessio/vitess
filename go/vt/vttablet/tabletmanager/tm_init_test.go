@@ -24,10 +24,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -40,6 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -1247,4 +1251,71 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 	require.NoError(t, err)
 	// Should be PRIMARY due to checkPrimaryShip logic
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+}
+
+func TestInitReplicationRecovery(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+
+	tm := &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		BatchCtx:               ctx,
+		TopoServer:             ts,
+		MysqlDaemon:            fakeMysqlDaemon,
+		tmc:                    newFakeTMClient(),
+		tabletAlias:            tablet.Alias,
+		_waitForGrantsComplete: make(chan struct{}),
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: tablet,
+			},
+		},
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityNone)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 2},
+		Hostname: "primary-host",
+		PortMap: map[string]int32{
+			"vt":   1234,
+			"grpc": 3456,
+		},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, primary))
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+	fakeMysqlDaemon.SetPrimaryPositionLocked(pos)
+	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	gotPosition, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }

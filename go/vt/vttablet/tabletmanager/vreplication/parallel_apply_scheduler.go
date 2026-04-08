@@ -40,8 +40,8 @@ type applyTxn struct {
 	// commit metadata are never run concurrently (safety boundary).
 	hasCommitMeta bool
 	// forceGlobal is true for transactions that must serialize with
-	// everything: non-row-only transactions (DDL, FIELD, OTHER, JOURNAL),
-	// copy-phase transactions, or transactions whose writeset build failed.
+	// everything: non-row-only transactions (DDL, FIELD, OTHER, JOURNAL)
+	// and copy-phase transactions.
 	forceGlobal bool
 	// noConflict is true for position-only saves and certain pass-through
 	// events (OTHER, ignored DDL). These bypass all conflict checking and
@@ -160,7 +160,8 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 
 // nextReady blocks until a transaction in the pending queue passes the
 // readiness check, marks it inflight, removes it from the queue, and returns
-// it to the calling worker. Returns io.EOF when the scheduler is closed.
+// it to the calling worker. Returns io.EOF when the scheduler is closed and
+// there is no pending work left to drain.
 func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,16 +173,15 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 		if err := s.ctx.Err(); err != nil {
 			return nil, err
 		}
-		// Check closed AFTER context checks so that workers exit
-		// cleanly when close() is called without context cancellation
-		// (e.g., scheduleLoop returns io.EOF for a relay log EOF).
-		if s.closed {
-			return nil, io.EOF
-		}
 		txn := s.popReadyLocked()
 		if txn != nil {
 			s.markInflightLocked(txn)
 			return txn, nil
+		}
+		// Check closed only after attempting to drain any queued work so
+		// transactions already scheduled before shutdown still commit.
+		if s.closed {
+			return nil, io.EOF
 		}
 		s.cond.Wait()
 	}
@@ -339,10 +339,13 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 		// checks above are sufficient for correctness — the same approach
 		// MySQL uses internally with WRITESET dependency tracking.
 		//
-		// When the writeset is empty (e.g., writeset build failed), we fall
-		// back to the commit-parent ordering as the safety net.
+		// When the writeset is empty, we fall back to commit-parent ordering
+		// as the safety net.
 		if len(txn.writeset) > 0 {
 			return true
+		}
+		if s.inflightCommitMeta > 0 {
+			return false
 		}
 		ready := txn.commitParent <= s.lastCommittedSequence
 		return ready
@@ -473,8 +476,9 @@ func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 	}
 }
 
-// close marks the scheduler as closed, clears the pending queue, and
-// broadcasts to wake all blocked workers so they exit with io.EOF.
+// close marks the scheduler as closed and broadcasts to wake blocked workers.
+// Already-enqueued work remains available so callers can drain the scheduled
+// prefix before observing io.EOF.
 func (s *applyScheduler) close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -482,9 +486,6 @@ func (s *applyScheduler) close() error {
 		return err
 	}
 	s.closed = true
-	s.pending = nil
-	s.pendingOff = 0
-	s.pendingCount = 0
 	s.cond.Broadcast()
 	return io.EOF
 }

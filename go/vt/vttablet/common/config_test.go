@@ -163,3 +163,32 @@ func TestNewVReplicationConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestVReplicationConfigSourceOverrides(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-parallel-replication-workers": "4",
+		"vreplication-parallel-insert-workers":      "8",
+		"vstream-packet-size":                       "1024",
+		"vstream_dynamic_packet_size":               "false",
+		"vstream_binlog_rotation_threshold":         "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vstream-packet-size":               "1024",
+		"vstream-dynamic-packet-size":       "false",
+		"vstream_binlog_rotation_threshold": "2048",
+	}, config.SourceOverrides())
+}
+
+func TestVReplicationConfigSourceOverridesUseEffectiveValues(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vstream-packet-size": "1024",
+		"vstream_packet_size": "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vstream-packet-size": "2048",
+	}, config.SourceOverrides())
+}

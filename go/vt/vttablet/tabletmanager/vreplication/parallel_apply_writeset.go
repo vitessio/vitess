@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -204,8 +205,9 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 		if plan == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
 		}
-		refs := fkRefs[rowEvent.TableName]
-		pRefs := parentRefs[rowEvent.TableName]
+		targetTableName := plan.TargetName
+		refs := fkRefs[targetTableName]
+		pRefs := parentRefs[targetTableName]
 		// Build fieldIdx once per table for FK ref lookups (child or parent side).
 		var fieldIdx map[string]int
 		if len(refs) > 0 || len(pRefs) > 0 {
@@ -221,18 +223,24 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 		}
 		for _, change := range rowEvent.RowChanges {
 			// Partial row images (DataColumns/JsonPartialValues) omit columns
-			// from the binlog payload. PK columns are always present so PK
-			// hashing is safe, but FK columns can be omitted when they're
-			// BLOB/TEXT typed and AllowNoBlobBinlogRowImage is enabled.
-			// Skipping FK writeset keys for absent columns would turn
-			// "column omitted from image" into "no FK edge", which is not
-			// a valid equivalence — the scheduler would lose the parent/
-			// child conflict edge and could reorder FK-dependent txns.
-			// Fail closed: return an error so the caller forces global
-			// serialization for this transaction.
-			if (change.DataColumns != nil || change.JsonPartialValues != nil) &&
-				(len(refs) > 0 || len(pRefs) > 0) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "partial row image on FK-related table %s: forcing serialization", rowEvent.TableName)
+			// from the binlog payload. buildTxnWriteset decodes rows with
+			// sqltypes.MakeRowTrusted(plan.Fields, change.Before/After), which
+			// treats the streamed values as positional and ignores the bitmaps.
+			// That makes both PK and FK hashing unsafe: omitted columns can
+			// shift later values into the wrong field slots. BEFORE images are
+			// ambiguous too: vstreamer can encode omitted columns as -1 lengths,
+			// but it only publishes DataColumns for AFTER rows.
+			// Fail closed until writeset reconstruction becomes bitmap-aware.
+			isPartialRow := change.DataColumns != nil || change.JsonPartialValues != nil
+			if !isPartialRow && plan.Fields != nil {
+				isPartialRow = (change.Before != nil && len(change.Before.Lengths) < len(plan.Fields)) ||
+					(change.After != nil && len(change.After.Lengths) < len(plan.Fields))
+			}
+			if !isPartialRow {
+				isPartialRow = beforeRowHasNegativeRelevantLengths(change.Before, plan, fieldIdx, refs, pRefs)
+			}
+			if isPartialRow {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "partial row image on table %s: forcing serialization", rowEvent.TableName)
 			}
 			// Decode Before/After row values once per change.
 			var beforeVals, afterVals []sqltypes.Value
@@ -242,7 +250,7 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			if change.After != nil && plan.Fields != nil {
 				afterVals = sqltypes.MakeRowTrusted(plan.Fields, change.After)
 			}
-			if err := writesetKeysForChange(plan, rowEvent.TableName, beforeVals, afterVals, keySet); err != nil {
+			if err := writesetKeysForChange(plan, targetTableName, beforeVals, afterVals, keySet); err != nil {
 				return nil, err
 			}
 			for i := range refs {
@@ -269,6 +277,40 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 	return keys, nil
 }
 
+func beforeRowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) bool {
+	if row == nil {
+		return false
+	}
+	relevantColumns := make(map[int]struct{})
+	for i, isPK := range plan.PKIndices {
+		if isPK {
+			relevantColumns[i] = struct{}{}
+		}
+	}
+	for _, ref := range refs {
+		for _, colName := range ref.ChildColumnNames {
+			if idx, ok := fieldIdx[colName]; ok {
+				relevantColumns[idx] = struct{}{}
+			}
+		}
+	}
+	for _, ref := range pRefs {
+		for _, colName := range ref.ReferencedColumnNames {
+			if idx, ok := fieldIdx[colName]; ok {
+				relevantColumns[idx] = struct{}{}
+			}
+		}
+	}
+	for i, length := range row.Lengths {
+		if length < 0 {
+			if _, ok := relevantColumns[i]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // snapshotTablePlans returns a copy-on-write snapshot of tablePlans. It only
 // copies the map when the version has changed since the last snapshot, avoiding
 // the read-lock hold time of building writesets directly against the live map.
@@ -288,6 +330,32 @@ func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, vers
 	return cp
 }
 
+func txnTouchesExtraUniqueSecondary(events []*binlogdatapb.VEvent, tablePlans map[string]*TablePlan) bool {
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		plan := tablePlans[event.RowEvent.TableName]
+		if plan != nil && plan.HasExtraUniqueSecondary {
+			return true
+		}
+	}
+	return false
+}
+
+func txnTouchesUnsupportedWritesetMapping(events []*binlogdatapb.VEvent, tablePlans map[string]*TablePlan) bool {
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		plan := tablePlans[event.RowEvent.TableName]
+		if plan != nil && plan.HasUnsupportedWritesetMapping {
+			return true
+		}
+	}
+	return false
+}
+
 // writesetKeysForChange extracts PK-based writeset keys from pre-decoded row
 // values and inserts them directly into the caller's keySet map as uint64 hashes.
 func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
@@ -295,6 +363,9 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 		return nil
 	}
 	if len(plan.PKIndices) == 0 {
+		if len(plan.IdentityColumns) != 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
+		}
 		return nil
 	}
 	appendKey := func(vals []sqltypes.Value) error {
@@ -320,6 +391,9 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 			writesetDigestAddValue(&d, vals[i])
 		}
 		if !hasPK {
+			if len(plan.IdentityColumns) != 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
+			}
 			return nil
 		}
 		keySet[d.Sum64()] = struct{}{}

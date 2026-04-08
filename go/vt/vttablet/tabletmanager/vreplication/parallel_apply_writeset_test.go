@@ -24,11 +24,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // testWritesetHash mirrors production hash logic for test assertions.
@@ -81,6 +84,108 @@ func TestBuildTxnWritesetUsesBeforeAndAfter(t *testing.T) {
 	assert.ElementsMatch(t, []uint64{h1, h2}, keys)
 }
 
+func TestBuildTxnWritesetRejectsPartialRowImageWithoutFKRefs(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "a", Type: querypb.Type_INT64},
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "b", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{false, true, false},
+	}
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("23"), Lengths: []int64{1, 1}},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 3,
+			Cols:  []byte{0x06},
+		},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "partial row image")
+	require.Nil(t, keys)
+	assert.NotEqual(t, []uint64{testWritesetHash("t1", sqltypes.NewInt64(3))}, keys)
+}
+
+func TestBuildTxnWritesetAllowsBeforeImageWithNullValue(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "nullable_col", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices: []bool{true, false},
+	}
+	change := &binlogdatapb.RowChange{
+		Before: &querypb.Row{Values: []byte("1"), Lengths: []int64{1, -1}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.NoError(t, err)
+	expected := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
+	require.Equal(t, []uint64{expected}, keys)
+}
+
+func TestBuildTxnWritesetRejectsSparseBeforeImageOnRelevantFKColumn(t *testing.T) {
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+			{Name: "val", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices: []bool{true, false, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	change := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, -1, 3},
+			Values:  []byte("5aaa"),
+		},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"child": childPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "partial row image")
+	require.Nil(t, keys)
+}
+
+func TestBuildTxnWritesetAllowsFullRowImageWithNullValue(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "nullable_col", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices: []bool{true, false},
+	}
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1, -1}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.NoError(t, err)
+	expected := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
+	require.Equal(t, []uint64{expected}, keys)
+}
+
 func TestBuildTxnWritesetNoPK(t *testing.T) {
 	plan := &TablePlan{
 		TargetName: "t1",
@@ -94,6 +199,23 @@ func TestBuildTxnWritesetNoPK(t *testing.T) {
 
 	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
 	require.NoError(t, err)
+	require.Nil(t, keys)
+}
+
+func TestBuildTxnWritesetFailsClosedWithoutUsableIdentity(t *testing.T) {
+	plan := &TablePlan{
+		TargetName:      "t1",
+		Fields:          []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		IdentityColumns: []string{"id"},
+	}
+	row := &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}
+	change := &binlogdatapb.RowChange{After: row}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no usable writeset identity")
 	require.Nil(t, keys)
 }
 
@@ -356,4 +478,152 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 		}
 	}
 	require.True(t, conflict, "parent and child writesets should conflict on parent hash")
+}
+
+func TestBuildTxnWritesetWithRenamedTableFKRefsUsesTargetTableNames(t *testing.T) {
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {
+			{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}},
+		},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{
+		"parent_src": parentPlan,
+		"child_src":  childPlan,
+	}
+
+	parentRow := &querypb.Row{Values: []byte("42"), Lengths: []int64{2}}
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "parent_src",
+			RowChanges: []*binlogdatapb.RowChange{{After: parentRow}},
+		},
+	}
+	childRow := &querypb.Row{Values: []byte("542"), Lengths: []int64{1, 2}}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "child_src",
+			RowChanges: []*binlogdatapb.RowChange{{After: childRow}},
+		},
+	}
+
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	parentHash := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	require.Equal(t, []uint64{parentHash}, parentKeys)
+
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+	require.Len(t, childKeys, 2)
+	childPKHash := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))
+	assert.ElementsMatch(t, []uint64{childPKHash, parentHash}, childKeys)
+
+	parentKeySet := map[uint64]struct{}{}
+	for _, k := range parentKeys {
+		parentKeySet[k] = struct{}{}
+	}
+	conflict := false
+	for _, k := range childKeys {
+		if _, ok := parentKeySet[k]; ok {
+			conflict = true
+			break
+		}
+	}
+	require.True(t, conflict, "renamed parent and child writesets should still conflict on target parent hash")
+}
+
+func TestBuildTxnWritesetExpressionPlanIsMarkedUnsupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select a + b as c1, c as c2 from t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {{Name: "c1", IsPK: true}, {Name: "c2"}}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "a", Type: querypb.Type_INT64},
+			{Name: "b", Type: querypb.Type_INT64},
+			{Name: "c", Type: querypb.Type_INT64},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, tplan.HasUnsupportedWritesetMapping)
+}
+
+func TestBuildTxnWritesetAliasedFKColumnPlanIsMarkedUnsupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "child",
+			Filter: "select id, parent_id as pid from child",
+		}}}),
+		map[string][]*ColumnInfo{"child": {{Name: "id", IsPK: true}, {Name: "pid"}}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, tplan.HasUnsupportedWritesetMapping)
+}
+
+func TestBuildTxnWritesetMatchingAliasExpressionPlanIsMarkedUnsupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select lower(email) as email from t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {{Name: "email", IsPK: true}}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "email", Type: querypb.Type_VARCHAR},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, tplan.HasUnsupportedWritesetMapping)
 }

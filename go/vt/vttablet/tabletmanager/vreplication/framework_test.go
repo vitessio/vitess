@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -205,9 +206,6 @@ const tempDir = "/tmp"
 func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
-	if testing.Short() {
-		os.Exit(m.Run())
-	}
 	exitCode := func() int {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -228,6 +226,9 @@ func TestMain(m *testing.M) {
 			return ret
 		}
 		cancel()
+		if testing.Short() {
+			return 0
+		}
 
 		runNoBlobTest = true
 		if err := utils.SetBinlogRowImageOptions("noblob", runPartialJSONTest, tempDir); err != nil {
@@ -274,7 +275,190 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
 			t.Fatalf("ExecuteFetch(%v) failed: %v", query, err)
 		}
+		updateMockSchemaForQuery(query)
 	}
+}
+
+func TestExecConnStatements_UpdatesMockSchema(t *testing.T) {
+	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	require.NoError(t, err)
+
+	tableName := "schema_engine_conn_test"
+	execConnStatements(t, conn, []string{
+		fmt.Sprintf("create table %s (id int primary key)", tableName),
+	})
+	t.Cleanup(func() {
+		execConnStatements(t, conn, []string{fmt.Sprintf("drop table if exists %s", tableName)})
+	})
+
+	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
+
+	execConnStatements(t, conn, []string{fmt.Sprintf("drop table %s", tableName)})
+
+	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
+}
+
+func TestShortModeHarnessInitialized(t *testing.T) {
+	if !testing.Short() {
+		t.Skip("short-mode only")
+	}
+
+	require.NotNil(t, env)
+	require.NotNil(t, playerEngine)
+	require.NotNil(t, streamerEngine)
+}
+
+func TestFakeTabletConnVStreamRowsForwardsOptions(t *testing.T) {
+	execStatements(t, []string{
+		"create table vstream_rows_options(id int, val varbinary(9), primary key(id))",
+		"insert into vstream_rows_options values (1, '123456789'), (2, '123456789')",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table vstream_rows_options"})
+	})
+
+	var packetRowCounts []int
+	err := (&fakeTabletConn{}).VStreamRows(context.Background(), &binlogdatapb.VStreamRowsRequest{
+		Query: "select * from vstream_rows_options",
+		Options: &binlogdatapb.VStreamOptions{
+			ConfigOverrides: map[string]string{
+				"vstream-dynamic-packet-size": "false",
+				"vstream-packet-size":         "10",
+			},
+		},
+	}, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if len(rows.Rows) > 0 {
+			packetRowCounts = append(packetRowCounts, len(rows.Rows))
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 1}, packetRowCounts)
+}
+
+func TestFakeTabletConnVStreamForwardsOptions(t *testing.T) {
+	execStatements(t, []string{
+		"create table vstream_options_t1(id int, primary key(id))",
+		"create table vstream_options_t2(id int, primary key(id))",
+		"insert into vstream_options_t1 values (1)",
+		"insert into vstream_options_t2 values (2)",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			"drop table vstream_options_t1",
+			"drop table vstream_options_t2",
+		})
+	})
+
+	copiedTables := map[string]bool{}
+	err := (&fakeTabletConn{tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Uid: 100}}}).VStream(context.Background(), &binlogdatapb.VStreamRequest{
+		Target: &querypb.Target{Keyspace: "vttest"},
+		Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "vstream_options_t1",
+			Filter: "select * from vstream_options_t1",
+		}, {
+			Match:  "vstream_options_t2",
+			Filter: "select * from vstream_options_t2",
+		}}},
+		Options: &binlogdatapb.VStreamOptions{TablesToCopy: []string{"vstream_options_t1"}},
+	}, func(evs []*binlogdatapb.VEvent) error {
+		for _, ev := range evs {
+			switch ev.Type {
+			case binlogdatapb.VEventType_FIELD:
+				copiedTables[ev.FieldEvent.TableName] = true
+			case binlogdatapb.VEventType_ROW:
+				copiedTables[ev.RowEvent.TableName] = true
+			case binlogdatapb.VEventType_LASTPK:
+				copiedTables[ev.LastPKEvent.TableLastPK.TableName] = true
+			case binlogdatapb.VEventType_COPY_COMPLETED:
+				return io.EOF
+			}
+		}
+		return nil
+	})
+	require.ErrorIs(t, err, io.EOF)
+	require.Contains(t, copiedTables, "vstream_options_t1")
+	require.NotContains(t, copiedTables, "vstream_options_t2")
+}
+
+func TestVPlayerForwardsWorkflowOverridesToSourceVStream(t *testing.T) {
+	streamer := &capturingVStreamerClient{err: errors.New("stream failed")}
+	mockDB := binlogplayer.NewMockDBClient(t)
+	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
+	config, err := vttablet.NewVReplicationConfig(map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	})
+	require.NoError(t, err)
+
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	vr := newVReplicator(1, &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "/.*"}}}}, streamer, stats, mockDB, nil, playerEngine, config)
+	vp := newVPlayer(vr, binlogplayer.VRSettings{}, nil, replication.Position{}, "replicate")
+	vp.replicatorPlan = &ReplicatorPlan{VStreamFilter: vr.source.Filter}
+
+	err = vp.fetchAndApply(t.Context())
+	require.ErrorContains(t, err, "stream failed")
+	mockDB.Wait()
+	require.NotNil(t, streamer.vstreamOptions)
+	require.Equal(t, map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	}, streamer.vstreamOptions.ConfigOverrides)
+}
+
+func TestVCopierCopyAllForwardsWorkflowOverridesToSourceVStreamTables(t *testing.T) {
+	streamer := &capturingVStreamerClient{vstreamTablesErr: errors.New("stream tables failed")}
+	mockDB := binlogplayer.NewMockDBClient(t)
+	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
+	config, err := vttablet.NewVReplicationConfig(map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	})
+	require.NoError(t, err)
+
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	vr := newVReplicator(1, &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}}}, streamer, stats, mockDB, nil, playerEngine, config)
+	vr.colInfoMap = map[string][]*ColumnInfo{"t1": {{Name: "id", IsPK: true}}}
+
+	err = newVCopier(vr).copyAll(t.Context(), binlogplayer.VRSettings{WorkflowName: "copy-all"})
+	require.ErrorContains(t, err, "stream tables failed")
+	mockDB.Wait()
+	require.NotNil(t, streamer.vstreamTablesOptions)
+	require.Equal(t, map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	}, streamer.vstreamTablesOptions.ConfigOverrides)
+}
+
+func TestVCopierCopyTableForwardsWorkflowOverridesToSourceVStreamRows(t *testing.T) {
+	streamer := &capturingVStreamerClient{vstreamRowsErr: errors.New("stream rows failed")}
+	mockDB := binlogplayer.NewMockDBClient(t)
+	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
+	config, err := vttablet.NewVReplicationConfig(map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	})
+	require.NoError(t, err)
+
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	vr := newVReplicator(1, &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}}}, streamer, stats, mockDB, nil, playerEngine, config)
+	vr.colInfoMap = map[string][]*ColumnInfo{"t1": {{Name: "id", IsPK: true}}}
+
+	err = newVCopier(vr).copyTable(t.Context(), "t1", map[string]*sqltypes.Result{"t1": nil})
+	require.ErrorContains(t, err, "stream rows failed")
+	mockDB.Wait()
+	require.NotNil(t, streamer.vstreamRowsOptions)
+	require.Equal(t, map[string]string{
+		"vreplication-net-read-timeout": "123",
+		"vstream-packet-size":           "42",
+	}, streamer.vstreamRowsOptions.ConfigOverrides)
 }
 
 // --------------------------------------
@@ -338,6 +522,43 @@ type fakeTabletConn struct {
 	tablet *topodatapb.Tablet
 }
 
+type capturingVStreamerClient struct {
+	vstreamOptions       *binlogdatapb.VStreamOptions
+	vstreamRowsOptions   *binlogdatapb.VStreamOptions
+	vstreamTablesOptions *binlogdatapb.VStreamOptions
+	err                  error
+	vstreamRowsErr       error
+	vstreamTablesErr     error
+}
+
+func (c *capturingVStreamerClient) Open(context.Context) error { return nil }
+
+func (c *capturingVStreamerClient) Close(context.Context) error { return nil }
+
+func (c *capturingVStreamerClient) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	c.vstreamOptions = options
+	if c.err != nil {
+		return c.err
+	}
+	return io.EOF
+}
+
+func (c *capturingVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
+	c.vstreamRowsOptions = options
+	if c.vstreamRowsErr != nil {
+		return c.vstreamRowsErr
+	}
+	return nil
+}
+
+func (c *capturingVStreamerClient) VStreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+	c.vstreamTablesOptions = options
+	if c.vstreamTablesErr != nil {
+		return c.vstreamTablesErr
+	}
+	return nil
+}
+
 // StreamHealth is part of queryservice.QueryService.
 func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return callback(&querypb.StreamHealthResponse{
@@ -371,7 +592,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 			return err
 		}
 	}
-	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
+	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, request.Options)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -393,15 +614,12 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
-	vstreamOptions := &binlogdatapb.VStreamOptions{
-		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
-	}
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	}, vstreamOptions)
+	}, request.Options)
 }
 
 // --------------------------------------
@@ -735,6 +953,20 @@ func applyDropTable(ddl *sqlparser.DropTable) {
 	}
 }
 
+func TestUpdateMockSchemaForQuery_DropRemovesSchemaEngineTable(t *testing.T) {
+	tableName := "schema_engine_drop_test"
+	execStatements(t, []string{fmt.Sprintf("create table %s (id int primary key)", tableName)})
+	t.Cleanup(func() {
+		execStatements(t, []string{fmt.Sprintf("drop table if exists %s", tableName)})
+	})
+
+	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
+
+	updateMockSchemaForQuery(fmt.Sprintf("drop table %s", tableName))
+
+	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
+}
+
 func normalizeDDLTableName(table sqlparser.TableName) (string, string, bool) {
 	name := table.Name.String()
 	if name == "" {
@@ -896,6 +1128,9 @@ func deleteMockTable(dbName, tableName string) {
 	mockSchemaMu.Lock()
 	delete(mockSchema, mockSchemaKey(dbName, tableName))
 	mockSchemaMu.Unlock()
+	if dbName == env.KeyspaceName {
+		env.SchemaEngine.DeleteTableForTests(tableName)
+	}
 }
 
 func getMockTable(dbName, tableName string) *mockTable {

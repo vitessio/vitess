@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
@@ -84,6 +86,31 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 		vttablet.DefaultVReplicationConfig.ParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}
+}
+
+func copyTestSourceOverrides() map[string]string {
+	return map[string]string{
+		"vstream-dynamic-packet-size": "false",
+		"vstream-packet-size":         "1",
+	}
+}
+
+func createVReplicationStateWithSourceOverrides(t *testing.T, workflow string, bls *binlogdatapb.BinlogSource, state binlogdatapb.VReplicationWorkflowState, dbName string, overrides map[string]string) string {
+	t.Helper()
+
+	query := binlogplayer.CreateVReplicationState(workflow, bls, "", state, dbName, 0, 0)
+	if len(overrides) == 0 {
+		return query
+	}
+
+	options, err := json.Marshal(vtctldata.WorkflowOptions{Config: overrides})
+	require.NoError(t, err)
+
+	emptyOptions := sqltypes.EncodeStringSQL("{}")
+	idx := strings.LastIndex(query, emptyOptions)
+	require.NotEqual(t, -1, idx)
+
+	return query[:idx] + sqltypes.EncodeStringSQL(string(options)) + query[idx+len(emptyOptions):]
 }
 
 func TestPlayerCopyCharPK(t *testing.T) {
@@ -156,7 +183,7 @@ func testPlayerCopyCharPK(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +289,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +412,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -751,7 +778,7 @@ func testPlayerCopyBigTable(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -888,7 +915,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

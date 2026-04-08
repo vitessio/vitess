@@ -96,11 +96,6 @@ type vplayer struct {
 
 	throttlerAppName string
 
-	// See updateFKCheck for more details on how the two fields below are used.
-
-	foreignKeyChecksEnabled          bool
-	foreignKeyChecksStateInitialized bool
-
 	serialMu      *sync.Mutex
 	parallelOrder int64
 
@@ -113,6 +108,17 @@ type vplayer struct {
 	// match child FK keys, ensuring correct conflict detection even when
 	// FKs reference non-PK unique keys.
 	parentFKRefs map[string][]parentFKRef
+	// postDDLDroppedTables records dropped table names from executed DDLs so the
+	// parallel scheduler can clear post-DDL barriers without mutating tablePlans.
+	postDDLDroppedTables map[string]struct{}
+	// postDDLStalePlans records the still-stale table plans left behind by the
+	// most recently executed EXEC* DDLs. scheduleLoop snapshots this under
+	// serialMu so commitLoop can publish real runtime DDL effects without
+	// racing the scheduler.
+	postDDLStalePlans map[string]postDDLStalePlan
+	// postDDLConservative keeps unknown DDL barriers fail-closed until every
+	// currently tracked plan refreshes.
+	postDDLConservative bool
 
 	// idStr is vp.idStr, cached to avoid repeated
 	// conversions on every lag gauge update.
@@ -249,7 +255,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 }
 
 // updateFKCheck updates the @@session.foreign_key_checks variable based on the binlog row event flags.
-// The function only does it if it has changed to avoid redundant updates, using the cached vplayer.foreignKeyChecksEnabled
+// The function only does it if it has changed to avoid redundant updates, using the cached state on the active db session.
 // The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
 // - If set (1), foreign key checks are disabled.
 // - If unset (0), foreign key checks are enabled.
@@ -270,18 +276,19 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	}
 	dbForeignKeyChecksEnabled := flags2&NoForeignKeyCheckFlagBitmask != NoForeignKeyCheckFlagBitmask
 
-	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
-		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
+	activeClient := vp.activeDBClient()
+	if activeClient.foreignKeyChecksStateInitialized /* already set earlier */ &&
+		dbForeignKeyChecksEnabled == activeClient.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
 		return nil
 	}
 	log.Info("Setting this session's foreign_key_checks to " + strconv.FormatBool(dbForeignKeyChecksEnabled))
 	if _, err := vp.query(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
-	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
-	if !vp.foreignKeyChecksStateInitialized {
+	activeClient.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
+	if !activeClient.foreignKeyChecksStateInitialized {
 		log.Info("First foreign_key_checks update to: " + strconv.FormatBool(dbForeignKeyChecksEnabled))
-		vp.foreignKeyChecksStateInitialized = true
+		activeClient.foreignKeyChecksStateInitialized = true
 	}
 	return nil
 }
@@ -357,7 +364,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		// context was canceled but the Go context hasn't propagated yet.
 		// Treat this the same as ctx.Done() — return nil to avoid a
 		// spurious retry.
-		if vterrors.Code(err) == vtrpcpb.Code_CANCELED {
+		if vterrors.Code(err) == vtrpcpb.Code_CANCELED && ctx.Err() != nil {
 			return nil
 		}
 		// If the stream ends normally we have to return an error indicating
@@ -741,10 +748,35 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
+		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 {
+			vp.tablePlansMu.RLock()
+			cachedPlan := vp.tablePlans[event.FieldEvent.TableName]
+			vp.tablePlansMu.RUnlock()
+			vp.serialMu.Lock()
+			staleEntry, hasStaleEntry := vp.postDDLStalePlans[event.FieldEvent.TableName]
+			cacheInvalidatedByRefreshTarget := !hasStaleEntry && postDDLRefreshTargetMatchesCachedPlan(vp.postDDLStalePlans, event.FieldEvent.TableName, cachedPlan)
+			vp.serialMu.Unlock()
+			cacheInvalidatedByDDL := (hasStaleEntry && staleEntry.stalePlan == cachedPlan) || cacheInvalidatedByRefreshTarget
+			if cachedPlan != nil && cachedPlan.TargetName == tplan.TargetName && !cacheInvalidatedByDDL {
+				tplan.HasExtraUniqueSecondary = cachedPlan.HasExtraUniqueSecondary
+			} else {
+				hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, tplan.TargetName, tplan)
+				if err != nil {
+					return err
+				}
+				tplan.HasExtraUniqueSecondary = hasExtraUniqueSecondary
+			}
+		}
+		fieldTableName := event.FieldEvent.TableName
 		vp.tablePlansMu.Lock()
-		vp.tablePlans[event.FieldEvent.TableName] = tplan
+		vp.tablePlans[fieldTableName] = tplan
 		vp.tablePlansVersion.Add(1)
 		vp.tablePlansMu.Unlock()
+		vp.serialMu.Lock()
+		// FIELD means this table name is live again, so later DDL barriers must
+		// treat it as tracked instead of as a previously dropped name.
+		delete(vp.postDDLDroppedTables, fieldTableName)
+		vp.serialMu.Unlock()
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 		}
@@ -803,66 +835,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
-		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
-		switch vp.vr.source.OnDdl {
-		case binlogdatapb.OnDDLAction_IGNORE:
-			// We still have to update the position.
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		case binlogdatapb.OnDDLAction_STOP:
-			if err := vp.activeDBClient().Begin(); err != nil {
-				return err
-			}
-			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
-				return err
-			}
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
-				return err
-			}
-			if err := vp.commit(); err != nil {
-				return err
-			}
-			return io.EOF
-		case binlogdatapb.OnDDLAction_EXEC:
-			// It's impossible to save the position transactionally with the statement.
-			// So, we apply the DDL first, and then save the position.
-			// Manual intervention may be needed if there is a partial
-			// failure here.
-			if _, err := vp.query(ctx, event.Statement); err != nil {
-				return err
-			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if _, err := vp.query(ctx, event.Statement); err != nil {
-				log.Info(fmt.Sprintf("Ignoring error: %v for DDL: %s", err, event.Statement))
-			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		}
+		_, err := vp.applyDDLEvent(ctx, event, stats)
+		return err
 	case binlogdatapb.VEventType_ROWS_QUERY:
 		// The original SQL query is informational only; VReplication applies row changes directly.
+	case binlogdatapb.VEventType_VERSION:
+		// VERSION only tells downstream consumers that schema_version changed.
+		// vplayer does not apply any data for it.
 	case binlogdatapb.VEventType_JOURNAL:
 		if vp.activeDBClient().InTransaction {
 			// Unreachable
@@ -924,7 +903,77 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 		}
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported vevent type: %v", event.Type)
 	}
 
 	return nil
+}
+
+// applyDDLEvent executes the DDL handling policy and reports whether the target
+// schema was actually changed, so commitLoop can publish only real EXEC* side effects.
+func (vp *vplayer) applyDDLEvent(ctx context.Context, event *binlogdatapb.VEvent, stats *VrLogStats) (bool, error) {
+	vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1)
+	sendStats := func() {
+		if stats != nil {
+			stats.Send(event.Statement)
+		}
+	}
+	switch vp.vr.source.OnDdl {
+	case binlogdatapb.OnDDLAction_IGNORE:
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return false, err
+		}
+		if posReached {
+			return false, io.EOF
+		}
+		return false, nil
+	case binlogdatapb.OnDDLAction_STOP:
+		if err := vp.activeDBClient().Begin(); err != nil {
+			return false, err
+		}
+		if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
+			return false, err
+		}
+		if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
+			return false, err
+		}
+		if err := vp.commit(); err != nil {
+			return false, err
+		}
+		return false, io.EOF
+	case binlogdatapb.OnDDLAction_EXEC:
+		// DDL and position save cannot be committed atomically, so we only
+		// publish the post-DDL barrier after the statement itself succeeds.
+		if _, err := vp.query(ctx, event.Statement); err != nil {
+			return false, err
+		}
+		sendStats()
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return false, err
+		}
+		if posReached {
+			return true, io.EOF
+		}
+		return true, nil
+	case binlogdatapb.OnDDLAction_EXEC_IGNORE:
+		executed := true
+		if _, err := vp.query(ctx, event.Statement); err != nil {
+			executed = false
+			log.Info(fmt.Sprintf("Ignoring error: %v for DDL: %s", err, event.Statement))
+		}
+		sendStats()
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return executed, err
+		}
+		if posReached {
+			return executed, io.EOF
+		}
+		return executed, nil
+	default:
+		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported ddl action: %v", vp.vr.source.OnDdl)
+	}
 }

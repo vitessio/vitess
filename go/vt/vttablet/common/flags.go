@@ -101,7 +101,7 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
 
-	fs.IntVar(&vreplicationParallelReplicationWorkers, "vreplication-parallel-replication-workers", vreplicationParallelReplicationWorkers, "(Experimental) Number of parallel replication workers to use during the replication phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent apply.")
+	fs.IntVar(&vreplicationParallelReplicationWorkers, "vreplication-parallel-replication-workers", vreplicationParallelReplicationWorkers, "Number of parallel replication workers to use during the replication phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent apply.")
 
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 

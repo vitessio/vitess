@@ -18,6 +18,8 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -35,6 +38,28 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeMysqlDaemon, ts *topo.Server) *TabletManager {
+	waitForGrantsComplete := make(chan struct{})
+	close(waitForGrantsComplete)
+
+	return &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		TopoServer:             ts,
+		MysqlDaemon:            mysqlDaemon,
+		tabletAlias:            tablet.Alias,
+		_waitForGrantsComplete: waitForGrantsComplete,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: tablet,
+			},
+		},
+	}
+}
+
+func recoverableReplicationInitError() error {
+	return sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
+}
 
 // TestWaitForGrantsToHaveApplied tests that waitForGrantsToHaveApplied only succeeds after waitForDBAGrants has been called.
 func TestWaitForGrantsToHaveApplied(t *testing.T) {
@@ -325,4 +350,245 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
 	require.False(t, isReadOnly)
+}
+
+func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
+	testCases := []struct {
+		name          string
+		inputErr      error
+		shouldRestart bool
+	}{
+		{
+			name:          "relay log info repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "master info error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			shouldRestart: true,
+		},
+		{
+			name:          "connection metadata repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1871), sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "applier metadata repository error",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1872), sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			shouldRestart: true,
+		},
+		{
+			name:          "wrapped master info error",
+			inputErr:      errors.New("ExecuteFetch(START REPLICA) failed: Could not initialize master info structure; more error messages can be found in the MySQL error log (errno 1201) (sqlstate HY000)"),
+			shouldRestart: true,
+		},
+		{
+			name:          "unrelated error",
+			inputErr:      errors.New("unexpected replication failure"),
+			shouldRestart: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			if tc.shouldRestart {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+					"STOP REPLICA",
+					"RESET REPLICA",
+					"START REPLICA",
+				}
+			}
+
+			tablet := newTestTablet(t, 100, "ks", "0", nil)
+			tm := &TabletManager{
+				MysqlDaemon: fakeMysqlDaemon,
+				tabletAlias: tablet.Alias,
+				tmState: &tmState{
+					displayState: displayState{
+						tablet: tablet,
+					},
+				},
+			}
+
+			err := tm.handleRecoverableReplicationInitError(t.Context(), tc.inputErr)
+			if tc.shouldRestart {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.inputErr)
+			}
+
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
+}
+
+func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.StartReplication(t.Context(), false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.RestartReplication(t.Context(), false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	err := tm.fixSemiSyncAndReplication(t.Context(), topodatapb.TabletType_REPLICA, SemiSyncActionUnset)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+func TestSetReplicationSourceRecovery(t *testing.T) {
+	t.Run("InitReplica recovers from start replication error", func(t *testing.T) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "cell1")
+
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+
+		parent := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_PRIMARY,
+			MysqlHostname: "mysql-primary",
+			MysqlPort:     3306,
+		}
+		require.NoError(t, ts.CreateTablet(ctx, parent))
+
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+		fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"FAKE RESET BINARY LOGS AND GTIDS",
+			"FAKE SET GLOBAL gtid_purged",
+			"FAKE SET SOURCE",
+			"STOP REPLICA",
+			"RESET REPLICA",
+			"START REPLICA",
+		}
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts)
+
+		err = tm.InitReplica(ctx, parent.Alias, "", 0, false)
+		require.NoError(t, err)
+		require.Equal(t, "mysql-primary", fakeMysqlDaemon.CurrentSourceHost)
+		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("SetReplicationSource reapplies source after recoverable source change error", func(t *testing.T) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "cell1")
+
+		tablet := newTestTablet(t, 100, "ks", "0", nil)
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
+		fakeMysqlDaemon.CurrentSourcePort = 3305
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA",
+			"STOP REPLICA",
+			"FAKE RESET REPLICA ALL",
+			"FAKE SET SOURCE",
+			"START REPLICA",
+		}
+
+		setSourceCalls := 0
+		fakeMysqlDaemon.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+			setSourceCalls++
+
+			require.Equal(t, "mysql-new-primary", host)
+			require.EqualValues(t, 3306, port)
+			require.Zero(t, heartbeatInterval)
+			require.False(t, startReplicationAfter)
+
+			if setSourceCalls == 1 {
+				require.True(t, stopReplicationBefore)
+				require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"STOP REPLICA"}))
+				return recoverableReplicationInitError()
+			}
+
+			if setSourceCalls == 2 {
+				require.False(t, stopReplicationBefore)
+				require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+				fakeMysqlDaemon.CurrentSourceHost = host
+				fakeMysqlDaemon.CurrentSourcePort = port
+				return nil
+			}
+
+			return fmt.Errorf("unexpected SetReplicationSource call %d", setSourceCalls)
+		}
+
+		tm := &TabletManager{
+			actionSema:             semaphore.NewWeighted(1),
+			BatchCtx:               ctx,
+			TopoServer:             ts,
+			MysqlDaemon:            fakeMysqlDaemon,
+			tmc:                    newFakeTMClient(),
+			tabletAlias:            tablet.Alias,
+			_waitForGrantsComplete: make(chan struct{}),
+			tmState: &tmState{
+				displayState: displayState{
+					tablet: tablet,
+				},
+			},
+		}
+		close(tm._waitForGrantsComplete)
+
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+		parent := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_PRIMARY,
+			MysqlHostname: "mysql-new-primary",
+			MysqlPort:     3306,
+		}
+		require.NoError(t, ts.CreateTablet(ctx, parent))
+
+		err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", false, false, 0)
+		require.NoError(t, err)
+		require.Equal(t, 2, setSourceCalls)
+		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
+		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
 }

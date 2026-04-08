@@ -810,30 +810,18 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 }
 
 func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName string) ([]*sqlparser.IndexDefinition, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
-	// schema should never be nil, but check to be extra safe.
-	if schema == nil || len(schema.TableDefinitions) != 1 {
-		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
-			tableName, len(schema.TableDefinitions))
-	}
-	tableSchema := schema.TableDefinitions[0].Schema
-	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
-	if err != nil {
-		return secondaryKeys, err
-	}
-	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-	// createTable or createTable.TableSpec should never be nil
-	// if it was a valid cast, but check to be extra safe.
-	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
-		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
-	}
+	return extractSecondaryKeys(tableSpec), nil
+}
 
-	tableSpec := createTable.GetTableSpec()
+func extractSecondaryKeys(tableSpec *sqlparser.TableSpec) []*sqlparser.IndexDefinition {
+	if tableSpec == nil {
+		return nil
+	}
+	var secondaryKeys []*sqlparser.IndexDefinition
 	fkIndexCols := make(map[string]bool)
 	for _, constraint := range tableSpec.Constraints {
 		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
@@ -857,7 +845,78 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
-	return secondaryKeys, err
+	return secondaryKeys
+}
+
+func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string) (*sqlparser.TableSpec, error) {
+	if vr.mysqld == nil || vr.vre == nil || vr.vre.env == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing schema lookup dependencies for %s", tableName)
+	}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return nil, err
+	}
+	// schema should never be nil, but check to be extra safe.
+	if schema == nil || len(schema.TableDefinitions) != 1 {
+		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	tableSchema := schema.TableDefinitions[0].Schema
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	// createTable or createTable.TableSpec should never be nil
+	// if it was a valid cast, but check to be extra safe.
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
+	}
+	return createTable.GetTableSpec(), nil
+}
+
+func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableName string, plan *TablePlan) (bool, error) {
+	if plan == nil {
+		return false, nil
+	}
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
+	if err != nil {
+		return false, err
+	}
+	if tableSpec == nil {
+		return false, nil
+	}
+	secondaryKeys := extractSecondaryKeys(tableSpec)
+	if len(secondaryKeys) == 0 {
+		return false, nil
+	}
+
+	identityCols := plan.IdentityColumns
+	if len(identityCols) == 0 {
+		return false, nil
+	}
+
+	for _, secondaryKey := range secondaryKeys {
+		if secondaryKey == nil || secondaryKey.Info == nil || !secondaryKey.Info.IsUnique() {
+			continue
+		}
+		if len(secondaryKey.Columns) != len(identityCols) {
+			return true, nil
+		}
+		matchesIdentity := true
+		for i, idxCol := range secondaryKey.Columns {
+			if idxCol.Expression != nil || idxCol.Column.Lowered() != identityCols[i] {
+				matchesIdentity = false
+				break
+			}
+		}
+		if matchesIdentity {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {

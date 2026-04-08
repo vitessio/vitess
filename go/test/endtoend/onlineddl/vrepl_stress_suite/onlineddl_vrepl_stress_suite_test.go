@@ -29,6 +29,7 @@ package vreplstress
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -70,6 +71,25 @@ type testcase struct {
 	expectRemovedUniqueKeys int64
 	// autoIncInsert is a special case where we don't generate id values. It's a specific test case.
 	autoIncInsert bool
+}
+
+type stressErrorState struct {
+	firstErr atomic.Pointer[error]
+}
+
+func (s *stressErrorState) record(err error) {
+	if err == nil {
+		return
+	}
+	errCopy := err
+	s.firstErr.CompareAndSwap(nil, &errCopy)
+}
+
+func (s *stressErrorState) err() error {
+	if errPtr := s.firstErr.Load(); errPtr != nil {
+		return *errPtr
+	}
+	return nil
 }
 
 var (
@@ -677,7 +697,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
+func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64, errs *stressErrorState) {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -720,10 +740,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 			}
 		}
 		if err != nil {
-			// Log but do not assert: this goroutine may outlive the parent
-			// subtest when a fatal assertion (require) ends the test early.
-			// Calling t.Errorf on a completed test panics in Go 1.24+.
-			fmt.Printf("# Unexpected error in stress connection: %v\n", err)
+			errs.record(err)
+			return
 		}
 		time.Sleep(singleConnectionSleepInterval)
 		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
@@ -742,16 +760,18 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
 	log.Info("Running multiple connections")
 	var done int64
+	errState := &stressErrorState{}
 	var wg sync.WaitGroup
 	for range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, autoIncInsert, &done)
+			runSingleConnection(ctx, t, autoIncInsert, &done, errState)
 		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
 	log.Info("Running multiple connections: done")
 	wg.Wait()
+	require.NoError(t, errState.err())
 	log.Info("All connections cancelled")
 }
 
@@ -857,4 +877,23 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBeforeTable, selectAfterTable)
 	}
+}
+
+func TestStressErrorStateRecordsFirstUnexpectedError(t *testing.T) {
+	state := &stressErrorState{}
+	firstErr := errors.New("first")
+	secondErr := errors.New("second")
+
+	state.record(firstErr)
+	state.record(secondErr)
+
+	require.ErrorIs(t, state.err(), firstErr)
+}
+
+func TestStressErrorStateIgnoresNilErrors(t *testing.T) {
+	state := &stressErrorState{}
+
+	state.record(nil)
+
+	require.NoError(t, state.err())
 }

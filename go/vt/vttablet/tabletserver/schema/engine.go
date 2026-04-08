@@ -1133,6 +1133,13 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.tables[table.Name.String()] = table
 }
 
+// DeleteTableForTests removes a Table from the map directly.
+func (se *Engine) DeleteTableForTests(tableName string) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	delete(se.tables, tableName)
+}
+
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
 }

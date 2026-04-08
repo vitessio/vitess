@@ -37,15 +37,17 @@ const beginStmtLen = int64(len("begin;"))
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
 	binlogplayer.DBClient
-	stats            *binlogplayer.Stats
-	vreplicationID   int32
-	InTransaction    bool
-	startTime        time.Time
-	queries          []string
-	queriesPos       int64
-	batchSize        int64
-	maxBatchSize     int64
-	relayLogMaxItems int
+	stats                            *binlogplayer.Stats
+	vreplicationID                   int32
+	InTransaction                    bool
+	foreignKeyChecksEnabled          bool
+	foreignKeyChecksStateInitialized bool
+	startTime                        time.Time
+	queries                          []string
+	queriesPos                       int64
+	batchSize                        int64
+	maxBatchSize                     int64
+	relayLogMaxItems                 int
 }
 
 func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {

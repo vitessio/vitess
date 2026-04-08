@@ -263,6 +263,21 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 	return c, nil
 }
 
+// SourceOverrides returns only the vstreamer-side overrides that can be sent to source tablets.
+func (c VReplicationConfig) SourceOverrides() map[string]string {
+	sourceOverrides := make(map[string]string)
+	if c.VStreamPacketSizeOverride {
+		sourceOverrides["vstream-packet-size"] = strconv.Itoa(c.VStreamPacketSize)
+	}
+	if c.VStreamDynamicPacketSizeOverride {
+		sourceOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(c.VStreamDynamicPacketSize)
+	}
+	if c.VStreamBinlogRotationThresholdOverride {
+		sourceOverrides["vstream_binlog_rotation_threshold"] = strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10)
+	}
+	return sourceOverrides
+}
+
 // Map returns a map of the VReplicationConfig: the keys are the flag names and the values are string representations.
 // Used in tests to compare the expected and actual configuration values and in validations to check if the user-provided
 // keys are one of those that are supported.

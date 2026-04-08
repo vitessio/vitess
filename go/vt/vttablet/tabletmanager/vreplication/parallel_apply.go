@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
 	"math"
 	"sync"
 	"time"
@@ -37,6 +36,11 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	workerLoopTestHookAfterSend         func(*applyTxn)
+	workerLoopTestHookBeforeWaitPending func(chan struct{})
 )
 
 type applyTxnPayload struct {
@@ -118,24 +122,435 @@ func releaseApplyTxn(txn *applyTxn) {
 	applyTxnPool.Put(txn)
 }
 
-// extractDDLTable parses a DDL statement and returns the affected table name.
-// Returns "" if the table cannot be determined (e.g., complex multi-table DDL,
-// CREATE/DROP, or parse failure). The caller should fall back to a conservative
-// all-tables snapshot in that case.
-func extractDDLTable(sql string, parser *sqlparser.Parser) string {
+type postDDLStalePlan struct {
+	stalePlan      *TablePlan
+	refreshedPlans map[string]*TablePlan
+	allowDisappear bool
+}
+
+// clonePostDDLStalePlan deep-copies the refreshed-name set so scheduler and
+// commitLoop state can evolve independently without sharing inner maps.
+func clonePostDDLStalePlan(stale postDDLStalePlan) postDDLStalePlan {
+	clone := stale
+	if len(stale.refreshedPlans) == 0 {
+		return clone
+	}
+	clone.refreshedPlans = make(map[string]*TablePlan, len(stale.refreshedPlans))
+	for refreshedName, refreshedPlan := range stale.refreshedPlans {
+		clone.refreshedPlans[refreshedName] = refreshedPlan
+	}
+	return clone
+}
+
+// clonePostDDLStalePlans returns a detached copy of the current barrier state.
+func clonePostDDLStalePlans(src map[string]postDDLStalePlan) map[string]postDDLStalePlan {
+	if len(src) == 0 {
+		return nil
+	}
+	cloned := make(map[string]postDDLStalePlan, len(src))
+	for name, stale := range src {
+		cloned[name] = clonePostDDLStalePlan(stale)
+	}
+	return cloned
+}
+
+func cloneDroppedTables(src map[string]struct{}) map[string]struct{} {
+	if len(src) == 0 {
+		return nil
+	}
+	cloned := make(map[string]struct{}, len(src))
+	for name := range src {
+		cloned[name] = struct{}{}
+	}
+	return cloned
+}
+
+// snapshotPostDDLStalePlans widens an unknown-DDL barrier to all currently
+// live plans except names already known to have been dropped.
+func snapshotPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables map[string]struct{}) map[string]postDDLStalePlan {
+	if len(tablePlans) == 0 {
+		return nil
+	}
+	tracked := make(map[string]postDDLStalePlan, len(tablePlans))
+	for name, plan := range tablePlans {
+		if _, dropped := droppedTables[name]; dropped {
+			continue
+		}
+		tracked[name] = postDDLStalePlan{
+			stalePlan:      plan,
+			refreshedPlans: map[string]*TablePlan{name: plan},
+		}
+	}
+	if len(tracked) == 0 {
+		return nil
+	}
+	return tracked
+}
+
+func addPostDDLStalePlan(tracked map[string]postDDLStalePlan, tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, allowDroppedRefreshedNames bool, staleName string, refreshedNames ...string) {
+	if _, dropped := droppedTables[staleName]; dropped {
+		return
+	}
+	plan, ok := tablePlans[staleName]
+	if !ok {
+		return
+	}
+	entry := postDDLStalePlan{
+		stalePlan:      plan,
+		refreshedPlans: make(map[string]*TablePlan, len(refreshedNames)),
+	}
+	for _, refreshedName := range refreshedNames {
+		if refreshedName == "" {
+			continue
+		}
+		if !allowDroppedRefreshedNames && refreshedName != staleName {
+			if _, dropped := droppedTables[refreshedName]; dropped {
+				continue
+			}
+		}
+		if tablePlans == nil {
+			continue
+		}
+		entry.refreshedPlans[refreshedName] = tablePlans[refreshedName]
+	}
+	if len(entry.refreshedPlans) == 0 {
+		return
+	}
+	tracked[staleName] = entry
+}
+
+// extractDDLAffectedTables parses a DDL statement and returns the tracked stale
+// plans plus the table names whose future FIELD refresh can satisfy each entry.
+// The caller uses this to keep the stale-plan barrier scoped to the plans that
+// actually matter for the DDL, including rename operations where the refreshed
+// FIELD arrives under a different table name.
+func extractDDLAffectedTables(sql string, parser *sqlparser.Parser, tablePlans map[string]*TablePlan, droppedTables map[string]struct{}) (map[string]postDDLStalePlan, bool) {
 	stmt, err := parser.ParseStrictDDL(sql)
 	if err != nil {
-		return ""
+		tracked := snapshotPostDDLStalePlans(tablePlans, droppedTables)
+		return tracked, len(tracked) != 0
 	}
 	ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 	if !ok {
-		return ""
+		tracked := snapshotPostDDLStalePlans(tablePlans, droppedTables)
+		return tracked, len(tracked) != 0
 	}
-	table := ddlStmt.GetTable()
-	if table.IsEmpty() {
-		return ""
+	tracked := make(map[string]postDDLStalePlan)
+	switch stmt := ddlStmt.(type) {
+	case *sqlparser.CreateTable:
+		// A same-name recreate can arrive before FIELD refreshes the live plan.
+		// Keep the stale pre-drop plan tracked until the new FIELD replaces it.
+		addPostDDLStalePlan(tracked, tablePlans, nil, true, stmt.Table.Name.String(), stmt.Table.Name.String())
+	case *sqlparser.RenameTable:
+		for _, pair := range stmt.TablePairs {
+			addPostDDLStalePlan(tracked, tablePlans, droppedTables, true, pair.FromTable.Name.String(), pair.ToTable.Name.String())
+		}
+	case *sqlparser.AlterTable:
+		refreshedNames := []string{stmt.Table.Name.String()}
+		allowDroppedRefreshedNames := false
+		for _, option := range stmt.AlterOptions {
+			if rename, ok := option.(*sqlparser.RenameTableName); ok {
+				refreshedNames = []string{rename.Table.Name.String()}
+				allowDroppedRefreshedNames = true
+			}
+		}
+		addPostDDLStalePlan(tracked, tablePlans, droppedTables, allowDroppedRefreshedNames, stmt.Table.Name.String(), refreshedNames...)
+	case *sqlparser.DropTable:
+		for _, table := range stmt.FromTables {
+			if table.IsEmpty() {
+				continue
+			}
+			name := table.Name.String()
+			addPostDDLStalePlan(tracked, tablePlans, nil, true, name, name)
+			entry := tracked[name]
+			entry.allowDisappear = true
+			tracked[name] = entry
+		}
+	default:
+		for _, table := range ddlStmt.AffectedTables() {
+			if table.IsEmpty() {
+				continue
+			}
+			name := table.Name.String()
+			addPostDDLStalePlan(tracked, tablePlans, droppedTables, false, name, name)
+		}
 	}
-	return table.Name.String()
+	if len(tracked) == 0 {
+		return nil, false
+	}
+	return tracked, false
+}
+
+func extractDroppedTables(sql string, parser *sqlparser.Parser) map[string]struct{} {
+	stmt, err := parser.ParseStrictDDL(sql)
+	if err != nil {
+		return nil
+	}
+	dropped := map[string]struct{}{}
+	switch stmt := stmt.(type) {
+	case *sqlparser.DropTable:
+		for _, table := range stmt.FromTables {
+			if table.IsEmpty() {
+				continue
+			}
+			dropped[table.Name.String()] = struct{}{}
+		}
+	}
+	if len(dropped) == 0 {
+		return nil
+	}
+	return dropped
+}
+
+// retireResolvedPostDDLTablePlans removes stale rename-source plans once the
+// rename barrier is fully satisfied. This keeps later unknown-DDL snapshots
+// from tracking names that no longer exist, while preserving fail-closed
+// behavior until the rename target actually refreshes.
+func retireResolvedPostDDLTablePlans(tablePlans map[string]*TablePlan, stalePlans map[string]postDDLStalePlan) bool {
+	retired := false
+	for staleName, stale := range stalePlans {
+		if stale.stalePlan == nil {
+			continue
+		}
+		if _, recreated := stale.refreshedPlans[staleName]; recreated {
+			continue
+		}
+		if tablePlans[staleName] != stale.stalePlan {
+			continue
+		}
+		delete(tablePlans, staleName)
+		retired = true
+	}
+	return retired
+}
+
+func resolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, stalePlans map[string]postDDLStalePlan) map[string]postDDLStalePlan {
+	if len(stalePlans) == 0 {
+		return nil
+	}
+	resolved := make(map[string]postDDLStalePlan, len(stalePlans))
+	for name, stale := range stalePlans {
+		if stale.allowDisappear {
+			if _, ok := droppedTables[name]; ok {
+				resolved[name] = clonePostDDLStalePlan(stale)
+				continue
+			}
+		}
+		allRefreshed := true
+		for refreshedName, priorPlan := range stale.refreshedPlans {
+			refreshedPlan, ok := tablePlans[refreshedName]
+			if !ok || refreshedPlan == priorPlan {
+				allRefreshed = false
+				break
+			}
+		}
+		if allRefreshed {
+			resolved[name] = clonePostDDLStalePlan(stale)
+		}
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+	return resolved
+}
+
+func mergePostDDLStalePlans(dst, src map[string]postDDLStalePlan) map[string]postDDLStalePlan {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]postDDLStalePlan, len(src))
+	}
+	for name, stale := range src {
+		existing, ok := dst[name]
+		if !ok {
+			dst[name] = clonePostDDLStalePlan(stale)
+			continue
+		}
+		merged := existing
+		if merged.stalePlan == nil {
+			merged.stalePlan = stale.stalePlan
+		}
+		if len(stale.refreshedPlans) != 0 {
+			if merged.refreshedPlans == nil {
+				merged.refreshedPlans = make(map[string]*TablePlan, len(existing.refreshedPlans)+len(stale.refreshedPlans))
+				for refreshedName, refreshedPlan := range existing.refreshedPlans {
+					merged.refreshedPlans[refreshedName] = refreshedPlan
+				}
+			}
+			for refreshedName, refreshedPlan := range stale.refreshedPlans {
+				if _, ok := merged.refreshedPlans[refreshedName]; !ok {
+					merged.refreshedPlans[refreshedName] = refreshedPlan
+				}
+			}
+		}
+		merged.allowDisappear = merged.allowDisappear || stale.allowDisappear
+		dst[name] = merged
+	}
+	return dst
+}
+
+func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]string {
+	stmt, err := parser.ParseStrictDDL(sql)
+	if err != nil {
+		return nil
+	}
+	renames := map[string]string{}
+	switch stmt := stmt.(type) {
+	case *sqlparser.RenameTable:
+		for _, pair := range stmt.TablePairs {
+			fromName := pair.FromTable.Name.String()
+			toName := pair.ToTable.Name.String()
+			if fromName == "" || toName == "" {
+				continue
+			}
+			renames[fromName] = toName
+		}
+	case *sqlparser.AlterTable:
+		for _, option := range stmt.AlterOptions {
+			rename, ok := option.(*sqlparser.RenameTableName)
+			if !ok {
+				continue
+			}
+			fromName := stmt.Table.Name.String()
+			toName := rename.Table.Name.String()
+			if fromName == "" || toName == "" {
+				continue
+			}
+			renames[fromName] = toName
+		}
+	}
+	if len(renames) == 0 {
+		return nil
+	}
+	return renames
+}
+
+func retargetPostDDLStalePlans(stalePlans map[string]postDDLStalePlan, renameTargets map[string]string, tablePlans map[string]*TablePlan) {
+	if len(stalePlans) == 0 || len(renameTargets) == 0 {
+		return
+	}
+	for staleName, stale := range stalePlans {
+		if len(stale.refreshedPlans) == 0 {
+			continue
+		}
+		refreshedPlans := make(map[string]*TablePlan, len(stale.refreshedPlans))
+		changed := false
+		for refreshedName, priorPlan := range stale.refreshedPlans {
+			if toName, ok := renameTargets[refreshedName]; ok {
+				// Retarget from the original watched names only so overlapping
+				// rename sets do not cascade based on map iteration order.
+				refreshedPlans[toName] = tablePlans[toName]
+				changed = true
+				continue
+			}
+			refreshedPlans[refreshedName] = priorPlan
+		}
+		if !changed {
+			continue
+		}
+		stale.refreshedPlans = refreshedPlans
+		stalePlans[staleName] = stale
+	}
+}
+
+// unresolvedPostDDLStalePlans drops entries whose replacement FIELD has already
+// arrived, so only still-stale table plans participate in later scheduling.
+func unresolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, stalePlans map[string]postDDLStalePlan) map[string]postDDLStalePlan {
+	if len(stalePlans) == 0 {
+		return nil
+	}
+	unresolved := make(map[string]postDDLStalePlan, len(stalePlans))
+	for name, stale := range stalePlans {
+		if stale.allowDisappear {
+			if _, ok := droppedTables[name]; ok {
+				continue
+			}
+		}
+		allRefreshed := true
+		for refreshedName, priorPlan := range stale.refreshedPlans {
+			refreshedPlan, ok := tablePlans[refreshedName]
+			if !ok {
+				allRefreshed = false
+				break
+			}
+			if refreshedPlan == priorPlan {
+				allRefreshed = false
+				break
+			}
+		}
+		if allRefreshed {
+			continue
+		}
+		unresolved[name] = clonePostDDLStalePlan(stale)
+	}
+	if len(unresolved) == 0 {
+		return nil
+	}
+	return unresolved
+}
+
+// txnTouchesPostDDLBarrier keeps known DDL barriers table-scoped while still
+// letting unknown DDLs remain conservative until every tracked plan refreshes.
+func txnTouchesPostDDLBarrier(events []*binlogdatapb.VEvent, stalePlans map[string]postDDLStalePlan, conservative bool) bool {
+	if len(stalePlans) == 0 {
+		return false
+	}
+	for _, event := range events {
+		var tableName string
+		switch event.Type {
+		case binlogdatapb.VEventType_FIELD:
+			if event.FieldEvent != nil {
+				tableName = event.FieldEvent.TableName
+			}
+		case binlogdatapb.VEventType_ROW:
+			if event.RowEvent != nil {
+				tableName = event.RowEvent.TableName
+			}
+		}
+		if tableName == "" {
+			continue
+		}
+		if conservative {
+			return true
+		}
+		for staleName, stale := range stalePlans {
+			if tableName == staleName {
+				return true
+			}
+			if _, ok := stale.refreshedPlans[tableName]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func postDDLRefreshTargetMatchesCachedPlan(stalePlans map[string]postDDLStalePlan, refreshedName string, cachedPlan *TablePlan) bool {
+	for _, stale := range stalePlans {
+		priorPlan, ok := stale.refreshedPlans[refreshedName]
+		if !ok {
+			continue
+		}
+		if priorPlan == cachedPlan {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeDroppedTables(dst, src map[string]struct{}) map[string]struct{} {
+	if len(src) == 0 {
+		return dst
+	}
+	merged := make(map[string]struct{}, len(dst)+len(src))
+	for name := range dst {
+		merged[name] = struct{}{}
+	}
+	for name := range src {
+		merged[name] = struct{}{}
+	}
+	return merged
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
@@ -251,9 +666,6 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	schedErr := vp.scheduleLoop(ctx, relay, scheduler)
 	if schedErr != nil {
 		applyErr <- schedErr
-		if schedErr != io.EOF {
-			cancel()
-		}
 	}
 
 	scheduler.close()
@@ -443,6 +855,10 @@ type parallelScheduleState struct {
 	// curHasCommitMeta is true when the current transaction's GTID event
 	// carried non-zero sequenceNumber or commitParent metadata.
 	curHasCommitMeta bool
+	// batchMissingCommitMeta is sticky across batched source transactions.
+	// Once a merged batch contains any txn without commit metadata, the
+	// flushed mega-transaction must stay in the no-metadata scheduler mode.
+	batchMissingCommitMeta bool
 	// lastFlushTime tracks when the last transaction was flushed, used to
 	// enforce the 500ms time-based batch bound during catch-up replay.
 	lastFlushTime time.Time
@@ -498,7 +914,13 @@ type parallelScheduleState struct {
 	// the DDL-affected table's plan pointer.
 	//
 	// nil means no DDL barrier is active.
-	postDDLStalePlans map[string]*TablePlan
+	postDDLStalePlans map[string]postDDLStalePlan
+	// postDDLDroppedTables records dropped tables that have been explicitly
+	// satisfied for the current DDL barrier.
+	postDDLDroppedTables map[string]struct{}
+	// postDDLConservative marks barriers from unparsed DDL, where we must keep
+	// serializing tracked-table transactions until every captured plan refreshes.
+	postDDLConservative bool
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -512,6 +934,16 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	vp.serialMu.Lock()
 	fkRefs := vp.fkRefs
 	parentFKRefs := vp.parentFKRefs
+	state.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+	if len(vp.postDDLStalePlans) != 0 {
+		if state.postDDLStalePlans == nil {
+			state.postDDLStalePlans = make(map[string]postDDLStalePlan, len(vp.postDDLStalePlans))
+		}
+		for name, stale := range vp.postDDLStalePlans {
+			state.postDDLStalePlans[name] = clonePostDDLStalePlan(stale)
+		}
+	}
+	state.postDDLConservative = state.postDDLConservative || vp.postDDLConservative
 	vp.serialMu.Unlock()
 
 	// After DDL events that may change schema or FK topology, force all
@@ -527,25 +959,23 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	// stale pointer no longer matches and the guard clears.
 	forceSerialize := false
 	if state.postDDLStalePlans != nil {
-		// Check whether ANY snapshotted plan pointer has been replaced.
-		// After DDL, the affected table gets a new *TablePlan when its
-		// FIELD event is applied. Unrelated tables keep the same pointer.
-		// If all pointers still match, no FIELD has refreshed any plan
-		// yet → keep serializing. If at least one differs, the DDL-
-		// affected table's plan was refreshed → clear the guard.
-		vp.tablePlansMu.RLock()
-		anyRefreshed := false
-		for name, oldPlan := range state.postDDLStalePlans {
-			if vp.tablePlans[name] != oldPlan {
-				anyRefreshed = true
-				break
-			}
+		// Keep serializing until every affected table plan captured at DDL time
+		// has been replaced. Unrelated FIELD events must not clear the barrier.
+		vp.tablePlansMu.Lock()
+		resolvedStalePlans := resolvedPostDDLStalePlans(vp.tablePlans, state.postDDLDroppedTables, state.postDDLStalePlans)
+		if retireResolvedPostDDLTablePlans(vp.tablePlans, resolvedStalePlans) {
+			vp.tablePlansVersion.Add(1)
 		}
-		vp.tablePlansMu.RUnlock()
-		if anyRefreshed {
+		state.postDDLStalePlans = unresolvedPostDDLStalePlans(vp.tablePlans, state.postDDLDroppedTables, state.postDDLStalePlans)
+		vp.tablePlansMu.Unlock()
+		if state.postDDLStalePlans == nil {
 			state.postDDLStalePlans = nil
-		} else {
-			forceSerialize = true
+			state.postDDLDroppedTables = nil
+			state.postDDLConservative = false
+			vp.serialMu.Lock()
+			vp.postDDLStalePlans = nil
+			vp.postDDLConservative = false
+			vp.serialMu.Unlock()
 		}
 	}
 	state.ddlSeen = false
@@ -573,11 +1003,16 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		// set them to its own connection before sending to commitCh.
 		txn := acquireApplyTxn()
 		txn.order = order
-		txn.sequenceNumber = state.curSequence
-		txn.commitParent = state.curCommitParent
-		txn.hasCommitMeta = state.curHasCommitMeta
+		if !state.batchMissingCommitMeta {
+			txn.sequenceNumber = state.curSequence
+			txn.commitParent = state.curCommitParent
+			txn.hasCommitMeta = state.curHasCommitMeta
+		}
 		txn.payload = payload
+		postDDLSerialize := state.postDDLStalePlans != nil && txnTouchesPostDDLBarrier(state.curEvents, state.postDDLStalePlans, state.postDDLConservative)
 		if forceSerialize {
+			txn.forceGlobal = true
+		} else if postDDLSerialize {
 			txn.forceGlobal = true
 		} else if state.curRowOnlySet && !state.curRowOnly {
 			txn.forceGlobal = true
@@ -586,16 +1021,21 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		} else {
 			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
 			state.cachedPlanSnapshot = planSnapshot
-			// Invalidate fieldIdxCache when table plans change (new FIELD events).
-			if state.fieldIdxCacheVersion != state.cachedPlanVersion {
-				state.fieldIdxCache = make(map[string]map[string]int)
-				state.fieldIdxCacheVersion = state.cachedPlanVersion
-			}
-			writeset, err := buildTxnWriteset(planSnapshot, fkRefs, parentFKRefs, state.curEvents, state.fieldIdxCache)
-			if err != nil {
+			if txnTouchesExtraUniqueSecondary(state.curEvents, planSnapshot) || txnTouchesUnsupportedWritesetMapping(state.curEvents, planSnapshot) {
 				txn.forceGlobal = true
 			} else {
-				txn.writeset = writeset
+				// Invalidate fieldIdxCache when table plans change (new FIELD events).
+				if state.fieldIdxCacheVersion != state.cachedPlanVersion {
+					state.fieldIdxCache = make(map[string]map[string]int)
+					state.fieldIdxCacheVersion = state.cachedPlanVersion
+				}
+				writeset, err := buildTxnWriteset(planSnapshot, fkRefs, parentFKRefs, state.curEvents, state.fieldIdxCache)
+				if err != nil {
+					releaseApplyTxn(txn)
+					return err
+				} else {
+					txn.writeset = writeset
+				}
 			}
 		}
 		// Attach any merged-away sequences to the txn so the scheduler can
@@ -607,6 +1047,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if len(state.mergedSequences) > 0 {
 			txn.mergedSequences = append(txn.mergedSequences[:0], state.mergedSequences...)
 			state.mergedSequences = state.mergedSequences[:0]
+		}
+		if state.batchMissingCommitMeta && state.curHasCommitMeta && state.curSequence > 0 {
+			txn.mergedSequences = append(txn.mergedSequences, state.curSequence)
 		}
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
@@ -622,6 +1065,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		state.curCommitParent = 0
 		state.curSequence = 0
 		state.curHasCommitMeta = false
+		state.batchMissingCommitMeta = false
 		state.batchedCommitCount = 0
 		state.lastFlushTime = time.Now()
 		return nil
@@ -640,6 +1084,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				state.curCommitParent = event.CommitParent
 				state.curSequence = event.SequenceNumber
 				state.curHasCommitMeta = event.SequenceNumber != 0 || event.CommitParent != 0
+				if !state.curHasCommitMeta {
+					state.batchMissingCommitMeta = true
+				}
 				vp.serialMu.Lock()
 				vp.pos = pos
 				vp.unsavedEvent = nil
@@ -705,6 +1152,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					state.curCommitParent = 0
 					state.curSequence = 0
 					state.curHasCommitMeta = false
+					state.batchMissingCommitMeta = false
 					continue
 				}
 				// Group multiple consecutive transactions into a single batch
@@ -849,29 +1297,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
-					// Parse the DDL to identify the affected table, then
-					// snapshot only that table's plan pointer. The barrier
-					// clears when a FIELD event replaces that specific plan.
-					// This avoids both the "unrelated FIELD clears guard"
-					// problem (global version) and the "guard never clears"
-					// problem (all-tables snapshot).
-					ddlTable := extractDDLTable(event.Statement, vp.vr.vre.env.Parser())
-					if ddlTable != "" {
-						vp.tablePlansMu.RLock()
-						if stalePlan, ok := vp.tablePlans[ddlTable]; ok {
-							state.postDDLStalePlans = map[string]*TablePlan{ddlTable: stalePlan}
-						}
-						vp.tablePlansMu.RUnlock()
-					}
-					// If we can't identify the affected table (complex DDL,
-					// CREATE, DROP), snapshot all plans as a conservative
-					// fallback. The guard clears when any plan changes.
-					if state.postDDLStalePlans == nil {
-						vp.tablePlansMu.RLock()
-						state.postDDLStalePlans = make(map[string]*TablePlan, len(vp.tablePlans))
-						maps.Copy(state.postDDLStalePlans, vp.tablePlans)
-						vp.tablePlansMu.RUnlock()
-					}
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -935,12 +1360,18 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						}
 					}
 				}
-			default:
+			case binlogdatapb.VEventType_ROWS_QUERY:
+				// Informational only; keep it with the surrounding txn if present.
 				state.curEvents = append(state.curEvents, event)
 				if !state.curRowOnlySet {
 					state.curRowOnly = false
 					state.curRowOnlySet = true
 				}
+			case binlogdatapb.VEventType_VERSION:
+				// VERSION is informational only for the applier. Preserve the
+				// old serial behavior by ignoring it instead of failing the stream.
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported vevent type: %v", event.Type)
 			}
 			if event.Timestamp != 0 {
 				state.curTimestamp = event.Timestamp
@@ -1003,10 +1434,8 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
 	// Shallow-copy vplayer once per worker lifetime instead of per
 	// transaction. This eliminates a ~200-300 byte struct copy on every
-	// txn in the hot path. The FK check state is reset once here since
-	// each worker has its own MySQL connection.
+	// txn in the hot path.
 	vp2 := *vp
-	vp2.foreignKeyChecksStateInitialized = false
 
 	// pendingDone holds the done channel of the most recently sent worker
 	// transaction that the commitLoop may still be committing. We capture
@@ -1016,9 +1445,17 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 	// to block forever if we were still dereferencing through the txn.
 	var pendingDone chan struct{}
 
+	// Test hooks let the regression test freeze the worker at precise points in
+	// the handoff without relying on scheduler timing.
+	afterSendHook := workerLoopTestHookAfterSend
+	beforeWaitPendingHook := workerLoopTestHookBeforeWaitPending
+
 	waitPending := func() error {
 		if pendingDone == nil {
 			return nil
+		}
+		if beforeWaitPendingHook != nil {
+			beforeWaitPendingHook(pendingDone)
 		}
 		select {
 		case <-pendingDone:
@@ -1056,6 +1493,11 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Apply events on the current active connection. This runs
 		// concurrently with the commitLoop committing the previous
 		// transaction on the other connection (double-buffering).
+		vp.serialMu.Lock()
+		vp2.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
+		vp2.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+		vp2.postDDLConservative = vp.postDDLConservative
+		vp.serialMu.Unlock()
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
 				worker.rollback()
@@ -1095,29 +1537,27 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		payload.commit = worker.commit
 		payload.client = worker.client
 
+		done := txn.done
 		select {
 		case commitCh <- txn:
 		case <-ctx.Done():
 			worker.rollback()
 			return ctx.Err()
 		}
+		if afterSendHook != nil {
+			afterSendHook(txn)
+		}
 
 		// Capture the done channel BEFORE rotating. The commitLoop may
 		// return the txn to the pool after signaling done, and
 		// acquireApplyTxn drains the channel on reuse. By holding our
 		// own reference, we are immune to that race.
-		pendingDone = txn.done
+		pendingDone = done
 
 		// Rotate to the spare connection for the next transaction.
 		// The commitLoop will commit the current txn on the old connection
 		// and signal txn.done when it's safe to reuse.
 		worker.rotate()
-		// Do NOT reset foreignKeyChecksStateInitialized here. Both worker
-		// connections are initialized identically (same clearFKCheck setup),
-		// and the FK check session state is the same across rotate. Resetting
-		// forces a redundant SET @@session.foreign_key_checks on the first
-		// row event of every transaction, which adds avoidable overhead for
-		// the small-transaction workloads where parallelism helps most.
 	}
 }
 
@@ -1253,7 +1693,15 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// redundant _vt.vreplication write and create an awkward
 		// partial-failure window where applyEvent succeeded but a second
 		// position write could fail.
-		if err := vp.applyEvent(ctx, payload.events[0], payload.mustSave); err != nil {
+		event := payload.events[0]
+		ddlExecuted := false
+		if event.Type == binlogdatapb.VEventType_DDL {
+			var err error
+			ddlExecuted, err = vp.applyDDLEvent(ctx, event, nil)
+			if err != nil {
+				return err
+			}
+		} else if err := vp.applyEvent(ctx, event, payload.mustSave); err != nil {
 			return err
 		}
 		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
@@ -1262,13 +1710,22 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// the main connection must not be used concurrently by scheduleLoop.
 		// Fail fast on refresh errors: stale FK topology after a schema
 		// change would silently compromise conflict detection.
-		if payload.events[0].Type == binlogdatapb.VEventType_DDL {
+		if event.Type == binlogdatapb.VEventType_DDL && ddlExecuted {
 			newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to refresh FK metadata after DDL")
 			}
 			vp.fkRefs = newRefs
 			vp.parentFKRefs = buildParentFKRefs(newRefs)
+			vp.tablePlansMu.RLock()
+			renameTargets := extractDDLRenameTargets(event.Statement, vp.vr.vre.env.Parser())
+			retargetPostDDLStalePlans(vp.postDDLStalePlans, renameTargets, vp.tablePlans)
+			ddlStalePlans, conservative := extractDDLAffectedTables(event.Statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
+			ddlStalePlans = unresolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, ddlStalePlans)
+			vp.tablePlansMu.RUnlock()
+			vp.postDDLStalePlans = mergePostDDLStalePlans(vp.postDDLStalePlans, ddlStalePlans)
+			vp.postDDLConservative = vp.postDDLConservative || conservative
+			vp.postDDLDroppedTables = mergeDroppedTables(vp.postDDLDroppedTables, extractDroppedTables(event.Statement, vp.vr.vre.env.Parser()))
 		}
 		updateLag(payload)
 		if err := scheduler.markCommitted(txn); err != nil {

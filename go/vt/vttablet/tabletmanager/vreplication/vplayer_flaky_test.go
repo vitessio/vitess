@@ -38,10 +38,12 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
@@ -2996,6 +2998,50 @@ func TestTimestamp(t *testing.T) {
 	))
 
 	expectData(t, "t1", [][]string{{"1", want, want}})
+}
+
+func TestVPlayerDoesNotTreatRemoteCanceledStreamAsLocalShutdown(t *testing.T) {
+	tablet := addTablet(100)
+	defer deleteTablet(tablet)
+
+	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "/.*"}}}
+	bls := &binlogdatapb.BinlogSource{Keyspace: env.KeyspaceName, Shard: env.ShardName, Filter: filter}
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+	dbClient := playerEngine.dbClientFactoryFiltered()
+	err := dbClient.Connect()
+	require.NoError(t, err)
+	defer dbClient.Close()
+
+	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (1, 'test', '', '', 99999, 99999, 0, 0, 'Stopped', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Stopped', db_name='%s'", dbClient.DBName(), dbClient.DBName()), 1)
+	require.NoError(t, err)
+	drainDBQueries()
+	defer func() {
+		_, err := dbClient.ExecuteFetch("delete from _vt.vreplication where id = 1", 1)
+		require.NoError(t, err)
+		drainDBQueries()
+	}()
+
+	oldErrors := vstreamErrorsByTablet
+	defer func() { vstreamErrorsByTablet = oldErrors }()
+	vstreamErrorsByTablet = map[uint32]error{
+		tablet.Alias.Uid: vterrors.New(vtrpcpb.Code_CANCELED, "remote canceled"),
+	}
+
+	vsClient := newTabletConnector(tablet)
+	require.NoError(t, vsClient.Open(t.Context()))
+	defer func() { _ = vsClient.Close(t.Context()) }()
+
+	vr := newVReplicator(1, bls, vsClient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
+	settings, _, err := vr.loadSettings(t.Context(), newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems))
+	require.NoError(t, err)
+
+	vp := newVPlayer(vr, settings, nil, replication.Position{}, "replicate")
+	vp.replicatorPlan = &ReplicatorPlan{VStreamFilter: filter}
+
+	err = vp.fetchAndApply(t.Context())
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 }
 
 // TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data on target matches that on source.

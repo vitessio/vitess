@@ -413,6 +413,41 @@ func TestApplySchedulerAdvanceCommittedSequenceUnblocks(t *testing.T) {
 	require.Equal(t, meta, <-readyCh)
 }
 
+func TestApplySchedulerAdvanceCommittedSequenceDoesNotBypassInflightMetaParent(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	metaParent := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{1}}
+	metaChild := &applyTxn{order: 2, sequenceNumber: 12, commitParent: 11, hasCommitMeta: true}
+
+	require.NoError(t, s.enqueue(metaParent))
+	gotParent, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, metaParent, gotParent)
+
+	require.NoError(t, s.enqueue(metaChild))
+	s.advanceCommittedSequence(11)
+
+	readyCh := make(chan *applyTxn, 1)
+	go func() {
+		txn, err := s.nextReady(ctx)
+		if err == nil {
+			readyCh <- txn
+		}
+	}()
+
+	assert.Never(t, func() bool {
+		return len(readyCh) > 0
+	}, 50*time.Millisecond, 5*time.Millisecond)
+
+	require.NoError(t, s.markCommitted(gotParent))
+
+	assert.Eventually(t, func() bool {
+		return len(readyCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+	require.Equal(t, metaChild, <-readyCh)
+}
+
 func TestApplySchedulerWaitForIdleReturnsWhenIdle(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
@@ -444,17 +479,35 @@ func TestApplySchedulerWaitForIdleReturnsOnSchedulerCancel(t *testing.T) {
 	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
-func TestApplySchedulerCloseClearsPending(t *testing.T) {
+func TestApplySchedulerClosePreservesPending(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	require.NoError(t, s.enqueue(&applyTxn{writeset: []uint64{100}}))
+	txn := &applyTxn{writeset: []uint64{100}, noConflict: true}
+	require.NoError(t, s.enqueue(txn))
 
 	err := s.close()
 	require.ErrorIs(t, err, io.EOF)
-	require.Zero(t, s.pendingCount)
+	require.Equal(t, 1, s.pendingCount)
 	require.Zero(t, s.pendingOff)
-	require.Len(t, s.pending, 0)
+	require.Len(t, s.pending, 1)
+	require.Same(t, txn, s.pending[0])
+}
+
+func TestApplySchedulerNextReadyDrainsPendingAfterClose(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	txn := &applyTxn{order: 1, noConflict: true}
+	require.NoError(t, s.enqueue(txn))
+	require.ErrorIs(t, s.close(), io.EOF)
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn, got)
+
+	_, err = s.nextReady(ctx)
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestApplySchedulerPendingCompaction(t *testing.T) {

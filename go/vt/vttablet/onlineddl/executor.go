@@ -22,6 +22,7 @@ package onlineddl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -57,6 +58,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -67,6 +69,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -1022,29 +1025,24 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		})
 	}
 
-	// Pre-buffering: wait for VReplication to catch up to the current primary position *before*
-	// enabling vtgate buffering. This is critical for two reasons:
-	// 1. It ensures the waitForPos inside the buffering window completes quickly (< 1s),
-	//    preventing buffer timeout (buffer timeout = CutOverThreshold + qrBufferExtraTimeout = 15s).
-	// 2. Once we start the RENAME TABLE goroutine, even while blocked by LOCK TABLES, MySQL queues
-	//    a pending exclusive MDL on the shadow table. That MDL blocks VReplication workers from
-	//    writing to the shadow table (MySQL MDL FIFO), causing lock-wait timeouts in the workers,
-	//    which prevents VReplication from advancing — a livelock. By ensuring VReplication has
-	//    already applied all pending events before buffering + RENAME, the shadow table will be
-	//    idle when RENAME starts, avoiding the livelock entirely.
-	e.updateMigrationStage(ctx, onlineDDL.UUID, "pre-buffer: waiting for vreplication to catch up")
-	preBufferPos, err := e.primaryPosition(ctx)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed reading primary position before buffering")
+	if shouldPreBufferWaitForParallelApply(s) {
+		// Parallel apply can livelock if a queued RENAME holds an exclusive MDL on the shadow
+		// table while workers are still trying to write into it. Serial apply does not have that
+		// failure mode, so preserve the original cutover path unless parallel apply is enabled.
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "pre-buffer: waiting for vreplication to catch up")
+		preBufferPos, err := e.primaryPosition(ctx)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed reading primary position before buffering")
+		}
+		// Read up-to-date vreplication stream info before waiting.
+		if s, err = e.readVReplStream(ctx, s.workflow, false); err != nil {
+			return vterrors.Wrapf(err, "failed reading vreplication stream before buffering")
+		}
+		if err := waitForPos(s, preBufferPos, onlineDDL.CutOverThreshold); err != nil {
+			return vterrors.Wrapf(err, "failed waiting for vreplication to catch up before buffering")
+		}
+		go log.Info("cutOverVReplMigration: pre-buffer waitForPos reached", slog.String("workflow", s.workflow), slog.String("position", replication.EncodePosition(preBufferPos)))
 	}
-	// Read up-to-date vreplication stream info before waiting
-	if s, err = e.readVReplStream(ctx, s.workflow, false); err != nil {
-		return vterrors.Wrapf(err, "failed reading vreplication stream before buffering")
-	}
-	if err := waitForPos(s, preBufferPos, onlineDDL.CutOverThreshold); err != nil {
-		return vterrors.Wrapf(err, "failed waiting for vreplication to catch up before buffering")
-	}
-	go log.Info("cutOverVReplMigration: pre-buffer waitForPos reached", slog.String("workflow", s.workflow), slog.String("position", replication.EncodePosition(preBufferPos)))
 
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "buffering queries")
 	// stop writes on source:
@@ -1227,6 +1225,27 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	return nil
 
 	// deferred function will re-enable writes now
+}
+
+func shouldPreBufferWaitForParallelApply(s *VReplStream) bool {
+	workers := vttablet.InitVReplicationConfigDefaults().ParallelReplicationWorkers
+	if s == nil || s.options == "" {
+		return workers > 1
+	}
+
+	var options vtctldatapb.WorkflowOptions
+	if err := json.Unmarshal([]byte(s.options), &options); err != nil {
+		return workers > 1
+	}
+	if len(options.Config) == 0 {
+		return workers > 1
+	}
+
+	config, err := vttablet.NewVReplicationConfig(options.Config)
+	if err != nil {
+		return workers > 1
+	}
+	return config.ParallelReplicationWorkers > 1
 }
 
 // initMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
@@ -3064,6 +3083,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		id:                   row.AsInt32("id", 0),
 		workflow:             row.AsString("workflow", ""),
 		source:               row.AsString("source", ""),
+		options:              row.AsString("options", ""),
 		pos:                  row.AsString("pos", ""),
 		timeUpdated:          row.AsInt64("time_updated", 0),
 		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),

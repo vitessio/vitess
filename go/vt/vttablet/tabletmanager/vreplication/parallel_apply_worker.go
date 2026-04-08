@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -57,7 +58,7 @@ type applyWorker struct {
 }
 
 // createWorkerConn creates a single configured vdbClient for a worker.
-func createWorkerConn(vr *vreplicator) (*vdbClient, error) {
+func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) {
 	dbClient := vr.vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -67,6 +68,10 @@ func createWorkerConn(vr *vreplicator) (*vdbClient, error) {
 		return nil, err
 	}
 	vdbc := newVDBClientWithID(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
+	if _, err := vr.setSQLMode(ctx, vdbc); err != nil {
+		dbClient.Close()
+		return nil, err
+	}
 	if err := vr.clearFKCheck(vdbc); err != nil {
 		dbClient.Close()
 		return nil, err
@@ -83,7 +88,7 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 
 	var conns [2]*vdbClient
 	for i := range 2 {
-		vdbc, err := createWorkerConn(vr)
+		vdbc, err := createWorkerConn(ctx, vr)
 		if err != nil {
 			// Close any previously created connections.
 			for j := range i {
@@ -189,7 +194,7 @@ func (w *applyWorker) rollback() {
 
 func (w *applyWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool, vp *vplayer) error {
 	if w.client == nil {
-		return nil
+		return fmt.Errorf("apply worker has no active client")
 	}
 	prevLocal := vp.dbClient
 	prevQuery := vp.query

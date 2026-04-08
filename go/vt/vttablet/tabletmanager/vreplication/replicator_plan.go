@@ -80,6 +80,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	// names and have already built most of the plan.
 	if prelim.Insert != nil {
 		tplanv := *prelim
+		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, fieldEvent.Fields)
 		// We know that we sent only column names, but they may be backticked.
 		// If so, we have to strip them out to allow them to match the expected
 		// bind var names.
@@ -98,6 +99,29 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	}
 	tplan.Fields = fieldEvent.Fields
 	return tplan, nil
+}
+
+func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Field) bool {
+	if plan == nil || len(streamedFields) == 0 || len(plan.PKIndices) == 0 {
+		return false
+	}
+	if len(streamedFields) != len(plan.PKIndices) {
+		return true
+	}
+	for i, field := range streamedFields {
+		if field == nil || i >= len(plan.TablePlanBuilder.colExprs) {
+			return true
+		}
+		cexpr := plan.TablePlanBuilder.colExprs[i]
+		if cexpr == nil || !cexpr.colName.Equal(sqlparser.NewIdentifierCI(field.Name)) {
+			return true
+		}
+		sourceCol, ok := cexpr.expr.(*sqlparser.ColName)
+		if !ok || !sourceCol.Name.Equal(sqlparser.NewIdentifierCI(field.Name)) || !sourceCol.Qualifier.IsEmpty() {
+			return true
+		}
+	}
+	return false
 }
 
 // buildFromFields builds a full TablePlan, but uses the field info as the
@@ -211,12 +235,18 @@ type TablePlan struct {
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
+	// IdentityColumns stores the chosen replication identity columns in key order.
+	IdentityColumns []string
 	// PKIndices is an array, length = #columns, true if column is part of the PK
 	PKIndices               []bool
-	Stats                   *binlogplayer.Stats
-	FieldsToSkip            map[string]bool
-	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
-	HasExtraSourcePkColumns bool
+	HasExtraUniqueSecondary bool
+	// HasUnsupportedWritesetMapping means the streamed FIELD layout cannot be
+	// mapped positionally back to target PK/FK columns for safe writeset hashing.
+	HasUnsupportedWritesetMapping bool
+	Stats                         *binlogplayer.Stats
+	FieldsToSkip                  map[string]bool
+	ConvertCharset                map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns       bool
 
 	TablePlanBuilder *tablePlanBuilder
 	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.

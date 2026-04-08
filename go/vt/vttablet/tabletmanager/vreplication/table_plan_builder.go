@@ -355,6 +355,16 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		pkrefs = append(pkrefs, k)
 	}
 	sort.Strings(pkrefs)
+	identityCols := make([]string, 0, len(tpb.pkCols))
+	for _, pkCol := range tpb.pkCols {
+		identityCols = append(identityCols, pkCol.colName.Lowered())
+	}
+	tpb.pkIndices = make([]bool, len(tpb.colExprs))
+	for i, cexpr := range tpb.colExprs {
+		if cexpr.isPK {
+			tpb.pkIndices[i] = true
+		}
+	}
 
 	bvf := &bindvarFormatter{}
 
@@ -375,6 +385,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Delete:                  tpb.generateDeleteStatement(),
 		MultiDelete:             tpb.generateMultiDeleteStatement(),
 		PKReferences:            pkrefs,
+		IdentityColumns:         identityCols,
 		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
@@ -810,11 +821,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
-	tpb.pkIndices = make([]bool, len(tpb.colExprs))
-	for i, cexpr := range tpb.colExprs {
-		if cexpr.isPK {
-			tpb.pkIndices[i] = true
-		}
+	for _, cexpr := range tpb.colExprs {
 		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated {
 			continue
 		}
