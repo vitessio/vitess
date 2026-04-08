@@ -166,7 +166,7 @@ func (g *TableGenerator) writeReorders(meta *CollationMetadata) string {
 	if len(meta.Reorder) > 0 {
 		tableReorder, dedup = g.dedupTable("reorder", meta.Name, meta.Reorder)
 		if !dedup {
-			var reorder []uca.Reorder
+			reorder := make([]uca.Reorder, 0, len(meta.Reorder))
 			for _, r := range meta.Reorder {
 				reorder = append(reorder, uca.Reorder{FromMin: r[0], FromMax: r[1], ToMin: r[2], ToMax: r[3]})
 			}
