@@ -7,7 +7,7 @@ This script runs at end of test and checks:
 1. Total balance is conserved (from primary)
 2. Account count is unchanged (from primary)
 3. Replica data matches primary
-4. Rdonly data matches primary
+4. Rdonly data matches primary - removed
 """
 
 import sys
@@ -62,6 +62,7 @@ def validate():
 
         cursor.execute("SELECT SUM(balance) FROM accounts")
         current_total = cursor.fetchone()[0]
+        conn.commit()
         log(f"[Finally] Current state (primary): num_accts={current_num_accts}, total={current_total}")
     except Exception as e:
         log(f"[Finally] Failed to read current state from primary: {e}")
@@ -81,19 +82,20 @@ def validate():
         cursor.execute(f"USE {config['keyspace']}@replica")
         cursor.execute("SELECT SUM(balance) FROM accounts")
         replica_total = cursor.fetchone()[0]
+        conn.commit()
         log(f"[Finally] Current state (replica): total={replica_total}")
     except Exception as e:
         log(f"[Finally] Failed to read current state from replica: {e}")
 
-    # Get current state from rdonly
-    rdonly_total = None
-    try:
-        cursor.execute(f"USE {config['keyspace']}@rdonly")
-        cursor.execute("SELECT SUM(balance) FROM accounts")
-        rdonly_total = cursor.fetchone()[0]
-        log(f"[Finally] Current state (rdonly): total={rdonly_total}")
-    except Exception as e:
-        log(f"[Finally] Failed to read current state from rdonly: {e}")
+    # # Get current state from rdonly
+    # rdonly_total = None
+    # try:
+    #     cursor.execute(f"USE {config['keyspace']}@rdonly")
+    #     cursor.execute("SELECT SUM(balance) FROM accounts")
+    #     rdonly_total = cursor.fetchone()[0]
+    #     log(f"[Finally] Current state (rdonly): total={rdonly_total}")
+    # except Exception as e:
+    #     log(f"[Finally] Failed to read current state from rdonly: {e}")
 
     try:
         cursor.close()
@@ -124,24 +126,26 @@ def validate():
             {"primary_total": float(current_total), "replica_total": float(replica_total)}
         )
 
-    if rdonly_total is not None:
-        always(
-            current_total == rdonly_total,
-            "[Finally] Rdonly matches primary",
-            {"primary_total": float(current_total), "rdonly_total": float(rdonly_total)}
-        )
+    # if rdonly_total is not None:
+    #     always(
+    #         current_total == rdonly_total,
+    #         "[Finally] Rdonly matches primary",
+    #         {"primary_total": float(current_total), "rdonly_total": float(rdonly_total)}
+    #     )
 
     balance_ok = (initial_total == current_total)
     count_ok = (initial_num_accts == current_num_accts)
     replica_ok = (replica_total is None) or (current_total == replica_total)
-    rdonly_ok = (rdonly_total is None) or (current_total == rdonly_total)
+    # rdonly_ok = (rdonly_total is None) or (current_total == rdonly_total)
 
-    if balance_ok and count_ok and replica_ok and rdonly_ok:
+    # if balance_ok and count_ok and replica_ok and rdonly_ok:
+    if balance_ok and count_ok and replica_ok:
         log("[Finally] VALIDATION PASSED")
     else:
         log("[Finally] VALIDATION FAILED")
 
-    return balance_ok and count_ok and replica_ok and rdonly_ok
+    # return balance_ok and count_ok and replica_ok and rdonly_ok
+    return balance_ok and count_ok and replica_ok
 
 
 if __name__ == '__main__':

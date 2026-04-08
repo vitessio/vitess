@@ -148,6 +148,9 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource.
 	SetReplicationSourceError error
 
+	// SetReplicationSourceFunc overrides SetReplicationSource when it is set.
+	SetReplicationSourceFunc func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
+
 	// StopReplicationError error is used by StopReplication.
 	StopReplicationError error
 
@@ -565,6 +568,10 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 
 // SetReplicationSource is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+	if fmd.SetReplicationSourceFunc != nil {
+		return fmd.SetReplicationSourceFunc(ctx, host, port, heartbeatInterval, stopReplicationBefore, startReplicationAfter)
+	}
+
 	input := fmt.Sprintf("%v:%v", host, port)
 	found := false
 	for _, sourceInput := range fmd.SetReplicationSourceInputs {

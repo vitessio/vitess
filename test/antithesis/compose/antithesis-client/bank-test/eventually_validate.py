@@ -61,6 +61,7 @@ def validate():
 
         cursor.execute("SELECT SUM(balance) FROM accounts")
         current_total = cursor.fetchone()[0]
+        conn.commit()
         log(f"[Eventually] Current state (primary): num_accts={current_num_accts}, total={current_total}")
     except Exception as e:
         log(f"[Eventually] Failed to read current state from primary: {e}")
