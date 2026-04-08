@@ -107,7 +107,7 @@ type Config[C Connection] struct {
 	IdleTimeout     time.Duration
 	MaxLifetime     time.Duration
 	RefreshInterval time.Duration
-	MaxWaiters      int64
+	MaxWaiters      uint
 	LogWait         func(time.Time)
 }
 
@@ -164,7 +164,7 @@ type ConnPool[C Connection] struct {
 		logWait func(time.Time)
 		// maxWaiters is the maximum number of clients that can be waiting for a connection;
 		// 0 means unlimited
-		maxWaiters int64
+		maxWaiters uint
 	}
 
 	Metrics Metrics
