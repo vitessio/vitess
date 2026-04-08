@@ -1851,7 +1851,8 @@ type BinlogDumpGTIDRequest struct {
 	// binlog_position is the byte offset within the binlog file.
 	// MySQL requires this to be >= 4 (BIN_LOG_HEADER_SIZE); values below 4
 	// cause a fatal error. Conventionally, clients send 4 to start from the
-	// beginning of the file. This field is always validated and used by MySQL,
+	// beginning of the file. Vitess forwards this value to MySQL; callers are
+	// responsible for supplying a valid position. MySQL may still use this value
 	// even when binlog_filename is empty and the file is auto-selected via GTIDs.
 	BinlogPosition uint64 `protobuf:"varint,7,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
 	// gtid_set is the GTID set in string format (e.g., "uuid:1-5,uuid2:1-3").
