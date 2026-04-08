@@ -396,13 +396,14 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 			semiSync = policy.IsReplicaSemiSync(durability, prevPrimary, replica)
 		}
 
-		wg.Go(func() {
+		go func() {
+			wg.Add(1)
 			erp.logger.Infof("restarting replication on %q after failed ERS", alias)
 			if err := erp.tmc.StartReplication(ctx, replica, semiSync); err != nil {
 				err := vterrors.Wrapf(err, "failed to restart replication on %q after failed ERS", alias)
 				rec.RecordError(err)
 			}
-		})
+		}()
 	}
 
 	wg.Wait()
