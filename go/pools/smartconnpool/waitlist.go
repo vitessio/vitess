@@ -36,24 +36,45 @@ type waiter[C Connection] struct {
 }
 
 type waitlist[C Connection] struct {
-	nodes sync.Pool
-	mu    sync.Mutex
-	list  list.List[waiter[C]]
+	nodes              sync.Pool
+	mu                 sync.Mutex
+	list               list.List[waiter[C]]
+	onWait             func()
+	onWaiterCapReached func()
 }
 
 // waitForConn blocks until a connection with the given Setting is returned by another client,
 // or until the given context expires.
+// If maxWaiters is > 0 and the waitlist already has that many waiters, it returns
+// ErrPoolWaiterCapReached immediately without blocking.
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer wl.nodes.Put(elem)
 
 	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
+	if wl.aboveWaiterCap(maxWaiters) {
+		if wl.onWaiterCapReached != nil {
+			wl.onWaiterCapReached()
+		}
+		return nil, ErrPoolWaiterCapReached
+	}
+
+	if wl.onWait != nil {
+		wl.onWait()
+	}
+
 	wl.mu.Lock()
-	// add ourselves as a waiter at the end of the waitlist
+	if wl.aboveWaiterCap(maxWaiters) {
+		wl.mu.Unlock()
+		if wl.onWaiterCapReached != nil {
+			wl.onWaiterCapReached()
+		}
+		return nil, ErrPoolWaiterCapReached
+	}
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
@@ -108,6 +129,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	case conn := <-elem.Value.conn:
 		return conn, nil
 	}
+}
+
+func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
+	return maxWaiters > 0 && wl.list.Len() >= int(maxWaiters)
 }
 
 func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
