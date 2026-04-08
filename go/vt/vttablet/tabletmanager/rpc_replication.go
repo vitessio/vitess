@@ -830,7 +830,11 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	defer tm.unlock()
 
 	// If MySQL is local and down, demote PRIMARY in topo and return early — replication
-	// config requires MySQL. TOCTOU: VTOrc's repair loop handles the race.
+	// config requires MySQL.
+	// TOCTOU note: MySQL could come back between IsLocalMySQLDown and ChangeTabletTypeDeferUpdate,
+	// causing an unnecessary demotion. This is acceptable because VTOrc's repair loop will
+	// detect the mismatch and re-promote the tablet. VTOrc (or equivalent) is required for
+	// correctness of this code path.
 	// Uses ChangeTabletTypeDeferUpdate so topo is updated synchronously
 	// but updateLocked (query service, VREngine) runs async best-effort.
 	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
@@ -969,14 +973,19 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			if err := tm.handleRelayLogError(ctx, err); err != nil {
 				return err
 			}
+			// handleRelayLogError called RestartReplication (STOP + RESET + START) which
+			// clears relay logs but preserves the old source config and leaves replication
+			// running. Re-apply the new source config, always stopping first since
+			// replication is now running regardless of the original wasReplicating state.
+			if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, true, shouldbeReplicating); err != nil {
+				return err
+			}
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
-				return err
-			}
+			return err
 		}
 		if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			if err := tm.handleRelayLogError(ctx, err); err != nil {
@@ -1258,12 +1267,22 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 // master info structure or related failures and throws errors like
 // ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
 // These errors can only be resolved by resetting the replication, otherwise START REPLICA fails.
+//
+// We match on error message strings rather than MySQL error codes because MySQL 8.0.33
+// reassigned error codes 1871/1872 to new meanings, making errno-based matching unreliable
+// across MySQL versions. The matched strings are stable across MySQL versions:
+//   - "Could not initialize master info structure" — MySQL 5.7, 8.0 (pre-8.0.22)
+//   - "Replica failed to initialize relay log info structure from the repository" — MySQL 8.0.22+
+//   - "Replica failed to initialize connection metadata structure from the repository" — MySQL 8.4+
+//   - "Replica failed to initialize applier metadata structure from the repository" — MySQL 8.4+
+//
+// Note: MariaDB uses different error message wording and would need separate strings.
+// See https://bugs.mysql.com/bug.php?id=83713, https://github.com/vitessio/vitess/issues/5067,
+// and https://github.com/vitessio/vitess/issues/10955.
 func (tm *TabletManager) handleRelayLogError(ctx context.Context, err error) error {
-	// attempt to fix this error:
-	// Replica failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START REPLICA
-	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
-	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
 	if strings.Contains(err.Error(), "Replica failed to initialize relay log info structure from the repository") ||
+		strings.Contains(err.Error(), "Replica failed to initialize connection metadata structure from the repository") ||
+		strings.Contains(err.Error(), "Replica failed to initialize applier metadata structure from the repository") ||
 		strings.Contains(err.Error(), "Could not initialize master info structure") {
 		// Stop, reset and start replication again to resolve this error
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {

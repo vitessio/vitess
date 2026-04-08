@@ -411,6 +411,10 @@ func TestShutdownStopsReplication(t *testing.T) {
 	defer db.Close()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Replica_IO_Running|Replica_SQL_Running", "varchar|varchar"),
+		"Yes|Yes",
+	))
 	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	cp := *db.ConnParams()

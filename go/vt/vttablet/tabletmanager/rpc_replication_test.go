@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -325,4 +326,68 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
 	require.False(t, isReadOnly)
+}
+
+func TestHandleRelayLogError(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+
+	tests := []struct {
+		name        string
+		errMsg      string
+		expectReset bool
+	}{
+		{
+			name:        "relay log info structure from repository",
+			errMsg:      "Replica failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000)",
+			expectReset: true,
+		},
+		{
+			name:        "connection metadata structure from repository",
+			errMsg:      "Replica failed to initialize connection metadata structure from the repository (errno 13117) (sqlstate HY000)",
+			expectReset: true,
+		},
+		{
+			name:        "applier metadata structure from repository",
+			errMsg:      "Replica failed to initialize applier metadata structure from the repository (errno 13117) (sqlstate HY000)",
+			expectReset: true,
+		},
+		{
+			name:        "could not initialize master info structure",
+			errMsg:      "Could not initialize master info structure; more error messages can be found in the MySQL error log",
+			expectReset: true,
+		},
+		{
+			name:        "unrelated error is not handled",
+			errMsg:      "some unrelated MySQL error",
+			expectReset: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent = 0
+			if tt.expectReset {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+					"STOP REPLICA",
+					"RESET REPLICA",
+					"START REPLICA",
+				}
+			} else {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = nil
+			}
+
+			inputErr := errors.New(tt.errMsg)
+			resultErr := tm.handleRelayLogError(ctx, inputErr)
+
+			if tt.expectReset {
+				require.NoError(t, resultErr)
+				require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+			} else {
+				require.ErrorIs(t, resultErr, inputErr)
+			}
+		})
+	}
 }

@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"syscall"
@@ -209,7 +208,8 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 // ChangeTabletTypeDeferUpdate is like ChangeTabletType but runs
 // updateLocked (query service, VREngine, etc) asynchronously. Use when
 // MySQL may be down — topo is updated synchronously, and updateLocked
-// runs best-effort in the background (with retryTransition on failure).
+// runs best-effort in the background with bounded retries. If it still
+// fails after retries, VTOrc or a vttablet restart will reconcile.
 func (ts *tmState) ChangeTabletTypeDeferUpdate(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	return ts.changeTabletType(ctx, tabletType, action, true)
 }
@@ -284,14 +284,34 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 	if deferUpdateLocked {
 		// Run updateLocked async — topo is updated synchronously below,
 		// but query service/VREngine transitions happen best-effort.
-		// If updateLocked fails (e.g. MySQL is down), retryTransition
-		// in the state manager will keep retrying until it succeeds.
+		// We retry with backoff for up to 60 seconds to cover transient
+		// failures (e.g. MySQL still starting). Uses ts.ctx so the
+		// goroutine is cancelled when the TabletManager shuts down.
 		ts.publishForDisplay()
 		go func() {
-			ts.mu.Lock()
-			defer ts.mu.Unlock()
-			if updateErr := ts.updateLocked(context.Background()); updateErr != nil {
-				log.Warn("Deferred updateLocked failed (will retry)", slog.Any("error", updateErr))
+			const (
+				maxRetryDuration = 60 * time.Second
+				retryInterval    = 5 * time.Second
+			)
+			deadline := time.Now().Add(maxRetryDuration)
+			for {
+				ts.mu.Lock()
+				updateErr := ts.updateLocked(ts.ctx)
+				ts.mu.Unlock()
+				if updateErr == nil {
+					return
+				}
+				if time.Now().After(deadline) {
+					log.Warn(fmt.Sprintf("Deferred updateLocked failed after retries, VTOrc or restart will reconcile: %v", updateErr))
+					return
+				}
+				log.Warn(fmt.Sprintf("Deferred updateLocked failed (will retry in %v): %v", retryInterval, updateErr))
+				select {
+				case <-ts.ctx.Done():
+					log.Warn("Deferred updateLocked cancelled during shutdown")
+					return
+				case <-time.After(retryInterval):
+				}
 			}
 		}()
 	} else {

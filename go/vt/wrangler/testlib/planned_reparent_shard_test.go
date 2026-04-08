@@ -638,14 +638,16 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
-		// simulate error that will trigger a call to RestartReplication
+		// PRS stop+start cycle: StopReplication succeeds, StartReplication
+		// fails with relay log error, handleRelayLogError calls
+		// RestartReplication (STOP + RESET + START) to recover.
+		"STOP REPLICA",
 		"STOP REPLICA",
 		"RESET REPLICA",
 		"START REPLICA",
-		"START REPLICA",
 	}
 	goodReplica1.StartActionLoop(t, wr)
-	goodReplica1.FakeMysqlDaemon.StopReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
+	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Replica failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
