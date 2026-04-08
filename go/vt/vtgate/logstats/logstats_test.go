@@ -256,7 +256,7 @@ func TestLogStatsEmimtOnAnyConditionMet(t *testing.T) {
 }
 
 func TestMarkSlowQuery(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", nil, streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", "sql1", "", nil, streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 
 	logStats.EndTime = logStats.StartTime.Add(time.Second)
