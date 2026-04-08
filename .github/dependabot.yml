@@ -55,6 +55,8 @@ updates:
       - "/examples/compose/external_db/mysql"
       - "/go/mysql/collations/tools/colldump"
       - "/test/antithesis/compose"
+      - "/test/antithesis/compose/antithesis-client"
+      - "/test/antithesis/compose/source_db/mysql"
     schedule:
       interval: "weekly"
     cooldown:
