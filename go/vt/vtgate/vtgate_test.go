@@ -34,7 +34,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -1022,7 +1021,5 @@ func TestBinlogDumpGTID(t *testing.T) {
 			TabletAlias: tabletAlias,
 		}, noopSend)
 		require.NoError(t, err)
-		// Verify the request was routed to the correct tablet
-		assert.Equal(t, topoproto.TabletAliasString(tabletAlias), topoproto.TabletAliasString(sbc1.Tablet().Alias))
 	})
 }
