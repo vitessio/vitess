@@ -97,6 +97,14 @@ func TestRegularExpressions(t *testing.T) {
 		},
 		{
 			regexp: regexpReplaceGolangDockerImage,
+			input:  "FROM --platform=linux/arm64 golang:1.25.3-bookworm@sha256:414a753c2f67d0efccb01b5f58b3d3a8a2cbb7c012ce9e535418b5b3492b2c24 AS builder",
+			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
+				res := regexp.ReplaceAllString(input, "${1}1.25.4-${2}@sha256:1111111111111111111111111111111111111111111111111111111111111111")
+				require.Equal(t, input, res)
+			},
+		},
+		{
+			regexp: regexpReplaceGolangDockerImage,
 			input:  "FROM golang:1.25.3-trixie@sha256:414a753c2f67d0efccb01b5f58b3d3a8a2cbb7c012ce9e535418b5b3492b2c24 AS builder",
 			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
 				res := regexp.ReplaceAllString(input, "${1}1.25.4-${2}@sha256:1111111111111111111111111111111111111111111111111111111111111111")

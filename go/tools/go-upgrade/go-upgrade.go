@@ -80,7 +80,11 @@ const (
 //   - FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder
 //
 // The first capture group retains the reference prefix. The second capture group retains the distro.
-var regexpReplaceGolangDockerImage = `(?i)((?:ARG[[:space:]]+image=|FROM(?:[[:space:]]+--platform=[^[:space:]]+)?[[:space:]]+)golang:)[0-9.]+-([a-z0-9]+)@sha256:[a-f0-9]{64}`
+var regexpReplaceGolangDockerImage = fmt.Sprintf(
+	`(?i)((?:ARG[[:space:]]+image=|FROM(?:[[:space:]]+--platform=%s/%s)?[[:space:]]+)golang:)[0-9.]+-([a-z0-9]+)@sha256:[a-f0-9]{64}`,
+	dockerPlatformOS,
+	dockerPlatformArch,
+)
 
 type (
 	latestGolangRelease struct {
