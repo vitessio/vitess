@@ -1,0 +1,70 @@
+services:
+  antithesis-client:
+    build:
+      context: ./antithesis-client
+      dockerfile: Dockerfile
+    # for quick local development  
+    # volumes:
+    #   - ./antithesis-client/crud:/opt/antithesis/test/v1/crud
+    #   - ./antithesis-client/bank-test:/opt/antithesis/test/v1/bank-test
+    #   - ./antithesis-client/helper.py:/opt/antithesis/resources/helper.py
+
+  source_db_host:
+    build:
+      context: ./source_db/mysql
+      dockerfile: Dockerfile
+    ports:
+      - "3306"
+
+  vtctld:
+    ports:
+      - "15999"
+
+  vtgate:
+    ports:
+      - "15999"
+
+  vttablet101:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet102:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet104:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet201:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet202:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet204:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet301:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet302:
+    ports:
+      - "15999"
+      - "3306"
+
+  vttablet304:
+    ports:
+      - "15999"
+      - "3306"

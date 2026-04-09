@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useEffect, useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useClusters, useCreateMoveTables, useKeyspaces, useSchemas } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -68,7 +68,7 @@ const onDDLOptions = ['IGNORE', 'STOP', 'EXEC', 'EXEC_IGNORE'];
 export const CreateMoveTables = () => {
     useDocumentTitle('Create a MoveTables Workflow');
 
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
@@ -103,7 +103,7 @@ export const CreateMoveTables = () => {
         {
             onSuccess: () => {
                 success(`Created workflow ${formData.workflow}`, { autoClose: 1600 });
-                history.push(`/workflows`);
+                navigate(`/workflows`);
             },
             onError: () => {
                 setErrorDialogOpen(true);

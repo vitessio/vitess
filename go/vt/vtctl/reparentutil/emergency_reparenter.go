@@ -150,6 +150,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	var (
 		stoppedReplicationSnapshot *replicationSnapshot
+
+		// replicasToRestart is the list of replicas that need replication to be restarted
+		// in the case of an error after their IO threads have been stopped, but before
+		// the ERS restarts them as part of a successful reparent.
+		replicasToRestart []*topodatapb.Tablet
+
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
@@ -161,6 +167,32 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		isIdeal                    bool
 		isGTIDBased                bool
 	)
+
+	defer func() {
+		// If we succeeded, or there are no replicas that need replication restarted,
+		// we can return early.
+		if err == nil || len(replicasToRestart) == 0 {
+			return
+		}
+
+		// We create a new context with a fresh timeout so that the parent context does not cancel early while
+		// we attempt to restart replication on the stopped replicas.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+		defer cancel()
+
+		// Make sure we still have the shard lock.
+		if lockErr := topo.CheckShardLocked(ctx, keyspace, shard); lockErr != nil {
+			erp.logger.Warningf("skipping replication restart cleanup because the shard lock was lost for %s/%s: %v", keyspace, shard, lockErr)
+			return
+		}
+
+		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, replicasToRestart, opts.durability)
+		if cleanupErr == nil {
+			return
+		}
+
+		err = fmt.Errorf("%w, and restart replication cleanup failed: %v", err, cleanupErr)
+	}()
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -205,7 +237,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, shardInfo.PrimaryAlias, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+
+	// If stoppedReplicationSnapshot is not nil, it means we have stopped replication on at
+	// least one replica. We'll keep track of the replicas that had their IO threads stopped
+	// so we can restart them later in case of an error that causes us to return early and
+	// leaves replication stopped. We do this before checking the error so that we ensure we
+	// handle partial failures (where we've stopped some replicas but failed on others) correctly.
+	if stoppedReplicationSnapshot != nil {
+		replicasToRestart = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
+	}
+
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -276,6 +318,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
+	// Relay logs have been successfully applied and we're ready to start repointing replicas,
+	// so we no longer need to restart replication manually in the event of an error.
+	replicasToRestart = nil
+
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
 	newPrimary := intermediateSource
 	if !isIdeal {
@@ -325,6 +371,46 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	ev.NewPrimary = newPrimary.CloneVT()
 	return err
+}
+
+// restartReplicationOnStoppedReplicas restarts replication on replicas whose IO threads were
+// stopped by ERS before the operation aborted.
+func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
+	ctx context.Context,
+	prevPrimary *topodatapb.Tablet,
+	replicas []*topodatapb.Tablet,
+	durability policy.Durabler,
+) error {
+	erp.logger.Infof("restarting replication on %d replicas whose IO threads were stopped by ERS", len(replicas))
+
+	rec := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+
+	// Start replication on each stopped replica concurrently.
+	for _, replica := range replicas {
+		alias := topoproto.TabletAliasString(replica.Alias)
+
+		semiSync := false
+		if prevPrimary != nil {
+			semiSync = policy.IsReplicaSemiSync(durability, prevPrimary, replica)
+		}
+
+		wg.Go(func() {
+			erp.logger.Infof("restarting replication on %q after failed ERS", alias)
+			if err := erp.tmc.StartReplication(ctx, replica, semiSync); err != nil {
+				err := vterrors.Wrapf(err, "failed to restart replication on %q after failed ERS", alias)
+				rec.RecordError(err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return rec.Error()
+	}
+
+	return nil
 }
 
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(

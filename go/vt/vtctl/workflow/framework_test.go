@@ -73,9 +73,11 @@ type testKeyspace struct {
 }
 
 type queryResult struct {
-	query  string
-	result *querypb.QueryResult
-	err    error
+	query            string
+	result           *querypb.QueryResult
+	err              error
+	beforeReturnHook func(context.Context, *topodatapb.Tablet, string)
+	returnContextErr bool
 }
 
 func TestMain(m *testing.M) {
@@ -512,7 +514,16 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	if !matched {
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
+	if qrs[0].beforeReturnHook != nil {
+		qrs[0].beforeReturnHook(ctx, tablet, query)
+	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
+	if qrs[0].returnContextErr && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if strings.Contains(query, "set message = 'FROZEN'") {
+		tmc.frozen.Store(true)
+	}
 	return qrs[0].result, qrs[0].err
 }
 
@@ -947,7 +958,7 @@ func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]s
 	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
 }
 
-func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, wantDeniedTables []string, wantAllowReadsFromDeniedTables bool) {
 	t.Helper()
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, keyspace, shard)
@@ -957,7 +968,10 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want [
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
+	require.EqualValues(t, got, wantDeniedTables, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, wantDeniedTables)
+	if tc != nil {
+		require.Equal(t, tc.AllowReads, wantAllowReadsFromDeniedTables, "allow reads for %s/%s: got: %v, want: %v", keyspace, shard, tc.AllowReads, wantAllowReadsFromDeniedTables)
+	}
 }
 
 func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
