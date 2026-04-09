@@ -35,16 +35,29 @@ import (
 )
 
 // bufferState represents the different states a shardBuffer object can be in.
-type bufferState string
+type bufferState int32
 
 const (
 	// stateIdle means no failover is currently in progress.
-	stateIdle bufferState = "IDLE"
+	stateIdle bufferState = iota
 	// stateBuffering is the phase when a failover is in progress.
-	stateBuffering bufferState = "BUFFERING"
+	stateBuffering
 	// stateDraining is the phase when a failover ended and the queue is drained.
-	stateDraining bufferState = "DRAINING"
+	stateDraining
 )
+
+func (s bufferState) String() string {
+	switch s {
+	case stateIdle:
+		return "IDLE"
+	case stateBuffering:
+		return "BUFFERING"
+	case stateDraining:
+		return "DRAINING"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", s)
+	}
+}
 
 // entry is created per buffered request.
 type entry struct {
@@ -90,9 +103,12 @@ type shardBuffer struct {
 	statsKeyJoined string
 	logTooRecent   *logutil.ThrottledLogger
 
+	// state is read atomically on the hot path (no lock needed for idle check)
+	// and written under mu during state transitions.
+	state atomic.Int32
+
 	// mu guards the fields below.
-	mu    sync.RWMutex
-	state bufferState
+	mu sync.RWMutex
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
 	// lastStart is the last time we saw the start of a failover.
@@ -124,7 +140,7 @@ func newShardBufferHealthCheck(buf *Buffer, mode bufferMode, keyspace, shard str
 		statsKey:       statsKey,
 		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
-		state:          stateIdle,
+		// state zero value is stateIdle (via atomic.Int32)
 	}
 }
 
@@ -142,16 +158,14 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
 
-	// Fast path (read lock): Check if we should NOT buffer a request.
-	sb.mu.RLock()
-	if !sb.shouldBufferLocked(failoverDetected) {
-		// No buffering required. Return early.
-		sb.mu.RUnlock()
+	// Fast path (lock-free): When no failover is detected (the common case),
+	// check the state atomically. We only need to proceed if the buffer is
+	// actively buffering requests.
+	if !failoverDetected && bufferState(sb.state.Load()) != stateBuffering {
 		return nil, nil
 	}
-	sb.mu.RUnlock()
 
-	// Buffering required. Acquire write lock.
+	// Slow path: Acquire write lock for state transitions or buffering.
 	sb.mu.Lock()
 	// Re-check state because it could have changed in the meantime.
 	if !sb.shouldBufferLocked(failoverDetected) {
@@ -161,7 +175,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	}
 
 	// Start buffering if failover is not detected yet.
-	if sb.state == stateIdle {
+	if bufferState(sb.state.Load()) == stateIdle {
 		// Do not buffer if last failover is too recent. This is the case if:
 		// a) buffering was stopped recently
 		// OR
@@ -238,7 +252,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 // shouldBufferLocked returns true if the current request should be buffered
 // (based on the current state and whether the request detected a failover).
 func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
-	switch s := sb.state; {
+	switch s := bufferState(sb.state.Load()); {
 	case s == stateIdle && !failoverDetected:
 		// No failover in progress.
 		return false
@@ -276,7 +290,7 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 
 	sb.lastStart = sb.timeNow()
 	sb.logErrorIfStateNotLocked(stateIdle)
-	sb.state = stateBuffering
+	sb.state.Store(int32(stateBuffering))
 	sb.queue = make([]*entry, 0)
 
 	sb.timeoutThread = newTimeoutThread(sb, sb.buf.config.MaxFailoverDuration)
@@ -301,8 +315,8 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 // Note: The prefix "Locked" is not related to the state. Instead, it stresses
 // that "sb.mu" must be locked before calling the method.
 func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
-	if sb.state != state {
-		log.Error(fmt.Sprintf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack()))
+	if current := bufferState(sb.state.Load()); current != state {
+		log.Error(fmt.Sprintf("BUG: Buffer state should be '%v' and not '%v'. shard=%s/%s Stacktrace:\n%s", state, current, sb.keyspace, sb.shard, debug.Stack()))
 	}
 }
 
@@ -523,7 +537,7 @@ func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
 }
 
 func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
-	if sb.state != stateBuffering {
+	if bufferState(sb.state.Load()) != stateBuffering {
 		return
 	}
 
@@ -547,7 +561,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	}
 
 	sb.logErrorIfStateNotLocked(stateBuffering)
-	sb.state = stateDraining
+	sb.state.Store(int32(stateDraining))
 	q := sb.queue
 	// Clear the queue such that remove(), oldestEntry() and evictOldestEntry()
 	// will not work on obsolete data.
@@ -623,7 +637,7 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 	sb.logErrorIfStateNotLocked(stateDraining)
-	sb.state = stateIdle
+	sb.state.Store(int32(stateIdle))
 	sb.timeoutThread = nil
 }
 
@@ -648,7 +662,5 @@ func (sb *shardBuffer) testGetSize() int {
 
 // stateForTesting is used by unit tests only to probe the current state.
 func (sb *shardBuffer) testGetState() bufferState {
-	sb.mu.RLock()
-	defer sb.mu.RUnlock()
-	return sb.state
+	return bufferState(sb.state.Load())
 }
