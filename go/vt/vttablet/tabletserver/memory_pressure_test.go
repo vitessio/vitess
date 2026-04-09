@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -128,6 +129,48 @@ func TestMemoryPressureControllerRefreshesEveryRequestUnderPressure(t *testing.T
 	require.Equal(t, memoryPressureStateNormal, controller.state())
 }
 
+func TestMemoryPressureControllerObserveUsesCachedNormalStateWithoutLock(t *testing.T) {
+	cfg := tabletenv.MemoryPressureConfig{
+		Enable:          true,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	}
+	controller := newMemoryPressureController(&cfg, nil, func() float64 {
+		return 0.95
+	})
+	controller.refreshInterval = time.Hour
+	controller.lastState.Store(int32(memoryPressureStateNormal))
+	controller.lastUsageBits.Store(math.Float64bits(0.65))
+	controller.lastSampleUnixNano.Store(time.Now().UnixNano())
+
+	controller.mu.Lock()
+	defer controller.mu.Unlock()
+
+	results := make(chan struct {
+		state memoryPressureState
+		usage float64
+	}, 1)
+	go func() {
+		state, usage := controller.observe()
+		results <- struct {
+			state memoryPressureState
+			usage float64
+		}{
+			state: state,
+			usage: usage,
+		}
+	}()
+
+	select {
+	case result := <-results:
+		require.Equal(t, memoryPressureStateNormal, result.state)
+		require.Equal(t, 0.65, result.usage)
+	case <-time.After(30 * time.Second):
+		t.Fatal("observe blocked on the mutex despite a fresh cached normal-state sample")
+	}
+}
+
 func TestMemoryPressureControllerAllowsTransactionFinalizationAtHardThreshold(t *testing.T) {
 	cfg := tabletenv.MemoryPressureConfig{
 		Enable:          true,
@@ -204,4 +247,37 @@ func TestTabletServerMemoryPressureRejectsVStreamAtSoftThreshold(t *testing.T) {
 	})
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	require.ErrorContains(t, err, "memory pressure")
+}
+
+func TestTabletServerMemoryPressureRejectionsIncrementErrorCountersAndLogStats(t *testing.T) {
+	ctx := t.Context()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.MemoryPressure.Enable = true
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+	defer tsv.StopService()
+	defer db.Close()
+
+	ch := tabletenv.StatsLogger.Subscribe("test memory pressure logging")
+	defer tabletenv.StatsLogger.Unsubscribe(ch)
+
+	usage := 0.95
+	tsv.memoryPressure.getMemoryUsage = func() float64 {
+		return usage
+	}
+	tsv.memoryPressure.refreshInterval = 0
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	initialResourceExhausted := tsv.stats.ErrorCounters.Counts()[vtrpcpb.Code_RESOURCE_EXHAUSTED.String()]
+	_, err := tsv.Begin(ctx, nil, &target, nil)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.EqualValues(t, initialResourceExhausted+1, tsv.stats.ErrorCounters.Counts()[vtrpcpb.Code_RESOURCE_EXHAUSTED.String()])
+
+	select {
+	case logStats := <-ch:
+		require.Equal(t, "Begin", logStats.Method)
+		require.Equal(t, "begin", logStats.OriginalSQL)
+		require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(logStats.Error))
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for log stats after memory-pressure rejection")
+	}
 }

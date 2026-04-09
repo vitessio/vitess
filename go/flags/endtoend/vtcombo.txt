@@ -122,6 +122,7 @@ Flags:
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
       --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
+      --enable-memory-pressure-backpressure                              If true, vttablet rejects new work with RESOURCE_EXHAUSTED when process memory utilization crosses configured thresholds.
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
@@ -206,6 +207,9 @@ Flags:
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
+      --memory-pressure-hard-threshold float                             Process memory utilization ratio (0-1) at which vttablet rejects most new work. (default 0.9)
+      --memory-pressure-resume-threshold float                           Process memory utilization ratio (0-1) below which vttablet resumes admitting work after memory-pressure backpressure has engaged. (default 0.7)
+      --memory-pressure-soft-threshold float                             Process memory utilization ratio (0-1) at which vttablet starts rejecting new transaction-start and streaming work. (default 0.8)
       --message-stream-grace-period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --migration-check-interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-bin-log-path string                                        mysql binlog path

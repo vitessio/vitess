@@ -388,7 +388,7 @@ type TabletConfig struct {
 	EnablePerWorkloadTableMetrics       bool                 `json:"-"`
 	SkipUserMetrics                     bool                 `json:"-"`
 	QueryThrottlerConfigRefreshInterval time.Duration        `json:"-"`
-	MemoryPressure                      MemoryPressureConfig `json:"memoryPressure,omitempty"`
+	MemoryPressure                      MemoryPressureConfig `json:"memoryPressure"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {

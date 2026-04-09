@@ -1865,15 +1865,15 @@ func (tsv *TabletServer) execRequest(
 
 	defer span.Finish()
 
-	if err = tsv.memoryPressure.reject(requestName); err != nil {
-		return err
-	}
-
 	logStats := tabletenv.NewLogStats(ctx, requestName, streamlog.GetQueryLogConfig())
 	logStats.Target = target
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
+
+	if err = tsv.memoryPressure.reject(requestName); err != nil {
+		return tsv.convertAndLogError(ctx, sql, bindVariables, err, logStats)
+	}
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err

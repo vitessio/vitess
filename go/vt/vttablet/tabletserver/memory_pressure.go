@@ -161,14 +161,42 @@ func (c *memoryPressureController) rejectIfAtLeast(requestName string, threshold
 }
 
 func (c *memoryPressureController) observe() (memoryPressureState, float64) {
+	now := time.Now()
+	if state, usage, ok := c.cachedObservation(now); ok {
+		return state, usage
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	usage := c.observeUsageLocked(time.Now())
+	usage := c.observeUsageLocked(now)
 	state := c.nextStateLocked(usage)
 	c.lastState.Store(int32(state))
 
 	return state, usage
+}
+
+func (c *memoryPressureController) cachedObservation(now time.Time) (memoryPressureState, float64, bool) {
+	if c.refreshInterval <= 0 {
+		return 0, 0, false
+	}
+
+	lastSampleUnixNano := c.lastSampleUnixNano.Load()
+	if lastSampleUnixNano == 0 || now.UnixNano()-lastSampleUnixNano >= c.refreshInterval.Nanoseconds() {
+		return 0, 0, false
+	}
+
+	state := memoryPressureState(c.lastState.Load())
+	if state >= memoryPressureStateSoft {
+		return 0, 0, false
+	}
+
+	usage := c.usage()
+	if c.lastSampleUnixNano.Load() != lastSampleUnixNano {
+		return 0, 0, false
+	}
+
+	return state, usage, true
 }
 
 func (c *memoryPressureController) observeUsageLocked(now time.Time) float64 {

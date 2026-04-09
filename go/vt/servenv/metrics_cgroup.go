@@ -58,7 +58,7 @@ func setup() {
 		log.Warn(fmt.Sprintf("Failed to resolve cgroup path for metrics, will use host metrics: %v", err))
 		return
 	}
-	cgroupMemoryPath = filepath.Join("/sys/fs/cgroup", groupPath)
+	cgroupMemoryPath = cgroupMemoryPathForGroupPath(groupPath)
 
 	manager, err := cgroup2.Load(groupPath)
 	if err != nil {
@@ -70,6 +70,10 @@ func setup() {
 		log.Warn(fmt.Sprintf("Failed to get initial cgroup CPU usage: %v", err))
 	}
 	lastTime = time.Now()
+}
+
+func cgroupMemoryPathForGroupPath(groupPath string) string {
+	return filepath.Join("/sys/fs/cgroup", strings.TrimLeft(groupPath, string(os.PathSeparator)))
 }
 
 func getCgroupCpuUsage() (float64, error) {

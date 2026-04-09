@@ -115,3 +115,33 @@ func TestReadCgroupMemoryValue(t *testing.T) {
 		require.Equal(t, ^uint64(0), value)
 	})
 }
+
+func TestCgroupMemoryPathForGroupPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		groupPath string
+		want      string
+	}{
+		{
+			name:      "absolute path",
+			groupPath: "/kubepods.slice/pod123/container456",
+			want:      "/sys/fs/cgroup/kubepods.slice/pod123/container456",
+		},
+		{
+			name:      "relative path",
+			groupPath: "kubepods.slice/pod123/container456",
+			want:      "/sys/fs/cgroup/kubepods.slice/pod123/container456",
+		},
+		{
+			name:      "root path",
+			groupPath: "/",
+			want:      "/sys/fs/cgroup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, cgroupMemoryPathForGroupPath(tt.groupPath))
+		})
+	}
+}
