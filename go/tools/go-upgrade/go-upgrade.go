@@ -540,13 +540,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
-<<<<<<< HEAD
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
-||||||| parent of b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
-=======
 	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o644)
->>>>>>> b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
 	if err != nil {
 		return err
 	}
@@ -608,13 +602,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
-<<<<<<< HEAD
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
-||||||| parent of b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
-=======
 	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o644)
->>>>>>> b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
 	if err != nil {
 		return err
 	}
