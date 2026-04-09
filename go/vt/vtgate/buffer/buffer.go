@@ -169,7 +169,6 @@ func New(cfg *Config) *Buffer {
 		config:         cfg,
 		bufferSizeSema: semaphore.NewWeighted(int64(cfg.Size)),
 		bufferSize:     cfg.Size,
-		// buffers and stopped use zero values (empty sync.Map and false atomic.Bool)
 	}
 }
 
@@ -223,15 +222,28 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 
 	key := topoproto.KeyspaceShardString(keyspace, shard)
 
-	// Hot path: lock-free lookup for existing shard buffers.
 	if v, ok := b.buffers.Load(key); ok {
 		return v.(*shardBuffer)
 	}
 
-	// Cold path (once per shard): create and store atomically.
+	// First access for this shard: create and store atomically.
 	sb := newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
-	v, _ := b.buffers.LoadOrStore(key, sb)
-	return v.(*shardBuffer)
+	v, loaded := b.buffers.LoadOrStore(key, sb)
+	if loaded {
+		return v.(*shardBuffer)
+	}
+
+	// Shutdown may have completed its Range between our stopped check above
+	// and the LoadOrStore, so this buffer would never be visited. Clean it up.
+	if b.stopped.Load() {
+		if actual, ok := b.buffers.LoadAndDelete(key); ok && actual == sb {
+			sb.shutdown()
+			sb.waitForShutdown()
+		}
+		return nil
+	}
+
+	return sb
 }
 
 // Shutdown blocks until all pending ShardBuffer objects are shut down.

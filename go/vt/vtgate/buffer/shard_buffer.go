@@ -103,11 +103,11 @@ type shardBuffer struct {
 	statsKeyJoined string
 	logTooRecent   *logutil.ThrottledLogger
 
-	// state is read atomically on the hot path (no lock needed for idle check)
-	// and written under mu during state transitions.
+	// state tracks the shard's buffering lifecycle (idle/buffering/draining).
+	// Read atomically on every query; written under mu during transitions.
 	state atomic.Int32
 
-	// mu guards the fields below.
+	// mu guards the mutable fields below (queue, timers, timestamps).
 	mu sync.RWMutex
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
@@ -140,7 +140,7 @@ func newShardBufferHealthCheck(buf *Buffer, mode bufferMode, keyspace, shard str
 		statsKey:       statsKey,
 		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
-		// state zero value is stateIdle (via atomic.Int32)
+		// state defaults to stateIdle (zero value).
 	}
 }
 
@@ -158,14 +158,13 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
 
-	// Fast path (lock-free): When no failover is detected (the common case),
-	// check the state atomically. We only need to proceed if the buffer is
-	// actively buffering requests.
+	// Lock-free fast path: most queries arrive with no failover and the shard
+	// is idle. An atomic load is sufficient to confirm nothing needs buffering.
 	if !failoverDetected && bufferState(sb.state.Load()) != stateBuffering {
 		return nil, nil
 	}
 
-	// Slow path: Acquire write lock for state transitions or buffering.
+	// Slow path: acquire lock for state transitions or to enqueue a request.
 	sb.mu.Lock()
 	// Re-check state because it could have changed in the meantime.
 	if !sb.shouldBufferLocked(failoverDetected) {
