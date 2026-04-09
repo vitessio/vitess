@@ -1105,7 +1105,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
@@ -1114,7 +1114,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 5, nil, 0)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("default position is allowed", func(t *testing.T) {

@@ -176,7 +176,7 @@ func TestBinlogDumpGTID_FilePositionRejected(t *testing.T) {
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestBinlogDumpGTID_FilePositionRejected(t *testing.T) {
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("position 0 is rejected", func(t *testing.T) {

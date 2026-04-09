@@ -825,7 +825,7 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 	}
 	if req.BinlogPosition > 4 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"non-default binlog position is not supported; use GTIDs instead")
+			"only binlog position 4 is supported; use GTIDs for positioning")
 	}
 
 	if req.Flags > 0xFFFF {

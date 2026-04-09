@@ -593,7 +593,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	}
 	if logPos > 4 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"non-default binlog position is not supported; use GTIDs instead")
+			"only binlog position 4 is supported; use GTIDs for positioning")
 	}
 
 	// Build the BinlogDumpGTID request

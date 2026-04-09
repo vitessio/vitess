@@ -980,7 +980,7 @@ func TestBinlogDumpGTID(t *testing.T) {
 			BinlogPosition: 1234,
 		}, noopSend)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
@@ -991,7 +991,7 @@ func TestBinlogDumpGTID(t *testing.T) {
 			TabletAlias:    tabletAlias,
 		}, noopSend)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
 	t.Run("flags exceeding uint16 rejected", func(t *testing.T) {
