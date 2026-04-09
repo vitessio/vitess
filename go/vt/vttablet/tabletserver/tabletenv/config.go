@@ -225,6 +225,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
 	fs.DurationVar(&queryThrottlerConfigRefreshInterval, "query-throttler-config-refresh-interval", time.Minute, "How frequently to refresh configuration for the query throttler")
+	utils.SetFlagBoolVar(fs, &currentConfig.MemoryPressure.Enable, "enable-memory-pressure-backpressure", defaultConfig.MemoryPressure.Enable, "If true, vttablet rejects new work with RESOURCE_EXHAUSTED when process memory utilization crosses configured thresholds.")
+	utils.SetFlagFloat64Var(fs, &currentConfig.MemoryPressure.SoftThreshold, "memory-pressure-soft-threshold", defaultConfig.MemoryPressure.SoftThreshold, "Process memory utilization ratio (0-1) at which vttablet starts rejecting new transaction-start and streaming work.")
+	utils.SetFlagFloat64Var(fs, &currentConfig.MemoryPressure.HardThreshold, "memory-pressure-hard-threshold", defaultConfig.MemoryPressure.HardThreshold, "Process memory utilization ratio (0-1) at which vttablet rejects most new work.")
+	utils.SetFlagFloat64Var(fs, &currentConfig.MemoryPressure.ResumeThreshold, "memory-pressure-resume-threshold", defaultConfig.MemoryPressure.ResumeThreshold, "Process memory utilization ratio (0-1) below which vttablet resumes admitting work after memory-pressure backpressure has engaged.")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
@@ -381,9 +385,10 @@ type TabletConfig struct {
 
 	EnableViews bool `json:"-"`
 
-	EnablePerWorkloadTableMetrics       bool          `json:"-"`
-	SkipUserMetrics                     bool          `json:"-"`
-	QueryThrottlerConfigRefreshInterval time.Duration `json:"-"`
+	EnablePerWorkloadTableMetrics       bool                 `json:"-"`
+	SkipUserMetrics                     bool                 `json:"-"`
+	QueryThrottlerConfigRefreshInterval time.Duration        `json:"-"`
+	MemoryPressure                      MemoryPressureConfig `json:"memoryPressure,omitempty"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
@@ -854,6 +859,13 @@ type TransactionLimitConfig struct {
 	TransactionLimitBySubcomponent bool
 }
 
+type MemoryPressureConfig struct {
+	Enable          bool    `json:"enable,omitempty"`
+	SoftThreshold   float64 `json:"softThreshold,omitempty"`
+	HardThreshold   float64 `json:"hardThreshold,omitempty"`
+	ResumeThreshold float64 `json:"resumeThreshold,omitempty"`
+}
+
 // RowStreamerConfig contains configuration parameters for a vstreamer (source) that is
 // copying the contents of a table to a target
 type RowStreamerConfig struct {
@@ -914,6 +926,9 @@ func (c *TabletConfig) Verify() error {
 		return err
 	}
 	if err := c.verifyTxThrottlerConfig(); err != nil {
+		return err
+	}
+	if err := c.verifyMemoryPressureConfig(); err != nil {
 		return err
 	}
 	if v := c.HotRowProtection.MaxQueueSize; v <= 0 {
@@ -1045,6 +1060,28 @@ func (c *TabletConfig) verifyTxThrottlerConfig() error {
 	return nil
 }
 
+func (c *TabletConfig) verifyMemoryPressureConfig() error {
+	if !c.MemoryPressure.Enable {
+		return nil
+	}
+	if v := c.MemoryPressure.SoftThreshold; v <= 0 || v >= 1 {
+		return fmt.Errorf("--memory-pressure-soft-threshold must be within (0, 1) (specified value: %v)", v)
+	}
+	if v := c.MemoryPressure.HardThreshold; v <= 0 || v >= 1 {
+		return fmt.Errorf("--memory-pressure-hard-threshold must be within (0, 1) (specified value: %v)", v)
+	}
+	if v := c.MemoryPressure.ResumeThreshold; v <= 0 || v >= 1 {
+		return fmt.Errorf("--memory-pressure-resume-threshold must be within (0, 1) (specified value: %v)", v)
+	}
+	if c.MemoryPressure.SoftThreshold >= c.MemoryPressure.HardThreshold {
+		return fmt.Errorf("--memory-pressure-soft-threshold must be < --memory-pressure-hard-threshold (%v >= %v)", c.MemoryPressure.SoftThreshold, c.MemoryPressure.HardThreshold)
+	}
+	if c.MemoryPressure.ResumeThreshold > c.MemoryPressure.SoftThreshold {
+		return fmt.Errorf("--memory-pressure-resume-threshold must be <= --memory-pressure-soft-threshold (%v > %v)", c.MemoryPressure.ResumeThreshold, c.MemoryPressure.SoftThreshold)
+	}
+	return nil
+}
+
 // Some of these values are for documentation purposes.
 // They actually get overwritten during Init.
 var defaultConfig = TabletConfig{
@@ -1140,6 +1177,13 @@ var defaultConfig = TabletConfig{
 	TwoPCAbandonAge: 15 * time.Minute,
 
 	QueryThrottlerConfigRefreshInterval: time.Minute,
+
+	MemoryPressure: MemoryPressureConfig{
+		Enable:          false,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	},
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on

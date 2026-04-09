@@ -86,6 +86,7 @@ func TestConfigParse(t *testing.T) {
 gracePeriods: {}
 healthcheck: {}
 hotRowProtection: {}
+memoryPressure: {}
 olap: {}
 olapReadPool: {}
 oltp: {}
@@ -145,6 +146,10 @@ hotRowProtection:
   maxGlobalQueueSize: 1000
   maxQueueSize: 20
   mode: disable
+memoryPressure:
+  hardThreshold: 0.9
+  resumeThreshold: 0.7
+  softThreshold: 0.8
 messagePostponeParallelism: 4
 olap:
   txTimeoutSeconds: 30s
