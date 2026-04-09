@@ -816,10 +816,15 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)
 	}
 
-	if req.BinlogFilename != "" && topoproto.TabletAliasIsZero(req.TabletAlias) {
+	// File/position-based resumption is only valid when targeting a specific
+	// tablet. When routing via health check, vtgate may pick a different
+	// replica each time, and binlog filenames/positions differ across replicas.
+	// GTIDs are consistent across replicas and can always be used.
+	hasFilePosition := req.BinlogFilename != "" || req.BinlogPosition > 4
+	if hasFilePosition && topoproto.TabletAliasIsZero(req.TabletAlias) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename can only be used with tablet targeting (set tablet_alias); "+
-				"use GTIDs for shard-level targeting, as binlog filenames differ across replicas")
+			"binlog filename/position can only be used with tablet targeting (set tablet_alias); "+
+				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
 	}
 
 	target := &querypb.Target{

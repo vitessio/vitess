@@ -980,13 +980,24 @@ func TestBinlogDumpGTID(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("position without filename allowed without tablet alias", func(t *testing.T) {
+	t.Run("non-default position rejected without tablet alias", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 1234,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "tablet targeting")
+	})
+
+	t.Run("non-default position allowed with tablet alias", func(t *testing.T) {
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 
 		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
 			Keyspace:       "TestExecutor",
 			Shard:          "-20",
 			BinlogPosition: 1234,
+			TabletAlias:    tabletAlias,
 		}, noopSend)
 		require.NoError(t, err)
 	})

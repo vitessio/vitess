@@ -1084,11 +1084,23 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Contains(t, err.Error(), "tablet targeting")
 	})
 
-	t.Run("non-default position allowed without tablet alias", func(t *testing.T) {
+	t.Run("non-default position rejected without tablet alias", func(t *testing.T) {
 		sbc1.BinlogDumpError = nil
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "tablet targeting")
+	})
+
+	t.Run("non-default position allowed with tablet alias", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
 		require.NoError(t, err)
