@@ -158,9 +158,9 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
 
-	// Lock-free fast path: most queries arrive with no failover and the shard
-	// is idle. An atomic load is sufficient to confirm nothing needs buffering.
-	if !failoverDetected && bufferState(sb.state.Load()) != stateBuffering {
+	// Lock-free fast path: an atomic state read determines whether buffering
+	// is possible. Most queries see idle state with no failover and return here.
+	if !sb.shouldBuffer(failoverDetected) {
 		return nil, nil
 	}
 
@@ -248,8 +248,22 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	return sb.wait(ctx, entry)
 }
 
-// shouldBufferLocked returns true if the current request should be buffered
-// (based on the current state and whether the request detected a failover).
+// shouldBuffer returns true if the request may need buffering based on an
+// atomic state read. This is the lock-free guard: when it returns false the
+// caller can skip acquiring mu entirely.
+func (sb *shardBuffer) shouldBuffer(failoverDetected bool) bool {
+	switch s := bufferState(sb.state.Load()); {
+	case s == stateBuffering:
+		return true
+	case s == stateIdle && failoverDetected:
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldBufferLocked is the authoritative check under mu. It re-reads state
+// atomically (safe because writes also hold mu) and covers the full matrix.
 func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 	switch s := bufferState(sb.state.Load()); {
 	case s == stateIdle && !failoverDetected:
