@@ -665,6 +665,32 @@
     }
   },
   {
+    "comment": "Single Shard - Window with ORDER BY alias and LIMIT",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) as fv from user where Id = 1 order by fv limit 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) as fv from user where Id = 1 order by fv limit 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select first_value(col) over (partition by Id order by col desc) as fv from `user` where 1 != 1",
+        "Query": "select distinct first_value(col) over (partition by Id order by col desc) as fv from `user` where Id = 1 order by first_value(`user`.col) over (partition by `user`.Id order by `user`.col desc) asc limit 5",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Authoritative Table - Partition By Primary Vindex",
     "query": "select rank() over (partition by user_id) from authoritative",
     "plan": {
@@ -1463,6 +1489,54 @@
                     "FieldQuery": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
                     "OrderBy": "(1|4) ASC",
                     "Query": "select dt.c0 as fv, dt.c1 as Id, weight_string(dt.c1), weight_string(dt.c0), weight_string(dt.c1) from (select distinct first_value(col) over (partition by Id order by col desc) as fv, Id from `user` where Id in ::__vals order by `user`.Id asc limit :__upper_limit) as dt(c0, c1)",
+                    "Values": [
+                      "(1, 2, 3)"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "IN clause - FirstValue with DISTINCT, ORDER BY window alias, and LIMIT",
+    "query": "select distinct first_value(col) over (partition by Id order by col desc) as fv from user where Id in (1, 2, 3) order by fv limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct first_value(col) over (partition by Id order by col desc) as fv from user where Id in (1, 2, 3) order by fv limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "0"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select first_value(col) over (partition by Id order by col desc) as fv from `user` where 1 != 1",
+                    "OrderBy": "0 ASC",
+                    "Query": "select distinct first_value(col) over (partition by Id order by col desc) as fv from `user` where Id in ::__vals order by first_value(`user`.col) over (partition by `user`.Id order by `user`.col desc) asc limit :__upper_limit",
                     "Values": [
                       "(1, 2, 3)"
                     ],
