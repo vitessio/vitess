@@ -203,28 +203,6 @@ func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }
 
-// ExtractMysqlComment extracts the version and SQL from a comment-only query
-// such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (string, string) {
-	sql = sql[3 : len(sql)-2]
-
-	digitCount := 0
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
-		digitCount++
-		return !unicode.IsDigit(c) || digitCount == 6
-	})
-	if endOfVersionIndex < 0 {
-		return "", ""
-	}
-	if endOfVersionIndex < 5 {
-		endOfVersionIndex = 0
-	}
-	version := sql[0:endOfVersionIndex]
-	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
-
-	return version, innerSQL
-}
-
 const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives

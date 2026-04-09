@@ -102,6 +102,10 @@ type vstreamer struct {
 	options *binlogdatapb.VStreamOptions
 	config  *vttablet.VReplicationConfig
 
+	historianRefreshedForStartup     bool
+	isHistorianRefreshedForStartup   func() bool
+	markHistorianRefreshedForStartup func()
+
 	eventTypesToStream map[binlogdatapb.VEventType]bool
 }
 
@@ -218,6 +222,9 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	if err := vs.se.Open(); err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
+	if err := vs.refreshHistorianForStartup(ctx); err != nil {
+		return wrapError(err, vs.pos, vs.vse)
+	}
 
 	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
@@ -231,6 +238,24 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	}
 	err = vs.parseEvents(vs.ctx, events, errs)
 	return wrapError(err, vs.pos, vs.vse)
+}
+
+func (vs *vstreamer) refreshHistorianForStartup(ctx context.Context) error {
+	if vs.historianRefreshedForStartup {
+		return nil
+	}
+	if vs.isHistorianRefreshedForStartup != nil && vs.isHistorianRefreshedForStartup() {
+		vs.historianRefreshedForStartup = true
+		return nil
+	}
+	if err := vs.se.RefreshHistorianForStreamStart(ctx); err != nil {
+		return err
+	}
+	vs.historianRefreshedForStartup = true
+	if vs.markHistorianRefreshedForStartup != nil {
+		vs.markHistorianRefreshedForStartup()
+	}
+	return nil
 }
 
 // parseEvents parses and sends events.
@@ -286,12 +311,21 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// Although unlikely, it's possible to get a HEARTBEAT in the middle
 			// of a transaction. If so, we still send the partial transaction along
 			// with the heartbeat.
+			//
+			// Even when one of these terminal event types is filtered from output,
+			// it still has to reach this flushing path. Otherwise any requested
+			// events we have already buffered (for example GTIDs in a filtered
+			// GTID+DDL stream) would remain buffered until a later heartbeat and
+			// could grow without bound on a busy stream.
 			if shouldBuffer(vevent) {
 				bufferedEvents = append(bufferedEvents, vevent)
 			}
 			vevents := bufferedEvents
 			bufferedEvents = nil
 			curSize = 0
+			if len(vevents) == 0 {
+				return nil
+			}
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			if !shouldBuffer(vevent) {
@@ -562,11 +596,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				Gtid: replication.EncodePosition(vs.pos),
 			})
 		}
-		if shouldSend(binlogdatapb.VEventType_COMMIT) {
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_COMMIT,
-			})
-		}
+		// Always emit the terminal COMMIT marker internally so parseEvents can
+		// flush any buffered requested events even when COMMIT itself is filtered
+		// from the stream output.
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_COMMIT,
+		})
 	case ev.IsQuery():
 		q, err := ev.Query(vs.format)
 		if err != nil {
@@ -627,31 +662,31 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		case sqlparser.StmtCommit:
-			if !shouldSend(binlogdatapb.VEventType_COMMIT) {
-				return nil, nil
-			}
+			// Same rationale as the XID path above: COMMIT may be filtered from the
+			// caller's output, but parseEvents still needs the terminal marker in
+			// order to flush buffered requested events promptly.
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if shouldSend(binlogdatapb.VEventType_DDL) {
-				if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
-					vevents = append(vevents, &binlogdatapb.VEvent{
-						Type: binlogdatapb.VEventType_GTID,
-						Gtid: replication.EncodePosition(vs.pos),
-					}, &binlogdatapb.VEvent{
-						Type:      binlogdatapb.VEventType_DDL,
-						Statement: q.SQL,
-					})
-				} else {
-					// If the DDL need not be sent, send a dummy OTHER event.
-					vevents = append(vevents, &binlogdatapb.VEvent{
-						Type: binlogdatapb.VEventType_GTID,
-						Gtid: replication.EncodePosition(vs.pos),
-					}, &binlogdatapb.VEvent{
-						Type: binlogdatapb.VEventType_OTHER,
-					})
-				}
+			if shouldSend(binlogdatapb.VEventType_GTID) {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: replication.EncodePosition(vs.pos),
+				})
+			}
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type:      binlogdatapb.VEventType_DDL,
+					Statement: q.SQL,
+				})
+			} else {
+				// If the DDL need not be sent, still emit a terminal OTHER marker so
+				// parseEvents can flush any buffered requested events instead of
+				// waiting for a later heartbeat to do it.
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_OTHER,
+				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
 				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
@@ -682,11 +717,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 					Gtid: replication.EncodePosition(vs.pos),
 				})
 			}
-			if shouldSend(binlogdatapb.VEventType_OTHER) {
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_OTHER,
-				})
-			}
+			// OTHER is the terminal marker for these statements. It must still be
+			// present internally so parseEvents flushes buffered requested events
+			// even when OTHER is filtered from the caller's output.
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_OTHER,
+			})
 		default:
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
