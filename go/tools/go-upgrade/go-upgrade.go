@@ -46,9 +46,6 @@ const (
 	// dockerPlatformArch is the target architecture for the Go base image.
 	dockerPlatformArch = "amd64"
 
-	// dockerImageDistro is the distro suffix used in Go base image tags.
-	dockerImageDistro = "bookworm"
-
 	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
 	// version is composed of either one or two numbers, for instance: 18.1 or 18.
 	// The expected format of the input is BOOTSTRAP_VERSION=18 or BOOTSTRAP_VERSION=18.1
@@ -76,13 +73,18 @@ const (
 	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
 )
 
-// regexpReplaceGolangDockerImage replaces the Go version and image digest in Dockerfiles.
-// Example input: "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder"
+// regexpReplaceGolangDockerImage matches Go image references that the upgrader rewrites.
+//
+// Supported forms include:
+//   - ARG image=golang:1.25.3-bookworm@sha256:abc
+//   - FROM golang:1.25.3-trixie@sha256:abc AS builder
+//   - FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder
+//
+// The first capture group retains the reference prefix. The second capture group retains the distro.
 var regexpReplaceGolangDockerImage = fmt.Sprintf(
-	`(?i)(FROM[[:space:]]+--platform=%s/%s[[:space:]]+golang:)([0-9.]+-%s)@sha256:[a-f0-9]{64}`,
+	`(?i)((?:ARG[[:space:]]+image=|FROM(?:[[:space:]]+--platform=%s/%s)?[[:space:]]+)golang:)[0-9.]+-([a-z0-9]+)@sha256:[a-f0-9]{64}`,
 	dockerPlatformOS,
 	dockerPlatformArch,
-	dockerImageDistro,
 )
 
 type (
@@ -353,11 +355,12 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 }
 
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
-// Golang version must be updated
+// Golang version must be updated.
 func replaceGoVersionInCodebase(old, new *version.Version) error {
 	if old.Equal(new) {
 		return nil
 	}
+
 	explore := []string{
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
@@ -384,17 +387,8 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-	dockerDigest, err := resolveGolangImageDigest(new)
-	if err != nil {
-		return err
-	}
-
 	for _, fileToChange := range filesToChange {
-		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangDockerImage)},
-			[]string{fmt.Sprintf("${1}%s@%s", golangDockerTag(new), dockerDigest)},
-			fileToChange,
-		)
+		err = replaceGolangImageReferencesInFile(fileToChange, new)
 		if err != nil {
 			return err
 		}
@@ -416,8 +410,76 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	return nil
 }
 
-func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
-	ref := "golang:" + golangDockerTag(goVersion)
+// replaceGolangImageReferencesInFile rewrites pinned Go image references in the given file.
+func replaceGolangImageReferencesInFile(fileToChange string, goVersion *version.Version) error {
+	contentRaw, err := os.ReadFile(fileToChange)
+	if err != nil {
+		return err
+	}
+
+	content, err := replaceGolangImageReferences(string(contentRaw), goVersion)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(fileToChange, []byte(content), 0o644)
+}
+
+// replaceGolangImageReferences rewrites pinned Go image references while preserving each matched distro.
+func replaceGolangImageReferences(content string, goVersion *version.Version) (string, error) {
+	golangImageRegexp := regexp.MustCompile(regexpReplaceGolangDockerImage)
+	matches := golangImageRegexp.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content, nil
+	}
+
+	digestsByDistro := map[string]string{}
+	for _, match := range matches {
+		distro := match[2]
+		if _, ok := digestsByDistro[distro]; ok {
+			continue
+		}
+
+		digest, err := resolveGolangImageDigest(goVersion, distro)
+		if err != nil {
+			return "", err
+		}
+
+		digestsByDistro[distro] = digest
+	}
+
+	var replaceErr error
+	replaced := golangImageRegexp.ReplaceAllStringFunc(content, func(match string) string {
+		if replaceErr != nil {
+			return match
+		}
+
+		submatch := golangImageRegexp.FindStringSubmatch(match)
+		if len(submatch) != 3 {
+			replaceErr = fmt.Errorf("malformatted golang image reference: %s", match)
+			return match
+		}
+
+		prefix := submatch[1]
+		distro := submatch[2]
+		digest, ok := digestsByDistro[distro]
+		if !ok {
+			replaceErr = fmt.Errorf("missing golang digest for distro %s", distro)
+			return match
+		}
+
+		return fmt.Sprintf("%s%s@%s", prefix, golangDockerTag(goVersion, distro), digest)
+	})
+	if replaceErr != nil {
+		return "", replaceErr
+	}
+
+	return replaced, nil
+}
+
+// resolveGolangImageDigest resolves the pinned digest for the given Go version and distro.
+func resolveGolangImageDigest(goVersion *version.Version, distro string) (string, error) {
+	ref := "golang:" + golangDockerTag(goVersion, distro)
 
 	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: dockerPlatformOS, Architecture: dockerPlatformArch}))
 	if err != nil {
@@ -427,8 +489,9 @@ func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
 	return digest, nil
 }
 
-func golangDockerTag(goVersion *version.Version) string {
-	return goVersion.String() + "-" + dockerImageDistro
+// golangDockerTag returns the Golang Docker tag for the given version and distro.
+func golangDockerTag(goVersion *version.Version, distro string) string {
+	return goVersion.String() + "-" + distro
 }
 
 func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
@@ -477,7 +540,13 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
+<<<<<<< HEAD
 	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
+||||||| parent of b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
+=======
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o644)
+>>>>>>> b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
 	if err != nil {
 		return err
 	}
@@ -539,7 +608,13 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
+<<<<<<< HEAD
 	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
+||||||| parent of b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
+=======
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o644)
+>>>>>>> b6914c79a2 (go-upgrade: fix Go image digest rewrite matching (#19820))
 	if err != nil {
 		return err
 	}
