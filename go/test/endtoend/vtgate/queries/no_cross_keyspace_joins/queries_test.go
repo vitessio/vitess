@@ -48,6 +48,27 @@ func TestNoCrossKeyspaceJoinsVSchemaSetting(t *testing.T) {
 	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
 }
 
+// TestNoCrossKeyspaceJoinsUnqualifiedTables tests that the no_cross_keyspace_joins
+// check fires even when table names are not qualified with a keyspace prefix,
+// relying on global routing to resolve unique table names to their keyspaces.
+func TestNoCrossKeyspaceJoinsUnqualifiedTables(t *testing.T) {
+	conn := start(t)
+
+	// Unqualified cross-keyspace join should fail — t1 routes to ks1, t2 routes to ks2.
+	_, err := utils.ExecAllowError(t, conn, "select * from t1 join t2 on t1.id = t2.id")
+	require.ErrorContains(t, err, "cross-keyspace JOIN")
+
+	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from t1 join t2 on t1.id = t2.id")
+
+	// Unqualified cross-keyspace UNION should also fail.
+	_, err = utils.ExecAllowError(t, conn, "select id from t1 union all select id from t2")
+	require.ErrorContains(t, err, "cross-keyspace UNION")
+
+	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ id from t1 union all select id from t2")
+}
+
 // TestNoCrossKeyspaceJoinsVSchemaSettingUnion tests that the no_cross_keyspace_joins
 // vschema keyspace setting also denies cross-keyspace UNIONs.
 func TestNoCrossKeyspaceJoinsVSchemaSettingUnion(t *testing.T) {
