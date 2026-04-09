@@ -1035,10 +1035,9 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		sbc1.BinlogDumpError = nil
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 
-		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
-		vh.session(mysqlConn).TargetString = targetString
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000001", 4, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1076,6 +1075,23 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Contains(t, err.Error(), "not found")
 	})
 
+	t.Run("filename is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
 	t.Run("position below minimum is rejected", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
@@ -1084,48 +1100,24 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
 	})
 
-	t.Run("file position rejected without tablet alias", func(t *testing.T) {
-		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
-
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
-	})
-
-	t.Run("non-default position rejected without tablet alias", func(t *testing.T) {
-		sbc1.BinlogDumpError = nil
-		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
-
+	t.Run("non-default position is rejected", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
 	})
 
-	t.Run("non-default position allowed with tablet alias", func(t *testing.T) {
-		sbc1.BinlogDumpError = nil
-		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
-
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
-		require.NoError(t, err)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 5, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
 	})
 
-	t.Run("file position allowed with tablet alias", func(t *testing.T) {
-		sbc1.BinlogDumpError = nil
-		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
-
-		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
-		vh.session(mysqlConn).TargetString = targetString
-
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 1234, nil, 0)
-		require.NoError(t, err)
-	})
-
-	t.Run("default position allowed without tablet alias", func(t *testing.T) {
+	t.Run("default position is allowed", func(t *testing.T) {
 		sbc1.BinlogDumpError = nil
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 

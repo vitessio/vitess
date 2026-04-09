@@ -118,7 +118,7 @@ func TestBinlogDumpGTID_MissingKeyspaceShard(t *testing.T) {
 	}
 }
 
-func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
+func TestBinlogDumpGTID_FilePositionRejected(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
 
@@ -134,16 +134,27 @@ func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
 		callerid.NewEffectiveCallerID("user", "", ""),
 		&querypb.VTGateCallerID{Username: "user"})
 
-	t.Run("filename without alias", func(t *testing.T) {
+	t.Run("filename is rejected", func(t *testing.T) {
 		req := &vtgatepb.BinlogDumpGTIDRequest{
 			Keyspace:       KsTestSharded,
 			Shard:          "-20",
 			BinlogFilename: "binlog.000003",
-			BinlogPosition: 4,
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		req := &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       KsTestSharded,
+			Shard:          "-20",
+			BinlogFilename: "binlog.000003",
+			TabletAlias:    &topodatapb.TabletAlias{Cell: "aa", Uid: 1},
+		}
+		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
 	})
 
 	t.Run("position below minimum is rejected", func(t *testing.T) {
@@ -157,7 +168,7 @@ func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
 		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
 	})
 
-	t.Run("non-default position without alias is rejected", func(t *testing.T) {
+	t.Run("non-default position is rejected", func(t *testing.T) {
 		req := &vtgatepb.BinlogDumpGTIDRequest{
 			Keyspace:       KsTestSharded,
 			Shard:          "-20",
@@ -165,10 +176,32 @@ func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
 	})
 
-	t.Run("default position without alias is allowed", func(t *testing.T) {
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
+		req := &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       KsTestSharded,
+			Shard:          "-20",
+			BinlogPosition: 5,
+			TabletAlias:    &topodatapb.TabletAlias{Cell: "aa", Uid: 1},
+		}
+		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "non-default binlog position is not supported")
+	})
+
+	t.Run("position 0 is rejected", func(t *testing.T) {
+		req := &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace: KsTestSharded,
+			Shard:    "-20",
+		}
+		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("position 4 is allowed", func(t *testing.T) {
 		req := &vtgatepb.BinlogDumpGTIDRequest{
 			Keyspace:       KsTestSharded,
 			Shard:          "-20",
@@ -244,9 +277,8 @@ func TestBinlogDumpGTID_SuccessViaTabletAlias(t *testing.T) {
 	req := &vtgatepb.BinlogDumpGTIDRequest{
 		Keyspace:       KsTestSharded,
 		Shard:          "-20",
+		BinlogPosition: 4,
 		TabletAlias:    tabletAlias,
-		BinlogFilename: "binlog.000003",
-		BinlogPosition: 1234,
 		GtidSet:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-50",
 	}
 

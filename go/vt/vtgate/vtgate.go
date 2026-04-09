@@ -811,25 +811,26 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 		tabletType = topodatapb.TabletType_PRIMARY
 	}
 
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if req.BinlogFilename != "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog filename is not supported; use GTIDs instead")
+	}
 	if req.BinlogPosition < 4 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"Client requested source to start replication from position < 4")
+	}
+	if req.BinlogPosition > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"non-default binlog position is not supported; use GTIDs instead")
 	}
 
 	if req.Flags > 0xFFFF {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)
-	}
-
-	// File/position-based resumption is only valid when targeting a specific
-	// tablet. When routing via health check, vtgate may pick a different
-	// replica each time, and binlog filenames/positions differ across replicas.
-	// GTIDs are consistent across replicas and can always be used.
-	hasFilePosition := req.BinlogFilename != "" || req.BinlogPosition > 4
-	if hasFilePosition && topoproto.TabletAliasIsZero(req.TabletAlias) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (set tablet_alias); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
 	}
 
 	target := &querypb.Target{
@@ -839,11 +840,9 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 	}
 
 	tabletRequest := &binlogdatapb.BinlogDumpGTIDRequest{
-		Target:         target,
-		BinlogFilename: req.BinlogFilename,
-		BinlogPosition: req.BinlogPosition,
-		GtidSet:        req.GtidSet,
-		Flags:          req.Flags,
+		Target:  target,
+		GtidSet: req.GtidSet,
+		Flags:   req.Flags,
 	}
 
 	callback := func(response *binlogdatapb.BinlogDumpResponse) error {
