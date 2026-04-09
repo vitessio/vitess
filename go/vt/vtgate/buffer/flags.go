@@ -81,7 +81,7 @@ func verifyFlags() error {
 	}
 
 	if bufferKeyspaceShards != "" && !bufferEnabled {
-		return fmt.Errorf("--buffer-keyspace-shards=%v also requires that --enable_buffer is set", bufferKeyspaceShards)
+		return fmt.Errorf("--buffer-keyspace-shards=%v also requires that --enable-buffer is set", bufferKeyspaceShards)
 	}
 	if bufferEnabled && bufferEnabledDryRun && bufferKeyspaceShards == "" {
 		return errors.New("both the dry-run mode and actual buffering is enabled. To avoid ambiguity, keyspaces and shards for actual buffering must be explicitly listed in --buffer-keyspace-shards")

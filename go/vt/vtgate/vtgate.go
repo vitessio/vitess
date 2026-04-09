@@ -103,7 +103,7 @@ var (
 	defaultDDLStrategy = string(schema.DDLStrategyDirect)
 
 	enableOnlineDDL = viperutil.Configure(
-		"enable_online_ddl",
+		"enable-online-ddl",
 		viperutil.Options[bool]{
 			FlagName: "enable-online-ddl",
 			Default:  true,
@@ -112,7 +112,7 @@ var (
 	)
 
 	enableDirectDDL = viperutil.Configure(
-		"enable_direct_ddl",
+		"enable-direct-ddl",
 		viperutil.Options[bool]{
 			FlagName: "enable-direct-ddl",
 			Default:  true,
@@ -121,7 +121,7 @@ var (
 	)
 
 	enableBinlogDump = viperutil.Configure(
-		"enable_binlog_dump",
+		"enable-binlog-dump",
 		viperutil.Options[bool]{
 			FlagName: "enable-binlog-dump",
 			Default:  false,
@@ -130,7 +130,7 @@ var (
 	)
 
 	transactionMode = viperutil.Configure(
-		"transaction_mode",
+		"transaction-mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
 			FlagName: "transaction-mode",
 			Default:  vtgatepb.TransactionMode_MULTI,
@@ -147,7 +147,7 @@ var (
 						return vtgatepb.TransactionMode_TWOPC
 					default:
 						fmt.Printf("Invalid option: %v\n", txMode)
-						fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+						fmt.Println("Usage: --transaction-mode {SINGLE | MULTI | TWOPC}")
 						os.Exit(1)
 						return -1
 					}
