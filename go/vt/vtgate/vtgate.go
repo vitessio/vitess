@@ -811,6 +811,11 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 		tabletType = topodatapb.TabletType_PRIMARY
 	}
 
+	if req.BinlogPosition < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+
 	if req.Flags > 0xFFFF {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)

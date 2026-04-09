@@ -139,10 +139,22 @@ func TestBinlogDumpGTID_FilePositionWithoutAlias(t *testing.T) {
 			Keyspace:       KsTestSharded,
 			Shard:          "-20",
 			BinlogFilename: "binlog.000003",
+			BinlogPosition: 4,
 		}
 		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tablet targeting")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		req := &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       KsTestSharded,
+			Shard:          "-20",
+			BinlogPosition: 3,
+		}
+		err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
 	})
 
 	t.Run("non-default position without alias is rejected", func(t *testing.T) {
@@ -190,9 +202,10 @@ func TestBinlogDumpGTID_SuccessViaGateway(t *testing.T) {
 	sbc1.BinlogDumpError = nil
 
 	req := &vtgatepb.BinlogDumpGTIDRequest{
-		Keyspace: KsTestSharded,
-		Shard:    "-20",
-		GtidSet:  "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100",
+		Keyspace:       KsTestSharded,
+		Shard:          "-20",
+		BinlogPosition: 4,
+		GtidSet:        "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100",
 	}
 
 	var received []*vtgatepb.BinlogDumpResponse
@@ -267,8 +280,9 @@ func TestBinlogDumpGTID_TabletError(t *testing.T) {
 	t.Cleanup(func() { sbc1.BinlogDumpError = nil })
 
 	req := &vtgatepb.BinlogDumpGTIDRequest{
-		Keyspace: KsTestSharded,
-		Shard:    "-20",
+		Keyspace:       KsTestSharded,
+		Shard:          "-20",
+		BinlogPosition: 4,
 	}
 	err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 	require.Error(t, err)
@@ -296,8 +310,9 @@ func TestBinlogDumpGTID_DefaultTabletType(t *testing.T) {
 
 	// Don't set tablet type — should default to PRIMARY
 	req := &vtgatepb.BinlogDumpGTIDRequest{
-		Keyspace: KsTestSharded,
-		Shard:    "-20",
+		Keyspace:       KsTestSharded,
+		Shard:          "-20",
+		BinlogPosition: 4,
 	}
 	err := vtg.BinlogDumpGTID(ctx, req, func(*vtgatepb.BinlogDumpResponse) error { return nil })
 	require.NoError(t, err)
@@ -320,8 +335,9 @@ func TestBinlogDumpGTID_NonexistentTabletAlias(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "user"})
 
 	req := &vtgatepb.BinlogDumpGTIDRequest{
-		Keyspace: KsTestSharded,
-		Shard:    "-20",
+		Keyspace:       KsTestSharded,
+		Shard:          "-20",
+		BinlogPosition: 4,
 		TabletAlias: &topodatapb.TabletAlias{
 			Cell: "aa",
 			Uid:  9999999,

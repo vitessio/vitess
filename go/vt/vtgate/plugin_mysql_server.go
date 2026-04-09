@@ -579,6 +579,11 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
+	if logPos < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+
 	// File/position-based resumption is only valid when targeting a specific
 	// tablet. When routing via health check, vtgate may pick a different
 	// replica each time, and binlog filenames/positions differ across replicas.
