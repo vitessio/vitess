@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,6 +44,7 @@ func TestMemoryPressureControllerHysteresis(t *testing.T) {
 	controller := newMemoryPressureController(&cfg, servenv.NewExporter("MemoryPressureControllerTest", "Tablet"), func() float64 {
 		return usage
 	})
+	controller.refreshInterval = 0
 
 	require.Equal(t, memoryPressureStateNormal, controller.state())
 	require.NoError(t, controller.rejectIfAtLeast("Execute", memoryPressureStateHard))
@@ -76,6 +78,84 @@ func TestMemoryPressureControllerHysteresis(t *testing.T) {
 	require.Equal(t, memoryPressureStateNormal, controller.state())
 }
 
+func TestMemoryPressureControllerCachesUsageSamples(t *testing.T) {
+	cfg := tabletenv.MemoryPressureConfig{
+		Enable:          true,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	}
+	calls := 0
+	controller := newMemoryPressureController(&cfg, nil, func() float64 {
+		calls++
+		return 0.65
+	})
+	controller.refreshInterval = time.Hour
+
+	require.NoError(t, controller.rejectIfAtLeast("Execute", memoryPressureStateHard))
+
+	require.NoError(t, controller.rejectIfAtLeast("Execute", memoryPressureStateHard))
+	require.Equal(t, 1, calls)
+
+	controller.refreshInterval = 0
+	require.NoError(t, controller.rejectIfAtLeast("Execute", memoryPressureStateHard))
+	require.Equal(t, 2, calls)
+}
+
+func TestMemoryPressureControllerRefreshesEveryRequestUnderPressure(t *testing.T) {
+	cfg := tabletenv.MemoryPressureConfig{
+		Enable:          true,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	}
+	calls := 0
+	controller := newMemoryPressureController(&cfg, nil, func() float64 {
+		calls++
+		if calls == 1 {
+			return 0.95
+		}
+		return 0.65
+	})
+	controller.refreshInterval = time.Hour
+
+	err := controller.rejectIfAtLeast("Execute", memoryPressureStateHard)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.Equal(t, memoryPressureStateHard, controller.state())
+
+	require.NoError(t, controller.rejectIfAtLeast("Execute", memoryPressureStateHard))
+	require.Equal(t, 2, calls)
+	require.Equal(t, memoryPressureStateNormal, controller.state())
+}
+
+func TestMemoryPressureControllerAllowsTransactionFinalizationAtHardThreshold(t *testing.T) {
+	cfg := tabletenv.MemoryPressureConfig{
+		Enable:          true,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	}
+	controller := newMemoryPressureController(&cfg, nil, func() float64 {
+		return 0.95
+	})
+
+	for _, requestName := range []string{
+		"Commit",
+		"Rollback",
+		"Release",
+		"CommitPrepared",
+		"RollbackPrepared",
+		"StartCommit",
+		"SetRollback",
+		"ConcludeTransaction",
+	} {
+		require.NoError(t, controller.reject(requestName), requestName)
+	}
+
+	err := controller.reject("Prepare")
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+}
+
 func TestTabletServerMemoryPressureRejectsNewWorkAtHardThresholdButAllowsRelease(t *testing.T) {
 	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()
@@ -89,6 +169,7 @@ func TestTabletServerMemoryPressureRejectsNewWorkAtHardThresholdButAllowsRelease
 	tsv.memoryPressure.getMemoryUsage = func() float64 {
 		return usage
 	}
+	tsv.memoryPressure.refreshInterval = 0
 
 	state, err := tsv.Begin(ctx, nil, &target, nil)
 	require.NoError(t, err)
@@ -114,6 +195,7 @@ func TestTabletServerMemoryPressureRejectsVStreamAtSoftThreshold(t *testing.T) {
 	tsv.memoryPressure.getMemoryUsage = func() float64 {
 		return usage
 	}
+	tsv.memoryPressure.refreshInterval = 0
 
 	err := tsv.VStream(ctx, &binlogdatapb.VStreamRequest{
 		Target: &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY},

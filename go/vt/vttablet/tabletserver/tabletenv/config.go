@@ -1076,8 +1076,8 @@ func (c *TabletConfig) verifyMemoryPressureConfig() error {
 	if c.MemoryPressure.SoftThreshold >= c.MemoryPressure.HardThreshold {
 		return fmt.Errorf("--memory-pressure-soft-threshold must be < --memory-pressure-hard-threshold (%v >= %v)", c.MemoryPressure.SoftThreshold, c.MemoryPressure.HardThreshold)
 	}
-	if c.MemoryPressure.ResumeThreshold > c.MemoryPressure.SoftThreshold {
-		return fmt.Errorf("--memory-pressure-resume-threshold must be <= --memory-pressure-soft-threshold (%v > %v)", c.MemoryPressure.ResumeThreshold, c.MemoryPressure.SoftThreshold)
+	if c.MemoryPressure.ResumeThreshold >= c.MemoryPressure.SoftThreshold {
+		return fmt.Errorf("--memory-pressure-resume-threshold must be < --memory-pressure-soft-threshold (%v >= %v)", c.MemoryPressure.ResumeThreshold, c.MemoryPressure.SoftThreshold)
 	}
 	return nil
 }

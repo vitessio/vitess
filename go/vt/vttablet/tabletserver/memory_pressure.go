@@ -20,6 +20,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
@@ -36,6 +37,8 @@ const (
 	memoryPressureStateNormal
 	memoryPressureStateSoft
 	memoryPressureStateHard
+
+	defaultMemoryPressureRefreshInterval = time.Millisecond
 )
 
 type memoryPressureController struct {
@@ -44,18 +47,21 @@ type memoryPressureController struct {
 	hardThreshold   float64
 	resumeThreshold float64
 	getMemoryUsage  func() float64
+	refreshInterval time.Duration
 
 	mu sync.Mutex
 
-	lastUsageBits atomic.Uint64
-	lastState     atomic.Int32
+	lastUsageBits      atomic.Uint64
+	lastSampleUnixNano atomic.Int64
+	lastState          atomic.Int32
 
 	rejectedRequests *stats.CountersWithMultiLabels
 }
 
 func newMemoryPressureController(cfg *tabletenv.MemoryPressureConfig, exporter *servenv.Exporter, getMemoryUsage func() float64) *memoryPressureController {
 	controller := &memoryPressureController{
-		getMemoryUsage: getMemoryUsage,
+		getMemoryUsage:  getMemoryUsage,
+		refreshInterval: defaultMemoryPressureRefreshInterval,
 	}
 	if cfg != nil {
 		controller.enabled = cfg.Enable
@@ -70,6 +76,7 @@ func newMemoryPressureController(cfg *tabletenv.MemoryPressureConfig, exporter *
 	}
 	controller.lastState.Store(int32(initialState))
 	controller.lastUsageBits.Store(math.Float64bits(-1))
+	controller.lastSampleUnixNano.Store(0)
 
 	if exporter != nil {
 		exporter.NewGaugeFunc("MemoryPressureState", "Current memory-pressure admission state: disabled=0, normal=1, soft=2, hard=3.", func() int64 {
@@ -154,20 +161,34 @@ func (c *memoryPressureController) rejectIfAtLeast(requestName string, threshold
 }
 
 func (c *memoryPressureController) observe() (memoryPressureState, float64) {
-	usage := -1.0
-	if c.getMemoryUsage != nil {
-		usage = c.getMemoryUsage()
-	}
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.lastUsageBits.Store(math.Float64bits(usage))
-
+	usage := c.observeUsageLocked(time.Now())
 	state := c.nextStateLocked(usage)
 	c.lastState.Store(int32(state))
 
 	return state, usage
+}
+
+func (c *memoryPressureController) observeUsageLocked(now time.Time) float64 {
+	if c.getMemoryUsage == nil {
+		c.lastUsageBits.Store(math.Float64bits(-1))
+		c.lastSampleUnixNano.Store(0)
+		return -1
+	}
+
+	if c.refreshInterval > 0 && c.state() < memoryPressureStateSoft {
+		lastSampleUnixNano := c.lastSampleUnixNano.Load()
+		if lastSampleUnixNano != 0 && now.UnixNano()-lastSampleUnixNano < c.refreshInterval.Nanoseconds() {
+			return c.usage()
+		}
+	}
+
+	usage := c.getMemoryUsage()
+	c.lastUsageBits.Store(math.Float64bits(usage))
+	c.lastSampleUnixNano.Store(now.UnixNano())
+	return usage
 }
 
 func (c *memoryPressureController) nextStateLocked(usage float64) memoryPressureState {
@@ -238,6 +259,7 @@ func (c *memoryPressureController) setForTests(cfg tabletenv.MemoryPressureConfi
 	c.hardThreshold = cfg.HardThreshold
 	c.resumeThreshold = cfg.ResumeThreshold
 	c.getMemoryUsage = getMemoryUsage
+	c.refreshInterval = 0
 
 	state := memoryPressureStateDisabled
 	if c.enabled {
@@ -245,6 +267,7 @@ func (c *memoryPressureController) setForTests(cfg tabletenv.MemoryPressureConfi
 	}
 	c.lastState.Store(int32(state))
 	c.lastUsageBits.Store(math.Float64bits(-1))
+	c.lastSampleUnixNano.Store(0)
 }
 
 func shouldRejectOnSoftMemoryPressure(requestName string) bool {
@@ -258,7 +281,7 @@ func shouldRejectOnSoftMemoryPressure(requestName string) bool {
 
 func shouldBypassHardMemoryPressure(requestName string) bool {
 	switch requestName {
-	case "Commit", "Rollback", "Release":
+	case "Commit", "Rollback", "Release", "CommitPrepared", "RollbackPrepared", "StartCommit", "SetRollback", "ConcludeTransaction":
 		return true
 	default:
 		return false

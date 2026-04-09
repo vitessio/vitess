@@ -185,6 +185,20 @@ txPool:
 	utils.MustMatch(t, want, string(gotBytes))
 }
 
+func TestVerifyMemoryPressureConfig(t *testing.T) {
+	cfg := NewDefaultConfig()
+	cfg.MemoryPressure.Enable = true
+	cfg.MemoryPressure.SoftThreshold = 0.80
+	cfg.MemoryPressure.HardThreshold = 0.90
+	cfg.MemoryPressure.ResumeThreshold = 0.80
+
+	err := cfg.Verify()
+	require.ErrorContains(t, err, "--memory-pressure-resume-threshold must be < --memory-pressure-soft-threshold")
+
+	cfg.MemoryPressure.ResumeThreshold = 0.70
+	require.NoError(t, cfg.Verify())
+}
+
 func TestClone(t *testing.T) {
 	queryLogHandler = ""
 	txLogHandler = ""
