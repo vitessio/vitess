@@ -64,4 +64,9 @@ service Vitess {
   // This has the same effect as if a "rollback" statement was executed,
   // but does not affect the query statistics.
   rpc CloseSession(vtgate.CloseSessionRequest) returns (vtgate.CloseSessionResponse) {};
+
+  // BinlogDumpGTID streams raw binlog events from a specific keyspace/shard
+  // using GTID-based replication. This is the vtgate-level gRPC equivalent
+  // of COM_BINLOG_DUMP_GTID.
+  rpc BinlogDumpGTID(vtgate.BinlogDumpGTIDRequest) returns (stream vtgate.BinlogDumpResponse) {};
 }

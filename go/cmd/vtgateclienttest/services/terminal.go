@@ -93,6 +93,10 @@ func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.Tabl
 	return errTerminal
 }
 
+func (c *terminalClient) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	return errTerminal
+}
+
 func (c *terminalClient) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
