@@ -17,21 +17,22 @@ import helper
 from helper import log
 
 
-def get_num_accounts(conn):
-    """Get number of accounts from initial_state table."""
+def get_account_ids(conn):
+    """Get list of actual account IDs from accounts table."""
     cursor = conn.cursor()
-    result = None
+    account_ids = []
     try:
-        cursor.execute("SELECT num_accts FROM initial_state")
-        result = cursor.fetchone()
+        cursor.execute("SELECT account_id FROM accounts")
+        rows = cursor.fetchall()
+        account_ids = [row[0] for row in rows]
     except Exception as e:
-        log(f"failed to get accounts: {e}")
+        log(f"failed to get account IDs: {e}")
     finally:
         try:
             cursor.close()
         except Exception as close_err:
             log(f"cursor.close() failed: {close_err}")
-    return result[0] if result else 0
+    return account_ids
 
 
 def transfer(conn, sender, recipient, value):
@@ -81,14 +82,14 @@ def run_transactions():
     # Connect to vtgate
     conn = helper.get_connection()
 
-    # Get number of accounts
-    num_accts = get_num_accounts(conn)
-    if num_accts == 0:
+    # Get actual account IDs
+    account_ids = get_account_ids(conn)
+    if len(account_ids) == 0:
         log("No accounts found.")
         conn.close()
         return True
 
-    log(f"Found {num_accts} accounts")
+    log(f"Found {len(account_ids)} accounts")
 
     # Run random number of transactions (1-100)
     iterations = (get_random() % 100) + 1
@@ -98,8 +99,8 @@ def run_transactions():
     fail_count = 0
 
     for i in range(iterations):
-        sender = (get_random() % num_accts) + 1
-        recipient = (get_random() % num_accts) + 1
+        sender = account_ids[get_random() % len(account_ids)]
+        recipient = account_ids[get_random() % len(account_ids)]
 
         # Skip if sender and recipient are the same
         if sender == recipient:
