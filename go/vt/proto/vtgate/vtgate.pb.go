@@ -1844,16 +1844,15 @@ type BinlogDumpGTIDRequest struct {
 	// When set, the stream is routed directly to this tablet.
 	// When unset, routing goes through health-check-based selection.
 	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	// binlog_filename is the optional binlog filename to start from.
-	// Only valid when tablet_alias is set, since filenames differ across replicas.
-	// When empty, the server finds the correct starting file from the GTID set.
+	// binlog_filename is not supported through vtgate and must be empty.
+	// Binlog filenames are local to individual MySQL instances and differ
+	// across replicas. Use gtid_set for positioning instead.
 	BinlogFilename string `protobuf:"bytes,6,opt,name=binlog_filename,json=binlogFilename,proto3" json:"binlog_filename,omitempty"`
-	// binlog_position is the byte offset within the binlog file.
-	// MySQL requires this to be >= 4 (BIN_LOG_HEADER_SIZE); values below 4
-	// cause a fatal error. Conventionally, clients send 4 to start from the
-	// beginning of the file. Vitess forwards this value to MySQL; callers are
-	// responsible for supplying a valid position. MySQL may still use this value
-	// even when binlog_filename is empty and the file is auto-selected via GTIDs.
+	// binlog_position must be exactly 4. Position-based replication is not
+	// supported through vtgate; use gtid_set for positioning instead.
+	// Values below 4 are rejected (MySQL requires >= 4 / BIN_LOG_HEADER_SIZE).
+	// Values above 4 are rejected because binlog positions are local to
+	// individual MySQL instances and differ across replicas.
 	BinlogPosition uint64 `protobuf:"varint,7,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
 	// gtid_set is the GTID set in string format (e.g., "uuid:1-5,uuid2:1-3").
 	GtidSet string `protobuf:"bytes,8,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
