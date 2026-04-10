@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -57,6 +58,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
@@ -243,6 +245,13 @@ var (
 		"Number of events that had to wait because the skew across shards was too high")
 
 	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameters unrecognized by Vindexes")
+
+	binlogDumpRequests = stats.NewCountersWithSingleLabel(
+		"BinlogDumpRequests",
+		"Binlog dump request counts",
+		"status",
+		"authorized", "denied", "disabled",
+	)
 
 	timings = stats.NewMultiTimings(
 		"VtgateApi",
@@ -774,6 +783,85 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
+}
+
+// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	if !enableBinlogDump.Get() {
+		binlogDumpRequests.Add("disabled", 1)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
+	}
+
+	im := callerid.ImmediateCallerIDFromContext(ctx)
+	if !binlogacl.Authorized(im) {
+		binlogDumpRequests.Add("denied", 1)
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError,
+			"User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
+	}
+
+	binlogDumpRequests.Add("authorized", 1)
+
+	if req.Keyspace == "" || req.Shard == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog dump requires keyspace and shard")
+	}
+
+	tabletType := req.TabletType
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		tabletType = topodatapb.TabletType_PRIMARY
+	}
+
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if req.BinlogFilename != "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog filename is not supported; use GTIDs instead")
+	}
+	if req.BinlogPosition < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+	if req.BinlogPosition > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"only binlog position 4 is supported; use GTIDs for positioning")
+	}
+
+	if req.Flags > 0xFFFF {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)
+	}
+
+	target := &querypb.Target{
+		Keyspace:   req.Keyspace,
+		Shard:      req.Shard,
+		TabletType: tabletType,
+	}
+
+	tabletRequest := &binlogdatapb.BinlogDumpGTIDRequest{
+		Target:         target,
+		BinlogPosition: req.BinlogPosition,
+		GtidSet:        req.GtidSet,
+		Flags:          req.Flags,
+	}
+
+	callback := func(response *binlogdatapb.BinlogDumpResponse) error {
+		return send(&vtgatepb.BinlogDumpResponse{
+			Raw: response.Raw,
+		})
+	}
+
+	if !topoproto.TabletAliasIsZero(req.TabletAlias) {
+		qs, err := vtg.gw.QueryServiceByAlias(ctx, req.TabletAlias, target)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get connection to tablet %s",
+				topoproto.TabletAliasString(req.TabletAlias))
+		}
+		return qs.BinlogDumpGTID(ctx, tabletRequest, callback)
+	}
+
+	return vtg.gw.BinlogDumpGTID(ctx, tabletRequest, callback)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
