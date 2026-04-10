@@ -20,7 +20,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
-        - [Binlog Dump Support for CDC Tools](#vtgate-binlog-dump)
+        - [GTID-Based Binlog Streaming](#vtgate-binlog-dump)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -177,12 +177,12 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
-#### <a id="vtgate-binlog-dump"/>Binlog Dump Support for CDC Tools</a>
+#### <a id="vtgate-binlog-dump"/>GTID-Based Binlog Streaming</a>
 
 VTGate now supports GTID-based binlog streaming through two protocols:
 
-- **MySQL protocol**: CDC tools can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
-- **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access, enabling custom CDC clients without the MySQL protocol dependency.
+- **MySQL protocol**: Clients can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
+- **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access for custom clients without the MySQL protocol dependency.
 
 Note: Only GTID-based streaming is supported. File/position-based streaming (`COM_BINLOG_DUMP`) is not supported and returns an error.
 
