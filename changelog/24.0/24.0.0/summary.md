@@ -184,7 +184,7 @@ VTGate now supports GTID-based binlog streaming through two protocols:
 - **MySQL protocol**: Clients can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
 - **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access for custom clients without the MySQL protocol dependency.
 
-Note: Only GTID-based streaming is supported. File/position-based streaming (`COM_BINLOG_DUMP`) is not supported and returns an error.
+Note: Only GTID-based streaming is supported. File/position-based streaming is not available through either `COM_BINLOG_DUMP` or `COM_BINLOG_DUMP_GTID` and returns an error.
 
 This feature is disabled by default. Enable it with `--enable-binlog-dump`.
 
