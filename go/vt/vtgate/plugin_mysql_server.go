@@ -598,8 +598,9 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 
 	// Build the BinlogDumpGTID request
 	request := &binlogdatapb.BinlogDumpGTIDRequest{
-		Flags:  uint32(flags),
-		Target: target,
+		BinlogPosition: logPos,
+		Flags:          uint32(flags),
+		Target:         target,
 	}
 	if gtidSet != nil {
 		request.GtidSet = gtidSet.String()

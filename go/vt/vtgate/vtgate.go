@@ -840,9 +840,10 @@ func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpG
 	}
 
 	tabletRequest := &binlogdatapb.BinlogDumpGTIDRequest{
-		Target:  target,
-		GtidSet: req.GtidSet,
-		Flags:   req.Flags,
+		Target:         target,
+		BinlogPosition: req.BinlogPosition,
+		GtidSet:        req.GtidSet,
+		Flags:          req.Flags,
 	}
 
 	callback := func(response *binlogdatapb.BinlogDumpResponse) error {
