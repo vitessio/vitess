@@ -208,15 +208,6 @@ For gRPC clients, specify the keyspace, shard, and optionally the tablet alias d
 - No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
 - Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
 
-**Architecture:**
-
-```
-CDC Client ◄─── MySQL Protocol ──► VTGate ◄─── gRPC ──► vttablet ◄─── MySQL Protocol ──► MySQL
-           ◄─── gRPC ─────────────────┘
-```
-
-The implementation streams raw binlog events without parsing or filtering, minimizing overhead between the CDC client and MySQL.
-
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
