@@ -200,7 +200,7 @@ When initiating a binlog dump connection, clients must specify:
 - A file position (`filepos`) of 4
 - A GTID position
 
-For gRPC clients, specify the keyspace, shard, and optionally the tablet alias directly in the `BinlogDumpGTIDRequest`.
+For gRPC clients, specify the keyspace, shard, and optionally the tablet type or tablet alias directly in the `BinlogDumpGTIDRequest`.
 
 **Limitations:**
 
