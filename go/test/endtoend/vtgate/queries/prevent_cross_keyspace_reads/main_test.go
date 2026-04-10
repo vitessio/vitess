@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nocrosskeyspacejoins
+package preventcrosskeyspacereads
 
 import (
 	_ "embed"
@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start ks1 (has no_cross_keyspace_joins: true in vschema)
+		// Start ks1 (has prevent_cross_keyspace_reads: true in vschema)
 		ks1 := &cluster.Keyspace{
 			Name:      ks1Name,
 			SchemaSQL: ks1SchemaSQL,

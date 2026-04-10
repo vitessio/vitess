@@ -31,14 +31,14 @@ import (
 
 type mockVSchema struct {
 	plancontext.VSchema
-	noCrossKeyspaceJoins map[string]bool
+	preventCrossKeyspaceReads map[string]bool
 }
 
-func (m *mockVSchema) AllowCrossKeyspaceJoins(keyspace string) (bool, error) {
-	if m.noCrossKeyspaceJoins == nil {
+func (m *mockVSchema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if m.preventCrossKeyspaceReads == nil {
 		return true, nil
 	}
-	return !m.noCrossKeyspaceJoins[keyspace], nil
+	return !m.preventCrossKeyspaceReads[keyspace], nil
 }
 
 func TestCheckCrossKeyspaceJoin(t *testing.T) {
@@ -92,7 +92,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  makeRoute(ks1),
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": false, "ks2": false},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": false, "ks2": false},
 			},
 		},
 		{
@@ -100,7 +100,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  makeRoute(ks1),
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true},
 			},
 			expectPanic: true,
 		},
@@ -109,7 +109,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  makeRoute(ks1),
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks2": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks2": true},
 			},
 			expectPanic: true,
 		},
@@ -118,11 +118,11 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  makeRoute(ks1),
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true},
 			},
 			stmt: func() sqlparser.Statement {
 				stmt, err := sqlparser.NewTestParser().Parse(
-					fmt.Sprintf("select /*vt+ %s */ 1", sqlparser.DirectiveAllowCrossKeyspaceJoins),
+					fmt.Sprintf("select /*vt+ %s */ 1", sqlparser.DirectiveAllowCrossKeyspaceReads),
 				)
 				require.NoError(t, err)
 				return stmt
@@ -138,7 +138,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			}},
 			rhs: makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
 			},
 		},
 		{
@@ -151,7 +151,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 				},
 			}},
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
 			},
 		},
 		{
@@ -166,7 +166,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			},
 			rhs: makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true, "ks2": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
 			},
 			expectPanic: true,
 		},
@@ -175,7 +175,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true},
 			},
 			expectPanic: true,
 		},
@@ -184,7 +184,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
 			rhs:  makeRoute(&vindexes.Keyspace{Name: "ks3"}),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks3": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks3": true},
 			},
 			expectPanic: true,
 		},
@@ -195,7 +195,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			},
 			rhs: makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": true},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true},
 			},
 			expectPanic: true,
 		},
@@ -206,7 +206,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			},
 			rhs: makeRoute(ks2),
 			vschema: &mockVSchema{
-				noCrossKeyspaceJoins: map[string]bool{"ks1": false, "ks2": false},
+				preventCrossKeyspaceReads: map[string]bool{"ks1": false, "ks2": false},
 			},
 		},
 	}

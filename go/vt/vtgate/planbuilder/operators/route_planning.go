@@ -365,24 +365,24 @@ func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, o
 }
 
 // checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
-// unless an alternate route or the ALLOW_CROSS_KEYSPACE_JOINS directive allows it.
+// unless an alternate route or the ALLOW_CROSS_KEYSPACE_READS directive allows it.
 func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
 	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
 		return
 	}
 
-	if sqlparser.AllowCrossKeyspaceJoinsDirective(ctx.Statement) {
+	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
 		return
 	}
 
 	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
-		allowed, err := ctx.VSchema.AllowCrossKeyspaceJoins(ks.Name)
+		allowed, err := ctx.VSchema.AllowCrossKeyspaceReads(ks.Name)
 		if err != nil {
 			panic(err)
 		}
 		if !allowed {
 			panic(vterrors.VT12001(
-				fmt.Sprintf("cross-keyspace %s between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ to override)", opType, lhsKs.Name, rhsKs.Name),
+				fmt.Sprintf("cross-keyspace %s between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
 			))
 		}
 	}

@@ -57,11 +57,11 @@ message Keyspace {
 
   // multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
   MultiTenantSpec multi_tenant_spec = 6;
-  // If no_cross_keyspace_joins is true, the planner will reject queries that require
-  // joining tables across different keyspaces or performing unions across different
+  // If prevent_cross_keyspace_reads is true, the planner will reject queries that require
+  // joining tables across different keyspaces or performing UNIONs across different
   // keyspaces. Can be overridden per-query with the
-  // /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ comment directive.
-  bool no_cross_keyspace_joins = 7;
+  // /*vt+ ALLOW_CROSS_KEYSPACE_READS */ comment directive.
+  bool prevent_cross_keyspace_reads = 7;
 }
 
 message MultiTenantSpec {

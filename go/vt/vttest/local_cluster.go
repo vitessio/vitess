@@ -166,8 +166,8 @@ type Config struct {
 	// Set the planner to fail on scatter queries
 	NoScatter bool
 
-	// Set the planner to fail on cross-keyspace joins
-	NoCrossKeyspaceJoins bool
+	// Set the planner to fail on cross-keyspace reads (joins and UNIONs)
+	PreventCrossKeyspaceReads bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

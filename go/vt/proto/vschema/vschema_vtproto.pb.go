@@ -76,7 +76,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.RequireExplicitRouting = m.RequireExplicitRouting
 	r.ForeignKeyMode = m.ForeignKeyMode
 	r.MultiTenantSpec = m.MultiTenantSpec.CloneVT()
-	r.NoCrossKeyspaceJoins = m.NoCrossKeyspaceJoins
+	r.PreventCrossKeyspaceReads = m.PreventCrossKeyspaceReads
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make(map[string]*Vindex, len(rhs))
 		for k, v := range rhs {
@@ -529,9 +529,9 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.NoCrossKeyspaceJoins {
+	if m.PreventCrossKeyspaceReads {
 		i--
-		if m.NoCrossKeyspaceJoins {
+		if m.PreventCrossKeyspaceReads {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1496,7 +1496,7 @@ func (m *Keyspace) SizeVT() (n int) {
 		l = m.MultiTenantSpec.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.NoCrossKeyspaceJoins {
+	if m.PreventCrossKeyspaceReads {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -2404,7 +2404,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field NoCrossKeyspaceJoins", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PreventCrossKeyspaceReads", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -2421,7 +2421,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.NoCrossKeyspaceJoins = bool(v != 0)
+			m.PreventCrossKeyspaceReads = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

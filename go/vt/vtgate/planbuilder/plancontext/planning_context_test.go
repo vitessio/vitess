@@ -306,7 +306,7 @@ func (v *vschema) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKey
 	panic("implement me")
 }
 
-func (v *vschema) AllowCrossKeyspaceJoins(keyspace string) (bool, error) {
+func (v *vschema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
 	return true, nil
 }
 

@@ -230,7 +230,7 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 
 	utils.SetFlagBoolVar(cmd.Flags(), &config.NoScatter, "no-scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
-	utils.SetFlagBoolVar(cmd.Flags(), &config.NoCrossKeyspaceJoins, "no-cross-keyspace-joins", false, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or unions")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.PreventCrossKeyspaceReads, "prevent-cross-keyspace-reads", false, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs")
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd

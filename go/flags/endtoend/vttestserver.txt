@@ -105,7 +105,7 @@ Flags:
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --no-cross-keyspace-joins                                          when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or unions
+      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --null-probability float                                           The probability to initialize a field with 'NULL'  if --initialize-with-random-data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num-shards strings                                               Comma separated shard count (one per keyspace) (default [2])

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nocrosskeyspacejoins
+package preventcrosskeyspacereads
 
 import (
 	"slices"
@@ -35,60 +35,60 @@ func start(t *testing.T) *mysql.Conn {
 	return conn
 }
 
-// TestNoCrossKeyspaceJoinsVSchemaSetting tests that the no_cross_keyspace_joins
+// TestPreventCrossKeyspaceReadsVSchemaSetting tests that the prevent_cross_keyspace_reads
 // vschema keyspace setting denies cross-keyspace joins.
-func TestNoCrossKeyspaceJoinsVSchemaSetting(t *testing.T) {
+func TestPreventCrossKeyspaceReadsVSchemaSetting(t *testing.T) {
 	conn := start(t)
 
-	// Cross-keyspace join should fail because ks1 has no_cross_keyspace_joins: true in its vschema.
+	// Cross-keyspace join should fail because ks1 has prevent_cross_keyspace_reads: true in its vschema.
 	_, err := utils.ExecAllowError(t, conn, "select * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
 	require.ErrorContains(t, err, "cross-keyspace JOIN")
 
-	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
-	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
+	// The ALLOW_CROSS_KEYSPACE_READS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
 }
 
-// TestNoCrossKeyspaceJoinsUnqualifiedTables tests that the no_cross_keyspace_joins
+// TestPreventCrossKeyspaceReadsUnqualifiedTables tests that the prevent_cross_keyspace_reads
 // check fires even when table names are not qualified with a keyspace prefix,
 // relying on global routing to resolve unique table names to their keyspaces.
-func TestNoCrossKeyspaceJoinsUnqualifiedTables(t *testing.T) {
+func TestPreventCrossKeyspaceReadsUnqualifiedTables(t *testing.T) {
 	conn := start(t)
 
 	// Unqualified cross-keyspace join should fail — t1 routes to ks1, t2 routes to ks2.
 	_, err := utils.ExecAllowError(t, conn, "select * from t1 join t2 on t1.id = t2.id")
 	require.ErrorContains(t, err, "cross-keyspace JOIN")
 
-	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
-	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from t1 join t2 on t1.id = t2.id")
+	// The ALLOW_CROSS_KEYSPACE_READS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ * from t1 join t2 on t1.id = t2.id")
 
 	// Unqualified cross-keyspace UNION should also fail.
 	_, err = utils.ExecAllowError(t, conn, "select id from t1 union all select id from t2")
 	require.ErrorContains(t, err, "cross-keyspace UNION")
 
-	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
-	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ id from t1 union all select id from t2")
+	// The ALLOW_CROSS_KEYSPACE_READS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ id from t1 union all select id from t2")
 }
 
-// TestNoCrossKeyspaceJoinsVSchemaSettingUnion tests that the no_cross_keyspace_joins
+// TestPreventCrossKeyspaceReadsVSchemaSettingUnion tests that the prevent_cross_keyspace_reads
 // vschema keyspace setting also denies cross-keyspace UNIONs.
-func TestNoCrossKeyspaceJoinsVSchemaSettingUnion(t *testing.T) {
+func TestPreventCrossKeyspaceReadsVSchemaSettingUnion(t *testing.T) {
 	conn := start(t)
 
-	// Cross-keyspace UNION should fail because ks1 has no_cross_keyspace_joins: true in its vschema.
+	// Cross-keyspace UNION should fail because ks1 has prevent_cross_keyspace_reads: true in its vschema.
 	_, err := utils.ExecAllowError(t, conn, "select id from ks1.t1 union all select id from ks2.t2")
 	require.ErrorContains(t, err, "cross-keyspace UNION")
 
-	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the restriction.
-	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ id from ks1.t1 union all select id from ks2.t2")
+	// The ALLOW_CROSS_KEYSPACE_READS directive should override the restriction.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ id from ks1.t1 union all select id from ks2.t2")
 }
 
-// TestNoCrossKeyspaceJoinsVTGateFlag tests that the --no-cross-keyspace-joins
+// TestPreventCrossKeyspaceReadsVTGateFlag tests that the --prevent-cross-keyspace-reads
 // vtgate flag denies cross-keyspace joins globally.
-func TestNoCrossKeyspaceJoinsVTGateFlag(t *testing.T) {
-	// Restart vtgate with the --no-cross-keyspace-joins flag.
+func TestPreventCrossKeyspaceReadsVTGateFlag(t *testing.T) {
+	// Restart vtgate with the --prevent-cross-keyspace-reads flag.
 	originalArgs := clusterInstance.VtGateExtraArgs
 	clusterInstance.VtGateExtraArgs = append(slices.Clone(originalArgs),
-		vtutils.GetFlagVariantForTests("--no-cross-keyspace-joins")+"=true")
+		vtutils.GetFlagVariantForTests("--prevent-cross-keyspace-reads")+"=true")
 	require.NoError(t, clusterInstance.RestartVtgate())
 	vtParams = mysql.ConnParams{
 		Host: clusterInstance.Hostname,
@@ -109,6 +109,6 @@ func TestNoCrossKeyspaceJoinsVTGateFlag(t *testing.T) {
 	_, err := utils.ExecAllowError(t, conn, "select * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
 	require.ErrorContains(t, err, "cross-keyspace JOIN")
 
-	// The ALLOW_CROSS_KEYSPACE_JOINS directive should override the flag.
-	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_JOINS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
+	// The ALLOW_CROSS_KEYSPACE_READS directive should override the flag.
+	_ = utils.Exec(t, conn, "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ * from ks1.t1 join ks2.t2 on ks1.t1.id = ks2.t2.id")
 }

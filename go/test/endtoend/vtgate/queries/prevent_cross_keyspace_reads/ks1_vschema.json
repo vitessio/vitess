@@ -3,5 +3,5 @@
   "tables": {
     "t1": {}
   },
-  "no_cross_keyspace_joins": true
+  "prevent_cross_keyspace_reads": true
 }

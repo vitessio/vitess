@@ -436,22 +436,22 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 
 var _ ResultsObserver = (*fakeObserver)(nil)
 
-func TestAllowCrossKeyspaceJoins(t *testing.T) {
+func TestAllowCrossKeyspaceReads(t *testing.T) {
 	ks1 := &vindexes.Keyspace{Name: "ks1"}
 	ks2 := &vindexes.Keyspace{Name: "ks2"}
 	vschema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			ks1.Name: {Keyspace: ks1, NoCrossKeyspaceJoins: true},
-			ks2.Name: {Keyspace: ks2, NoCrossKeyspaceJoins: false},
+			ks1.Name: {Keyspace: ks1, PreventCrossKeyspaceReads: true},
+			ks2.Name: {Keyspace: ks2, PreventCrossKeyspaceReads: false},
 		},
 	}
 
 	tests := []struct {
-		name                 string
-		noCrossKeyspaceJoins bool
-		keyspace             string
-		expectedAllowed      bool
-		expectedError        string
+		name                      string
+		preventCrossKeyspaceReads bool
+		keyspace                  string
+		expectedAllowed           bool
+		expectedError             string
 	}{
 		{
 			name:            "allowed by default",
@@ -464,10 +464,10 @@ func TestAllowCrossKeyspaceJoins(t *testing.T) {
 			expectedAllowed: false,
 		},
 		{
-			name:                 "denied by vtgate flag",
-			noCrossKeyspaceJoins: true,
-			keyspace:             ks2.Name,
-			expectedAllowed:      false,
+			name:                      "denied by vtgate flag",
+			preventCrossKeyspaceReads: true,
+			keyspace:                  ks2.Name,
+			expectedAllowed:           false,
 		},
 		{
 			name:            "vtgate flag false does not override keyspace deny",
@@ -483,11 +483,11 @@ func TestAllowCrossKeyspaceJoins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := VCursorConfig{NoCrossKeyspaceJoins: tt.noCrossKeyspaceJoins}
+			cfg := VCursorConfig{PreventCrossKeyspaceReads: tt.preventCrossKeyspaceReads}
 			vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, fakeObserver{}, cfg, nil)
 			require.NoError(t, err)
 
-			allowed, err := vc.AllowCrossKeyspaceJoins(tt.keyspace)
+			allowed, err := vc.AllowCrossKeyspaceReads(tt.keyspace)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 			} else {

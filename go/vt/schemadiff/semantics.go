@@ -67,7 +67,7 @@ func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschema
 	return vschemapb.Keyspace_unmanaged, nil
 }
 
-func (si *declarativeSchemaInformation) AllowCrossKeyspaceJoins(keyspace string) (bool, error) {
+func (si *declarativeSchemaInformation) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
 	return true, nil
 }
 

@@ -45,10 +45,10 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no_scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
-	// DirectiveAllowCrossKeyspaceJoins lets cross-keyspace join plans pass through even when they are
-	// turned off by the `--no-cross-keyspace-joins` vtgate flag or the `no_cross_keyspace_joins`
-	// vschema keyspace setting.
-	DirectiveAllowCrossKeyspaceJoins = "ALLOW_CROSS_KEYSPACE_JOINS"
+	// DirectiveAllowCrossKeyspaceReads lets cross-keyspace read plans (joins and UNIONs) pass through
+	// even when they are turned off by the `--prevent-cross-keyspace-reads` vtgate flag or the
+	// `prevent_cross_keyspace_reads` vschema keyspace setting.
+	DirectiveAllowCrossKeyspaceReads = "ALLOW_CROSS_KEYSPACE_READS"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
@@ -538,9 +538,9 @@ func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
 }
 
-// AllowCrossKeyspaceJoinsDirective returns true if the allow cross-keyspace joins override is set to true
-func AllowCrossKeyspaceJoinsDirective(stmt Statement) bool {
-	return checkDirective(stmt, DirectiveAllowCrossKeyspaceJoins)
+// AllowCrossKeyspaceReadsDirective returns true if the allow cross-keyspace reads override is set to true
+func AllowCrossKeyspaceReadsDirective(stmt Statement) bool {
+	return checkDirective(stmt, DirectiveAllowCrossKeyspaceReads)
 }
 
 func checkDirective(stmt Statement, key string) bool {
