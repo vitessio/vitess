@@ -20,12 +20,8 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
-<<<<<<< HEAD
         - [New `--slow-query-threshold` flag for slow query detection](#vtgate-slow-query-threshold)
-||||||| 4e9a8268e7
-=======
         - [Binlog Streaming Support](#vtgate-binlog-dump)
->>>>>>> main
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -182,7 +178,6 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
-<<<<<<< HEAD
 #### <a id="vtgate-slow-query-threshold"/>New `--slow-query-threshold` flag for slow query detection</a>
 
 VTGate now supports configurable slow query detection with the new `--slow-query-threshold` flag. When set to a non-zero duration, queries whose total execution time meets or exceeds the threshold are marked as slow.
@@ -202,8 +197,6 @@ The default value is `0`, which disables slow query detection.
 
 See [#19603](https://github.com/vitessio/vitess/pull/19603) for details.
 
-||||||| 4e9a8268e7
-=======
 #### <a id="vtgate-binlog-dump"/>Binlog Streaming Support</a>
 
 VTGate now supports GTID-based binlog streaming through two protocols:
@@ -235,7 +228,6 @@ For gRPC clients, specify the keyspace, shard, and optionally the tablet type or
 - No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
 - Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
 
->>>>>>> main
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
