@@ -195,15 +195,10 @@ This feature is disabled by default. Enable it with `--enable-binlog-dump`.
 
 **Requirements:**
 
-Binlog dump requires [tablet targeting](#tablet-targeting) for data consistency. Target a specific tablet using the `USE` statement syntax or the extended username format:
-
-```sql
--- Target via USE statement
-USE keyspace:shard@type|tablet_alias;
-
--- Or include in username during connection
-user|keyspace:shard@type|tablet_alias
-```
+When initiating a binlog dump connection, clients must specify:
+- An empty filename
+- A file position (`filepos`) of 4
+- A GTID position
 
 For gRPC clients, specify the keyspace, shard, and optionally the tablet alias directly in the `BinlogDumpGTIDRequest`.
 
