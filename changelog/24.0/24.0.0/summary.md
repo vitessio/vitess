@@ -181,7 +181,7 @@ To enable session mode, set the flag when starting VTGate:
 
 VTGate now supports GTID-based binlog streaming through two protocols:
 
-- **MySQL protocol**: CDC tools like Debezium and Fivetran can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
+- **MySQL protocol**: CDC tools can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
 - **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access, enabling custom CDC clients without the MySQL protocol dependency.
 
 Note: Only GTID-based streaming is supported. File/position-based streaming (`COM_BINLOG_DUMP`) is not supported and returns an error.
