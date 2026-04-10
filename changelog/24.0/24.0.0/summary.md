@@ -20,7 +20,12 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+<<<<<<< HEAD
         - [New `--slow-query-threshold` flag for slow query detection](#vtgate-slow-query-threshold)
+||||||| 4e9a8268e7
+=======
+        - [Binlog Streaming Support](#vtgate-binlog-dump)
+>>>>>>> main
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -177,6 +182,7 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
+<<<<<<< HEAD
 #### <a id="vtgate-slow-query-threshold"/>New `--slow-query-threshold` flag for slow query detection</a>
 
 VTGate now supports configurable slow query detection with the new `--slow-query-threshold` flag. When set to a non-zero duration, queries whose total execution time meets or exceeds the threshold are marked as slow.
@@ -196,6 +202,40 @@ The default value is `0`, which disables slow query detection.
 
 See [#19603](https://github.com/vitessio/vitess/pull/19603) for details.
 
+||||||| 4e9a8268e7
+=======
+#### <a id="vtgate-binlog-dump"/>Binlog Streaming Support</a>
+
+VTGate now supports GTID-based binlog streaming through two protocols:
+
+- **MySQL protocol**: Clients can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
+- **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access for custom clients without the MySQL protocol dependency.
+
+Note: Only GTID-based streaming is supported. File/position-based streaming is not available through either `COM_BINLOG_DUMP` or `COM_BINLOG_DUMP_GTID` and returns an error.
+
+This feature is disabled by default. Enable it with `--enable-binlog-dump`.
+
+**New flags:**
+
+- `--enable-binlog-dump`: Enables binlog dump support. Without this flag, binlog dump requests return an error.
+- `--binlog-dump-authorized-users`: Comma-separated list of users authorized to execute binlog dump operations, or `%` to allow all users.
+
+**Requirements:**
+
+When initiating a binlog dump connection, clients must specify:
+- An empty filename
+- A file position (`filepos`) of 4
+- A GTID position
+
+For gRPC clients, specify the keyspace, shard, and optionally the tablet type or tablet alias directly in the `BinlogDumpGTIDRequest`.
+
+**Limitations:**
+
+- Each stream operates on a single tablet—no data aggregation across shards.
+- No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
+- Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
+
+>>>>>>> main
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
