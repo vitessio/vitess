@@ -311,6 +311,9 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 		case smartconnpool.ErrTimeout:
 			tp.LogActive()
 			err = vterrors.Errorf(errCode, "transaction pool connection limit exceeded")
+		case smartconnpool.ErrPoolWaiterCapReached:
+			tp.LogActive()
+			err = vterrors.Errorf(errCode, "transaction pool connection waiter cap exceeded")
 		}
 		return nil, err
 	}

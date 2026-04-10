@@ -890,6 +890,13 @@ func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }
 
+// RefreshHistorianForStreamStart performs the strict historian refresh used during stream
+// startup. It returns schema_version read errors so the caller can abort startup instead
+// of proceeding with stale historian state.
+func (se *Engine) RefreshHistorianForStreamStart(ctx context.Context) error {
+	return se.historian.RefreshForStreamStart(ctx)
+}
+
 // GetTableForPos makes a best-effort attempt to return a table's schema at a specific
 // GTID/position. If it cannot get the table schema for the given GTID/position then it
 // returns the latest table schema that is available in the database -- the table schema

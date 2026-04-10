@@ -3118,8 +3118,10 @@ func (node *ShowEngine) FormatFast(buf *TrackedBuffer) {
 func (node *ShowGrants) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("show grants")
 	if node.User != nil {
-		buf.WriteString(" for ")
-		node.User.formatTo(buf)
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.WriteString(" for ")
+			node.User.formatTo(buf)
+		}
 		if len(node.UsingRole) > 0 {
 			buf.WriteString(" using ")
 			for i, role := range node.UsingRole {

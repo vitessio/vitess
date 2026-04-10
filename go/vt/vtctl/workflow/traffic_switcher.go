@@ -347,11 +347,14 @@ func (ts *trafficSwitcher) TargetShards() []*topo.ShardInfo {
 }
 
 func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) {
-	var sourceShards, targetShards []string
-	for _, si := range ts.SourceShards() {
+	srcShards := ts.SourceShards()
+	tgtShards := ts.TargetShards()
+	sourceShards := make([]string, 0, len(srcShards))
+	targetShards := make([]string, 0, len(tgtShards))
+	for _, si := range srcShards {
 		sourceShards = append(sourceShards, si.ShardName())
 	}
-	for _, si := range ts.TargetShards() {
+	for _, si := range tgtShards {
 		targetShards = append(targetShards, si.ShardName())
 	}
 	return sourceShards, targetShards

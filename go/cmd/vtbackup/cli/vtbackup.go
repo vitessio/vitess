@@ -217,8 +217,8 @@ func init() {
 	utils.SetFlagBoolVar(Main.Flags(), &allowFirstBackup, "allow-first-backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	utils.SetFlagBoolVar(Main.Flags(), &restartBeforeBackup, "restart-before-backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
-	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute before initializing the backup")
-	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup")
+	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute after catch-up replication, before initializing the backup")
+	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
 
@@ -517,11 +517,6 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		}
 	}
 
-	// Perform any requested pre backup initialization queries.
-	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
-		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
-	}
-
 	// We have restored a backup. Now start replication.
 	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
@@ -558,11 +553,6 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	}
 
 	log.Info("takeBackup: primary position is: " + primaryPos.String())
-
-	// Remember the time when we fetched the primary position, not when we caught
-	// up to it, so the timestamp on our backup is honest (assuming we make it
-	// to the goal position).
-	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
@@ -641,12 +631,22 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
-	// Re-enable redo logging.
+	// Re-enable redo logging before running init SQL, so that init SQL
+	// queries run with full crash safety.
 	if disabledRedoLog {
 		if err := mysqld.EnableRedoLog(ctx); err != nil {
 			return fmt.Errorf("failed to re-enable redo log: %v", err)
 		}
 	}
+
+	// Perform any requested backup initialization queries after catch-up replication.
+	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
+	}
+
+	// Set BackupTime after catch-up and init SQL, so the timestamp on the
+	// backup postdates any changes made by init SQL queries.
+	backupParams.BackupTime = time.Now()
 
 	if restartBeforeBackup {
 		restartAt := time.Now()

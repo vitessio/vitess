@@ -103,6 +103,8 @@ Flags:
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb-uri string                                              URI of opentsdb /api/put method
+      --otel-endpoint string                                             OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
+      --otel-insecure                                                    use insecure connection to OpenTelemetry collector
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
@@ -174,7 +176,7 @@ Flags:
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-rate float                                      sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
   -v, --version                                                          print binary version
       --vtctld-sanitize-log-messages                                     When true, vtctld sanitizes logging.

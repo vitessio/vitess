@@ -33,10 +33,12 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestBinlogDumpGTID_Streaming tests that binlog events are actually streamed from vttablet to the client.
@@ -1083,4 +1085,128 @@ packetLoop:
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet with shard-level targeting")
+}
+
+// vtgateGrpcAddr returns the vtgate gRPC address for the cluster.
+func vtgateGrpcAddr() string {
+	return fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_Streaming tests binlog streaming through vtgate's gRPC endpoint.
+func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
+	ctx := t.Context()
+
+	// Get current GTID position
+	pos, _ := cluster.GetPrimaryPosition(t, *clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet(), hostname)
+	gtidSet := pos
+	if _, after, found := strings.Cut(pos, "/"); found {
+		gtidSet = after
+	}
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	reader, err := conn.BinlogDumpGTID(grpcCtx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 4, gtidSet, 0)
+	require.NoError(t, err)
+
+	// Insert data to generate binlog events
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		// Small delay so the stream is established first
+		time.Sleep(200 * time.Millisecond)
+		dataConn, err := mysql.Connect(ctx, &vtParams)
+		if err != nil {
+			t.Logf("Failed to connect for writes: %v", err)
+			return
+		}
+		defer dataConn.Close()
+		for i := range 3 {
+			_, err := dataConn.ExecuteFetch(
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('vtgate_grpc_test_%d')", i), 1, false)
+			if err != nil {
+				t.Logf("Insert failed: %v", err)
+				return
+			}
+		}
+	})
+
+	var receivedPackets int
+	for {
+		resp, err := reader.Recv()
+		if err != nil {
+			t.Logf("Stream ended: %v", err)
+			break
+		}
+		receivedPackets++
+		t.Logf("Received packet %d via vtgate gRPC: %d bytes", receivedPackets, len(resp.Raw))
+		if receivedPackets >= 3 {
+			break
+		}
+	}
+
+	cancel()
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received binlog packets via vtgate gRPC")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsFilename tests that vtgate's gRPC endpoint rejects
+// requests with a binlog filename.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "binlog.000001", 4, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "binlog filename is not supported")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition tests that vtgate's gRPC endpoint
+// rejects requests with a binlog position other than 4.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 1234, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum tests that vtgate's gRPC endpoint
+// rejects requests with a binlog position below 4.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 0, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "position < 4")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "position < 4")
 }

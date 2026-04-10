@@ -178,6 +178,10 @@ func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.T
 	return nil
 }
 
+func (f *fakeVTGateService) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	return nil
+}
+
 // ExecuteMulti is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
 	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(sqlString)

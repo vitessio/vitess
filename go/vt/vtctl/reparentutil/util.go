@@ -91,7 +91,7 @@ func ElectNewPrimary(
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
-	candidates := []*topodatapb.Tablet{}
+	candidates := make([]*topodatapb.Tablet, 0, len(tabletMap))
 	reasonsToInvalidate := strings.Builder{}
 	for _, tablet := range tabletMap {
 		switch {

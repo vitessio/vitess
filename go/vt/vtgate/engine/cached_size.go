@@ -74,7 +74,9 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 		size += int64(48)
 	}
 	// field WsCol *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.WsCol != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment

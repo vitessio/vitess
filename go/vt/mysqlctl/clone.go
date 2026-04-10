@@ -347,7 +347,7 @@ func isCloneConnError(err error) bool {
 		return false
 	}
 	switch sqlErr.Number() {
-	case sqlerror.CRServerGone, sqlerror.CRServerLost:
+	case sqlerror.CRServerGone, sqlerror.CRServerLost, sqlerror.ERRestartServerFailed:
 		return true
 	default:
 		return false

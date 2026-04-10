@@ -102,6 +102,10 @@ type vstreamer struct {
 	options *binlogdatapb.VStreamOptions
 	config  *vttablet.VReplicationConfig
 
+	historianRefreshedForStartup     bool
+	isHistorianRefreshedForStartup   func() bool
+	markHistorianRefreshedForStartup func()
+
 	eventTypesToStream map[binlogdatapb.VEventType]bool
 }
 
@@ -218,6 +222,9 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	if err := vs.se.Open(); err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
+	if err := vs.refreshHistorianForStartup(ctx); err != nil {
+		return wrapError(err, vs.pos, vs.vse)
+	}
 
 	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
@@ -231,6 +238,24 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	}
 	err = vs.parseEvents(vs.ctx, events, errs)
 	return wrapError(err, vs.pos, vs.vse)
+}
+
+func (vs *vstreamer) refreshHistorianForStartup(ctx context.Context) error {
+	if vs.historianRefreshedForStartup {
+		return nil
+	}
+	if vs.isHistorianRefreshedForStartup != nil && vs.isHistorianRefreshedForStartup() {
+		vs.historianRefreshedForStartup = true
+		return nil
+	}
+	if err := vs.se.RefreshHistorianForStreamStart(ctx); err != nil {
+		return err
+	}
+	vs.historianRefreshedForStartup = true
+	if vs.markHistorianRefreshedForStartup != nil {
+		vs.markHistorianRefreshedForStartup()
+	}
+	return nil
 }
 
 // parseEvents parses and sends events.
