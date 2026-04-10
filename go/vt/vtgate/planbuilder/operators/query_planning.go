@@ -551,6 +551,9 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
+
+	orderToPush := findOrderingInSourceChain(in.Source)
+
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
@@ -564,7 +567,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 			}
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
-			op.Source = newLimit(op.Source, ast, false)
+			src := op.Source
+			if len(orderToPush) > 0 {
+				src = newOrdering(src, orderToPush)
+			}
+			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		}
@@ -574,6 +581,30 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	TopDown(in.Source, TableID, visitor, shouldVisit)
 
 	return in, result
+}
+
+// findOrderingInSourceChain walks down unary operators for an Ordering above a
+// Window, so it can be pushed into the route with the limit. Window queries need
+// this because DISTINCT stays (not converted to GROUP BY), leaving Ordering unpushed.
+// Resolved upfront to avoid leaking across branches during the TopDown walk.
+func findOrderingInSourceChain(op Operator) []OrderBy {
+	var order []OrderBy
+	for {
+		switch src := op.(type) {
+		case *Ordering:
+			// Clone the slice to avoid aliasing with src.Order, which may be rewritten later.
+			order = append([]OrderBy(nil), src.Order...)
+		case *Window:
+			return order
+		case *Route:
+			return nil
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			return nil
+		}
+		op = inputs[0]
+	}
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {
@@ -856,6 +887,17 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 	case *Ordering:
 		in.Source = src.Source
 		return in, Rewrote("remove ordering under distinct")
+	case *Window:
+		if isDistinct(src.Source) {
+			debugNoRewrite("distinct push blocked: window source already has distinct")
+			return in, NoRewrite
+		}
+		src.Source = newDistinct(src.Source, nil, false)
+		if in.Required {
+			in.PushedPerformance = true
+			return in, Rewrote("push distinct under window - kept original")
+		}
+		return src, Rewrote("push distinct under window")
 	}
 
 	return in, NoRewrite
