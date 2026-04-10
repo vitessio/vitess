@@ -445,15 +445,6 @@ func (sqb *SubQueryBuilder) findEquivalent(ctx *plancontext.PlanningContext, sub
 	return nil
 }
 
-func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
-	for _, sq := range sqb.Inner {
-		if sq.ArgName == name {
-			return sq
-		}
-	}
-	return nil
-}
-
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
 // Returns nil for EXISTS (handled separately) or the appropriate opcode for IN/NOT IN/value contexts.
 func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
