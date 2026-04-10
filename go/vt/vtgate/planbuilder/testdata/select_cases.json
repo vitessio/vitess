@@ -6623,8 +6623,7 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "same subquery as scalar value and NOT IN across different select items",
@@ -6707,8 +6706,7 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "same subquery three times in one expression: scalar + IN + scalar should produce two operators, not three",
@@ -6791,8 +6789,7 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "same subquery in three select items: scalar, IN, IN — the two IN uses should share one operator",
@@ -6875,8 +6872,7 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "same subquery across SELECT (scalar + IN), WHERE (IN), and ORDER BY (scalar)",
@@ -6988,8 +6984,7 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "DISTINCT with window function - multi-shard IN clause",
