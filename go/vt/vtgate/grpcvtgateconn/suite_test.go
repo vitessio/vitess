@@ -298,6 +298,10 @@ func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.T
 	panic("unimplemented")
 }
 
+func (f *fakeVTGateService) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	panic("unimplemented")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	return &fakeVTGateService{
