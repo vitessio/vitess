@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -87,16 +86,6 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
-
-	// binlogDumpRequests tracks binlog dump request counts by status
-	binlogDumpRequests = stats.NewCountersWithSingleLabel(
-		"VtgateBinlogDumpRequests",
-		"Vtgate binlog dump request counts",
-		"status",
-		"authorized", // successfully authorized requests
-		"denied",     // denied due to user ACL
-		"disabled",   // denied because feature is disabled
-	)
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -590,20 +579,25 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
-	// File/position-based resumption is only valid when targeting a specific
-	// tablet. When routing via health check, vtgate may pick a different
-	// replica each time, and binlog filenames/positions differ across replicas.
-	// GTIDs are consistent across replicas and can always be used.
-	hasFilePosition := logFile != "" || logPos > 4
-	if hasFilePosition && tabletAlias == nil {
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if logFile != "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (e.g., 'commerce:0@primary|zone1-100'); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+			"binlog filename is not supported; use GTIDs instead")
+	}
+	if logPos < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+	if logPos > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"only binlog position 4 is supported; use GTIDs for positioning")
 	}
 
 	// Build the BinlogDumpGTID request
 	request := &binlogdatapb.BinlogDumpGTIDRequest{
-		BinlogFilename: logFile,
 		BinlogPosition: logPos,
 		Flags:          uint32(flags),
 		Target:         target,
