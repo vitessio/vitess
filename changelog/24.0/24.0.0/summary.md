@@ -20,7 +20,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
-        - [GTID-Based Binlog Streaming](#vtgate-binlog-dump)
+        - [Binlog Streaming Support](#vtgate-binlog-dump)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -177,7 +177,7 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
-#### <a id="vtgate-binlog-dump"/>GTID-Based Binlog Streaming</a>
+#### <a id="vtgate-binlog-dump"/>Binlog Streaming Support</a>
 
 VTGate now supports GTID-based binlog streaming through two protocols:
 
