@@ -54,6 +54,11 @@ func ensureShardedCustomerKeyspace(t *testing.T) {
 			SchemaSQL: sqlSchema,
 			VSchema:   shardedVSchema,
 		}, []string{"-80", "80-"}, 1, true, cell)
+		if startShardedKeyspaceErr != nil {
+			return
+		}
+
+		startShardedKeyspaceErr = clusterInstance.WaitForTabletsToHealthyInVtgate()
 	})
 	require.NoError(t, startShardedKeyspaceErr)
 }

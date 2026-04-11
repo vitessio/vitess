@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -113,7 +114,7 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 func TestVStreamClientIgnoresNoOpTransactions(t *testing.T) {
 	te := newTestEnv(t)
 
-	flushCount := 0
+	var flushCount atomic.Int32
 	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
 		Keyspace:        "customer",
 		Table:           "customer",
@@ -121,7 +122,7 @@ func TestVStreamClientIgnoresNoOpTransactions(t *testing.T) {
 		MaxRowsPerFlush: 10,
 		DataType:        &Customer{},
 		FlushFn: func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-			flushCount++
+			flushCount.Add(1)
 			return nil
 		},
 	}})
@@ -132,7 +133,7 @@ func TestVStreamClientIgnoresNoOpTransactions(t *testing.T) {
 	te.exec(t, "insert into accounting.customer(id, email) values (2901, 'unrelated@domain.com')", nil)
 
 	assert.Never(t, func() bool {
-		return flushCount > 0
+		return flushCount.Load() > 0
 	}, 1500*time.Millisecond, 100*time.Millisecond)
 
 	cancelRun()
@@ -140,7 +141,7 @@ func TestVStreamClientIgnoresNoOpTransactions(t *testing.T) {
 	if err != nil && runCtx.Err() == nil {
 		t.Fatalf("failed to run vstreamclient: %v", err)
 	}
-	assert.Zero(t, flushCount)
+	assert.Zero(t, flushCount.Load())
 }
 
 // TestVStreamClientGracefulShutdownClosesMultiTableClient verifies
