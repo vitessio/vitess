@@ -31,8 +31,12 @@ type TableConfig struct {
 	//     holding too much memory in the rows slice.
 	MaxRowsPerFlush int
 
-	// if true, will reuse the same slice for each batch, which can reduce memory allocations. It does mean
-	// that the caller must copy the data if they want to keep it, because the slice will be reused.
+	// ReuseBatchSlice will reuse the backing array of the `rows []Row` slice passed to FlushFn
+	// across successive batches, which can reduce memory allocations.
+	//
+	// DANGER: If true, the caller MUST NOT retain references to the `rows` slice or any of its
+	// elements after FlushFn returns. The slice and its contents will be aggressively mutated
+	// in place by the internal processing loop. Retaining pointers will lead to data corruption.
 	ReuseBatchSlice bool
 
 	// if true, will error and block the stream if there are fields in the result that don't match the struct
