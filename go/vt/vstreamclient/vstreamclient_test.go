@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -123,7 +124,7 @@ func newConstructorTestConn(t *testing.T) *vtgateconn.VTGateConn {
 	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return &newTestVTGateImpl{}, nil
 	}, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 	return conn
 }
@@ -256,7 +257,7 @@ func TestWithTimeLocation_Validation(t *testing.T) {
 
 	loc := time.FixedZone("UTC-5", -5*60*60)
 	err = WithTimeLocation(loc)(v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Same(t, loc, v.cfg.timeLocation)
 }
 
@@ -268,7 +269,7 @@ func TestWithTabletType_Validation(t *testing.T) {
 	assert.ErrorContains(t, err, "tablet type cannot be UNKNOWN")
 
 	err = WithTabletType(topodatapb.TabletType_RDONLY)(v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_RDONLY, v.cfg.tabletType)
 }
 
@@ -292,7 +293,7 @@ func TestWithGracefulShutdownChan_Validation(t *testing.T) {
 
 	ch := make(chan struct{})
 	err = WithGracefulShutdownChan(ch, time.Second)(v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, (<-chan struct{})(ch), v.cfg.gracefulShutdownChan)
 	assert.Equal(t, time.Second, v.cfg.gracefulShutdownWaitDur)
 }
@@ -309,7 +310,7 @@ func TestWithGracefulShutdownSignals_Validation(t *testing.T) {
 	assert.ErrorContains(t, err, "graceful shutdown wait")
 
 	err = WithGracefulShutdownSignals(time.Second, os.Interrupt)(v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []os.Signal{os.Interrupt}, v.cfg.gracefulShutdownSignals)
 	assert.Equal(t, time.Second, v.cfg.gracefulShutdownWaitDur)
 }
@@ -323,7 +324,7 @@ func TestWithEventFunc_Validation(t *testing.T) {
 	assert.ErrorContains(t, err, "no event types provided")
 
 	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
 	assert.Error(t, err)
@@ -338,7 +339,7 @@ func TestLookupTable(t *testing.T) {
 		}}
 
 		got, err := v.lookupTable("ks.t")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Same(t, want, got)
 	})
 
@@ -349,7 +350,7 @@ func TestLookupTable(t *testing.T) {
 		}}
 
 		got, err := v.lookupTable("t")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Same(t, want, got)
 	})
 
@@ -439,7 +440,7 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return &testVTGateImpl{reader: reader}, nil
 	}, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	v := &VStreamClient{
@@ -455,12 +456,10 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "unexpected EOF")
 	assert.Nil(t, v.lastFlushedVgtid)
-	if assert.Len(t, table.currentBatch, 1) {
-		row, ok := table.currentBatch[0].Data.(*testRowSmall)
-		if assert.True(t, ok) {
-			assert.Equal(t, int64(7), row.ID)
-		}
-	}
+	require.Len(t, table.currentBatch, 1)
+	row, ok := table.currentBatch[0].Data.(*testRowSmall)
+	require.True(t, ok)
+	assert.Equal(t, int64(7), row.ID)
 }
 
 func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
@@ -475,7 +474,7 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 	setLifecycleState(v, false, false, true, nil)
 
 	err := v.flush(context.Background(), false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	select {
 	case <-v.getGracefulShutdownFlushChan():
@@ -521,15 +520,13 @@ func TestFlush_ConsumerMutationDoesNotAffectInternalCheckpoint(t *testing.T) {
 	}
 
 	err := v.flush(context.Background(), true)
-	assert.NoError(t, err)
-	assert.NotNil(t, seenFlushVGtid)
+	require.NoError(t, err)
+	require.NotNil(t, seenFlushVGtid)
 	assert.NotSame(t, v.latestVgtid, seenFlushVGtid)
-	if assert.Len(t, seenFlushVGtid.ShardGtids, 2) {
-		assert.Equal(t, "mutated", seenFlushVGtid.ShardGtids[0].Gtid)
-	}
-	if assert.Len(t, v.latestVgtid.ShardGtids, 1) {
-		assert.Equal(t, "MySQL56/1", v.latestVgtid.ShardGtids[0].Gtid)
-	}
+	require.Len(t, seenFlushVGtid.ShardGtids, 2)
+	assert.Equal(t, "mutated", seenFlushVGtid.ShardGtids[0].Gtid)
+	require.Len(t, v.latestVgtid.ShardGtids, 1)
+	assert.Equal(t, "MySQL56/1", v.latestVgtid.ShardGtids[0].Gtid)
 	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
 }
 
