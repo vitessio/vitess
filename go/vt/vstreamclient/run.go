@@ -125,14 +125,14 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	defer cancelRunCtxFn()
 	defer v.endRun()
 
+	go v.listenForGracefulShutdown(ctx)
+
 	// initialize the streamer
 	var err error
 	v.reader, err = v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
-
-	go v.listenForGracefulShutdown(ctx)
 
 	go v.monitorHeartbeat(ctx)
 
@@ -421,7 +421,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 
 		case <-startupTimerChan:
 			// this is a sanity check to shutdown the client if we never receive a single event
-			if v.lastEventProcessedAtUnixNano.Load() == 0 {
+			if v.lastEventProcessedAtUnixNano.Load() == 0 && !v.isProcessingEvents.Load() {
 				v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
 				return
 			}

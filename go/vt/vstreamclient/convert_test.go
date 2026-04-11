@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -789,6 +790,47 @@ func TestHandleRowEvent_UsesTypedScanner(t *testing.T) {
 	if assert.Len(t, table.currentBatch, 1) {
 		row := table.currentBatch[0]
 		scanned, ok := row.Data.(*testScannerRow)
+		if assert.True(t, ok) {
+			assert.Equal(t, int64(7), scanned.ID)
+		}
+	}
+}
+
+func TestInitTables_ValueDataTypeStillUsesPointerScanner(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace: "ks",
+		Table:    "t",
+		DataType: testScannerRow{},
+		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	require.NoError(t, err)
+
+	table := v.tables[qualifiedTableName("ks", "t")]
+	require.NotNil(t, table)
+	assert.True(t, table.implementsScanner)
+
+	err = table.handleFieldEvent(&binlogdatapb.FieldEvent{
+		Shard:  "0",
+		Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+	})
+	require.NoError(t, err)
+
+	err = table.handleRowEvent(&binlogdatapb.RowEvent{
+		TableName: "t",
+		Shard:     "0",
+		RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Lengths: []int64{1}, Values: []byte("7")},
+		}},
+	}, &VStreamStats{})
+	require.NoError(t, err)
+
+	if assert.Len(t, table.currentBatch, 1) {
+		scanned, ok := table.currentBatch[0].Data.(*testScannerRow)
 		if assert.True(t, ok) {
 			assert.Equal(t, int64(7), scanned.ID)
 		}
