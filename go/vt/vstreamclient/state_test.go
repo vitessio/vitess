@@ -18,7 +18,7 @@ package vstreamclient
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -61,7 +61,7 @@ func (t *stateTestVTGateImpl) Execute(ctx context.Context, session *vtgatepb.Ses
 }
 
 func (t *stateTestVTGateImpl) BinlogDumpGTID(context.Context, string, string, topodatapb.TabletType, *topodatapb.TabletAlias, string, uint64, string, uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
-	return nil, fmt.Errorf("unexpected BinlogDumpGTID call")
+	return nil, errors.New("unexpected BinlogDumpGTID call")
 }
 
 func newStateTestSession(t *testing.T, responses ...stateExecuteResponse) (*vtgateconn.VTGateSession, *stateTestVTGateImpl) {

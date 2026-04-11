@@ -350,8 +350,7 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 }
 
 func (table *TableConfig) reflectMapStructFields(structType reflect.Type, indexPrefix []int, fields []*querypb.Field, fieldMap map[string]fieldMapping) {
-	for i := range structType.NumField() {
-		structField := structType.Field(i)
+	for structField := range structType.Fields() {
 		if !structField.IsExported() {
 			continue
 		}
@@ -384,7 +383,7 @@ func (table *TableConfig) reflectMapStructFields(structType reflect.Type, indexP
 			}
 
 			fieldType := structField.Type
-			isPointer := fieldType.Kind() == reflect.Ptr
+			isPointer := fieldType.Kind() == reflect.Pointer
 			if isPointer {
 				fieldType = fieldType.Elem()
 			}
