@@ -17,9 +17,10 @@ limitations under the License.
 package vitessdriver
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -194,12 +195,8 @@ func TestToNative(t *testing.T) {
 
 	for _, tcase := range testcases {
 		v, err := tcase.convert.ToNative(tcase.in)
-		if err != nil {
-			t.Error(err)
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("%v.ToNativeEx = %#v, want %#v", tcase.in, v, tcase.out)
-		}
+		require.NoError(t, err)
+		require.Equal(t, tcase.out, v)
 	}
 }
 
@@ -243,12 +240,8 @@ func TestBuildBindVariable(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			bv, err := convert.BuildBindVariable(tcase.in)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(bv, tcase.out) {
-				t.Fatalf("BuildBindVariable(%v) = %#v, want %#v", tcase.in, bv, tcase.out)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tcase.out, bv)
 		})
 	}
 }
