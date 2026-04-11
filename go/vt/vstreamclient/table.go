@@ -190,9 +190,6 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 			return fmt.Errorf("vstreamclient: max rows per flush must be positive for table %s.%s, got %d", table.Keyspace, table.Table, table.MaxRowsPerFlush)
 		}
 
-		// if the data type implements VStreamScanner, we will use that to scan the results
-		_, table.implementsScanner = table.DataType.(VStreamScanner)
-
 		// regardless whether the user provided a pointer to a struct or a struct, we want to store the
 		// underlying type of the struct, so we can create new instances of it later
 		table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
@@ -200,6 +197,10 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		if table.underlyingType.Kind() != reflect.Struct {
 			return fmt.Errorf("vstreamclient: data type for table %s.%s must be a struct", table.Keyspace, table.Table)
 		}
+
+		// Rows are always instantiated as pointers, so detect scanner support on *T even when the
+		// caller provides DataType as a value form T{}.
+		table.implementsScanner = reflect.PointerTo(table.underlyingType).Implements(reflect.TypeFor[VStreamScanner]())
 
 		table.shards = make(map[string]shardConfig)
 
