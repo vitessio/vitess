@@ -61,6 +61,10 @@ func (t *testVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlog
 	return t.reader, nil
 }
 
+func (t *testVTGateImpl) BinlogDumpGTID(context.Context, string, string, topodatapb.TabletType, *topodatapb.TabletAlias, string, uint64, string, uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
+	return nil, fmt.Errorf("unexpected BinlogDumpGTID call")
+}
+
 func (t *testVTGateImpl) Close() {}
 
 type testVStreamReader struct {
