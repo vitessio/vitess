@@ -18,6 +18,7 @@ package vstreamclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -46,31 +47,31 @@ type testVTGateImpl struct {
 }
 
 func (t *testVTGateImpl) Execute(context.Context, *vtgatepb.Session, string, map[string]*querypb.BindVariable, bool) (*vtgatepb.Session, *sqltypes.Result, error) {
-	return nil, nil, fmt.Errorf("unexpected Execute call")
+	return nil, nil, errors.New("unexpected Execute call")
 }
 
 func (t *testVTGateImpl) ExecuteBatch(context.Context, *vtgatepb.Session, []string, []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	return nil, nil, fmt.Errorf("unexpected ExecuteBatch call")
+	return nil, nil, errors.New("unexpected ExecuteBatch call")
 }
 
 func (t *testVTGateImpl) StreamExecute(context.Context, *vtgatepb.Session, string, map[string]*querypb.BindVariable, func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error) {
-	return nil, fmt.Errorf("unexpected StreamExecute call")
+	return nil, errors.New("unexpected StreamExecute call")
 }
 
 func (t *testVTGateImpl) ExecuteMulti(context.Context, *vtgatepb.Session, string) (*vtgatepb.Session, []*sqltypes.Result, error) {
-	return nil, nil, fmt.Errorf("unexpected ExecuteMulti call")
+	return nil, nil, errors.New("unexpected ExecuteMulti call")
 }
 
 func (t *testVTGateImpl) StreamExecuteMulti(context.Context, *vtgatepb.Session, string, func(*vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error) {
-	return nil, fmt.Errorf("unexpected StreamExecuteMulti call")
+	return nil, errors.New("unexpected StreamExecuteMulti call")
 }
 
 func (t *testVTGateImpl) Prepare(context.Context, *vtgatepb.Session, string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
-	return nil, nil, 0, fmt.Errorf("unexpected Prepare call")
+	return nil, nil, 0, errors.New("unexpected Prepare call")
 }
 
 func (t *testVTGateImpl) CloseSession(context.Context, *vtgatepb.Session) error {
-	return fmt.Errorf("unexpected CloseSession call")
+	return errors.New("unexpected CloseSession call")
 }
 
 func (t *testVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
@@ -78,7 +79,7 @@ func (t *testVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlog
 }
 
 func (t *testVTGateImpl) BinlogDumpGTID(context.Context, string, string, topodatapb.TabletType, *topodatapb.TabletAlias, string, uint64, string, uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
-	return nil, fmt.Errorf("unexpected BinlogDumpGTID call")
+	return nil, errors.New("unexpected BinlogDumpGTID call")
 }
 
 func (t *testVTGateImpl) Close() {}
