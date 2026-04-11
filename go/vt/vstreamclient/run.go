@@ -19,12 +19,15 @@ import (
 type EventFunc func(ctx context.Context, event *binlogdatapb.VEvent) error
 
 // FlushFunc is called per batch of rows, which could be any number of rows, but will be limited by the
-// MaxRowsPerFlush setting. The rows are always a slice of the data type for the table, which is configured
-// per table. You can use type assertion to convert the rows to the correct type, and then process them as needed.
+// MaxRowsPerFlush setting. The rows are passed as a slice of `Row` structs. For each `Row`, the `Data` field
+// will hold the specific data type configured for the table. You can use type assertion on `Row.Data` to
+// convert it to the correct type, and then process it as needed.
 //
-//	func(ctx context.Context, rows any, meta FlushMeta) error {
-//		 typedRows := rows.([]*DataType)
-//		 // do something with the rows
+//	func(ctx context.Context, rows []Row, meta FlushMeta) error {
+//		 for _, row := range rows {
+//			 typedRow := row.Data.(*DataType)
+//			 // do something with the row
+//		 }
 //		 return nil
 //	}
 //
@@ -403,7 +406,8 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 		case <-startupTimerChan:
 			// this is a sanity check to shutdown the client if we never receive a single event
 			if v.lastEventProcessedAtUnixNano.Load() == 0 {
-				panic("vstreamclient: vstream never received an event")
+				v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
+				return
 			}
 			startupTimerChan = nil
 
