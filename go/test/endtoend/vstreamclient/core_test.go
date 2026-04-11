@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vstreamclient"
 )
@@ -202,7 +201,7 @@ func TestVStreamClientTransactionBoundaries(t *testing.T) {
 func TestVStreamClientHandlesDDL(t *testing.T) {
 	te := newTestEnv(t)
 
-	var got []*Customer
+	gotCh := make(chan *Customer, 1)
 	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
 		Keyspace:        "customer",
 		Table:           "customer",
@@ -211,7 +210,10 @@ func TestVStreamClientHandlesDDL(t *testing.T) {
 		DataType:        &Customer{},
 		FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 			for _, row := range rows {
-				got = append(got, row.Data.(*Customer))
+				select {
+				case gotCh <- row.Data.(*Customer):
+				default:
+				}
 			}
 			return nil
 		},
@@ -224,10 +226,12 @@ func TestVStreamClientHandlesDDL(t *testing.T) {
 	te.exec(t, "alter table customer.customer add column ddl_note varchar(64) null", nil)
 	te.exec(t, "insert into customer.customer(id, email, ddl_note) values (1401, 'ddl@domain.com', 'ok')", nil)
 
-	assert.Eventually(t, func() bool {
-		return len(got) == 1
-	}, 3*time.Second, 100*time.Millisecond)
-	assert.Equal(t, []*Customer{{ID: 1401, Email: "ddl@domain.com"}}, got)
+	select {
+	case got := <-gotCh:
+		assert.Equal(t, &Customer{ID: 1401, Email: "ddl@domain.com"}, got)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for row after DDL")
+	}
 
 	cancelRun()
 	err := <-runErrCh
@@ -241,7 +245,7 @@ func TestVStreamClientHandlesDDL(t *testing.T) {
 func TestVStreamClientReuseBatchSlice(t *testing.T) {
 	te := newTestEnv(t)
 
-	var batchPointers []string
+	batchPointers := make(chan string, 2)
 	newClient := func(t *testing.T) *vstreamclient.VStreamClient {
 		t.Helper()
 		return te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
@@ -252,9 +256,13 @@ func TestVStreamClientReuseBatchSlice(t *testing.T) {
 			ReuseBatchSlice: true,
 			DataType:        &Customer{},
 			FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-				batchPointers = append(batchPointers, "")
+				pointer := ""
 				if len(rows) > 0 {
-					batchPointers[len(batchPointers)-1] = fmt.Sprintf("%p", &rows[0])
+					pointer = fmt.Sprintf("%p", &rows[0])
+				}
+				select {
+				case batchPointers <- pointer:
+				default:
 				}
 				return nil
 			},
@@ -265,14 +273,20 @@ func TestVStreamClientReuseBatchSlice(t *testing.T) {
 	vstreamClient := newClient(t)
 	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
 	defer cancelRun()
-	assert.Eventually(t, func() bool {
-		return len(batchPointers) >= 1
-	}, 3*time.Second, 50*time.Millisecond)
+	var firstPointer string
+	select {
+	case firstPointer = <-batchPointers:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for first batch flush")
+	}
 
 	te.exec(t, "insert into customer.customer(id, email) values (1963, 'reuse-c@domain.com'), (1964, 'reuse-d@domain.com')", nil)
-	assert.Eventually(t, func() bool {
-		return len(batchPointers) >= 2
-	}, 3*time.Second, 50*time.Millisecond)
+	var secondPointer string
+	select {
+	case secondPointer = <-batchPointers:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for second batch flush")
+	}
 
 	cancelRun()
 	err := <-runErrCh
@@ -280,6 +294,5 @@ func TestVStreamClientReuseBatchSlice(t *testing.T) {
 		t.Fatalf("failed to run vstreamclient: %v", err)
 	}
 
-	require.Len(t, batchPointers, 2)
-	assert.Equal(t, batchPointers[0], batchPointers[1])
+	assert.Equal(t, firstPointer, secondPointer)
 }

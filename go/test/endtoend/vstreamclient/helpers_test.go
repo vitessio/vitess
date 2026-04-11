@@ -99,6 +99,21 @@ func (te *testEnv) execBackground(t *testing.T, query string, bindVariables map[
 	require.NoError(t, err)
 }
 
+func (te *testEnv) execBackgroundAllowMissingColumn(t *testing.T, query string, bindVariables map[string]*querypb.BindVariable) {
+	t.Helper()
+
+	_, err := te.session.Execute(context.Background(), query, bindVariables, false)
+	if err == nil {
+		return
+	}
+
+	if strings.Contains(err.Error(), "errno 1091") || strings.Contains(err.Error(), "check that column/key exists") {
+		return
+	}
+
+	require.NoError(t, err)
+}
+
 func (te *testEnv) runUntilTimeout(t *testing.T, client *vstreamclient.VStreamClient, timeout time.Duration) {
 	t.Helper()
 

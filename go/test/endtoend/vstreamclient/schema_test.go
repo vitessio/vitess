@@ -110,7 +110,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnDropped(t *testing.T) {
 	te := newTestEnv(t)
 	te.exec(t, "alter table customer.customer add column projected_col varchar(128) null", nil)
 	t.Cleanup(func() {
-		te.execBackground(t, "alter table customer.customer drop column if exists projected_col", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column projected_col", nil)
 	})
 
 	var got []*customerWithProjectedString
@@ -150,8 +150,8 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnRenamed(t *testing.T) {
 	te := newTestEnv(t)
 	te.exec(t, "alter table customer.customer add column projected_col varchar(128) null", nil)
 	t.Cleanup(func() {
-		te.execBackground(t, "alter table customer.customer drop column if exists projected_col", nil)
-		te.execBackground(t, "alter table customer.customer drop column if exists projected_col_renamed", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column projected_col", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column projected_col_renamed", nil)
 	})
 
 	var got []*customerWithProjectedString
@@ -191,7 +191,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 	te := newTestEnv(t)
 	te.exec(t, "alter table customer.customer add column projected_payload text null", nil)
 	t.Cleanup(func() {
-		te.execBackground(t, "alter table customer.customer drop column if exists projected_payload", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column projected_payload", nil)
 	})
 
 	var got []*customerWithProjectedPayload
@@ -218,6 +218,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 	}, 3*time.Second, 50*time.Millisecond)
 	assert.Equal(t, []*customerWithProjectedPayload{{ID: 3501, Payload: &customerPayload{Source: "before-type"}}}, got)
 
+	te.exec(t, "update customer.customer set projected_payload = null where id = 3501", nil)
 	te.exec(t, "alter table customer.customer modify column projected_payload bigint null", nil)
 	te.exec(t, "insert into customer.customer(id, email, projected_payload) values (3502, 'projected-after-type@domain.com', 123)", nil)
 
@@ -232,7 +233,8 @@ func TestVStreamClientRemapsFieldsAfterDDL(t *testing.T) {
 	te := newTestEnv(t)
 	te.exec(t, "alter table customer.customer add column remap_a varchar(128) null, add column remap_b varchar(128) null", nil)
 	t.Cleanup(func() {
-		te.execBackground(t, "alter table customer.customer drop column if exists remap_a, drop column if exists remap_b", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column remap_a", nil)
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column remap_b", nil)
 	})
 
 	var got []*customerWithRemapColumns
