@@ -58,7 +58,7 @@ func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeM
 }
 
 func recoverableReplicationInitError() error {
-	return sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
+	return sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
 }
 
 // TestWaitForGrantsToHaveApplied tests that waitForGrantsToHaveApplied only succeeds after waitForDBAGrants has been called.
@@ -360,27 +360,32 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 	}{
 		{
 			name:          "relay log info repository error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaRelayLogInfoInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize relay log info structure from the repository"),
 			shouldRestart: true,
 		},
 		{
 			name:          "master info error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1201), sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log"),
 			shouldRestart: true,
 		},
 		{
 			name:          "connection metadata repository error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1871), sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERReplicaConnectionMetadataInitRepository, sqlerror.SSUnknownSQLState, "Replica failed to initialize connection metadata structure from the repository"),
 			shouldRestart: true,
 		},
 		{
-			name:          "applier metadata repository error",
-			inputErr:      sqlerror.NewSQLError(sqlerror.ErrorCode(1872), sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
-			shouldRestart: true,
+			name:          "applier metadata message with wrong errno",
+			inputErr:      sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "Replica failed to initialize applier metadata structure from the repository"),
+			shouldRestart: false,
 		},
 		{
-			name:          "wrapped master info error",
+			name:          "mysqlctl wrapped master info error",
 			inputErr:      errors.New("ExecuteFetch(START REPLICA) failed: Could not initialize master info structure; more error messages can be found in the MySQL error log (errno 1201) (sqlstate HY000)"),
+			shouldRestart: true,
+		},
+		{
+			name:          "native mysql master info error",
+			inputErr:      errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log"),
 			shouldRestart: true,
 		},
 		{
@@ -424,6 +429,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 	}
 }
 
+// TestStartReplicationRecoversFromRecoverableReplicationInitError verifies StartReplication self-heals recoverable init failures.
 func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
@@ -439,6 +445,7 @@ func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
 
+// TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.
 func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
@@ -455,6 +462,7 @@ func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
 
+// TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError verifies semi-sync restart path self-heals recoverable init failures.
 func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.Replicating = true
@@ -477,11 +485,15 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		ctx := t.Context()
 		ts := memorytopo.NewServer(ctx, "cell1")
 
+		// Create a shard with a primary that InitReplica will point to.
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
 
 		parent := &topodatapb.Tablet{
-			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Alias: &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  200,
+			},
 			Keyspace:      "ks",
 			Shard:         "0",
 			Type:          topodatapb.TabletType_PRIMARY,
@@ -491,6 +503,9 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.NoError(t, ts.CreateTablet(ctx, parent))
 
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+
+		// Let the source change succeed, then fail the explicit START REPLICA so
+		// the recovery path is exercised after the source is already configured.
 		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
 		fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -504,6 +519,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 
 		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts)
 
+		// InitReplica should recover the start failure and still complete.
 		err = tm.InitReplica(ctx, parent.Alias, "", 0, false)
 		require.NoError(t, err)
 		require.Equal(t, "mysql-primary", fakeMysqlDaemon.CurrentSourceHost)
@@ -511,12 +527,14 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 
-	t.Run("SetReplicationSource reapplies source after recoverable source change error", func(t *testing.T) {
+	t.Run("SetReplicationSource recovers on source change for running replica", func(t *testing.T) {
 		ctx := t.Context()
 		ts := memorytopo.NewServer(ctx, "cell1")
 
 		tablet := newTestTablet(t, 100, "ks", "0", nil)
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+
+		// Start from a running replica that still points at the old primary.
 		fakeMysqlDaemon.Replicating = true
 		fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
 		fakeMysqlDaemon.CurrentSourcePort = 3305
@@ -529,6 +547,10 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		}
 
 		setSourceCalls := 0
+
+		// Fail the first source-change attempt after the internal STOP REPLICA.
+		// The second attempt should succeed after recovery has cleared the broken
+		// metadata and reapplied the requested source.
 		fakeMysqlDaemon.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 			setSourceCalls++
 
@@ -546,8 +568,10 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 			if setSourceCalls == 2 {
 				require.False(t, stopReplicationBefore)
 				require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+
 				fakeMysqlDaemon.CurrentSourceHost = host
 				fakeMysqlDaemon.CurrentSourcePort = port
+
 				return nil
 			}
 
@@ -570,12 +594,16 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		}
 		close(tm._waitForGrantsComplete)
 
+		// Register both the replica and the new primary in topo.
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
 		require.NoError(t, ts.CreateTablet(ctx, tablet))
 
 		parent := &topodatapb.Tablet{
-			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Alias: &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  200,
+			},
 			Keyspace:      "ks",
 			Shard:         "0",
 			Type:          topodatapb.TabletType_PRIMARY,
@@ -584,7 +612,106 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		}
 		require.NoError(t, ts.CreateTablet(ctx, parent))
 
+		// SetReplicationSource should recover the source-change error, then
+		// leave the replica configured for the new primary.
 		err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", false, false, 0)
+		require.NoError(t, err)
+
+		require.Equal(t, 2, setSourceCalls)
+		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
+		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("non-running replica reapplies source after recoverable source error", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
+		fakeMysqlDaemon.CurrentSourcePort = 3305
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"FAKE RESET REPLICA ALL",
+			"FAKE SET SOURCE",
+		}
+
+		setSourceCalls := 0
+
+		// When replication was not running, recovery should clear any stale source
+		// settings and reapply the requested source without starting replication.
+		fakeMysqlDaemon.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+			setSourceCalls++
+
+			require.Equal(t, "mysql-new-primary", host)
+			require.EqualValues(t, 3306, port)
+			require.False(t, stopReplicationBefore)
+			require.False(t, startReplicationAfter)
+
+			if setSourceCalls == 1 {
+				return recoverableReplicationInitError()
+			}
+
+			if setSourceCalls == 2 {
+				require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+
+				fakeMysqlDaemon.CurrentSourceHost = host
+				fakeMysqlDaemon.CurrentSourcePort = port
+
+				return nil
+			}
+
+			return fmt.Errorf("unexpected SetReplicationSource call %d", setSourceCalls)
+		}
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, false, false)
+		require.NoError(t, err)
+		require.Equal(t, 2, setSourceCalls)
+		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
+		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("non-running replica with start requested reapplies source and starts replication", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
+		fakeMysqlDaemon.CurrentSourcePort = 3305
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"FAKE RESET REPLICA ALL",
+			"FAKE SET SOURCE",
+			"START REPLICA",
+		}
+
+		setSourceCalls := 0
+
+		// A source-change failure can happen before the new source is applied.
+		// Recovery should clear the old source settings, reapply the requested
+		// source, and only then start replication.
+		fakeMysqlDaemon.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+			setSourceCalls++
+
+			require.Equal(t, "mysql-new-primary", host)
+			require.EqualValues(t, 3306, port)
+			require.False(t, stopReplicationBefore)
+			require.False(t, startReplicationAfter)
+
+			if setSourceCalls == 1 {
+				return recoverableReplicationInitError()
+			}
+
+			if setSourceCalls == 2 {
+				require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+
+				fakeMysqlDaemon.CurrentSourceHost = host
+				fakeMysqlDaemon.CurrentSourcePort = port
+
+				return nil
+			}
+
+			return fmt.Errorf("unexpected SetReplicationSource call %d", setSourceCalls)
+		}
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, false, true)
 		require.NoError(t, err)
 		require.Equal(t, 2, setSourceCalls)
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)

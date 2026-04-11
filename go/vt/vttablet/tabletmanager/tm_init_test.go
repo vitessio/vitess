@@ -1253,6 +1253,8 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 }
 
+// TestInitReplicationRecovery verifies replica startup initialization self-heals recoverable
+// init failures returned from SetReplicationSource.
 func TestInitReplicationRecovery(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
@@ -1282,7 +1284,10 @@ func TestInitReplicationRecovery(t *testing.T) {
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityNone)
 
 	primary := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 2},
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  2,
+		},
 		Hostname: "primary-host",
 		PortMap: map[string]int32{
 			"vt":   1234,
@@ -1303,6 +1308,11 @@ func TestInitReplicationRecovery(t *testing.T) {
 
 	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
+
+	// Make StartReplication return a recoverable init error and expect the
+	// startup path to self-heal by restarting replication. SetReplicationSource
+	// is called with startReplicationAfter=false so recovery only applies to
+	// the separate StartReplication call.
 	fakeMysqlDaemon.SetPrimaryPositionLocked(pos)
 	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
 	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
@@ -1314,6 +1324,8 @@ func TestInitReplicationRecovery(t *testing.T) {
 		"START REPLICA",
 	}
 
+	// initializeReplication should now succeed and return the primary position
+	// after routing the recoverable error through RestartReplication.
 	gotPosition, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)

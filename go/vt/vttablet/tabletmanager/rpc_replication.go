@@ -1240,6 +1240,7 @@ func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error 
 		return nil
 	}
 
+	// Try to recover from the error.
 	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
 		return err
 	}
@@ -1251,8 +1252,11 @@ func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error 
 // replication afterward. When possible, certain errors are recovered by reinitializing replication
 // metadata.
 func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, wasReplicating bool, shouldStartReplication bool) error {
+	// Let's first try to apply the requested source without starting replication afterwards. If the
+	// replica was replicating before, we stop replication first.
 	err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, false)
 	if err == nil {
+		// We succeeded, let's start replication but only if it was requested.
 		if !shouldStartReplication {
 			return nil
 		}
@@ -1260,31 +1264,39 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 		return tm.startReplicationRecoverable(ctx)
 	}
 
+	// We hit an error. If the error is not one of the recoverable ones, we can't recover and should return it.
 	if !isRecoverableReplicationInitializationError(err) {
 		return err
 	}
 
 	log.Warn(
-		"Encountered recoverable replication initialization error while changing replication source, resetting replication parameters and reapplying source",
+		"Encountered recoverable replication initialization error while changing replication source, resetting "+
+			"replication parameters and reapplying source",
 		slog.String("source_host", host),
 		slog.Int("source_port", int(port)),
 		slog.Any("error", err),
 	)
 
+	// If the replica was running when the source-change attempt failed, stop it
+	// explicitly before resetting replication metadata.
 	if wasReplicating {
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}
 	}
 
+	// Recover from the error by reinitializing replication metadata through
+	// `RESET REPLICA ALL`.
 	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return err
 	}
 
+	// Now that we've reinitialized the replication metadata, try setting the source again.
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, false, false); err != nil {
 		return err
 	}
 
+	// The replication source has finally been set. Let's also start replication if it was requested.
 	if shouldStartReplication {
 		return tm.startReplicationRecoverable(ctx)
 	}
@@ -1292,10 +1304,15 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 	return nil
 }
 
+// recoverableReplicationInitializationErrorCodes is the set of replication initialization error
+// codes that can be recovered from by reinitializing replication metadata.
+// MySQL used 1871/1872 for master-info and relay-log-info initialization errors
+// through 8.0.32, and reassigned those numbers in 8.0.33 to connection-metadata
+// and applier-metadata initialization errors.
 var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
-	sqlerror.ErrorCode(1201): {},
-	sqlerror.ErrorCode(1871): {},
-	sqlerror.ErrorCode(1872): {},
+	sqlerror.ERMasterInfo:                              {},
+	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
+	sqlerror.ERReplicaApplierMetadataInitRepository:    {},
 }
 
 // isRecoverableReplicationInitializationError reports whether an error can be recovered from by
@@ -1313,6 +1330,7 @@ func isRecoverableReplicationInitializationError(err error) bool {
 // handleRecoverableReplicationInitError repairs recoverable replication initialization
 // failures by restarting replication.
 func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Context, err error) error {
+	// Attempt to self-heal by restarting replication when initialization fails.
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
 	if isRecoverableReplicationInitializationError(err) {

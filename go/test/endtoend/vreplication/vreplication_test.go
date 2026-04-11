@@ -139,9 +139,9 @@ func TestVReplicationDDLHandling(t *testing.T) {
 		jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
 		require.NoError(t, err)
 		require.NotEqual(t, "{}", jsVal)
-		// The JSON values look like this: {"onddl_test.3.IGNORE": 1}
+		// The JSON values look like this: {"onddl_test.MoveTables.3.IGNORE": 1}
 		for _, action := range binlogdatapb.OnDDLAction_name {
-			count := gjson.Get(jsVal, fmt.Sprintf(`%s\.%d\.%s`, workflow, id, action)).Int()
+			count := gjson.Get(jsVal, fmt.Sprintf(`%s\.%s\.%d\.%s`, workflow, binlogdatapb.VReplicationWorkflowType_MoveTables.String(), id, action)).Int()
 			expectedCount := int64(0)
 			if action == expectedAction.String() {
 				expectedCount = 1
@@ -883,7 +883,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
 			for _, tab := range []*cluster.VttabletProcess{tablet200, tablet300} {
-				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, defaultSourceKs+".0.p2c.1", tab)
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, defaultSourceKs+".0.p2c.MoveTables.1", tab)
 				totalInserts += insertCount
 				totalUpdates += updateCount
 				totalInsertQueries += insertQueries
@@ -2089,8 +2089,8 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 	jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
 	require.NoError(t, err)
 	require.NotEqual(t, "{}", jsVal)
-	// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
-	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.%s`, workflow, appname)).Int()
+	// The JSON value looks like this: {"cproduct.MoveTables.4.tablet.vstreamer": 2, "cproduct.MoveTables.4.tablet.vplayer": 4}
+	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.*\.tablet\.%s`, workflow, appname)).Int()
 	require.Greater(t, throttledCount, zv, "JSON value: %s", jsVal)
 
 	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
@@ -2106,8 +2106,8 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 		jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
 		require.NoError(t, err)
 		require.NotEqual(t, "{}", jsVal)
-		// The JSON value looks like this: {"product.0.cproduct.4": 6}
-		vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*`, keyspace, workflow)).Int()
+		// The JSON value looks like this: {"product.0.cproduct.MoveTables.4": 6}
+		vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*\.*`, keyspace, workflow)).Int()
 		require.NoError(t, err)
 		// Take off 1 second to deal with timing issues in the test.
 		minLagSecs := int64(int64(sleepTime.Seconds()) - 1)

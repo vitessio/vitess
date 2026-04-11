@@ -133,10 +133,10 @@ linters:
         path: _test\.go$
       - linters:
           - prealloc
-        path: ^go/(cache|mysql|pools|sqltypes|test|tools)/
+        path: ^go/(pools|test|tools)/
       - linters:
           - prealloc
-        path: ^go/vt/(grpcclient|schemadiff|sqlparser|topo|vtctl|vtgate|vttablet|wrangler)/
+        path: ^go/vt/(sqlparser|vtgate|vttablet|wrangler)/
       - linters:
           - errcheck
         path: ^go/vt/proto/
