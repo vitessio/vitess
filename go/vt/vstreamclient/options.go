@@ -136,6 +136,10 @@ func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Optio
 
 func WithStateTable(keyspace, table string) Option {
 	return func(v *VStreamClient) error {
+		if table == "" {
+			return errors.New("vstreamclient: state table name is required")
+		}
+
 		shards, ok := v.shardsByKeyspace[keyspace]
 		if !ok {
 			return fmt.Errorf("vstreamclient: keyspace %s not found", keyspace)
