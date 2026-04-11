@@ -110,9 +110,8 @@ func TestVStreamClientStreamsAndResumesFromShardedSource(t *testing.T) {
 	assert.ElementsMatch(t, firstBatch, firstRun)
 
 	vgtid := queryLatestVGtid(t, te.ctx, te.session, streamName)
-	if assert.Len(t, vgtid.ShardGtids, 2) {
-		assert.ElementsMatch(t, []string{"-80", "80-"}, []string{vgtid.ShardGtids[0].Shard, vgtid.ShardGtids[1].Shard})
-	}
+	require.Len(t, vgtid.ShardGtids, 2)
+	assert.ElementsMatch(t, []string{"-80", "80-"}, []string{vgtid.ShardGtids[0].Shard, vgtid.ShardGtids[1].Shard})
 
 	secondBatch := []*Customer{{ID: 4103, Email: "sharded-c@domain.com"}}
 	for _, customer := range secondBatch {

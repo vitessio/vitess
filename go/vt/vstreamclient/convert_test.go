@@ -152,7 +152,7 @@ func TestCopyRowToStruct_TimeAndPointers(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 
@@ -165,15 +165,14 @@ func TestCopyRowToStruct_TimeAndPointers(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out := v.Interface().(*testRow)
 	assert.Equal(t, int64(1), out.ID)
 	assert.False(t, out.TS.IsZero())
 	assert.Nil(t, out.Opt)
-	if assert.NotNil(t, out.OptT) {
-		assert.False(t, out.OptT.IsZero())
-	}
+	require.NotNil(t, out.OptT)
+	assert.False(t, out.OptT.IsZero())
 }
 
 func TestHandleRowEvent_TimeUsesConfiguredLocation(t *testing.T) {
@@ -186,7 +185,7 @@ func TestHandleRowEvent_TimeUsesConfiguredLocation(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRow{}, timeLocation: loc}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
 
@@ -198,14 +197,12 @@ func TestHandleRowEvent_TimeUsesConfiguredLocation(t *testing.T) {
 	}}}
 
 	err = table.handleRowEvent(ev, &VStreamStats{})
-	assert.NoError(t, err)
-	if assert.Len(t, table.currentBatch, 1) {
-		out, ok := table.currentBatch[0].Data.(*testRow)
-		if assert.True(t, ok) {
-			assert.Equal(t, time.Date(2026, 2, 10, 11, 12, 13, 0, loc), out.TS)
-			assert.Equal(t, loc, out.TS.Location())
-		}
-	}
+	require.NoError(t, err)
+	require.Len(t, table.currentBatch, 1)
+	out, ok := table.currentBatch[0].Data.(*testRow)
+	require.True(t, ok)
+	assert.Equal(t, time.Date(2026, 2, 10, 11, 12, 13, 0, loc), out.TS)
+	assert.Equal(t, loc, out.TS.Location())
 }
 
 func TestCopyRowToStruct_NullIntoNonPointerErrors(t *testing.T) {
@@ -215,7 +212,7 @@ func TestCopyRowToStruct_NullIntoNonPointerErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{sqltypes.NULL}
@@ -237,7 +234,7 @@ func TestCopyRowToStruct_JSONFields(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{
@@ -248,7 +245,7 @@ func TestCopyRowToStruct_JSONFields(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out := v.Interface().(*testJSONRow)
 	assert.Equal(t, int64(1), out.ID)
@@ -268,7 +265,7 @@ func TestCopyRowToStruct_JSONFieldInvalidErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{
@@ -294,7 +291,7 @@ func TestCopyRowToStruct_JSONFieldNullIntoNonPointerErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{
@@ -321,11 +318,11 @@ func TestCopyRowToStruct_ByteAndRawJSONFields(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	rawPayload, err := sqltypes.NewJSON(`{"name":"alpha","count":2}`)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := []sqltypes.Value{
 		sqltypes.NewVarBinary("payload-bytes"),
 		rawPayload,
@@ -334,7 +331,7 @@ func TestCopyRowToStruct_ByteAndRawJSONFields(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out := v.Interface().(*testBytesAndRawJSONRow)
 	assert.Equal(t, []byte("payload-bytes"), out.Payload)
@@ -352,7 +349,7 @@ func TestCopyRowToStruct_NestedAndEmbeddedFields(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, fieldMap, "id")
 	assert.Contains(t, fieldMap, "name")
 
@@ -364,7 +361,7 @@ func TestCopyRowToStruct_NestedAndEmbeddedFields(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out := v.Interface().(*testNestedMappedRow)
 	assert.Equal(t, int64(7), out.ID)
@@ -383,7 +380,7 @@ func TestCopyRowToStruct_ScannerAndTextUnmarshalerFields(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{
@@ -395,7 +392,7 @@ func TestCopyRowToStruct_ScannerAndTextUnmarshalerFields(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out := v.Interface().(*testWrapperRow)
 	assert.True(t, out.Name.Valid)
@@ -414,7 +411,7 @@ func TestCopyRowToStruct_UnsupportedStructFieldErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("value")}
@@ -433,7 +430,7 @@ func TestCopyRowToStruct_IntOverflowErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{sqltypes.NewInt64(128)}
@@ -452,7 +449,7 @@ func TestCopyRowToStruct_UintOverflowErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{sqltypes.NewUint64(256)}
@@ -471,7 +468,7 @@ func TestCopyRowToStruct_FloatOverflowErrors(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	shard := shardConfig{fieldMap: fieldMap, fields: fields}
 	row := []sqltypes.Value{sqltypes.NewFloat64(1e40)}
@@ -505,16 +502,15 @@ func TestReflectMapFields_FallbackTagsStripOptions(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, ok := fieldMap["db_name"]
 	assert.True(t, ok)
 	_, ok = fieldMap["json_name"]
 	assert.True(t, ok)
 	m, ok := fieldMap["option_name"]
-	if assert.True(t, ok) {
-		assert.True(t, m.jsonDecode)
-	}
+	require.True(t, ok)
+	assert.True(t, m.jsonDecode)
 }
 
 func TestInitTables_RequiresFlushFn(t *testing.T) {
@@ -544,15 +540,14 @@ func TestInitTables_SetsDefaults(t *testing.T) {
 		DataType: &testRowSmall{},
 		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	table := v.tables[qualifiedTableName("ks", "t")]
-	if assert.NotNil(t, table) {
-		assert.Equal(t, "select * from `t`", table.Query)
-		assert.Equal(t, DefaultMaxRowsPerFlush, table.MaxRowsPerFlush)
-		assert.Len(t, table.currentBatch, 0)
-		assert.Equal(t, DefaultMaxRowsPerFlush, cap(table.currentBatch))
-	}
+	require.NotNil(t, table)
+	assert.Equal(t, "select * from `t`", table.Query)
+	assert.Equal(t, DefaultMaxRowsPerFlush, table.MaxRowsPerFlush)
+	assert.Len(t, table.currentBatch, 0)
+	assert.Equal(t, DefaultMaxRowsPerFlush, cap(table.currentBatch))
 }
 
 func TestInitTables_RejectsDuplicateTables(t *testing.T) {
@@ -565,7 +560,7 @@ func TestInitTables_RejectsDuplicateTables(t *testing.T) {
 		{Keyspace: "ks1", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
 		{Keyspace: "ks2", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, v.tables, qualifiedTableName("ks1", "t"))
 	assert.Contains(t, v.tables, qualifiedTableName("ks2", "t"))
 }
@@ -656,7 +651,7 @@ func TestValidateTableConfig(t *testing.T) {
 			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
 			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("different config fails", func(t *testing.T) {
@@ -706,7 +701,7 @@ func TestHandleRowEvent_DeleteUsesBeforeRowData(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
@@ -718,13 +713,11 @@ func TestHandleRowEvent_DeleteUsesBeforeRowData(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err = table.handleRowEvent(ev, stats)
-	assert.NoError(t, err)
-	if assert.Len(t, table.currentBatch, 1) {
-		row, ok := table.currentBatch[0].Data.(*testRowSmall)
-		if assert.True(t, ok) {
-			assert.Equal(t, int64(1), row.ID)
-		}
-	}
+	require.NoError(t, err)
+	require.Len(t, table.currentBatch, 1)
+	row, ok := table.currentBatch[0].Data.(*testRowSmall)
+	require.True(t, ok)
+	assert.Equal(t, int64(1), row.ID)
 }
 
 func TestHandleRowEvent_InsertScansNullableFields(t *testing.T) {
@@ -737,7 +730,7 @@ func TestHandleRowEvent_InsertScansNullableFields(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testNullableJSONRow{}}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
 
@@ -755,18 +748,15 @@ func TestHandleRowEvent_InsertScansNullableFields(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err = table.handleRowEvent(ev, stats)
-	assert.NoError(t, err)
-	if assert.Len(t, table.currentBatch, 1) {
-		row, ok := table.currentBatch[0].Data.(*testNullableJSONRow)
-		if assert.True(t, ok) {
-			assert.Equal(t, int64(7), row.ID)
-			assert.Nil(t, row.Opt)
-			if assert.NotNil(t, row.Payload) {
-				assert.Equal(t, "beta", row.Payload.Name)
-				assert.Equal(t, 4, row.Payload.Count)
-			}
-		}
-	}
+	require.NoError(t, err)
+	require.Len(t, table.currentBatch, 1)
+	row, ok := table.currentBatch[0].Data.(*testNullableJSONRow)
+	require.True(t, ok)
+	assert.Equal(t, int64(7), row.ID)
+	assert.Nil(t, row.Opt)
+	require.NotNil(t, row.Payload)
+	assert.Equal(t, "beta", row.Payload.Name)
+	assert.Equal(t, 4, row.Payload.Count)
 }
 
 func TestHandleRowEvent_UsesTypedScanner(t *testing.T) {
@@ -786,14 +776,12 @@ func TestHandleRowEvent_UsesTypedScanner(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err := table.handleRowEvent(ev, stats)
-	assert.NoError(t, err)
-	if assert.Len(t, table.currentBatch, 1) {
-		row := table.currentBatch[0]
-		scanned, ok := row.Data.(*testScannerRow)
-		if assert.True(t, ok) {
-			assert.Equal(t, int64(7), scanned.ID)
-		}
-	}
+	require.NoError(t, err)
+	require.Len(t, table.currentBatch, 1)
+	row := table.currentBatch[0]
+	scanned, ok := row.Data.(*testScannerRow)
+	require.True(t, ok)
+	assert.Equal(t, int64(7), scanned.ID)
 }
 
 func TestInitTables_ValueDataTypeStillUsesPointerScanner(t *testing.T) {
@@ -829,12 +817,10 @@ func TestInitTables_ValueDataTypeStillUsesPointerScanner(t *testing.T) {
 	}, &VStreamStats{})
 	require.NoError(t, err)
 
-	if assert.Len(t, table.currentBatch, 1) {
-		scanned, ok := table.currentBatch[0].Data.(*testScannerRow)
-		if assert.True(t, ok) {
-			assert.Equal(t, int64(7), scanned.ID)
-		}
-	}
+	require.Len(t, table.currentBatch, 1)
+	scanned, ok := table.currentBatch[0].Data.(*testScannerRow)
+	require.True(t, ok)
+	assert.Equal(t, int64(7), scanned.ID)
 }
 
 func TestHandleRowEvent_DecodeFailureDoesNotBufferRow(t *testing.T) {
@@ -843,7 +829,7 @@ func TestHandleRowEvent_DecodeFailureDoesNotBufferRow(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
 
@@ -883,7 +869,7 @@ func TestHandleRowEvent_PartialRowImageFailsForDefaultDecoder(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
 
@@ -909,7 +895,7 @@ func TestHandleRowEvent_PartialJSONFailsForDefaultDecoder(t *testing.T) {
 	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testJSONRow{}}
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	fieldMap, err := table.reflectMapFields(fields)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
 	table.resetBatch()
 

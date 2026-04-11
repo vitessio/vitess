@@ -113,10 +113,8 @@ func TestNewVGtid_DeduplicatesKeyspaces(t *testing.T) {
 	}
 
 	vgtid, err := newVGtid(tables, shardsByKeyspace)
-	assert.NoError(t, err)
-	if !assert.NotNil(t, vgtid) {
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, vgtid)
 
 	counts := make(map[string]int)
 	for _, shardGtid := range vgtid.ShardGtids {
