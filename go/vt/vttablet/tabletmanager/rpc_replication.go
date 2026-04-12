@@ -524,6 +524,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
+
 	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
 		return err
 	}

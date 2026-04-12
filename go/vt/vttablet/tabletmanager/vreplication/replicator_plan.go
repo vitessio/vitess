@@ -80,7 +80,6 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	// names and have already built most of the plan.
 	if prelim.Insert != nil {
 		tplanv := *prelim
-		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, fieldEvent.Fields)
 		// We know that we sent only column names, but they may be backticked.
 		// If so, we have to strip them out to allow them to match the expected
 		// bind var names.
@@ -90,6 +89,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
+		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, tplanv.Fields)
 		return &tplanv, nil
 	}
 	// select * construct was used. We need to use the field names.

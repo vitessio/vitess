@@ -8,6 +8,7 @@ cd "$SCRIPT_DIR" || exit 1
 
 ROW_COUNT=${ROW_COUNT:-200000}
 SEED_ROWS=${SEED_ROWS:-10000}
+RUN_ORDER=${RUN_ORDER:-random}
 export ROW_COUNT SEED_ROWS
 
 echo "============================================"
@@ -41,16 +42,52 @@ run_bench() {
 	echo ""
 }
 
-# Run 1: Serial (1 worker)
-run_bench 1 "Serial (1 worker)" || exit 1
+case "$RUN_ORDER" in
+	serial-first)
+		first_workers=1
+		first_label="Serial (1 worker)"
+		second_workers=4
+		second_label="Parallel (4 workers)"
+		;;
+	parallel-first)
+		first_workers=4
+		first_label="Parallel (4 workers)"
+		second_workers=1
+		second_label="Serial (1 worker)"
+		;;
+	random)
+		if (( RANDOM % 2 == 0 )); then
+			first_workers=1
+			first_label="Serial (1 worker)"
+			second_workers=4
+			second_label="Parallel (4 workers)"
+			RUN_ORDER=serial-first
+		else
+			first_workers=4
+			first_label="Parallel (4 workers)"
+			second_workers=1
+			second_label="Serial (1 worker)"
+			RUN_ORDER=parallel-first
+		fi
+		;;
+	*)
+		echo "Invalid RUN_ORDER: $RUN_ORDER"
+		exit 1
+		;;
+esac
+
+echo "Run order: $RUN_ORDER"
+
+# Run 1
+run_bench "$first_workers" "$first_label" || exit 1
 
 # Teardown between runs
 echo "Tearing down between runs..."
 (cd "$SCRIPT_DIR/../local" && ./501_teardown.sh) 2>/dev/null
 sleep 3
 
-# Run 2: Parallel (4 workers)
-run_bench 4 "Parallel (4 workers)" || exit 1
+# Run 2
+run_bench "$second_workers" "$second_label" || exit 1
 
 # Teardown after
 echo "Tearing down after benchmark..."

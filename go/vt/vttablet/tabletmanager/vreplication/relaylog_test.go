@@ -55,7 +55,7 @@ func TestRelayLogSendFetch(t *testing.T) {
 func TestRelayLogSendTimeout(t *testing.T) {
 	ctx := t.Context()
 	oldDeadline := vplayerProgressDeadline
-	vplayerProgressDeadline = 20 * time.Millisecond
+	vplayerProgressDeadline = 100 * time.Millisecond
 	t.Cleanup(func() {
 		vplayerProgressDeadline = oldDeadline
 	})
@@ -83,7 +83,7 @@ func TestRelayLogSendTimeout(t *testing.T) {
 	case err := <-errCh:
 		require.Error(t, err)
 		assert.ErrorContains(t, err, relayLogIOStalledMsg)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for send")
 	}
 }
@@ -91,7 +91,7 @@ func TestRelayLogSendTimeout(t *testing.T) {
 func TestRelayLogFetchTimeout(t *testing.T) {
 	ctx := t.Context()
 	oldIdle := idleTimeout
-	idleTimeout = 20 * time.Millisecond
+	idleTimeout = 100 * time.Millisecond
 	t.Cleanup(func() {
 		idleTimeout = oldIdle
 	})

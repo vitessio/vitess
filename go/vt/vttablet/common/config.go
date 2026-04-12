@@ -266,6 +266,16 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 // SourceOverrides returns only the vstreamer-side overrides that can be sent to source tablets.
 func (c VReplicationConfig) SourceOverrides() map[string]string {
 	sourceOverrides := make(map[string]string)
+	for _, key := range []string{
+		"vreplication-experimental-flags",
+		"vreplication-net-read-timeout",
+		"vreplication-net-write-timeout",
+		"vreplication-copy-phase-duration",
+	} {
+		if value, ok := c.Overrides[key]; ok && value != "" {
+			sourceOverrides[key] = value
+		}
+	}
 	if c.VStreamPacketSizeOverride {
 		sourceOverrides["vstream-packet-size"] = strconv.Itoa(c.VStreamPacketSize)
 	}

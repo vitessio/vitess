@@ -288,12 +288,12 @@ func TestExecConnStatements_UpdatesMockSchema(t *testing.T) {
 		fmt.Sprintf("create table %s (id int primary key)", tableName),
 	})
 	t.Cleanup(func() {
-		execConnStatements(t, conn, []string{fmt.Sprintf("drop table if exists %s", tableName)})
+		execConnStatements(t, conn, []string{"drop table if exists " + tableName})
 	})
 
 	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
 
-	execConnStatements(t, conn, []string{fmt.Sprintf("drop table %s", tableName)})
+	execConnStatements(t, conn, []string{"drop table " + tableName})
 
 	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
 }
@@ -390,8 +390,9 @@ func TestVPlayerForwardsWorkflowOverridesToSourceVStream(t *testing.T) {
 		"4194304",
 	))
 	config, err := vttablet.NewVReplicationConfig(map[string]string{
-		"vreplication-net-read-timeout": "123",
-		"vstream-packet-size":           "42",
+		"vreplication-net-read-timeout":             "123",
+		"vreplication-parallel-replication-workers": "4",
+		"vstream-packet-size":                       "42",
 	})
 	require.NoError(t, err)
 
@@ -416,8 +417,9 @@ func TestVCopierCopyAllForwardsWorkflowOverridesToSourceVStreamTables(t *testing
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
 	config, err := vttablet.NewVReplicationConfig(map[string]string{
-		"vreplication-net-read-timeout": "123",
-		"vstream-packet-size":           "42",
+		"vreplication-net-read-timeout":             "123",
+		"vreplication-parallel-replication-workers": "4",
+		"vstream-packet-size":                       "42",
 	})
 	require.NoError(t, err)
 
@@ -441,8 +443,9 @@ func TestVCopierCopyTableForwardsWorkflowOverridesToSourceVStreamRows(t *testing
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
 	config, err := vttablet.NewVReplicationConfig(map[string]string{
-		"vreplication-net-read-timeout": "123",
-		"vstream-packet-size":           "42",
+		"vreplication-net-read-timeout":             "123",
+		"vreplication-parallel-replication-workers": "4",
+		"vstream-packet-size":                       "42",
 	})
 	require.NoError(t, err)
 
@@ -957,12 +960,12 @@ func TestUpdateMockSchemaForQuery_DropRemovesSchemaEngineTable(t *testing.T) {
 	tableName := "schema_engine_drop_test"
 	execStatements(t, []string{fmt.Sprintf("create table %s (id int primary key)", tableName)})
 	t.Cleanup(func() {
-		execStatements(t, []string{fmt.Sprintf("drop table if exists %s", tableName)})
+		execStatements(t, []string{"drop table if exists " + tableName})
 	})
 
 	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
 
-	updateMockSchemaForQuery(fmt.Sprintf("drop table %s", tableName))
+	updateMockSchemaForQuery("drop table " + tableName)
 
 	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
 }

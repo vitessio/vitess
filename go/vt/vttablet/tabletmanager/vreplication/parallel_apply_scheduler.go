@@ -179,8 +179,10 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 			return txn, nil
 		}
 		// Check closed only after attempting to drain any queued work so
-		// transactions already scheduled before shutdown still commit.
-		if s.closed {
+		// transactions already scheduled before shutdown still commit. A
+		// closed scheduler may still have blocked pending work that becomes
+		// ready only after inflight transactions commit.
+		if s.closed && s.pendingCount == 0 {
 			return nil, io.EOF
 		}
 		s.cond.Wait()

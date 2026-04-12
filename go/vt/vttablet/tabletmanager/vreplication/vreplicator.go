@@ -508,6 +508,19 @@ func (vr *vreplicator) insertLog(typ, message string) {
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(vr.dbClient, state, message, false)
+}
+
+// setStateWithDBClientImmediate updates the stream state using the supplied
+// connection immediately, even when the connection is in batch mode. The
+// commitLoop uses this after a worker has already flushed its batch but before
+// COMMIT so the stop-state write stays in the same transaction as the row
+// changes and position update.
+func (vr *vreplicator) setStateWithDBClientImmediate(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(dbClient, state, message, true)
+}
+
+func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string, immediate bool) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -516,19 +529,19 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	// If we're batching a transaction, then include the state update
-	// in the current transaction batch.
-	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
-		vr.dbClient.AddQueryToTrxBatch(query)
-	} else { // Otherwise, send it down the wire
-		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
+		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
+			return fmt.Errorf("could not set state: %v: %v", query, err)
+		}
+	} else {
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
 	if state == vr.state {
 		return nil
 	}
-	insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message)
+	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
 
 	return nil
@@ -880,6 +893,10 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 	if plan == nil {
 		return false, nil
 	}
+	identityColSet := make(map[string]struct{}, len(plan.IdentityColumns))
+	for _, col := range plan.IdentityColumns {
+		identityColSet[col] = struct{}{}
+	}
 	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
 		return false, err
@@ -897,6 +914,42 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 		return false, nil
 	}
 
+	primaryKeyMatchesIdentity := true
+	primaryKeyMatchesIdentitySet := len(identityColSet) == len(identityCols)
+	primaryKeyColumnCount := 0
+	for _, index := range tableSpec.Indexes {
+		if index == nil || index.Info == nil || index.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		primaryKeyColumnCount = len(index.Columns)
+		if primaryKeyColumnCount != len(identityCols) {
+			return true, nil
+		}
+		for i, idxCol := range index.Columns {
+			if idxCol.Expression != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			if idxCol.Length != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			colName := idxCol.Column.Lowered()
+			if colName != identityCols[i] {
+				primaryKeyMatchesIdentity = false
+			}
+			if _, ok := identityColSet[colName]; !ok {
+				primaryKeyMatchesIdentitySet = false
+			}
+		}
+		break
+	}
+	if primaryKeyColumnCount > 0 && !primaryKeyMatchesIdentity && !primaryKeyMatchesIdentitySet {
+		return true, nil
+	}
+
 	for _, secondaryKey := range secondaryKeys {
 		if secondaryKey == nil || secondaryKey.Info == nil || !secondaryKey.Info.IsUnique() {
 			continue
@@ -905,13 +958,27 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 			return true, nil
 		}
 		matchesIdentity := true
+		matchesIdentitySet := len(identityColSet) == len(identityCols)
 		for i, idxCol := range secondaryKey.Columns {
-			if idxCol.Expression != nil || idxCol.Column.Lowered() != identityCols[i] {
+			if idxCol.Expression != nil {
 				matchesIdentity = false
+				matchesIdentitySet = false
 				break
 			}
+			if idxCol.Length != nil {
+				matchesIdentity = false
+				matchesIdentitySet = false
+				break
+			}
+			colName := idxCol.Column.Lowered()
+			if colName != identityCols[i] {
+				matchesIdentity = false
+			}
+			if _, ok := identityColSet[colName]; !ok {
+				matchesIdentitySet = false
+			}
 		}
-		if matchesIdentity {
+		if matchesIdentity || matchesIdentitySet {
 			continue
 		}
 		return true, nil

@@ -104,7 +104,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var gtid string
 
 	vstreamOptions := &binlogdatapb.VStreamOptions{
-		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+		ConfigOverrides: vc.vr.workflowConfig.SourceOverrides(),
 	}
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())

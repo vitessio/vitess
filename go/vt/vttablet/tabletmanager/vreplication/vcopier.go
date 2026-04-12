@@ -421,7 +421,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var prevCh <-chan *vcopierCopyTaskResult
 
 	vstreamOptions := &binlogdatapb.VStreamOptions{
-		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+		ConfigOverrides: vc.vr.workflowConfig.SourceOverrides(),
 	}
 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {

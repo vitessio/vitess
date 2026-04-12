@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,9 +138,7 @@ func clonePostDDLStalePlan(stale postDDLStalePlan) postDDLStalePlan {
 		return clone
 	}
 	clone.refreshedPlans = make(map[string]*TablePlan, len(stale.refreshedPlans))
-	for refreshedName, refreshedPlan := range stale.refreshedPlans {
-		clone.refreshedPlans[refreshedName] = refreshedPlan
-	}
+	maps.Copy(clone.refreshedPlans, stale.refreshedPlans)
 	return clone
 }
 
@@ -165,6 +165,25 @@ func cloneDroppedTables(src map[string]struct{}) map[string]struct{} {
 	return cloned
 }
 
+func canonicalPostDDLTableKey[T any](entries map[string]T, name string) string {
+	if name == "" {
+		return ""
+	}
+	if _, ok := entries[name]; ok {
+		return name
+	}
+	for candidate := range entries {
+		if strings.EqualFold(candidate, name) {
+			return candidate
+		}
+	}
+	return name
+}
+
+func postDDLTableKeyMatches(a, b string) bool {
+	return a != "" && b != "" && strings.EqualFold(a, b)
+}
+
 // snapshotPostDDLStalePlans widens an unknown-DDL barrier to all currently
 // live plans except names already known to have been dropped.
 func snapshotPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables map[string]struct{}) map[string]postDDLStalePlan {
@@ -173,7 +192,7 @@ func snapshotPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables m
 	}
 	tracked := make(map[string]postDDLStalePlan, len(tablePlans))
 	for name, plan := range tablePlans {
-		if _, dropped := droppedTables[name]; dropped {
+		if _, dropped := droppedTables[canonicalPostDDLTableKey(droppedTables, name)]; dropped {
 			continue
 		}
 		tracked[name] = postDDLStalePlan{
@@ -188,7 +207,8 @@ func snapshotPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables m
 }
 
 func addPostDDLStalePlan(tracked map[string]postDDLStalePlan, tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, allowDroppedRefreshedNames bool, staleName string, refreshedNames ...string) {
-	if _, dropped := droppedTables[staleName]; dropped {
+	staleName = canonicalPostDDLTableKey(tablePlans, staleName)
+	if _, dropped := droppedTables[canonicalPostDDLTableKey(droppedTables, staleName)]; dropped {
 		return
 	}
 	plan, ok := tablePlans[staleName]
@@ -203,8 +223,9 @@ func addPostDDLStalePlan(tracked map[string]postDDLStalePlan, tablePlans map[str
 		if refreshedName == "" {
 			continue
 		}
+		refreshedName = canonicalPostDDLTableKey(tablePlans, refreshedName)
 		if !allowDroppedRefreshedNames && refreshedName != staleName {
-			if _, dropped := droppedTables[refreshedName]; dropped {
+			if _, dropped := droppedTables[canonicalPostDDLTableKey(droppedTables, refreshedName)]; dropped {
 				continue
 			}
 		}
@@ -260,7 +281,7 @@ func extractDDLAffectedTables(sql string, parser *sqlparser.Parser, tablePlans m
 			if table.IsEmpty() {
 				continue
 			}
-			name := table.Name.String()
+			name := canonicalPostDDLTableKey(tablePlans, table.Name.String())
 			addPostDDLStalePlan(tracked, tablePlans, nil, true, name, name)
 			entry := tracked[name]
 			entry.allowDisappear = true
@@ -293,7 +314,7 @@ func extractDroppedTables(sql string, parser *sqlparser.Parser) map[string]struc
 			if table.IsEmpty() {
 				continue
 			}
-			dropped[table.Name.String()] = struct{}{}
+			dropped[strings.ToLower(table.Name.String())] = struct{}{}
 		}
 	}
 	if len(dropped) == 0 {
@@ -331,14 +352,14 @@ func resolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables m
 	resolved := make(map[string]postDDLStalePlan, len(stalePlans))
 	for name, stale := range stalePlans {
 		if stale.allowDisappear {
-			if _, ok := droppedTables[name]; ok {
+			if _, ok := droppedTables[canonicalPostDDLTableKey(droppedTables, name)]; ok {
 				resolved[name] = clonePostDDLStalePlan(stale)
 				continue
 			}
 		}
 		allRefreshed := true
 		for refreshedName, priorPlan := range stale.refreshedPlans {
-			refreshedPlan, ok := tablePlans[refreshedName]
+			refreshedPlan, ok := tablePlans[canonicalPostDDLTableKey(tablePlans, refreshedName)]
 			if !ok || refreshedPlan == priorPlan {
 				allRefreshed = false
 				break
@@ -374,9 +395,7 @@ func mergePostDDLStalePlans(dst, src map[string]postDDLStalePlan) map[string]pos
 		if len(stale.refreshedPlans) != 0 {
 			if merged.refreshedPlans == nil {
 				merged.refreshedPlans = make(map[string]*TablePlan, len(existing.refreshedPlans)+len(stale.refreshedPlans))
-				for refreshedName, refreshedPlan := range existing.refreshedPlans {
-					merged.refreshedPlans[refreshedName] = refreshedPlan
-				}
+				maps.Copy(merged.refreshedPlans, existing.refreshedPlans)
 			}
 			for refreshedName, refreshedPlan := range stale.refreshedPlans {
 				if _, ok := merged.refreshedPlans[refreshedName]; !ok {
@@ -399,8 +418,8 @@ func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]st
 	switch stmt := stmt.(type) {
 	case *sqlparser.RenameTable:
 		for _, pair := range stmt.TablePairs {
-			fromName := pair.FromTable.Name.String()
-			toName := pair.ToTable.Name.String()
+			fromName := strings.ToLower(pair.FromTable.Name.String())
+			toName := strings.ToLower(pair.ToTable.Name.String())
 			if fromName == "" || toName == "" {
 				continue
 			}
@@ -412,8 +431,8 @@ func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]st
 			if !ok {
 				continue
 			}
-			fromName := stmt.Table.Name.String()
-			toName := rename.Table.Name.String()
+			fromName := strings.ToLower(stmt.Table.Name.String())
+			toName := strings.ToLower(rename.Table.Name.String())
 			if fromName == "" || toName == "" {
 				continue
 			}
@@ -424,6 +443,51 @@ func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]st
 		return nil
 	}
 	return renames
+}
+
+func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, statement string) (bool, error) {
+	if vp == nil || vp.vr == nil || vp.vr.vre == nil || vp.vr.vre.env == nil {
+		return false, nil
+	}
+	parser := vp.vr.vre.env.Parser()
+	stmt, err := parser.ParseStrictDDL(statement)
+	if err != nil {
+		return false, nil
+	}
+	alter, ok := stmt.(*sqlparser.AlterTable)
+	if !ok || alter.Table.IsEmpty() {
+		return false, nil
+	}
+	tableName := alter.Table.Name.String()
+	vp.tablePlansMu.RLock()
+	cachedPlan := vp.tablePlans[canonicalPostDDLTableKey(vp.tablePlans, tableName)]
+	vp.tablePlansMu.RUnlock()
+	if cachedPlan == nil {
+		return false, nil
+	}
+	for _, option := range alter.AlterOptions {
+		switch option := option.(type) {
+		case *sqlparser.AddIndexDefinition:
+			if option.IndexDefinition == nil || option.IndexDefinition.Info == nil || !option.IndexDefinition.Info.IsUnique() {
+				continue
+			}
+			hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, cachedPlan.TargetName, cachedPlan)
+			if err != nil {
+				return false, err
+			}
+			return hasExtraUniqueSecondary != cachedPlan.HasExtraUniqueSecondary, nil
+		case *sqlparser.DropKey:
+			if option.Type != sqlparser.NormalKeyType && option.Type != sqlparser.ConstraintType {
+				continue
+			}
+			hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, cachedPlan.TargetName, cachedPlan)
+			if err != nil {
+				return false, err
+			}
+			return hasExtraUniqueSecondary != cachedPlan.HasExtraUniqueSecondary, nil
+		}
+	}
+	return false, nil
 }
 
 func retargetPostDDLStalePlans(stalePlans map[string]postDDLStalePlan, renameTargets map[string]string, tablePlans map[string]*TablePlan) {
@@ -437,9 +501,10 @@ func retargetPostDDLStalePlans(stalePlans map[string]postDDLStalePlan, renameTar
 		refreshedPlans := make(map[string]*TablePlan, len(stale.refreshedPlans))
 		changed := false
 		for refreshedName, priorPlan := range stale.refreshedPlans {
-			if toName, ok := renameTargets[refreshedName]; ok {
+			if toName, ok := renameTargets[canonicalPostDDLTableKey(renameTargets, refreshedName)]; ok {
 				// Retarget from the original watched names only so overlapping
 				// rename sets do not cascade based on map iteration order.
+				toName = canonicalPostDDLTableKey(tablePlans, toName)
 				refreshedPlans[toName] = tablePlans[toName]
 				changed = true
 				continue
@@ -463,13 +528,13 @@ func unresolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables
 	unresolved := make(map[string]postDDLStalePlan, len(stalePlans))
 	for name, stale := range stalePlans {
 		if stale.allowDisappear {
-			if _, ok := droppedTables[name]; ok {
+			if _, ok := droppedTables[canonicalPostDDLTableKey(droppedTables, name)]; ok {
 				continue
 			}
 		}
 		allRefreshed := true
 		for refreshedName, priorPlan := range stale.refreshedPlans {
-			refreshedPlan, ok := tablePlans[refreshedName]
+			refreshedPlan, ok := tablePlans[canonicalPostDDLTableKey(tablePlans, refreshedName)]
 			if !ok {
 				allRefreshed = false
 				break
@@ -515,11 +580,13 @@ func txnTouchesPostDDLBarrier(events []*binlogdatapb.VEvent, stalePlans map[stri
 			return true
 		}
 		for staleName, stale := range stalePlans {
-			if tableName == staleName {
+			if postDDLTableKeyMatches(tableName, staleName) {
 				return true
 			}
-			if _, ok := stale.refreshedPlans[tableName]; ok {
-				return true
+			for refreshedName := range stale.refreshedPlans {
+				if postDDLTableKeyMatches(tableName, refreshedName) {
+					return true
+				}
 			}
 		}
 	}
@@ -528,12 +595,13 @@ func txnTouchesPostDDLBarrier(events []*binlogdatapb.VEvent, stalePlans map[stri
 
 func postDDLRefreshTargetMatchesCachedPlan(stalePlans map[string]postDDLStalePlan, refreshedName string, cachedPlan *TablePlan) bool {
 	for _, stale := range stalePlans {
-		priorPlan, ok := stale.refreshedPlans[refreshedName]
-		if !ok {
-			continue
-		}
-		if priorPlan == cachedPlan {
-			return true
+		for trackedName, priorPlan := range stale.refreshedPlans {
+			if !postDDLTableKeyMatches(trackedName, refreshedName) {
+				continue
+			}
+			if priorPlan == cachedPlan {
+				return true
+			}
 		}
 	}
 	return false
@@ -551,6 +619,82 @@ func mergeDroppedTables(dst, src map[string]struct{}) map[string]struct{} {
 		merged[name] = struct{}{}
 	}
 	return merged
+}
+
+func extractFieldRefreshTables(events []*binlogdatapb.VEvent) map[string]struct{} {
+	var refreshed map[string]struct{}
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_FIELD || event.FieldEvent == nil || event.FieldEvent.TableName == "" {
+			continue
+		}
+		if refreshed == nil {
+			refreshed = make(map[string]struct{})
+		}
+		refreshed[event.FieldEvent.TableName] = struct{}{}
+	}
+	return refreshed
+}
+
+// Same-txn FIELD+ROW means the worker may build or replace the plan before it
+// applies the row. The scheduler cannot safely compute a writeset from the
+// pre-apply snapshot, so serialize these rare refresh transactions.
+func txnNeedsFieldRefreshSerialization(events []*binlogdatapb.VEvent) bool {
+	refreshedTables := extractFieldRefreshTables(events)
+	if len(refreshedTables) == 0 {
+		return false
+	}
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		if _, ok := refreshedTables[event.RowEvent.TableName]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func txnTouchesPendingFieldRefresh(events []*binlogdatapb.VEvent, pending map[string]int) bool {
+	if len(pending) == 0 {
+		return false
+	}
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		for tableName, count := range pending {
+			if count <= 0 {
+				continue
+			}
+			if postDDLTableKeyMatches(event.RowEvent.TableName, tableName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func workerLocalVPlayer(vp *vplayer) vplayer {
+	return vplayer{
+		vr:                  vp.vr,
+		copyState:           vp.copyState,
+		replicatorPlan:      vp.replicatorPlan,
+		canAcceptStmtEvents: vp.canAcceptStmtEvents,
+		tablePlansMu:        vp.tablePlansMu,
+		tablePlans:          vp.tablePlans,
+		tablePlansVersion:   vp.tablePlansVersion,
+		batchMode:           vp.batchMode,
+		phase:               vp.phase,
+		serialMu:            vp.serialMu,
+	}
+}
+
+func writesetErrorForcesSerialization(err error) bool {
+	if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION {
+		return false
+	}
+	return strings.Contains(err.Error(), "partial row image on table ") ||
+		strings.Contains(err.Error(), "not in streamed fields")
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
@@ -587,12 +731,16 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	scheduler := newApplyScheduler(ctx)
 	// Buffer 4x worker count to decouple worker throughput from commit
 	// latency. Workers block when commitCh is full, stalling the pipeline.
 	commitCh := make(chan *applyTxn, workerCount*4)
 	applyErr := make(chan error, 2)
+	commitLoopErr := make(chan error, 1)
 	workerErr := make(chan error, workerCount)
 
 	workers := make([]*applyWorker, 0, workerCount)
@@ -654,7 +802,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	go func() {
 		defer close(commitDone)
 		if err := vp.commitLoop(ctx, scheduler, commitCh); err != nil {
-			applyErr <- err
+			commitLoopErr <- err
 			// Always cancel context when commitLoop exits with an error,
 			// including io.EOF (stop position reached). This ensures
 			// scheduleLoop and workers shut down promptly instead of
@@ -672,6 +820,14 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	wg.Wait()
 	close(commitCh)
 	<-commitDone
+	select {
+	case err := <-commitLoopErr:
+		if err == io.EOF {
+			return nil
+		}
+		applyErr <- err
+	default:
+	}
 
 	// Now that commitLoop is done, it's safe to rollback any leftover
 	// transaction on the main connection. This must happen after commitDone
@@ -679,54 +835,55 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	vp.vr.dbClient.Rollback()
 
 	// Drain all errors and prioritize real failures over io.EOF/context.Canceled.
-	// Both scheduleLoop and commitLoop may send to applyErr, so we must drain
-	// the channel fully to avoid masking a commit failure behind an io.EOF.
+	// We must always inspect workerErr too: teardown after a worker failure makes
+	// scheduleLoop/commitLoop commonly return io.EOF/context.Canceled, and those
+	// benign shutdown signals must not mask the original worker error.
 	var realErrs []error
 	var hasEOF bool
+	var hasCanceled bool
+	classifyErr := func(err error) {
+		if err == nil {
+			return
+		}
+		if err == io.EOF {
+			hasEOF = true
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			hasCanceled = true
+			return
+		}
+		realErrs = append(realErrs, err)
+	}
 drainApplyErrs:
 	for {
 		select {
 		case err := <-applyErr:
-			if err == io.EOF || errors.Is(err, context.Canceled) {
-				hasEOF = hasEOF || err == io.EOF
-			} else {
-				realErrs = append(realErrs, err)
-			}
+			classifyErr(err)
 		default:
 			break drainApplyErrs
 		}
 	}
-
-	var finalErr error
+drainWorkerErrs:
+	for {
+		select {
+		case err := <-workerErr:
+			classifyErr(err)
+		default:
+			break drainWorkerErrs
+		}
+	}
 	if len(realErrs) > 0 {
-		finalErr = errors.Join(realErrs...)
-	} else if hasEOF {
-		finalErr = io.EOF
-	} else {
-		// No applyErr — check worker errors. Drain all and join so that
-		// no diagnostic information is silently dropped.
-		var workerErrs []error
-	drainWorkerErrs:
-		for {
-			select {
-			case err := <-workerErr:
-				workerErrs = append(workerErrs, err)
-			default:
-				break drainWorkerErrs
-			}
-		}
-		if len(workerErrs) > 0 {
-			finalErr = errors.Join(workerErrs...)
-		}
+		return errors.Join(realErrs...)
 	}
 	// Convert io.EOF (stop position reached) and context.Canceled (shutdown)
 	// to nil. fetchAndApply's caller treats nil from applyEventsParallel
 	// the same as io.EOF from the serial path — it stops the controller
 	// without retrying.
-	if finalErr == io.EOF || errors.Is(finalErr, context.Canceled) {
+	if hasEOF || hasCanceled {
 		return nil
 	}
-	return finalErr
+	return nil
 }
 
 // scheduleLoop reads event batches from the relay log and dispatches them
@@ -774,7 +931,7 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 			vp.unsavedEvent = nil
 			vp.timeLastSaved = time.Now()
 			vp.serialMu.Unlock()
-			if err := vp.enqueueCommitOnly(ctx, scheduler, event, true, true); err != nil {
+			if err := vp.enqueueCommitOnly(ctx, scheduler, event, true, true, 0, 0, false); err != nil {
 				return err
 			}
 		} else {
@@ -929,11 +1086,48 @@ type parallelScheduleState struct {
 // applyTxn structs into the scheduler. Empty transactions bypass the scheduler
 // and are saved via unsavedEvent / idle timeout.
 func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, items [][]*binlogdatapb.VEvent) error {
+	stopPosReached := func(pos replication.Position) bool {
+		return !vp.stopPos.IsZero() && !pos.IsZero() && pos.AtLeast(vp.stopPos)
+	}
+	journalTerminates := func(event *binlogdatapb.VEvent) bool {
+		if event.Type != binlogdatapb.VEventType_JOURNAL || event.Journal == nil {
+			return false
+		}
+		if event.Journal.MigrationType != binlogdatapb.MigrationType_TABLES {
+			return true
+		}
+		jtables := make(map[string]struct{}, len(event.Journal.Tables))
+		for _, table := range event.Journal.Tables {
+			jtables[table] = struct{}{}
+		}
+		found := false
+		notFound := false
+		for tableName := range vp.replicatorPlan.TablePlans {
+			if _, ok := jtables[tableName]; ok {
+				found = true
+			} else {
+				notFound = true
+			}
+		}
+		switch {
+		case found && notFound:
+			return true
+		case notFound:
+			return false
+		default:
+			return true
+		}
+	}
+	ddlTerminates := func(event *binlogdatapb.VEvent) bool {
+		return event.Type == binlogdatapb.VEventType_DDL && vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_STOP
+	}
+
 	// Snapshot FK refs under serialMu so we have a consistent view for this
 	// relay fetch. The commitLoop may update these after DDL events.
 	vp.serialMu.Lock()
 	fkRefs := vp.fkRefs
 	parentFKRefs := vp.parentFKRefs
+	pendingFieldRefreshTables := maps.Clone(vp.pendingFieldRefreshTables)
 	state.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
 	if len(vp.postDDLStalePlans) != 0 {
 		if state.postDDLStalePlans == nil {
@@ -979,6 +1173,19 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		}
 	}
 	state.ddlSeen = false
+	var fkBatchingResolvedTables map[string]struct{}
+	fkBatchingResolvedVersion := int64(-1)
+	writesetCache := &txnWritesetCache{fieldIdxCache: state.fieldIdxCache}
+	getFKBatchingSnapshot := func() (map[string]*TablePlan, map[string]struct{}) {
+		planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
+		state.cachedPlanSnapshot = planSnapshot
+		if fkBatchingResolvedVersion == state.cachedPlanVersion {
+			return planSnapshot, fkBatchingResolvedTables
+		}
+		fkBatchingResolvedTables = buildResolvedFKRefTableSet(fkRefs, parentFKRefs, buildCanonicalTargetTableNames(planSnapshot))
+		fkBatchingResolvedVersion = state.cachedPlanVersion
+		return planSnapshot, fkBatchingResolvedTables
+	}
 
 	flush := func(commitOnly bool) error {
 		if len(state.curEvents) == 0 && !commitOnly {
@@ -1018,6 +1225,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			txn.forceGlobal = true
 		} else if len(vp.copyState) != 0 {
 			txn.forceGlobal = true
+		} else if txnNeedsFieldRefreshSerialization(state.curEvents) {
+			txn.forceGlobal = true
+		} else if txnTouchesPendingFieldRefresh(state.curEvents, pendingFieldRefreshTables) {
+			txn.forceGlobal = true
 		} else {
 			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
 			state.cachedPlanSnapshot = planSnapshot
@@ -1028,11 +1239,18 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if state.fieldIdxCacheVersion != state.cachedPlanVersion {
 					state.fieldIdxCache = make(map[string]map[string]int)
 					state.fieldIdxCacheVersion = state.cachedPlanVersion
+					writesetCache = &txnWritesetCache{fieldIdxCache: state.fieldIdxCache}
+				} else if writesetCache == nil {
+					writesetCache = &txnWritesetCache{fieldIdxCache: state.fieldIdxCache}
 				}
-				writeset, err := buildTxnWriteset(planSnapshot, fkRefs, parentFKRefs, state.curEvents, state.fieldIdxCache)
+				writeset, err := buildTxnWritesetWithCache(planSnapshot, fkRefs, parentFKRefs, state.curEvents, writesetCache)
 				if err != nil {
-					releaseApplyTxn(txn)
-					return err
+					if writesetErrorForcesSerialization(err) {
+						txn.forceGlobal = true
+					} else {
+						releaseApplyTxn(txn)
+						return err
+					}
 				} else {
 					txn.writeset = writeset
 				}
@@ -1053,6 +1271,20 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		}
 		if err := scheduler.enqueue(txn); err != nil {
 			return err
+		}
+		if refreshedTables := extractFieldRefreshTables(payload.events); len(refreshedTables) != 0 {
+			if pendingFieldRefreshTables == nil {
+				pendingFieldRefreshTables = make(map[string]int, len(refreshedTables))
+			}
+			vp.serialMu.Lock()
+			if vp.pendingFieldRefreshTables == nil {
+				vp.pendingFieldRefreshTables = make(map[string]int, len(refreshedTables))
+			}
+			for tableName := range refreshedTables {
+				pendingFieldRefreshTables[tableName]++
+				vp.pendingFieldRefreshTables[tableName]++
+			}
+			vp.serialMu.Unlock()
 		}
 		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
 		// pattern on the hot path. We can't reuse the old slice via [:0]
@@ -1098,11 +1330,29 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					state.curRowOnlySet = true
 				}
 			case binlogdatapb.VEventType_COMMIT:
-				state.curMustSave = !vp.stopPos.IsZero() && state.curPos.AtLeast(vp.stopPos)
+				posReached := stopPosReached(state.curPos)
+				state.curMustSave = posReached
 				if len(state.curEvents) == 0 {
 					if state.curMustSave {
 						eventCopy := event
-						if err := vp.enqueueCommitOnly(ctx, scheduler, eventCopy, true, true); err != nil {
+						if err := vp.enqueueCommitOnly(ctx, scheduler, eventCopy, true, true, state.curSequence, state.curCommitParent, state.curHasCommitMeta); err != nil {
+							return err
+						}
+						return io.EOF
+					}
+
+					now := time.Now()
+					queuePositionSave := false
+					vp.serialMu.Lock()
+					if time.Since(vp.timeLastSaved) >= idleTimeout {
+						vp.timeLastSaved = now
+						queuePositionSave = true
+					}
+					vp.serialMu.Unlock()
+					if queuePositionSave {
+						state.lastHeartbeatRefresh = now
+						eventCopy := event
+						if err := vp.enqueueCommitOnly(ctx, scheduler, eventCopy, true, true, state.curSequence, state.curCommitParent, state.curHasCommitMeta); err != nil {
 							return err
 						}
 					} else {
@@ -1111,15 +1361,13 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						// keep the scheduleLoop busy, so the idle timeout at
 						// the top of the loop never fires. Periodically refresh
 						// time_updated directly via SQL to keep
-						// max_v_replication_lag fresh. We use a separate
-						// lastHeartbeatRefresh timer so that vp.timeLastSaved
-						// remains stale and the idle timeout position save at
-						// the top of scheduleLoop still fires normally.
+						// max_v_replication_lag fresh until the next ordered
+						// position save is queued.
 						needRefresh := time.Since(state.lastHeartbeatRefresh) >= idleTimeout
 						if needRefresh {
-							state.lastHeartbeatRefresh = time.Now()
+							state.lastHeartbeatRefresh = now
 							vp.serialMu.Lock()
-							err := vp.vr.updateHeartbeatTime(time.Now().Unix())
+							err := vp.vr.updateHeartbeatTime(now.Unix())
 							vp.serialMu.Unlock()
 							if err != nil {
 								return err
@@ -1128,6 +1376,12 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.serialMu.Lock()
 						vp.unsavedEvent = event
 						vp.serialMu.Unlock()
+						// Advance lastCommittedSequence immediately only when the
+						// empty transaction stays on the unsavedEvent path.
+						// Queued position saves publish their sequence on commit.
+						if state.curHasCommitMeta {
+							scheduler.advanceCommittedSequence(state.curSequence)
+						}
 					}
 					// Advance lastCommittedSequence immediately for this empty
 					// transaction. Empty txns have no data effects, so their
@@ -1141,9 +1395,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					// markCommitted() uses max() for lastCommittedSequence, so
 					// this early advance cannot regress the watermark when a
 					// later txn commits with a lower sequence number.
-					if state.curHasCommitMeta {
-						scheduler.advanceCommittedSequence(state.curSequence)
-					}
 					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
 					state.curRowOnlySet = false
@@ -1180,9 +1431,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// transactions and run them in parallel. Transactions on
 				// unrelated tables can still batch normally.
 				hasFKRefs := false
-				for _, ev := range state.curEvents {
-					if ev.Type == binlogdatapb.VEventType_ROW && ev.RowEvent != nil {
-						if len(fkRefs[ev.RowEvent.TableName]) > 0 || len(parentFKRefs[ev.RowEvent.TableName]) > 0 {
+				if len(fkRefs) > 0 || len(parentFKRefs) > 0 {
+					planSnapshot, resolvedFKRefTables := getFKBatchingSnapshot()
+					for _, ev := range state.curEvents {
+						if ev.Type != binlogdatapb.VEventType_ROW || ev.RowEvent == nil {
+							continue
+						}
+						tableName := ev.RowEvent.TableName
+						if plan := planSnapshot[tableName]; plan != nil {
+							tableName = plan.TargetName
+						}
+						if _, ok := resolvedFKRefTables[tableName]; ok {
 							hasFKRefs = true
 							break
 						}
@@ -1220,6 +1479,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if err := flush(false); err != nil {
 					return err
 				}
+				if posReached {
+					return io.EOF
+				}
 			case binlogdatapb.VEventType_BEGIN:
 				// No-op: BEGIN is handled on-demand by workers when they encounter
 				// ROW/FIELD events (via activeDBClient().Begin()). We intentionally
@@ -1235,10 +1497,23 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// already sets forceSerialize. Accumulate FIELD events like
 				// ROW events so they stay in the same applyTxn.
 				state.curEvents = append(state.curEvents, event)
+			case binlogdatapb.VEventType_INSERT,
+				binlogdatapb.VEventType_DELETE,
+				binlogdatapb.VEventType_UPDATE,
+				binlogdatapb.VEventType_REPLACE,
+				binlogdatapb.VEventType_SAVEPOINT:
+				// Statement-based DML events are supported for external MySQL
+				// streams. Keep them in the transaction payload, but classify the
+				// transaction as non-row-only so it serializes like the serial
+				// applier's statement path.
+				state.curEvents = append(state.curEvents, event)
+				state.curRowOnly = false
+				state.curRowOnlySet = true
 			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 				if err := flush(false); err != nil {
 					return err
 				}
+				posReached := stopPosReached(state.curPos)
 				vp.serialMu.Lock()
 				vp.parallelOrder++
 				order := vp.parallelOrder
@@ -1261,9 +1536,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				payload.lastEventCurrentTime = event.CurrentTime
 				txn := acquireApplyTxn()
 				txn.order = order
-				txn.sequenceNumber = event.SequenceNumber
-				txn.commitParent = event.CommitParent
-				txn.hasCommitMeta = event.SequenceNumber != 0 || event.CommitParent != 0
+				txn.sequenceNumber = state.curSequence
+				txn.commitParent = state.curCommitParent
+				txn.hasCommitMeta = state.curHasCommitMeta
 				txn.forceGlobal = true
 				// OTHER events and DDL events with OnDdl=IGNORE only update the
 				// replication position — they never touch user table data. Marking
@@ -1297,6 +1572,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 					forceSerialize = true
 					state.ddlSeen = true
+				}
+				if posReached || journalTerminates(event) || ddlTerminates(event) {
+					return io.EOF
 				}
 			case binlogdatapb.VEventType_HEARTBEAT:
 				// Handle heartbeats inline without enqueuing through the scheduler.
@@ -1362,11 +1640,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				}
 			case binlogdatapb.VEventType_ROWS_QUERY:
 				// Informational only; keep it with the surrounding txn if present.
+				// vstreamer emits ROWS_QUERY ahead of the ROW events it describes,
+				// so this metadata must not force serialization on its own.
 				state.curEvents = append(state.curEvents, event)
-				if !state.curRowOnlySet {
-					state.curRowOnly = false
-					state.curRowOnlySet = true
-				}
 			case binlogdatapb.VEventType_VERSION:
 				// VERSION is informational only for the applier. Preserve the
 				// old serial behavior by ignoring it instead of failing the stream.
@@ -1385,7 +1661,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 // scheduler. Used for DDL, OTHER, JOURNAL events, and position-only saves
 // (idle timeout). These transactions are applied by the commitLoop on the main
 // connection, not by workers.
-func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applyScheduler, event *binlogdatapb.VEvent, mustSave bool, updatePosOnly bool) error {
+func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applyScheduler, event *binlogdatapb.VEvent, mustSave bool, updatePosOnly bool, sequenceNumber int64, commitParent int64, hasCommitMeta bool) error {
 	var order int64
 	var pos replication.Position
 	var query func(ctx context.Context, sql string) (*sqltypes.Result, error)
@@ -1414,9 +1690,9 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	payload.lastEventCurrentTime = event.CurrentTime
 	txn := acquireApplyTxn()
 	txn.order = order
-	txn.sequenceNumber = event.SequenceNumber
-	txn.commitParent = event.CommitParent
-	txn.hasCommitMeta = event.SequenceNumber != 0 || event.CommitParent != 0
+	txn.sequenceNumber = sequenceNumber
+	txn.commitParent = commitParent
+	txn.hasCommitMeta = hasCommitMeta
 	txn.forceGlobal = true
 	txn.noConflict = updatePosOnly
 	txn.payload = payload
@@ -1432,10 +1708,10 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 // a transaction, the worker rotates to its spare connection and immediately
 // starts the next transaction, overlapping apply with the commitLoop's commit.
 func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
-	// Shallow-copy vplayer once per worker lifetime instead of per
-	// transaction. This eliminates a ~200-300 byte struct copy on every
-	// txn in the hot path.
-	vp2 := *vp
+	// Workers only apply ROW/FIELD/ROWS_QUERY events. Build a narrow local
+	// vplayer view once and refresh the DDL barrier snapshots per transaction
+	// under serialMu, instead of racing on a whole-struct shallow copy.
+	workerVP := workerLocalVPlayer(vp)
 
 	// pendingDone holds the done channel of the most recently sent worker
 	// transaction that the commitLoop may still be committing. We capture
@@ -1494,12 +1770,11 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// concurrently with the commitLoop committing the previous
 		// transaction on the other connection (double-buffering).
 		vp.serialMu.Lock()
-		vp2.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
-		vp2.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
-		vp2.postDDLConservative = vp.postDDLConservative
+		workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
+		workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
 		vp.serialMu.Unlock()
 		for _, event := range payload.events {
-			if err := worker.applyEvent(ctx, event, payload.mustSave, &vp2); err != nil {
+			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
 				worker.rollback()
 				return err
 			}
@@ -1590,29 +1865,37 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	}
 
 	// commitWorkerTxn handles a worker's row transaction. It executes the
-	// position update SQL and commit on the worker's private MySQL connection
-	// WITHOUT holding serialMu, then briefly locks to update vp state. This
-	// avoids blocking the scheduleLoop during slow MySQL commits.
+	// position update SQL, optional stop-state update, and commit on the
+	// worker's private MySQL connection WITHOUT holding serialMu. This avoids
+	// blocking the scheduleLoop during slow MySQL commits.
 	commitWorkerTxn := func(txn *applyTxn) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		payload := txn.payload
-
-		// Generate the position update SQL. These reads are all from
-		// immutable or atomic fields, no lock needed.
-		updateSQL := binlogplayer.GenerateUpdatePos(vp.vr.id, payload.pos,
-			time.Now().Unix(), payload.timestamp,
-			vp.vr.stats.CopyRowCount.Get(),
-			vp.vr.workflowConfig.StoreCompressedGTID)
-
-		// Execute position update within the worker's open transaction,
-		// then commit. No serialMu needed — we use the payload's
-		// connection directly, never touching vp's fields.
-		if _, err := payload.query(ctx, updateSQL); err != nil {
-			return fmt.Errorf("error %v updating position", err)
+		queryFn := payload.query
+		if queryFn == nil {
+			queryFn = vp.query
 		}
-		if err := payload.commit(); err != nil {
+		commitFn := payload.commit
+		if commitFn == nil {
+			commitFn = vp.commit
+		}
+		dbClient := payload.client
+		if dbClient == nil {
+			dbClient = vp.activeDBClient()
+		}
+
+		posReached, err := vp.updatePosWithoutStop(ctx, payload.pos, payload.timestamp, queryFn)
+		if err != nil {
+			return err
+		}
+		if posReached {
+			if err := vp.setStopPositionStateImmediate(dbClient); err != nil {
+				return err
+			}
+		}
+		if err := commitFn(); err != nil {
 			return err
 		}
 
@@ -1621,13 +1904,20 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// may have recorded a higher position that hasn't been flushed yet.
 		// The idle-timeout saver at the top of scheduleLoop will handle it.
 		vp.serialMu.Lock()
-		vp.numAccumulatedHeartbeats = 0
-		vp.timeLastSaved = time.Now()
-		shouldStop := vp.stopPos.GTIDSet != nil
-		posReached := !vp.stopPos.IsZero() && payload.pos.AtLeast(vp.stopPos)
+		vp.recordPositionSave(payload.pos, false)
+		for refreshedName := range extractFieldRefreshTables(payload.events) {
+			if vp.pendingFieldRefreshTables != nil {
+				key := canonicalPostDDLTableKey(vp.pendingFieldRefreshTables, refreshedName)
+				if remaining := vp.pendingFieldRefreshTables[key] - 1; remaining > 0 {
+					vp.pendingFieldRefreshTables[key] = remaining
+				} else {
+					delete(vp.pendingFieldRefreshTables, key)
+				}
+			}
+			delete(vp.postDDLDroppedTables, canonicalPostDDLTableKey(vp.postDDLDroppedTables, refreshedName))
+		}
 		vp.serialMu.Unlock()
 
-		vp.vr.stats.SetLastPosition(payload.pos)
 		updateLag(payload)
 
 		// Signal the worker that commit is done so it can reuse its
@@ -1638,17 +1928,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return err
 		}
 
-		// Now that the worker transaction is committed (lock released),
-		// set state on the main connection if stop position was reached.
-		if shouldStop && posReached {
-			if vp.saveStop {
-				vp.serialMu.Lock()
-				err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
-				vp.serialMu.Unlock()
-				if err != nil {
-					return err
-				}
-			}
+		if posReached {
 			return io.EOF
 		}
 		return nil
@@ -1661,10 +1941,70 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return ctx.Err()
 		}
 		payload := txn.payload
+		dbClient := payload.client
+		if dbClient == nil {
+			dbClient = vp.activeDBClient()
+		}
 		vp.serialMu.Lock()
 		defer vp.serialMu.Unlock()
 
-		shouldStop := vp.stopPos.GTIDSet != nil
+		if payload.updatePosOnly {
+			savePos := payload.pos
+			if savePos.IsZero() {
+				savePos = vp.pos
+			}
+			posReached := !savePos.IsZero() && !vp.stopPos.IsZero() && savePos.AtLeast(vp.stopPos)
+			if posReached && vp.saveStop {
+				if err := dbClient.BeginImmediate(); err != nil {
+					return err
+				}
+				if _, err := dbClient.ExecuteFetch(vp.generateUpdatePosQuery(savePos, payload.timestamp), 1); err != nil {
+					return fmt.Errorf("error %v updating position", err)
+				}
+				if err := vp.setStopPositionStateImmediate(dbClient); err != nil {
+					return err
+				}
+				if err := dbClient.Commit(); err != nil {
+					return err
+				}
+				vp.recordPositionSave(savePos, false)
+				updateLag(payload)
+				if err := scheduler.markCommitted(txn); err != nil {
+					return err
+				}
+				return io.EOF
+			}
+
+			queryFn := payload.query
+			if queryFn == nil {
+				queryFn = vp.query
+			}
+
+			posReached, err := vp.updatePosWithoutStop(ctx, savePos, payload.timestamp, queryFn)
+			if err != nil {
+				return err
+			}
+			if payload.timestamp == 0 {
+				if err := vp.vr.updateHeartbeatTime(time.Now().Unix()); err != nil {
+					return err
+				}
+			}
+			vp.recordPositionSave(savePos, false)
+			if posReached {
+				if err := vp.setStopPositionState(dbClient); err != nil {
+					return err
+				}
+			}
+			updateLag(payload)
+			if err := scheduler.markCommitted(txn); err != nil {
+				return err
+			}
+			if posReached {
+				return io.EOF
+			}
+			return nil
+		}
+
 		// Temporarily swap pos for the main connection's updatePos call.
 		prevPos := vp.pos
 		if !payload.pos.IsZero() {
@@ -1672,20 +2012,6 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		defer func() { vp.pos = prevPos }()
 
-		if payload.updatePosOnly {
-			posReached, err := vp.updatePos(ctx, payload.timestamp)
-			if err != nil {
-				return err
-			}
-			updateLag(payload)
-			if err := scheduler.markCommitted(txn); err != nil {
-				return err
-			}
-			if shouldStop && posReached {
-				return io.EOF
-			}
-			return nil
-		}
 		// applyEvent handles position updates internally for DDL, OTHER,
 		// and JOURNAL events, and returns io.EOF when the stop position
 		// is reached or when a JOURNAL forces termination. We therefore
@@ -1695,28 +2021,50 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// position write could fail.
 		event := payload.events[0]
 		ddlExecuted := false
+		publishExecIgnoreDDLBarrier := false
+		var terminalErr error
 		if event.Type == binlogdatapb.VEventType_DDL {
 			var err error
 			ddlExecuted, err = vp.applyDDLEvent(ctx, event, nil)
 			if err != nil {
-				return err
+				if !errors.Is(err, io.EOF) {
+					return err
+				}
+				terminalErr = err
+			}
+			if !ddlExecuted && vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE {
+				publishExecIgnoreDDLBarrier, err = shouldPublishExecIgnoreDDLBarrier(ctx, vp, event.Statement)
+				if err != nil {
+					return vterrors.Wrapf(err, "failed to inspect EXEC_IGNORE DDL target schema")
+				}
 			}
 		} else if err := vp.applyEvent(ctx, event, payload.mustSave); err != nil {
-			return err
+			if !errors.Is(err, io.EOF) {
+				return err
+			}
+			terminalErr = err
 		}
-		// After DDL, refresh FK metadata so that ADD/DROP FOREIGN KEY
-		// changes are reflected in subsequent writeset conflict detection.
+		// After EXEC DDLs and all EXEC_IGNORE DDLs, refresh FK metadata so
+		// that ADD/DROP FOREIGN KEY changes are reflected in subsequent
+		// writeset conflict detection. EXEC_IGNORE still advances the stream
+		// position after a statement error, and that error can mean the
+		// target is already in the post-DDL FK state (for example, dropping
+		// a foreign key that's already gone). Continuing with the old FK
+		// cache would silently use stale conflict metadata.
+		//
 		// We hold serialMu for the DB round-trip here. DDL is rare, and
 		// the main connection must not be used concurrently by scheduleLoop.
 		// Fail fast on refresh errors: stale FK topology after a schema
 		// change would silently compromise conflict detection.
-		if event.Type == binlogdatapb.VEventType_DDL && ddlExecuted {
+		if event.Type == binlogdatapb.VEventType_DDL && (ddlExecuted || vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE) {
 			newRefs, err := queryFKRefs(vp.vr.dbClient, vp.vr.dbClient.DBName())
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to refresh FK metadata after DDL")
 			}
 			vp.fkRefs = newRefs
 			vp.parentFKRefs = buildParentFKRefs(newRefs)
+		}
+		if event.Type == binlogdatapb.VEventType_DDL && (ddlExecuted || publishExecIgnoreDDLBarrier) {
 			vp.tablePlansMu.RLock()
 			renameTargets := extractDDLRenameTargets(event.Statement, vp.vr.vre.env.Parser())
 			retargetPostDDLStalePlans(vp.postDDLStalePlans, renameTargets, vp.tablePlans)
@@ -1731,7 +2079,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
 		}
-		return nil
+		return terminalErr
 	}
 
 	commitTxn := func(txn *applyTxn) error {

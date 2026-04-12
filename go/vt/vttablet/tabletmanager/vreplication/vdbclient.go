@@ -90,6 +90,24 @@ func (vc *vdbClient) Begin() error {
 	return nil
 }
 
+// BeginImmediate starts a real transaction on the server even when batch mode
+// is enabled. This is needed for commit paths that must execute a couple of
+// statements immediately on one connection and still commit them atomically.
+func (vc *vdbClient) BeginImmediate() error {
+	if vc.InTransaction {
+		return nil
+	}
+	if err := vc.DBClient.Begin(); err != nil {
+		return err
+	}
+	vc.queries = []string{"begin"}
+	vc.queriesPos = 0
+	vc.batchSize = 0
+	vc.InTransaction = true
+	vc.startTime = time.Now()
+	return nil
+}
+
 func (vc *vdbClient) Commit() error {
 	if err := vc.DBClient.Commit(); err != nil {
 		return err

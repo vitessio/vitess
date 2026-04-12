@@ -255,6 +255,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	pos := bls.startPos
 	autocommit := true
 	var err error
+	var pendingStreamErr error
 
 	// Remember the RBR state.
 	// tableMaps is indexed by tableID.
@@ -298,12 +299,33 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		select {
 		case ev, ok = <-events:
 			if !ok {
+				if pendingStreamErr != nil {
+					return pos, pendingStreamErr
+				}
+				if errs != nil {
+					select {
+					case err, ok := <-errs:
+						if ok && err != nil {
+							return pos, err
+						}
+					default:
+					}
+				}
 				// events channel has been closed, which means the connection died.
 				log.Info("reached end of binlog event stream")
 				return pos, ErrServerEOF
 			}
-		case err = <-errs:
-			return pos, err
+		case err, ok = <-errs:
+			if !ok {
+				errs = nil
+				continue
+			}
+			if len(events) == 0 {
+				return pos, err
+			}
+			pendingStreamErr = err
+			errs = nil
+			continue
 		case <-ctx.Done():
 			log.Info("stopping early due to binlog Streamer service shutdown or client disconnect")
 			return pos, ctx.Err()

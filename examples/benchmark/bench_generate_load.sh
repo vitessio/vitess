@@ -210,11 +210,15 @@ echo "Loading data into commerce keyspace via vtgate (4 concurrent streams)..."
 load_start=$(date +%s)
 
 # Pipe all 4 SQL files concurrently through vtgate
+load_pids=()
 for table in orders events accounts logs; do
 	command mysql --no-defaults -h 127.0.0.1 -P 15306 --binary-as-hex=false commerce < "$TMPDIR/${table}.sql" &
+	load_pids+=("$!")
 done
 
-wait
+for pid in "${load_pids[@]}"; do
+	wait "$pid" || fail "Failed to load one or more benchmark SQL streams"
+done
 
 load_end=$(date +%s)
 load_elapsed=$((load_end - load_start))

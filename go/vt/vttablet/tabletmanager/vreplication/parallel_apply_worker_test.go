@@ -174,6 +174,29 @@ func TestApplyWorkerApplyEventNilClientFailsFast(t *testing.T) {
 	assert.Equal(t, pos.String(), vp.pos.String())
 }
 
+func TestApplyWorkerApplyEventInsertStatementAcceptsMatchAllFilter(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := t.Context()
+	vp.canAcceptStmtEvents = true
+
+	db := &recordingDBClient{}
+	worker := &applyWorker{
+		ctx:    ctx,
+		client: newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+	}
+	worker.bindFunctions()
+
+	event := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_INSERT,
+		Dml:  "insert into t1(id) values (1)",
+	}
+
+	workerVP := workerLocalVPlayer(vp)
+	err := worker.applyEvent(ctx, event, false, &workerVP)
+	require.NoError(t, err)
+	assert.Contains(t, db.queries, event.Dml)
+}
+
 func TestApplyWorkerStatsReturnsVReplicatorStats(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	worker := &applyWorker{vr: vp.vr}
@@ -281,6 +304,48 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			conn.Close()
 		})
 	}
+}
+
+func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	defer stats.Stop()
+
+	config := vttablet.InitVReplicationConfigDefaults()
+	workerDB := binlogplayer.NewMockDBClient(t)
+	workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
+	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.sql_mode = REPLACE(REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''), 'NO_BACKSLASH_ESCAPES', '')", &sqltypes.Result{})
+	workerDB.ExpectRequest(getSQLModeQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("sql_mode", "varchar"),
+		"STRICT_TRANS_TABLES,NO_ZERO_DATE,ANSI_QUOTES",
+	), nil)
+	workerDB.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables), nil)
+	workerDB.ExpectRequest("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	), nil)
+	workerDB.ExpectRequest(fmt.Sprintf(setSQLModeQueryf, SQLMode), &sqltypes.Result{}, nil)
+	workerDB.ExpectRequest("set @@session.foreign_key_checks=1", &sqltypes.Result{}, nil)
+
+	vr := &vreplicator{
+		id:                     1,
+		stats:                  stats,
+		dbClient:               newVDBClient(workerDB, stats, config.RelayLogMaxItems),
+		workflowConfig:         config,
+		originalFKCheckSetting: 1,
+		vre:                    &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return workerDB }},
+	}
+
+	conn, err := createWorkerConn(t.Context(), vr)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	workerDB.Wait()
+	conn.Close()
 }
 
 func TestNewApplyWorkerConnectError(t *testing.T) {

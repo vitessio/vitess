@@ -80,7 +80,8 @@ type vplayer struct {
 	// If nothing else happens for idleTimeout since timeLastSaved,
 	// the position of the unsavedEvent gets saved.
 	unsavedEvent *binlogdatapb.VEvent
-	// timeLastSaved is set every time a GTID is saved.
+	// timeLastSaved tracks when the latest pending position was durably saved.
+	// Older saves behind a later unsavedEvent must not refresh it.
 	timeLastSaved time.Time
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs *atomic.Int64
@@ -119,6 +120,10 @@ type vplayer struct {
 	// postDDLConservative keeps unknown DDL barriers fail-closed until every
 	// currently tracked plan refreshes.
 	postDDLConservative bool
+	// pendingFieldRefreshTables tracks tables whose FIELD refresh was scheduled
+	// but has not committed yet, so later row transactions do not hash against a
+	// still-cold table-plan cache.
+	pendingFieldRefreshTables map[string]int
 
 	// idStr is vp.idStr, cached to avoid repeated
 	// conversions on every lag gauge update.
@@ -191,26 +196,27 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 
 	return &vplayer{
-		vr:                vr,
-		startPos:          settings.StartPos,
-		pos:               settings.StartPos,
-		stopPos:           settings.StopPos,
-		saveStop:          saveStop,
-		copyState:         copyState,
-		timeLastSaved:     time.Now(),
-		lastTimestampNs:   &atomic.Int64{},
-		timeOffsetNs:      &atomic.Int64{},
-		tablePlansMu:      &sync.RWMutex{},
-		tablePlans:        make(map[string]*TablePlan),
-		tablePlansVersion: &atomic.Int64{},
-		serialMu:          &sync.Mutex{},
-		phase:             phase,
-		throttlerAppName:  throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
-		query:             queryFunc,
-		commit:            commitFunc,
-		batchMode:         batchMode,
-		dbClient:          vr.dbClient,
-		idStr:             strconv.Itoa(int(vr.id)),
+		vr:                        vr,
+		startPos:                  settings.StartPos,
+		pos:                       settings.StartPos,
+		stopPos:                   settings.StopPos,
+		saveStop:                  saveStop,
+		copyState:                 copyState,
+		timeLastSaved:             time.Now(),
+		lastTimestampNs:           &atomic.Int64{},
+		timeOffsetNs:              &atomic.Int64{},
+		tablePlansMu:              &sync.RWMutex{},
+		tablePlans:                make(map[string]*TablePlan),
+		tablePlansVersion:         &atomic.Int64{},
+		serialMu:                  &sync.Mutex{},
+		phase:                     phase,
+		throttlerAppName:          throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
+		pendingFieldRefreshTables: make(map[string]int),
+		query:                     queryFunc,
+		commit:                    commitFunc,
+		batchMode:                 batchMode,
+		dbClient:                  vr.dbClient,
+		idStr:                     strconv.Itoa(int(vr.id)),
 	}
 }
 
@@ -314,7 +320,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	streamErr := make(chan error, 1)
 	go func() {
 		vstreamOptions := &binlogdatapb.VStreamOptions{
-			ConfigOverrides: vp.vr.workflowConfig.Overrides,
+			ConfigOverrides: vp.vr.workflowConfig.SourceOverrides(),
 		}
 		err := vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
 			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
@@ -441,22 +447,78 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
-	if _, err := vp.query(ctx, update); err != nil {
+func (vp *vplayer) generateUpdatePosQuery(pos replication.Position, ts int64) string {
+	return binlogplayer.GenerateUpdatePos(vp.vr.id, pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
+}
+
+func (vp *vplayer) updatePosWithoutStop(ctx context.Context, pos replication.Position, ts int64, query func(context.Context, string) (*sqltypes.Result, error)) (posReached bool, err error) {
+	if _, err := query(ctx, vp.generateUpdatePosQuery(pos, ts)); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
+	return !vp.stopPos.IsZero() && pos.AtLeast(vp.stopPos), nil
+}
+
+func (vp *vplayer) recordPositionSave(pos replication.Position, clearUnsavedEvent bool) {
 	vp.numAccumulatedHeartbeats = 0
-	vp.unsavedEvent = nil
-	vp.timeLastSaved = time.Now()
-	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
+	refreshIdleTimer := clearUnsavedEvent || vp.unsavedEvent == nil || !vp.pos.AtLeast(pos) || vp.pos.Equal(pos)
+	if clearUnsavedEvent {
+		vp.unsavedEvent = nil
+	}
+	if refreshIdleTimer {
+		vp.timeLastSaved = time.Now()
+	}
+	vp.vr.stats.SetLastPosition(pos)
+}
+
+func (vp *vplayer) journalEventPosition(eventGtid string) (replication.Position, error) {
+	if strings.Contains(eventGtid, "/") {
+		return binlogplayer.DecodePosition(eventGtid)
+	}
+
+	basePos := vp.pos
+	if basePos.GTIDSet == nil {
+		switch {
+		case vp.startPos.GTIDSet != nil:
+			basePos = vp.startPos
+		case vp.stopPos.GTIDSet != nil:
+			basePos = vp.stopPos
+		default:
+			return replication.Position{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot derive journal position from event gtid %q without a base position", eventGtid)
+		}
+	}
+
+	gtid, err := replication.ParseGTID(basePos.GTIDSet.Flavor(), eventGtid)
+	if err != nil {
+		return replication.Position{}, err
+	}
+	return replication.AppendGTID(basePos, gtid), nil
+}
+
+func (vp *vplayer) setStopPositionState(dbClient *vdbClient) error {
+	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
+	if !vp.saveStop {
+		return nil
+	}
+	return vp.vr.setStateWithDBClient(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos), false)
+}
+
+func (vp *vplayer) setStopPositionStateImmediate(dbClient *vdbClient) error {
+	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
+	if !vp.saveStop {
+		return nil
+	}
+	return vp.vr.setStateWithDBClientImmediate(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
+}
+
+func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
+	posReached, err = vp.updatePosWithoutStop(ctx, vp.pos, ts, vp.query)
+	if err != nil {
+		return false, err
+	}
+	vp.recordPositionSave(vp.pos, true)
 	if posReached {
-		log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
-		if vp.saveStop {
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
-				return false, err
-			}
+		if err := vp.setStopPositionState(vp.activeDBClient()); err != nil {
+			return false, err
 		}
 	}
 	return posReached, nil
@@ -775,7 +837,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		vp.serialMu.Lock()
 		// FIELD means this table name is live again, so later DDL barriers must
 		// treat it as tracked instead of as a previously dropped name.
-		delete(vp.postDDLDroppedTables, fieldTableName)
+		delete(vp.postDDLDroppedTables, canonicalPostDDLTableKey(vp.postDDLDroppedTables, fieldTableName))
 		vp.serialMu.Unlock()
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
@@ -879,6 +941,17 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return nil
 			}
 			// All were found. We must register journal.
+		}
+		if event.EventGtid != "" {
+			journalPos, err := vp.journalEventPosition(event.EventGtid)
+			if err != nil {
+				return err
+			}
+			vp.pos = journalPos
+			if _, err := vp.updatePosWithoutStop(ctx, journalPos, event.Timestamp, vp.query); err != nil {
+				return err
+			}
+			vp.recordPositionSave(journalPos, false)
 		}
 		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {

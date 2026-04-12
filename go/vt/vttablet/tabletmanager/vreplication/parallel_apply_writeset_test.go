@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cespare/xxhash/v2"
@@ -38,10 +39,7 @@ import (
 func testWritesetHash(tableName string, vals ...sqltypes.Value) uint64 {
 	var d xxhash.Digest
 	writesetDigestInit(&d, tableName)
-	for i, v := range vals {
-		if i > 0 {
-			d.Write([]byte{','})
-		}
+	for _, v := range vals {
 		writesetDigestAddValue(&d, v)
 	}
 	return d.Sum64()
@@ -82,6 +80,54 @@ func TestBuildTxnWritesetUsesBeforeAndAfter(t *testing.T) {
 	h1 := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
 	h2 := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("2")))
 	assert.ElementsMatch(t, []uint64{h1, h2}, keys)
+}
+
+func BenchmarkBuildTxnWriteset_NoFKRefsAvoidsPlanWideCanonicalization(b *testing.B) {
+	const tableCount = 256
+	tablePlans := make(map[string]*TablePlan, tableCount)
+	for i := range tableCount {
+		name := fmt.Sprintf("t%d", i)
+		tablePlans[name] = &TablePlan{
+			TargetName: name,
+			Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+			PKIndices:  []bool{true},
+		}
+	}
+	row := &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}
+	events := []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t0",
+			RowChanges: []*binlogdatapb.RowChange{{After: row}},
+		},
+	}}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		keys, err := buildTxnWriteset(tablePlans, nil, nil, events)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(keys) != 1 {
+			b.Fatalf("unexpected key count: %d", len(keys))
+		}
+	}
+}
+
+func BenchmarkWritesetDigestAddFieldValue_TextAllocations(b *testing.B) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	field := &querypb.Field{Name: "email", Type: querypb.Type_VARCHAR, Charset: collationID}
+	value := sqltypes.NewVarChar("user@example.com   ")
+
+	b.ReportAllocs()
+	for b.Loop() {
+		var d xxhash.Digest
+		writesetDigestInit(&d, "emails")
+		if err := writesetDigestAddFieldValue(&d, field, value); err != nil {
+			b.Fatal(err)
+		}
+		_ = d.Sum64()
+	}
 }
 
 func TestBuildTxnWritesetRejectsPartialRowImageWithoutFKRefs(t *testing.T) {
@@ -163,6 +209,62 @@ func TestBuildTxnWritesetRejectsSparseBeforeImageOnRelevantFKColumn(t *testing.T
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "partial row image")
 	require.Nil(t, keys)
+}
+
+func TestBuildTxnWritesetAllowsCaseOnlyFKColumnNameMismatch(t *testing.T) {
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "ID", Type: querypb.Type_INT64},
+			{Name: "PARENT_ID", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("12"), Lengths: []int64{1, 1}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"child": childPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.NoError(t, err)
+	require.Len(t, keys, 2)
+}
+
+func TestBuildTxnWritesetAllowsMixedCaseFKColumnNameMismatch(t *testing.T) {
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "ID", Type: querypb.Type_INT64},
+			{Name: "PARENT_ID", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"Parent_ID"}, ReferencedColumnNames: []string{"ID"}}},
+	}
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("12"), Lengths: []int64{1, 1}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"child": childPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.NoError(t, err)
+	require.Len(t, keys, 2)
 }
 
 func TestBuildTxnWritesetAllowsFullRowImageWithNullValue(t *testing.T) {
@@ -247,6 +349,32 @@ func TestWritesetKeysForChangeMultiplePK(t *testing.T) {
 	)
 	_, ok := keySet[expected]
 	require.True(t, ok)
+}
+
+func TestWritesetKeysForChangeCompositeBinaryPKValuesDoNotAlias(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id1", Type: querypb.Type_VARBINARY},
+			{Name: "id2", Type: querypb.Type_VARBINARY},
+		},
+		PKIndices: []bool{true, true},
+	}
+	valueType := querypb.Type_VARBINARY
+	typeByte := byte(valueType)
+	firstTuple := []sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_VARBINARY, []byte{'a'}),
+		sqltypes.MakeTrusted(querypb.Type_VARBINARY, []byte{'x', ',', typeByte, 'y'}),
+	}
+	secondTuple := []sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_VARBINARY, []byte{'a', ',', typeByte, 'x'}),
+		sqltypes.MakeTrusted(querypb.Type_VARBINARY, []byte{'y'}),
+	}
+	keySet := map[uint64]struct{}{}
+
+	require.NoError(t, writesetKeysForChange(plan, "t1", nil, firstTuple, keySet))
+	require.NoError(t, writesetKeysForChange(plan, "t1", nil, secondTuple, keySet))
+	require.Len(t, keySet, 2)
 }
 
 func TestWritesetKeysForChangeUsesMakeRowTrusted(t *testing.T) {
@@ -344,6 +472,77 @@ func TestQueryFKRefsError(t *testing.T) {
 	require.Nil(t, refs)
 }
 
+type maxRowsAssertingDBClient struct {
+	result      *sqltypes.Result
+	err         error
+	assertQuery func(query string)
+	assertRows  func(maxrows int) error
+}
+
+func (m *maxRowsAssertingDBClient) DBName() string  { return "db" }
+func (m *maxRowsAssertingDBClient) Connect() error  { return nil }
+func (m *maxRowsAssertingDBClient) Begin() error    { return nil }
+func (m *maxRowsAssertingDBClient) Commit() error   { return nil }
+func (m *maxRowsAssertingDBClient) Rollback() error { return nil }
+func (m *maxRowsAssertingDBClient) Close()          {}
+func (m *maxRowsAssertingDBClient) IsClosed() bool  { return false }
+func (m *maxRowsAssertingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	if m.assertQuery != nil {
+		m.assertQuery(query)
+	}
+	if m.assertRows != nil {
+		if err := m.assertRows(maxrows); err != nil {
+			return nil, err
+		}
+	}
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.result, nil
+}
+
+func (m *maxRowsAssertingDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	qr, err := m.ExecuteFetch(query, maxrows)
+	if err != nil {
+		return nil, err
+	}
+	return []*sqltypes.Result{qr}, nil
+}
+
+func (m *maxRowsAssertingDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
+}
+
+func TestQueryFKRefsFetchesAllRows(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	qr := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME",
+			"varchar|varchar|varchar|varchar|varchar",
+		),
+		"child|fk_child_parent|parent_id|parent|id",
+	)
+	client := newVDBClient(&maxRowsAssertingDBClient{
+		result: qr,
+		assertRows: func(maxrows int) error {
+			if maxrows != -1 {
+				return fmt.Errorf("expected fetch-all maxrows, got %d", maxrows)
+			}
+			return nil
+		},
+	}, stats, 100)
+
+	refs, err := queryFKRefs(client, "db")
+	require.NoError(t, err)
+	require.Len(t, refs["child"], 1)
+	require.Equal(t, "parent", refs["child"][0].ParentTable)
+	require.Equal(t, []string{"parent_id"}, refs["child"][0].ChildColumnNames)
+	require.Equal(t, []string{"id"}, refs["child"][0].ReferencedColumnNames)
+}
+
 func TestBuildTxnWritesetMissingTablePlan(t *testing.T) {
 	rowEvent := &binlogdatapb.RowEvent{
 		TableName: "missing",
@@ -372,7 +571,7 @@ func TestWritesetKeysForFKRefMissingColumn(t *testing.T) {
 	keySet := map[uint64]struct{}{}
 	// When an FK column is missing from the streamed fields, the function
 	// should return an error (fail closed) instead of silently dropping the edge.
-	err := writesetKeysForFKRef(ref, fieldIdx, nil, vals, keySet)
+	err := writesetKeysForFKRef(ref, []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, fieldIdx, nil, vals, keySet)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not in streamed fields")
 	require.Empty(t, keySet)
@@ -401,7 +600,7 @@ func TestWritesetKeysForFKRef(t *testing.T) {
 		fieldIdx[f.Name] = i
 	}
 	keySet := map[uint64]struct{}{}
-	writesetKeysForFKRef(ref, fieldIdx, nil, afterVals, keySet)
+	writesetKeysForFKRef(ref, childPlan.Fields, fieldIdx, nil, afterVals, keySet)
 	require.Len(t, keySet, 1)
 	expected := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
 	_, ok := keySet[expected]
@@ -480,6 +679,72 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 	require.True(t, conflict, "parent and child writesets should conflict on parent hash")
 }
 
+func TestBuildTxnWritesetWithCompositeParentFKRefsUsesIdentityColumnOrder(t *testing.T) {
+	parentPlan := &TablePlan{
+		TargetName:      "parent",
+		Fields:          []*querypb.Field{{Name: "b", Type: querypb.Type_INT64}, {Name: "a", Type: querypb.Type_INT64}},
+		IdentityColumns: []string{"a", "b"},
+		PKIndices:       []bool{true, true},
+	}
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_a", Type: querypb.Type_INT64},
+			{Name: "parent_b", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {
+			{ParentTable: "parent", ChildColumnNames: []string{"parent_a", "parent_b"}, ReferencedColumnNames: []string{"a", "b"}},
+		},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{
+		"parent": parentPlan,
+		"child":  childPlan,
+	}
+
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "parent", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("12"), Lengths: []int64{1, 1}},
+		}}},
+	}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("921"), Lengths: []int64{1, 1, 1}},
+		}}},
+	}
+
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	parentHash := testWritesetHash(
+		"parent",
+		sqltypes.MakeTrusted(querypb.Type_INT64, []byte("2")),
+		sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")),
+	)
+	require.Equal(t, []uint64{parentHash}, parentKeys)
+
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+	require.Len(t, childKeys, 2)
+	childPKHash := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("9")))
+	assert.ElementsMatch(t, []uint64{childPKHash, parentHash}, childKeys)
+
+	parentKeySet := map[uint64]struct{}{parentHash: {}}
+	conflict := false
+	for _, k := range childKeys {
+		if _, ok := parentKeySet[k]; ok {
+			conflict = true
+			break
+		}
+	}
+	require.True(t, conflict, "parent and child writesets should conflict on the parent identity hash")
+}
+
 func TestBuildTxnWritesetWithRenamedTableFKRefsUsesTargetTableNames(t *testing.T) {
 	parentPlan := &TablePlan{
 		TargetName: "parent",
@@ -545,6 +810,262 @@ func TestBuildTxnWritesetWithRenamedTableFKRefsUsesTargetTableNames(t *testing.T
 		}
 	}
 	require.True(t, conflict, "renamed parent and child writesets should still conflict on target parent hash")
+}
+
+func TestBuildTxnWritesetWithMixedCaseFKRefsUsesTargetTableNames(t *testing.T) {
+	parentPlan := &TablePlan{
+		TargetName: "Parent",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	childPlan := &TablePlan{
+		TargetName: "Child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {
+			{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}},
+		},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{
+		"parent_src": parentPlan,
+		"child_src":  childPlan,
+	}
+
+	parentRow := &querypb.Row{Values: []byte("42"), Lengths: []int64{2}}
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "parent_src",
+			RowChanges: []*binlogdatapb.RowChange{{After: parentRow}},
+		},
+	}
+	childRow := &querypb.Row{Values: []byte("542"), Lengths: []int64{1, 2}}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "child_src",
+			RowChanges: []*binlogdatapb.RowChange{{After: childRow}},
+		},
+	}
+
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	parentHash := testWritesetHash("Parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	require.Equal(t, []uint64{parentHash}, parentKeys)
+
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+	require.Len(t, childKeys, 2)
+	childPKHash := testWritesetHash("Child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))
+	assert.ElementsMatch(t, []uint64{childPKHash, parentHash}, childKeys)
+
+	parentKeySet := map[uint64]struct{}{parentHash: {}}
+	conflict := false
+	for _, k := range childKeys {
+		if _, ok := parentKeySet[k]; ok {
+			conflict = true
+			break
+		}
+	}
+	require.True(t, conflict, "mixed-case FK metadata should still conflict on the target parent hash")
+}
+
+func TestBuildTxnWritesetTextPrimaryKeyUsesCollationEquality(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_0900_ai_ci"))
+	require.NotZero(t, collationID)
+
+	plan := &TablePlan{
+		TargetName: "emails",
+		Fields: []*querypb.Field{{
+			Name:    "email",
+			Type:    querypb.Type_VARCHAR,
+			Charset: collationID,
+		}},
+		PKIndices: []bool{true},
+	}
+
+	upperEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("A"), Lengths: []int64{1}},
+		}}},
+	}
+	lowerEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("a"), Lengths: []int64{1}},
+		}}},
+	}
+
+	upperKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{upperEvent})
+	require.NoError(t, err)
+	lowerKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{lowerEvent})
+	require.NoError(t, err)
+	require.Equal(t, upperKeys, lowerKeys, "text primary keys that compare equal under MySQL collation rules must hash identically")
+}
+
+func TestBuildTxnWritesetPadSpaceTextPrimaryKeyUsesTrailingSpaceEquality(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	require.NotZero(t, collationID)
+
+	plan := &TablePlan{
+		TargetName: "emails",
+		Fields: []*querypb.Field{{
+			Name:    "email",
+			Type:    querypb.Type_VARCHAR,
+			Charset: collationID,
+		}},
+		PKIndices: []bool{true},
+	}
+
+	trimmedEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("a"), Lengths: []int64{1}},
+		}}},
+	}
+	spacedEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("a "), Lengths: []int64{2}},
+		}}},
+	}
+
+	trimmedKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{trimmedEvent})
+	require.NoError(t, err)
+	spacedKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{spacedEvent})
+	require.NoError(t, err)
+	require.Equal(t, trimmedKeys, spacedKeys, "text primary keys that compare equal under PAD SPACE collation rules must hash identically")
+}
+
+func TestBuildTxnWritesetWithStringFKRefsUsesCollationEqualityAcrossCompatibleTypes(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_0900_ai_ci"))
+	require.NotZero(t, collationID)
+
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields: []*querypb.Field{{
+			Name:    "email",
+			Type:    querypb.Type_CHAR,
+			Charset: collationID,
+		}},
+		PKIndices: []bool{true},
+	}
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_email", Type: querypb.Type_VARCHAR, Charset: collationID},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_email"}, ReferencedColumnNames: []string{"email"}}},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{
+		"parent": parentPlan,
+		"child":  childPlan,
+	}
+
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "parent", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("A"), Lengths: []int64{1}},
+		}}},
+	}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("1a"), Lengths: []int64{1, 1}},
+		}}},
+	}
+
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+
+	parentKeySet := map[uint64]struct{}{}
+	for _, k := range parentKeys {
+		parentKeySet[k] = struct{}{}
+	}
+	conflict := false
+	for _, k := range childKeys {
+		if _, ok := parentKeySet[k]; ok {
+			conflict = true
+			break
+		}
+	}
+	require.True(t, conflict, "compatible string FK values that compare equal under MySQL collation rules must conflict")
+}
+
+func TestBuildTxnWritesetWithPadSpaceStringFKRefsUsesTrailingSpaceEqualityAcrossCompatibleTypes(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	require.NotZero(t, collationID)
+
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields: []*querypb.Field{{
+			Name:    "email",
+			Type:    querypb.Type_CHAR,
+			Charset: collationID,
+		}},
+		PKIndices: []bool{true},
+	}
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_email", Type: querypb.Type_VARCHAR, Charset: collationID},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_email"}, ReferencedColumnNames: []string{"email"}}},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{
+		"parent": parentPlan,
+		"child":  childPlan,
+	}
+
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "parent", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("A"), Lengths: []int64{1}},
+		}}},
+	}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("1a "), Lengths: []int64{1, 2}},
+		}}},
+	}
+
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+
+	parentKeySet := map[uint64]struct{}{}
+	for _, k := range parentKeys {
+		parentKeySet[k] = struct{}{}
+	}
+	conflict := false
+	for _, k := range childKeys {
+		if _, ok := parentKeySet[k]; ok {
+			conflict = true
+			break
+		}
+	}
+	require.True(t, conflict, "compatible PAD SPACE string FK values that compare equal under MySQL rules must conflict")
 }
 
 func TestBuildTxnWritesetExpressionPlanIsMarkedUnsupported(t *testing.T) {
@@ -626,4 +1147,34 @@ func TestBuildTxnWritesetMatchingAliasExpressionPlanIsMarkedUnsupported(t *testi
 	})
 	require.NoError(t, err)
 	assert.True(t, tplan.HasUnsupportedWritesetMapping)
+}
+
+func TestBuildTxnWritesetBacktickedDirectColumnPlanStaysSupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id, email from t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {{Name: "id", IsPK: true}, {Name: "email"}}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "`id`", Type: querypb.Type_INT64},
+			{Name: "`email`", Type: querypb.Type_VARCHAR},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, tplan.HasUnsupportedWritesetMapping)
+	require.Len(t, tplan.Fields, 2)
+	assert.Equal(t, "id", tplan.Fields[0].Name)
+	assert.Equal(t, "email", tplan.Fields[1].Name)
 }

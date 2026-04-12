@@ -26,6 +26,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireNoReadyTxn(t *testing.T, s *applyScheduler) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	require.Nil(t, s.popReadyLocked())
+}
+
+func requireReadyTxn(t *testing.T, s *applyScheduler, want *applyTxn) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	require.Same(t, want, s.popReadyLocked())
+}
+
 func TestApplySchedulerCommitParentOrder(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
@@ -67,7 +81,7 @@ func TestApplySchedulerAllowsIndependentWritesets(t *testing.T) {
 	got2, err := s.nextReady(ctx)
 	require.NoError(t, err)
 
-	assert.NotEqual(t, got1, got2)
+	require.NotEqual(t, got1, got2)
 }
 
 func TestApplySchedulerBlocksConflictingWritesets(t *testing.T) {
@@ -83,23 +97,11 @@ func TestApplySchedulerBlocksConflictingWritesets(t *testing.T) {
 	got1, err := s.nextReady(ctx)
 	require.NoError(t, err)
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, txn2)
 }
 
 func TestApplySchedulerBlocksCommitMetaDuringMissingMeta(t *testing.T) {
@@ -116,23 +118,11 @@ func TestApplySchedulerBlocksCommitMetaDuringMissingMeta(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, missing, got1)
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, meta)
 }
 
 func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
@@ -149,23 +139,11 @@ func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, txn1, got1)
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, txn2)
 }
 
 func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
@@ -190,7 +168,7 @@ func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
 	require.Equal(t, meta, got2)
 
 	require.NoError(t, s.markCommitted(got2))
-	assert.Equal(t, int64(5), s.lastCommittedSequence)
+	require.Equal(t, int64(5), s.lastCommittedSequence)
 }
 
 func TestApplySchedulerSeedsCommitParentOnFirstMeta(t *testing.T) {
@@ -262,23 +240,11 @@ func TestApplySchedulerWritesetConflictStillBlocks(t *testing.T) {
 	require.Equal(t, txn1, got1)
 
 	// txn2 should be blocked because it conflicts with inflight txn1.
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, txn2)
 }
 
 func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
@@ -300,25 +266,13 @@ func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
 
 	// txn2 has commitParent=10 but lastCommittedSequence is still 9 (seeded).
 	// txn2's writeset is empty, so it falls back to commit-parent check.
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	// After committing txn1, lastCommittedSequence advances to 10,
 	// making txn2 ready (commitParent 10 <= 10).
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, txn2)
 }
 
 func TestApplySchedulerNoConflictDoesNotBlockPending(t *testing.T) {
@@ -358,23 +312,11 @@ func TestApplySchedulerForceGlobalBlocksWritesets(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, global, got1)
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(got1))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	requireReadyTxn(t, s, conflict)
 }
 
 func TestApplySchedulerAdvanceCommittedSequenceUnblocks(t *testing.T) {
@@ -393,24 +335,11 @@ func TestApplySchedulerAdvanceCommittedSequenceUnblocks(t *testing.T) {
 	require.Equal(t, seed, got1)
 	require.NoError(t, s.markCommitted(got1))
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	s.advanceCommittedSequence(5)
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
-	require.Equal(t, meta, <-readyCh)
+	requireReadyTxn(t, s, meta)
 }
 
 func TestApplySchedulerAdvanceCommittedSequenceDoesNotBypassInflightMetaParent(t *testing.T) {
@@ -428,24 +357,11 @@ func TestApplySchedulerAdvanceCommittedSequenceDoesNotBypassInflightMetaParent(t
 	require.NoError(t, s.enqueue(metaChild))
 	s.advanceCommittedSequence(11)
 
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	requireNoReadyTxn(t, s)
 
 	require.NoError(t, s.markCommitted(gotParent))
 
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
-	require.Equal(t, metaChild, <-readyCh)
+	requireReadyTxn(t, s, metaChild)
 }
 
 func TestApplySchedulerWaitForIdleReturnsWhenIdle(t *testing.T) {
@@ -462,21 +378,13 @@ func TestApplySchedulerWaitForIdleReturnsOnSchedulerCancel(t *testing.T) {
 
 	require.NoError(t, s.enqueue(&applyTxn{writeset: []uint64{100}}))
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- s.waitForIdle(ctx)
-	}()
-
-	assert.Never(t, func() bool {
-		return len(errCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
+	s.mu.Lock()
+	require.NotZero(t, s.pendingCount)
+	s.mu.Unlock()
 
 	cancel()
 
-	assert.Eventually(t, func() bool {
-		return len(errCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
-	require.ErrorIs(t, <-errCh, context.Canceled)
+	require.ErrorIs(t, s.waitForIdle(ctx), context.Canceled)
 }
 
 func TestApplySchedulerClosePreservesPending(t *testing.T) {
@@ -505,6 +413,52 @@ func TestApplySchedulerNextReadyDrainsPendingAfterClose(t *testing.T) {
 	got, err := s.nextReady(ctx)
 	require.NoError(t, err)
 	require.Same(t, txn, got)
+
+	_, err = s.nextReady(ctx)
+	require.ErrorIs(t, err, io.EOF)
+}
+
+func TestApplySchedulerNextReadyWaitsForBlockedPendingAfterClose(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	blocker := &applyTxn{order: 1, writeset: []uint64{100}}
+	blocked := &applyTxn{order: 2, writeset: []uint64{100}}
+
+	require.NoError(t, s.enqueue(blocker))
+	require.NoError(t, s.enqueue(blocked))
+
+	gotBlocker, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, blocker, gotBlocker)
+
+	require.ErrorIs(t, s.close(), io.EOF)
+
+	type nextReadyResult struct {
+		txn *applyTxn
+		err error
+	}
+	resultCh := make(chan nextReadyResult, 1)
+	go func() {
+		txn, err := s.nextReady(ctx)
+		resultCh <- nextReadyResult{txn: txn, err: err}
+	}()
+
+	assert.Never(t, func() bool {
+		return len(resultCh) > 0
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	require.NoError(t, s.markCommitted(gotBlocker))
+
+	assert.Eventually(t, func() bool {
+		return len(resultCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+
+	gotBlocked := <-resultCh
+	require.NoError(t, gotBlocked.err)
+	require.Same(t, blocked, gotBlocked.txn)
+
+	require.NoError(t, s.markCommitted(gotBlocked.txn))
 
 	_, err = s.nextReady(ctx)
 	require.ErrorIs(t, err, io.EOF)

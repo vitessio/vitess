@@ -75,6 +75,110 @@ echo "=== Bench Run (ROW_COUNT=$TOTAL_OPS, SEED_ROWS=$SEED_ROWS) ==="
 
 detect_primaries
 
+cleanup_workflow() {
+	vtctldclient MoveTables --workflow bench_move --target-keyspace customer cancel 2>/dev/null
+}
+
+timeout_failed=0
+
+add_target_indexes() {
+	target_mysql vt_customer -e "
+  ALTER TABLE bench_orders
+    ADD INDEX idx_name_status (customer_name, status),
+    ADD INDEX idx_name_region_qty (customer_name, region, quantity),
+    ADD INDEX idx_sku_status_region (product_sku, status, region),
+    ADD INDEX idx_region_status_price (region, status, total_price),
+    ADD INDEX idx_notes_prefix (notes(255)),
+    ADD INDEX idx_qty_price (quantity, total_price),
+    ADD INDEX idx_status_qty_price (status, quantity, total_price),
+    ADD INDEX idx_sku_qty (product_sku, quantity),
+    ADD INDEX idx_name_price (customer_name, total_price),
+    ADD INDEX idx_region_qty_price (region, quantity, total_price),
+    ADD INDEX idx_status_name (status, customer_name),
+    ADD INDEX idx_sku_region (product_sku, region),
+    ADD INDEX idx_status_sku_price (status, product_sku, total_price),
+    ADD INDEX idx_name_qty_status (customer_name, quantity, status),
+    ADD INDEX idx_region_name (region, customer_name),
+    ADD INDEX idx_sku_name_region (product_sku, customer_name, region),
+    ADD INDEX idx_qty_status_region (quantity, status, region),
+    ADD INDEX idx_price_status (total_price, status),
+    ADD INDEX idx_price_region_name (total_price, region, customer_name),
+    ADD INDEX idx_notes_prefix2 (notes(128));
+" || return 1
+
+	target_mysql vt_customer -e "
+  ALTER TABLE bench_events
+    ADD INDEX idx_source_type (source, event_type),
+    ADD INDEX idx_type_category (event_type, category),
+    ADD INDEX idx_category_severity (category, severity),
+    ADD INDEX idx_created_severity (created_at, severity),
+    ADD INDEX idx_source_category (source, category),
+    ADD INDEX idx_payload_prefix (payload(255)),
+    ADD INDEX idx_type_created_severity (event_type, created_at, severity),
+    ADD INDEX idx_source_severity (source, severity),
+    ADD INDEX idx_category_created (category, created_at),
+    ADD INDEX idx_type_source_severity (event_type, source, severity),
+    ADD INDEX idx_severity_category (severity, category),
+    ADD INDEX idx_created_type (created_at, event_type),
+    ADD INDEX idx_source_created_type (source, created_at, event_type),
+    ADD INDEX idx_category_type_created (category, event_type, created_at),
+    ADD INDEX idx_severity_source (severity, source),
+    ADD INDEX idx_type_severity_created (event_type, severity, created_at),
+    ADD INDEX idx_created_category_severity (created_at, category, severity),
+    ADD INDEX idx_source_type_category (source, event_type, category),
+    ADD INDEX idx_severity_type_source (severity, event_type, source),
+    ADD INDEX idx_payload_prefix2 (payload(128));
+" || return 1
+
+	target_mysql vt_customer -e "
+  ALTER TABLE bench_accounts
+    ADD INDEX idx_username_tier (username, tier),
+    ADD INDEX idx_email_region (email, region),
+    ADD INDEX idx_tier_balance (tier, balance),
+    ADD INDEX idx_region_tier (region, tier),
+    ADD INDEX idx_bio_prefix (bio(255)),
+    ADD INDEX idx_tier_region_balance (tier, region, balance),
+    ADD INDEX idx_username_balance (username, balance),
+    ADD INDEX idx_email_tier (email, tier),
+    ADD INDEX idx_username_region (username, region),
+    ADD INDEX idx_balance_tier (balance, tier),
+    ADD INDEX idx_region_balance_tier (region, balance, tier),
+    ADD INDEX idx_tier_username (tier, username),
+    ADD INDEX idx_email_balance (email, balance),
+    ADD INDEX idx_region_username (region, username),
+    ADD INDEX idx_username_tier_balance (username, tier, balance),
+    ADD INDEX idx_tier_email (tier, email),
+    ADD INDEX idx_balance_region (balance, region),
+    ADD INDEX idx_email_tier_region (email, tier, region),
+    ADD INDEX idx_region_email_balance (region, email, balance),
+    ADD INDEX idx_bio_prefix2 (bio(128));
+" || return 1
+
+	target_mysql vt_customer -e "
+  ALTER TABLE bench_logs
+    ADD INDEX idx_component_level (component, level),
+    ADD INDEX idx_trace_span (trace_id, span_id),
+    ADD INDEX idx_level_error (level, error_code),
+    ADD INDEX idx_component_error (component, error_code),
+    ADD INDEX idx_message_prefix (message(255)),
+    ADD INDEX idx_span_level (span_id, level),
+    ADD INDEX idx_error_component_level (error_code, component, level),
+    ADD INDEX idx_level_component_error (level, component, error_code),
+    ADD INDEX idx_trace_level (trace_id, level),
+    ADD INDEX idx_component_trace (component, trace_id),
+    ADD INDEX idx_error_level (error_code, level),
+    ADD INDEX idx_span_component (span_id, component),
+    ADD INDEX idx_level_trace (level, trace_id),
+    ADD INDEX idx_trace_component_level (trace_id, component, level),
+    ADD INDEX idx_error_span (error_code, span_id),
+    ADD INDEX idx_component_span_level (component, span_id, level),
+    ADD INDEX idx_level_span_error (level, span_id, error_code),
+    ADD INDEX idx_span_error_component (span_id, error_code, component),
+    ADD INDEX idx_trace_error (trace_id, error_code),
+    ADD INDEX idx_message_prefix2 (message(128));
+" || return 1
+}
+
 # Step 1: Seed source tables with initial data
 echo ""
 echo "Seeding source tables ($SEED_ROWS rows per table = $TOTAL_SEED total)..."
@@ -133,101 +237,11 @@ echo "Workflow stopped."
 # requires many random page reads that can be overlapped by parallel workers.
 echo ""
 echo "Adding extra indexes on target to increase applier workload..."
-target_mysql vt_customer -e "
-  ALTER TABLE bench_orders
-    ADD INDEX idx_name_status (customer_name, status),
-    ADD INDEX idx_name_region_qty (customer_name, region, quantity),
-    ADD INDEX idx_sku_status_region (product_sku, status, region),
-    ADD INDEX idx_region_status_price (region, status, total_price),
-    ADD INDEX idx_notes_prefix (notes(255)),
-    ADD INDEX idx_qty_price (quantity, total_price),
-    ADD INDEX idx_status_qty_price (status, quantity, total_price),
-    ADD INDEX idx_sku_qty (product_sku, quantity),
-    ADD INDEX idx_name_price (customer_name, total_price),
-    ADD INDEX idx_region_qty_price (region, quantity, total_price),
-    ADD INDEX idx_status_name (status, customer_name),
-    ADD INDEX idx_sku_region (product_sku, region),
-    ADD INDEX idx_status_sku_price (status, product_sku, total_price),
-    ADD INDEX idx_name_qty_status (customer_name, quantity, status),
-    ADD INDEX idx_region_name (region, customer_name),
-    ADD INDEX idx_sku_name_region (product_sku, customer_name, region),
-    ADD INDEX idx_qty_status_region (quantity, status, region),
-    ADD INDEX idx_price_status (total_price, status),
-    ADD INDEX idx_price_region_name (total_price, region, customer_name),
-    ADD INDEX idx_notes_prefix2 (notes(128));
-" || echo "Warning: could not add extra indexes to bench_orders"
-
-target_mysql vt_customer -e "
-  ALTER TABLE bench_events
-    ADD INDEX idx_source_type (source, event_type),
-    ADD INDEX idx_type_category (event_type, category),
-    ADD INDEX idx_category_severity (category, severity),
-    ADD INDEX idx_created_severity (created_at, severity),
-    ADD INDEX idx_source_category (source, category),
-    ADD INDEX idx_payload_prefix (payload(255)),
-    ADD INDEX idx_type_created_severity (event_type, created_at, severity),
-    ADD INDEX idx_source_severity (source, severity),
-    ADD INDEX idx_category_created (category, created_at),
-    ADD INDEX idx_type_source_severity (event_type, source, severity),
-    ADD INDEX idx_severity_category (severity, category),
-    ADD INDEX idx_created_type (created_at, event_type),
-    ADD INDEX idx_source_created_type (source, created_at, event_type),
-    ADD INDEX idx_category_type_created (category, event_type, created_at),
-    ADD INDEX idx_severity_source (severity, source),
-    ADD INDEX idx_type_severity_created (event_type, severity, created_at),
-    ADD INDEX idx_created_category_severity (created_at, category, severity),
-    ADD INDEX idx_source_type_category (source, event_type, category),
-    ADD INDEX idx_severity_type_source (severity, event_type, source),
-    ADD INDEX idx_payload_prefix2 (payload(128));
-" || echo "Warning: could not add extra indexes to bench_events"
-
-target_mysql vt_customer -e "
-  ALTER TABLE bench_accounts
-    ADD INDEX idx_username_tier (username, tier),
-    ADD INDEX idx_email_region (email, region),
-    ADD INDEX idx_tier_balance (tier, balance),
-    ADD INDEX idx_region_tier (region, tier),
-    ADD INDEX idx_bio_prefix (bio(255)),
-    ADD INDEX idx_tier_region_balance (tier, region, balance),
-    ADD INDEX idx_username_balance (username, balance),
-    ADD INDEX idx_email_tier (email, tier),
-    ADD INDEX idx_username_region (username, region),
-    ADD INDEX idx_balance_tier (balance, tier),
-    ADD INDEX idx_region_balance_tier (region, balance, tier),
-    ADD INDEX idx_tier_username (tier, username),
-    ADD INDEX idx_email_balance (email, balance),
-    ADD INDEX idx_region_username (region, username),
-    ADD INDEX idx_username_tier_balance (username, tier, balance),
-    ADD INDEX idx_tier_email (tier, email),
-    ADD INDEX idx_balance_region (balance, region),
-    ADD INDEX idx_email_tier_region (email, tier, region),
-    ADD INDEX idx_region_email_balance (region, email, balance),
-    ADD INDEX idx_bio_prefix2 (bio(128));
-" || echo "Warning: could not add extra indexes to bench_accounts"
-
-target_mysql vt_customer -e "
-  ALTER TABLE bench_logs
-    ADD INDEX idx_component_level (component, level),
-    ADD INDEX idx_trace_span (trace_id, span_id),
-    ADD INDEX idx_level_error (level, error_code),
-    ADD INDEX idx_component_error (component, error_code),
-    ADD INDEX idx_message_prefix (message(255)),
-    ADD INDEX idx_span_level (span_id, level),
-    ADD INDEX idx_error_component_level (error_code, component, level),
-    ADD INDEX idx_level_component_error (level, component, error_code),
-    ADD INDEX idx_trace_level (trace_id, level),
-    ADD INDEX idx_component_trace (component, trace_id),
-    ADD INDEX idx_error_level (error_code, level),
-    ADD INDEX idx_span_component (span_id, component),
-    ADD INDEX idx_level_trace (level, trace_id),
-    ADD INDEX idx_trace_component_level (trace_id, component, level),
-    ADD INDEX idx_error_span (error_code, span_id),
-    ADD INDEX idx_component_span_level (component, span_id, level),
-    ADD INDEX idx_level_span_error (level, span_id, error_code),
-    ADD INDEX idx_span_error_component (span_id, error_code, component),
-    ADD INDEX idx_trace_error (trace_id, error_code),
-    ADD INDEX idx_message_prefix2 (message(128));
-" || echo "Warning: could not add extra indexes to bench_logs"
+add_target_indexes || {
+	echo "ERROR: failed to add target indexes"
+	cleanup_workflow
+	exit 1
+}
 
 echo "Target indexes added (~25 per table)."
 
@@ -287,12 +301,20 @@ while true; do
 	fi
 
 	if [[ "$elapsed" -ge 7200 ]]; then
-		echo "WARNING: Timed out after ${elapsed}s (target_seq=${target_seq:-?})"
+		echo "ERROR: Timed out after ${elapsed}s (target_seq=${target_seq:-?})"
+		timeout_failed=1
 		break
 	fi
 
 	sleep 1
 done
+
+if [[ "$timeout_failed" -ne 0 ]]; then
+	echo ""
+	echo "ERROR: drain timed out before reaching source GTID position"
+	cleanup_workflow
+	exit 1
+fi
 
 end_time=$(date +%s)
 
@@ -366,13 +388,13 @@ if [[ "$validation_failed" -ne 0 ]]; then
 	echo "ERROR: validation FAILED — source and target diverged. See mismatches above."
 	echo "=== Bench Run Failed ==="
 	# Still attempt workflow cleanup before exiting.
-	vtctldclient MoveTables --workflow bench_move --target-keyspace customer cancel 2>/dev/null
+	cleanup_workflow
 	exit 1
 fi
 
 # Step 10: Cleanup workflow
 echo ""
 echo "Cleaning up workflow..."
-vtctldclient MoveTables --workflow bench_move --target-keyspace customer cancel 2>/dev/null
+cleanup_workflow
 
 echo "=== Bench Run Complete ==="

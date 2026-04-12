@@ -17,20 +17,43 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/binary"
 	"fmt"
 	"maps"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var writesetTextValueMarker = [2]byte{0xFF, 0x00}
+
+func fieldIndexForName(fieldIdx map[string]int, colName string) (int, bool) {
+	if idx, ok := fieldIdx[colName]; ok {
+		return idx, true
+	}
+	idx, ok := fieldIdx[strings.ToLower(colName)]
+	return idx, ok
+}
+
+func writesetDigestAddPayload(d *xxhash.Digest, payload []byte) {
+	var scratch [8]byte
+	binary.LittleEndian.PutUint64(scratch[:], uint64(len(payload)))
+	d.Write(scratch[:])
+	d.Write(payload)
+}
 
 // writesetDigestInit initializes an xxhash digest with the table name
 // followed by a ':' separator. Callers declare a stack-local xxhash.Digest
@@ -45,8 +68,65 @@ func writesetDigestInit(d *xxhash.Digest, tableName string) {
 // writesetDigestAddValue folds a sqltypes.Value into the digest by writing
 // its type discriminator (1 byte) followed by its raw bytes.
 func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
+	var scratch [8]byte
+	raw := v.Raw()
+	binary.LittleEndian.PutUint64(scratch[:], uint64(1+len(raw)))
+	d.Write(scratch[:])
 	d.Write([]byte{byte(v.Type())})
-	d.Write(v.Raw())
+	d.Write(raw)
+}
+
+func writesetDigestAddFieldValue(d *xxhash.Digest, field *querypb.Field, v sqltypes.Value) error {
+	if field == nil || !sqltypes.IsText(field.Type) || field.Charset == 0 {
+		writesetDigestAddValue(d, v)
+		return nil
+	}
+
+	collation := colldata.Lookup(collations.ID(field.Charset))
+	if collation == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unknown collation %d for field %s", field.Charset, field.Name)
+	}
+
+	raw := v.Raw()
+	if collationUsesPadSpace(collation) {
+		raw = trimTrailingPadSpaceCodepoints(collation.Charset(), raw)
+	}
+
+	var semanticHash vthash.Hasher
+	semanticHash.Reset()
+	collation.Hash(&semanticHash, raw, 0)
+
+	var scratch [8]byte
+	binary.LittleEndian.PutUint64(scratch[:], semanticHash.Sum64())
+	payload := make([]byte, len(writesetTextValueMarker)+len(scratch))
+	copy(payload, writesetTextValueMarker[:])
+	copy(payload[len(writesetTextValueMarker):], scratch[:])
+	writesetDigestAddPayload(d, payload)
+	return nil
+}
+
+func collationUsesPadSpace(collation colldata.Collation) bool {
+	switch collation.(type) {
+	case *colldata.Collation_utf8mb4_uca_0900, *colldata.Collation_utf8mb4_0900_bin:
+		return false
+	default:
+		return true
+	}
+}
+
+func trimTrailingPadSpaceCodepoints(cs charset.Charset, raw []byte) []byte {
+	trimmedEnd := 0
+	for i := 0; i < len(raw); {
+		r, size := cs.DecodeRune(raw[i:])
+		if size <= 0 {
+			return raw
+		}
+		i += size
+		if r != ' ' {
+			trimmedEnd = i
+		}
+	}
+	return raw[:trimmedEnd]
 }
 
 // fkConstraintRef represents one foreign key constraint on a table.
@@ -86,23 +166,132 @@ func buildParentFKRefs(fkRefs map[string][]fkConstraintRef) map[string][]parentF
 	return result
 }
 
+func buildCanonicalTargetTableNames(tablePlans map[string]*TablePlan) map[string]string {
+	if len(tablePlans) == 0 {
+		return nil
+	}
+	canonical := make(map[string]string, len(tablePlans))
+	ambiguous := make(map[string]struct{})
+	for _, plan := range tablePlans {
+		if plan == nil || plan.TargetName == "" {
+			continue
+		}
+		key := strings.ToLower(plan.TargetName)
+		if _, ok := ambiguous[key]; ok {
+			continue
+		}
+		if existing, ok := canonical[key]; ok {
+			if existing != plan.TargetName {
+				delete(canonical, key)
+				ambiguous[key] = struct{}{}
+			}
+			continue
+		}
+		canonical[key] = plan.TargetName
+	}
+	if len(canonical) == 0 {
+		return nil
+	}
+	return canonical
+}
+
+func canonicalTargetTableName(name string, canonical map[string]string) string {
+	if name == "" || len(canonical) == 0 {
+		return name
+	}
+	if resolved, ok := canonical[strings.ToLower(name)]; ok {
+		return resolved
+	}
+	return name
+}
+
+func resolveFKRefsForTable(tableName string, refs map[string][]fkConstraintRef, canonical map[string]string) []fkConstraintRef {
+	if tableName == "" || len(refs) == 0 {
+		return nil
+	}
+	resolvedTableName := canonicalTargetTableName(tableName, canonical)
+	var resolved []fkConstraintRef
+	for name, tableRefs := range refs {
+		if canonicalTargetTableName(name, canonical) != resolvedTableName {
+			continue
+		}
+		start := len(resolved)
+		resolved = append(resolved, tableRefs...)
+		for i := start; i < len(resolved); i++ {
+			resolved[i].ParentTable = canonicalTargetTableName(resolved[i].ParentTable, canonical)
+		}
+	}
+	return resolved
+}
+
+func resolveParentFKRefsForTable(tableName string, refs map[string][]parentFKRef, canonical map[string]string) []parentFKRef {
+	if tableName == "" || len(refs) == 0 {
+		return nil
+	}
+	resolvedTableName := canonicalTargetTableName(tableName, canonical)
+	var resolved []parentFKRef
+	for name, tableRefs := range refs {
+		if canonicalTargetTableName(name, canonical) != resolvedTableName {
+			continue
+		}
+		start := len(resolved)
+		resolved = append(resolved, tableRefs...)
+		for i := start; i < len(resolved); i++ {
+			resolved[i].ParentTable = canonicalTargetTableName(resolved[i].ParentTable, canonical)
+		}
+	}
+	return resolved
+}
+
+func buildResolvedFKRefTableSet(refs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, canonical map[string]string) map[string]struct{} {
+	if len(refs) == 0 && len(parentRefs) == 0 {
+		return nil
+	}
+	resolved := make(map[string]struct{}, len(refs)+len(parentRefs))
+	for name, tableRefs := range refs {
+		if len(tableRefs) == 0 {
+			continue
+		}
+		resolved[canonicalTargetTableName(name, canonical)] = struct{}{}
+	}
+	for name, tableRefs := range parentRefs {
+		if len(tableRefs) == 0 {
+			continue
+		}
+		resolved[canonicalTargetTableName(name, canonical)] = struct{}{}
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+	return resolved
+}
+
+type txnWritesetCache struct {
+	fieldIdxCache        map[string]map[string]int
+	canonicalTargetNames map[string]string
+	resolvedFKRefs       map[string][]fkConstraintRef
+	resolvedParentRefs   map[string][]parentFKRef
+}
+
 // writesetKeysForParentFKRef generates writeset keys for a parent table row
 // based on foreign key constraints that reference this table. The hash uses
 // parentTable:referencedColValues, matching the child-side FK key hash.
 // Returns an error if the FK columns are missing from the streamed field list,
 // so the caller can force serialization instead of silently dropping the edge.
-func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+func writesetKeysForParentFKRef(ref *parentFKRef, fields []*querypb.Field, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	appendKey := func(vals []sqltypes.Value) error {
 		if len(vals) == 0 {
 			return nil
 		}
 		var d xxhash.Digest
 		writesetDigestInit(&d, ref.ParentTable)
-		first := true
 		for _, colName := range ref.ReferencedColumnNames {
-			idx, ok := fieldIdx[colName]
+			idx, ok := fieldIndexForName(fieldIdx, colName)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK referenced column %q not in streamed fields for parent table %s", colName, ref.ParentTable)
+			}
+			if idx >= len(fields) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK referenced column %q index %d out of range for parent table fields %s", colName, idx, ref.ParentTable)
 			}
 			if idx >= len(vals) {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK referenced column %q index %d out of range for parent table %s", colName, idx, ref.ParentTable)
@@ -111,11 +300,9 @@ func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, befor
 			if val.IsNull() {
 				return nil
 			}
-			if !first {
-				d.Write([]byte{','})
+			if err := writesetDigestAddFieldValue(&d, fields[idx], val); err != nil {
+				return err
 			}
-			first = false
-			writesetDigestAddValue(&d, val)
 		}
 		keySet[d.Sum64()] = struct{}{}
 		return nil
@@ -132,7 +319,7 @@ func writesetKeysForParentFKRef(ref *parentFKRef, fieldIdx map[string]int, befor
 // with the parent table's PK-based writeset key, forcing serialization of
 // dependent txns.
 // Returns an error if FK columns are missing from the streamed field list.
-func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+func writesetKeysForFKRef(ref *fkConstraintRef, fields []*querypb.Field, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if ref == nil {
 		return nil
 	}
@@ -142,11 +329,13 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 		}
 		var d xxhash.Digest
 		writesetDigestInit(&d, ref.ParentTable)
-		first := true
 		for _, colName := range ref.ChildColumnNames {
-			idx, ok := fieldIdx[colName]
+			idx, ok := fieldIndexForName(fieldIdx, colName)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK child column %q not in streamed fields for table referencing %s", colName, ref.ParentTable)
+			}
+			if idx >= len(fields) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK child column %q index %d out of range for table fields referencing %s", colName, idx, ref.ParentTable)
 			}
 			if idx >= len(vals) {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "FK child column %q index %d out of range for table referencing %s", colName, idx, ref.ParentTable)
@@ -158,11 +347,9 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 			if val.IsNull() {
 				return nil
 			}
-			if !first {
-				d.Write([]byte{','})
+			if err := writesetDigestAddFieldValue(&d, fields[idx], val); err != nil {
+				return err
 			}
-			first = false
-			writesetDigestAddValue(&d, val)
 		}
 		keySet[d.Sum64()] = struct{}{}
 		return nil
@@ -178,6 +365,14 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fieldIdx map[string]int, beforeV
 // across transactions on the same scheduler goroutine. Pass nil to
 // use a local cache (e.g. in tests).
 func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, events []*binlogdatapb.VEvent, fieldIdxCaches ...map[string]map[string]int) ([]uint64, error) {
+	var cache *txnWritesetCache
+	if len(fieldIdxCaches) > 0 && fieldIdxCaches[0] != nil {
+		cache = &txnWritesetCache{fieldIdxCache: fieldIdxCaches[0]}
+	}
+	return buildTxnWritesetWithCache(tablePlans, fkRefs, parentRefs, events, cache)
+}
+
+func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, events []*binlogdatapb.VEvent, cache *txnWritesetCache) ([]uint64, error) {
 	// Pre-estimate capacity to avoid map rehashing during key insertion.
 	// Each row change can produce ~2 keys (before + after).
 	estimated := 0
@@ -187,9 +382,38 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 		}
 	}
 	keySet := make(map[uint64]struct{}, estimated)
+	needResolvedFKRefs := len(fkRefs) > 0 || len(parentRefs) > 0
+	var canonicalTargetNames map[string]string
+	var resolvedFKRefs map[string][]fkConstraintRef
+	var resolvedParentRefs map[string][]parentFKRef
+	if needResolvedFKRefs {
+		if cache != nil {
+			canonicalTargetNames = cache.canonicalTargetNames
+			resolvedFKRefs = cache.resolvedFKRefs
+			resolvedParentRefs = cache.resolvedParentRefs
+		}
+		if canonicalTargetNames == nil {
+			canonicalTargetNames = buildCanonicalTargetTableNames(tablePlans)
+			if cache != nil {
+				cache.canonicalTargetNames = canonicalTargetNames
+			}
+		}
+		if resolvedFKRefs == nil {
+			resolvedFKRefs = make(map[string][]fkConstraintRef)
+			if cache != nil {
+				cache.resolvedFKRefs = resolvedFKRefs
+			}
+		}
+		if resolvedParentRefs == nil {
+			resolvedParentRefs = make(map[string][]parentFKRef)
+			if cache != nil {
+				cache.resolvedParentRefs = resolvedParentRefs
+			}
+		}
+	}
 	var fieldIdxCache map[string]map[string]int
-	if len(fieldIdxCaches) > 0 && fieldIdxCaches[0] != nil {
-		fieldIdxCache = fieldIdxCaches[0]
+	if cache != nil && cache.fieldIdxCache != nil {
+		fieldIdxCache = cache.fieldIdxCache
 	} else {
 		fieldIdxCache = map[string]map[string]int{}
 	}
@@ -206,17 +430,31 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
 		}
 		targetTableName := plan.TargetName
-		refs := fkRefs[targetTableName]
-		pRefs := parentRefs[targetTableName]
-		// Build fieldIdx once per table for FK ref lookups (child or parent side).
+		var refs []fkConstraintRef
+		var pRefs []parentFKRef
+		if needResolvedFKRefs {
+			var ok bool
+			refs, ok = resolvedFKRefs[targetTableName]
+			if !ok {
+				refs = resolveFKRefsForTable(targetTableName, fkRefs, canonicalTargetNames)
+				resolvedFKRefs[targetTableName] = refs
+			}
+			pRefs, ok = resolvedParentRefs[targetTableName]
+			if !ok {
+				pRefs = resolveParentFKRefsForTable(targetTableName, parentRefs, canonicalTargetNames)
+				resolvedParentRefs[targetTableName] = pRefs
+			}
+		}
+		// Build fieldIdx once per table for FK and composite identity lookups.
 		var fieldIdx map[string]int
-		if len(refs) > 0 || len(pRefs) > 0 {
+		if len(refs) > 0 || len(pRefs) > 0 || len(plan.IdentityColumns) > 1 {
 			var ok bool
 			fieldIdx, ok = fieldIdxCache[rowEvent.TableName]
 			if !ok {
 				fieldIdx = make(map[string]int, len(plan.Fields))
 				for i, f := range plan.Fields {
 					fieldIdx[f.Name] = i
+					fieldIdx[strings.ToLower(f.Name)] = i
 				}
 				fieldIdxCache[rowEvent.TableName] = fieldIdx
 			}
@@ -250,18 +488,18 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 			if change.After != nil && plan.Fields != nil {
 				afterVals = sqltypes.MakeRowTrusted(plan.Fields, change.After)
 			}
-			if err := writesetKeysForChange(plan, targetTableName, beforeVals, afterVals, keySet); err != nil {
+			if err := writesetKeysForChangeWithFieldIdx(plan, targetTableName, fieldIdx, beforeVals, afterVals, keySet); err != nil {
 				return nil, err
 			}
 			for i := range refs {
-				if err := writesetKeysForFKRef(&refs[i], fieldIdx, beforeVals, afterVals, keySet); err != nil {
+				if err := writesetKeysForFKRef(&refs[i], plan.Fields, fieldIdx, beforeVals, afterVals, keySet); err != nil {
 					return nil, err
 				}
 			}
 			// Parent-side: generate FK-aware keys using the referenced columns
 			// so parent row changes conflict with child FK keys.
 			for i := range pRefs {
-				if err := writesetKeysForParentFKRef(&pRefs[i], fieldIdx, beforeVals, afterVals, keySet); err != nil {
+				if err := writesetKeysForParentFKRef(&pRefs[i], plan.Fields, fieldIdx, beforeVals, afterVals, keySet); err != nil {
 					return nil, err
 				}
 			}
@@ -289,14 +527,14 @@ func beforeRowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fiel
 	}
 	for _, ref := range refs {
 		for _, colName := range ref.ChildColumnNames {
-			if idx, ok := fieldIdx[colName]; ok {
+			if idx, ok := fieldIndexForName(fieldIdx, colName); ok {
 				relevantColumns[idx] = struct{}{}
 			}
 		}
 	}
 	for _, ref := range pRefs {
 		for _, colName := range ref.ReferencedColumnNames {
-			if idx, ok := fieldIdx[colName]; ok {
+			if idx, ok := fieldIndexForName(fieldIdx, colName); ok {
 				relevantColumns[idx] = struct{}{}
 			}
 		}
@@ -359,6 +597,35 @@ func txnTouchesUnsupportedWritesetMapping(events []*binlogdatapb.VEvent, tablePl
 // writesetKeysForChange extracts PK-based writeset keys from pre-decoded row
 // values and inserts them directly into the caller's keySet map as uint64 hashes.
 func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+	return writesetKeysForChangeWithFieldIdx(plan, tableName, nil, beforeVals, afterVals, keySet)
+}
+
+func writesetIdentityFieldIndexes(plan *TablePlan, tableName string, fieldIdx map[string]int) ([]int, error) {
+	if plan == nil || len(plan.IdentityColumns) <= 1 {
+		return nil, nil
+	}
+	if fieldIdx == nil {
+		fieldIdx = make(map[string]int, len(plan.Fields))
+		for i, f := range plan.Fields {
+			if f == nil {
+				continue
+			}
+			fieldIdx[f.Name] = i
+			fieldIdx[strings.ToLower(f.Name)] = i
+		}
+	}
+	indexes := make([]int, 0, len(plan.IdentityColumns))
+	for _, colName := range plan.IdentityColumns {
+		idx, ok := fieldIndexForName(fieldIdx, colName)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "writeset identity column %q not in streamed fields for %s", colName, tableName)
+		}
+		indexes = append(indexes, idx)
+	}
+	return indexes, nil
+}
+
+func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if plan == nil {
 		return nil
 	}
@@ -368,27 +635,48 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 		}
 		return nil
 	}
+	identityIndexes, err := writesetIdentityFieldIndexes(plan, tableName, fieldIdx)
+	if err != nil {
+		return err
+	}
 	appendKey := func(vals []sqltypes.Value) error {
 		if len(vals) == 0 {
 			return nil
 		}
 		var d xxhash.Digest
 		writesetDigestInit(&d, tableName)
-		first := true
 		hasPK := false
-		for i, isPK := range plan.PKIndices {
-			if !isPK {
-				continue
+		if len(identityIndexes) > 0 {
+			for _, idx := range identityIndexes {
+				if idx >= len(vals) {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pk index out of range for %s", tableName)
+				}
+				hasPK = true
+				var field *querypb.Field
+				if idx < len(plan.Fields) {
+					field = plan.Fields[idx]
+				}
+				if err := writesetDigestAddFieldValue(&d, field, vals[idx]); err != nil {
+					return err
+				}
 			}
-			if i >= len(vals) {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pk index out of range for %s", tableName)
+		} else {
+			for i, isPK := range plan.PKIndices {
+				if !isPK {
+					continue
+				}
+				if i >= len(vals) {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pk index out of range for %s", tableName)
+				}
+				hasPK = true
+				var field *querypb.Field
+				if i < len(plan.Fields) {
+					field = plan.Fields[i]
+				}
+				if err := writesetDigestAddFieldValue(&d, field, vals[i]); err != nil {
+					return err
+				}
 			}
-			hasPK = true
-			if !first {
-				d.Write([]byte{','})
-			}
-			first = false
-			writesetDigestAddValue(&d, vals[i])
 		}
 		if !hasPK {
 			if len(plan.IdentityColumns) != 0 {
@@ -422,7 +710,7 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 			"ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION",
 		encodeString(dbName),
 	)
-	qr, err := dbClient.ExecuteFetch(query, 10000)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "queryFKRefs")
 	}

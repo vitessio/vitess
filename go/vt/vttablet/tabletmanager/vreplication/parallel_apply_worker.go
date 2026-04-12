@@ -18,7 +18,7 @@ package vreplication
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -72,11 +72,11 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 		dbClient.Close()
 		return nil, err
 	}
-	if err := vr.clearFKCheck(vdbc); err != nil {
+	if err := vr.resetFKCheckAfterCopy(vdbc); err != nil {
 		dbClient.Close()
 		return nil, err
 	}
-	if err := vr.clearFKRestrict(vdbc); err != nil {
+	if err := vr.resetFKRestrictAfterCopy(vdbc); err != nil {
 		dbClient.Close()
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (w *applyWorker) rollback() {
 
 func (w *applyWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool, vp *vplayer) error {
 	if w.client == nil {
-		return fmt.Errorf("apply worker has no active client")
+		return errors.New("apply worker has no active client")
 	}
 	prevLocal := vp.dbClient
 	prevQuery := vp.query

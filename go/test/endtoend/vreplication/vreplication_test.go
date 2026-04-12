@@ -274,8 +274,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 }
 
 func TestVreplicationParallel(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.0"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.4"
+	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.4"
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 		parallelReplicationWorkers,

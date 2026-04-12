@@ -192,3 +192,28 @@ func TestVReplicationConfigSourceOverridesUseEffectiveValues(t *testing.T) {
 		"vstream-packet-size": "2048",
 	}, config.SourceOverrides())
 }
+
+func TestVReplicationConfigSourceOverridesIncludeSourceConsumedWorkflowKeys(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-experimental-flags":           "3",
+		"vreplication-net-read-timeout":             "123",
+		"vreplication-net-write-timeout":            "456",
+		"vreplication-copy-phase-duration":          "2h",
+		"vreplication-parallel-replication-workers": "4",
+		"vreplication-parallel-insert-workers":      "8",
+		"vstream-packet-size":                       "1024",
+		"vstream_dynamic_packet_size":               "false",
+		"vstream_binlog_rotation_threshold":         "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vreplication-experimental-flags":   "3",
+		"vreplication-net-read-timeout":     "123",
+		"vreplication-net-write-timeout":    "456",
+		"vreplication-copy-phase-duration":  "2h",
+		"vstream-packet-size":               "1024",
+		"vstream-dynamic-packet-size":       "false",
+		"vstream_binlog_rotation_threshold": "2048",
+	}, config.SourceOverrides())
+}
