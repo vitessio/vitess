@@ -1756,47 +1756,54 @@ func TestQueryAsString(t *testing.T) {
 	assert.Equal(t, want, query)
 }
 
+// testLogState holds the shared mutable state for testLogHandler instances.
+// All handlers derived via WithAttrs/WithGroup share the same state so that
+// log messages are captured regardless of which derived handler records them.
+type testLogState struct {
+	mu   sync.Mutex
+	logs []string
+}
+
 // testLogHandler is a slog.Handler that records log messages for test assertions
 // while forwarding them to the original handler. It uses the atomic logger swap
 // mechanism in the log package instead of mutating global function pointers,
 // which avoids data races with background goroutines that call log functions.
 type testLogHandler struct {
-	mu      sync.Mutex
-	logs    []string
+	state   *testLogState
 	wrapped slog.Handler
 }
 
 func (h *testLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return true
+	return h.wrapped.Enabled(ctx, level)
 }
 
 func (h *testLogHandler) Handle(ctx context.Context, r slog.Record) error {
-	h.mu.Lock()
-	h.logs = append(h.logs, r.Message)
-	h.mu.Unlock()
+	h.state.mu.Lock()
+	h.state.logs = append(h.state.logs, r.Message)
+	h.state.mu.Unlock()
 	return h.wrapped.Handle(ctx, r)
 }
 
 func (h *testLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &testLogHandler{wrapped: h.wrapped.WithAttrs(attrs), logs: h.logs}
+	return &testLogHandler{state: h.state, wrapped: h.wrapped.WithAttrs(attrs)}
 }
 
 func (h *testLogHandler) WithGroup(name string) slog.Handler {
-	return &testLogHandler{wrapped: h.wrapped.WithGroup(name), logs: h.logs}
+	return &testLogHandler{state: h.state, wrapped: h.wrapped.WithGroup(name)}
 }
 
 type testLogger struct {
-	handler     *testLogHandler
+	state       *testLogState
 	savedLogger *slog.Logger
 }
 
 func newTestLogger() *testLogger {
-	savedLogger := log.SwapLogger(slog.New(&slog.TextHandler{}))
-	handler := &testLogHandler{wrapped: savedLogger.Handler()}
-	newLogger := slog.New(handler)
-	log.SwapLogger(newLogger)
+	savedLogger := log.SwapLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	state := &testLogState{}
+	handler := &testLogHandler{state: state, wrapped: savedLogger.Handler()}
+	log.SwapLogger(slog.New(handler))
 	return &testLogger{
-		handler:     handler,
+		state:       state,
 		savedLogger: savedLogger,
 	}
 }
@@ -1806,18 +1813,20 @@ func (tl *testLogger) Close() {
 }
 
 func (tl *testLogger) getLog(i int) string {
-	tl.handler.mu.Lock()
-	defer tl.handler.mu.Unlock()
-	if i < len(tl.handler.logs) {
-		return tl.handler.logs[i]
+	tl.state.mu.Lock()
+	defer tl.state.mu.Unlock()
+	if i < len(tl.state.logs) {
+		return tl.state.logs[i]
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.handler.logs))
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.state.logs))
 }
 
 func (tl *testLogger) getLogs() []string {
-	tl.handler.mu.Lock()
-	defer tl.handler.mu.Unlock()
-	return tl.handler.logs
+	tl.state.mu.Lock()
+	defer tl.state.mu.Unlock()
+	logs := make([]string, len(tl.state.logs))
+	copy(logs, tl.state.logs)
+	return logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
