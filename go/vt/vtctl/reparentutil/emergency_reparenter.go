@@ -594,7 +594,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replicaMutex               sync.Mutex
 	)
 
-	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
+	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
@@ -700,9 +700,16 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// in the main body of promoteNewPrimary, we would be bound to the
 	// time of slowest replica, instead of the time of the fastest successful
 	// replica, and we want ERS to be fast.
+	//
+	// This goroutine also cancels replCtx after all replicas finish, so that
+	// replicas that are still in-flight can complete their SetReplicationSource
+	// calls even when this function returns early (after the first successful
+	// replica). On primary failure, replCancel() is called immediately below,
+	// which is safe because cancel functions are idempotent.
 	go func() {
 		replWg.Wait()
 		allReplicasDoneCancel()
+		replCancel()
 	}()
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
@@ -712,15 +719,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 	}
-
-	// We should only cancel the context that all the replicas are using when they are done.
-	// Since this function can return early when only 1 replica succeeds, if we cancel this context as a deferred call from this function,
-	// then we would end up having cancelled the context for the replicas who have not yet finished running all the commands.
-	// This leads to some replicas not starting replication properly. So we must wait for all the replicas to finish before cancelling this context.
-	go func() {
-		replWg.Wait()
-		defer replCancel()
-	}()
 
 	select {
 	case <-replSuccessCtx.Done():
