@@ -166,10 +166,10 @@ func TestReparentSorter(t *testing.T) {
 			innodbBufferPool: []int{100, 200, 0, 200, 200},
 			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
 		}, {
-			name:          "equal candidates use tablet UID as stable tiebreaker",
-			tablets:       []*topodatapb.Tablet{tabletReplica3_103, tabletReplica1_101, tabletReplica1_100},
-			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica3_103},
+			name:          "equal candidates use full tablet alias as stable tiebreaker",
+			tablets:       []*topodatapb.Tablet{tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletReplica1_100},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica3_103, tabletReplica2_100},
 		},
 	}
 
