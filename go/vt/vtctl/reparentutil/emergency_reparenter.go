@@ -933,7 +933,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 				continue
 			}
 			otherPosition := validCandidates[otherCandidate]
-			if otherPosition != nil || !otherPosition.IsZero() {
+			if otherPosition != nil && !otherPosition.IsZero() {
 				otherPositions = append(otherPositions, otherPosition.Combined)
 			}
 		}
