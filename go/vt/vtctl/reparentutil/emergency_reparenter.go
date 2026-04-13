@@ -594,7 +594,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replicaMutex               sync.Mutex
 	)
 
-	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	replCtx, replCancel := context.WithTimeout(context.WithoutCancel(ctx), opts.WaitReplicasTimeout)
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
