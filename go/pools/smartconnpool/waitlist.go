@@ -39,21 +39,60 @@ type waitlist[C Connection] struct {
 	nodes sync.Pool
 	mu    sync.Mutex
 	list  list.List[waiter[C]]
+	// onWait is called when a client gets to the point in which it is waiting for a connection - or the mutex that it needs to grab to wait for a connection.
+	onWait func()
+	// onWaiterCapReached is called when the waitlist has reached its maximum capacity.
+	onWaiterCapReached func()
 }
 
 // waitForConn blocks until a connection with the given Setting is returned by another client,
 // or until the given context expires.
+// If maxWaiters is > 0 and the waitlist already has that many waiters, it returns
+// ErrPoolWaiterCapReached immediately without blocking.
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer wl.nodes.Put(elem)
 
 	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
+	// Fast path: reject early using an atomic read of the list length to avoid
+	// contending on the mutex under high query rates. This is racy — the count
+	// can change between this check and the lock acquisition — so we re-check
+	// under the lock below for correctness. Still, we expect to reject most
+	// requests early here when under a heavy load.
+	//
+	// We do this here rather than further upstream (e.g. in ConnPool.Get) because
+	// callers only reach waitForConn after exhausting all other options (idle
+	// connections, new connections, settings stacks). There is no point in checking
+	// there when those requests can still get a connection without waiting. The cap
+	// is just for waiting.
+	if wl.aboveWaiterCap(maxWaiters) {
+		if wl.onWaiterCapReached != nil {
+			wl.onWaiterCapReached()
+		}
+		return nil, ErrPoolWaiterCapReached
+	}
+
+	// If we reach this point, we are waiting, at the very least on the mutex, likely
+	// on the connection. So call onWait which takes care of recording the wait.
+	if wl.onWait != nil {
+		wl.onWait()
+	}
+
 	wl.mu.Lock()
-	// add ourselves as a waiter at the end of the waitlist
+	// Strict check: the list length may have changed since the lockless check
+	// above, so we verify again while holding the lock to guarantee the cap is
+	// never exceeded.
+	if wl.aboveWaiterCap(maxWaiters) {
+		wl.mu.Unlock()
+		if wl.onWaiterCapReached != nil {
+			wl.onWaiterCapReached()
+		}
+		return nil, ErrPoolWaiterCapReached
+	}
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
@@ -108,6 +147,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	case conn := <-elem.Value.conn:
 		return conn, nil
 	}
+}
+
+func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
+	return maxWaiters > 0 && wl.list.Len() >= int(maxWaiters)
 }
 
 func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
