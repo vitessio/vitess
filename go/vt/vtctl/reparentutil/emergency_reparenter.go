@@ -594,6 +594,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replicaMutex               sync.Mutex
 	)
 
+	// WithoutCancel preserves ctx values (tracing, caller ID) but lets replicas
+	// finish SetReplicationSource RPCs after the parent context is cancelled.
 	replCtx, replCancel := context.WithTimeout(context.WithoutCancel(ctx), opts.WaitReplicasTimeout)
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
