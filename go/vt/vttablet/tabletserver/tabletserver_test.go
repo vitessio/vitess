@@ -1756,60 +1756,68 @@ func TestQueryAsString(t *testing.T) {
 	assert.Equal(t, want, query)
 }
 
-type testLogger struct {
-	logsMu sync.Mutex
-	logs   []string
+// testLogHandler is a slog.Handler that records log messages for test assertions
+// while forwarding them to the original handler. It uses the atomic logger swap
+// mechanism in the log package instead of mutating global function pointers,
+// which avoids data races with background goroutines that call log functions.
+type testLogHandler struct {
+	mu      sync.Mutex
+	logs    []string
+	wrapped slog.Handler
+}
 
-	savedInfo  func(msg string, attrs ...slog.Attr)
-	savedError func(msg string, attrs ...slog.Attr)
+func (h *testLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return true
+}
+
+func (h *testLogHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.mu.Lock()
+	h.logs = append(h.logs, r.Message)
+	h.mu.Unlock()
+	return h.wrapped.Handle(ctx, r)
+}
+
+func (h *testLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &testLogHandler{wrapped: h.wrapped.WithAttrs(attrs), logs: h.logs}
+}
+
+func (h *testLogHandler) WithGroup(name string) slog.Handler {
+	return &testLogHandler{wrapped: h.wrapped.WithGroup(name), logs: h.logs}
+}
+
+type testLogger struct {
+	handler     *testLogHandler
+	savedLogger *slog.Logger
 }
 
 func newTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfo:  log.Info,
-		savedError: log.Error,
+	savedLogger := log.SwapLogger(slog.New(&slog.TextHandler{}))
+	handler := &testLogHandler{wrapped: savedLogger.Handler()}
+	newLogger := slog.New(handler)
+	log.SwapLogger(newLogger)
+	return &testLogger{
+		handler:     handler,
+		savedLogger: savedLogger,
 	}
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Info = tl.recordInfo
-	log.Error = tl.recordError
-	return tl
 }
 
 func (tl *testLogger) Close() {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Info = tl.savedInfo
-	log.Error = tl.savedError
-}
-
-func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg, attrs...)
-}
-
-func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg, attrs...)
+	log.SwapLogger(tl.savedLogger)
 }
 
 func (tl *testLogger) getLog(i int) string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	if i < len(tl.logs) {
-		return tl.logs[i]
+	tl.handler.mu.Lock()
+	defer tl.handler.mu.Unlock()
+	if i < len(tl.handler.logs) {
+		return tl.handler.logs[i]
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.handler.logs))
 }
 
 func (tl *testLogger) getLogs() []string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	return tl.logs
+	tl.handler.mu.Lock()
+	defer tl.handler.mu.Unlock()
+	return tl.handler.logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
@@ -2105,7 +2113,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	}
 
 	// errors during failover aren't logged at all
-	require.Empty(t, tl.logs, "unexpected error log during failover")
+	require.Empty(t, tl.getLogs(), "unexpected error log during failover")
 }
 
 var aclJSON1 = `{
