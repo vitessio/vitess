@@ -561,8 +561,8 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
 	oldVal := config.GetInstancePollTime()
@@ -743,8 +743,8 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	oldCache := forgetAliases
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -804,17 +804,6 @@ func TestSnapshotTopologies(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
-}
-
-// waitForCacheInitialization waits for the cache to be initialized to prevent data race in tests
-// that alter the cache or depend on its behaviour.
-func waitForCacheInitialization() {
-	for {
-		if cacheInitializationCompleted.Load() {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 }
 
 func TestGetDatabaseState(t *testing.T) {
