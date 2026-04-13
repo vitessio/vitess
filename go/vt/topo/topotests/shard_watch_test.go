@@ -149,7 +149,6 @@ func TestWatchShard(t *testing.T) {
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchShard(ctx, keyspace, shard)
 	require.ErrorContains(t, err, "error unpacking initial Shard object")
-	}
 
 	data, err := wanted.MarshalVT()
 	require.NoError(t, err)
