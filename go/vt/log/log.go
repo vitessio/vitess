@@ -58,6 +58,13 @@ func init() {
 	structured.Store(true)
 }
 
+// SwapLogger atomically replaces the structured logger with a new one
+// and returns the previous logger. This is safe for concurrent use and is
+// intended for tests that need to intercept log output.
+func SwapLogger(newLogger *slog.Logger) *slog.Logger {
+	return logger.Swap(newLogger)
+}
+
 // log is a helper that logs with glog or slog depending on the configured flags.
 func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	if !structured.Load() {
