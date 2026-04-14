@@ -1045,23 +1045,24 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	// If not, return the Before status with After set to nil to signal that replication
 	// was not stopped. This avoids stopping replication on non-GTID tablets that will
 	// be ignored by ERS.
-	if before.RelayLogPosition == "" {
-		return StopReplicationAndGetStatusResponse{
-			Status: &replicationdatapb.StopReplicationStatus{
-				Before: before,
-			},
-		}, nil
-	}
-	pos, err := replication.DecodePosition(before.RelayLogPosition)
-	if err != nil {
-		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "failed to decode relay log position")
-	}
-	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
-		return StopReplicationAndGetStatusResponse{
-			Status: &replicationdatapb.StopReplicationStatus{
-				Before: before,
-			},
-		}, nil
+	//
+	// Only check when relay log position is non-empty. An empty position (e.g., a
+	// freshly-initialized GTID replica that has not yet received transactions) is
+	// ambiguous — we cannot determine the flavor from an empty string — so we
+	// proceed through the normal stop-replication path and let downstream ERS
+	// logic handle the zero-position case.
+	if before.RelayLogPosition != "" {
+		pos, err := replication.DecodePosition(before.RelayLogPosition)
+		if err != nil {
+			return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "failed to decode relay log position")
+		}
+		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+			return StopReplicationAndGetStatusResponse{
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+				},
+			}, nil
+		}
 	}
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {

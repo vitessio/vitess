@@ -356,9 +356,9 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 		// the most up-to-date changes.
 		if !candidateInfo.IsGTIDBased {
 			if candidateInfo.IsSemiSyncReplica {
-				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v does not report MySQL GTID-based positions and has semi-sync enabled. Replicas without MySQL GTID-based positions are unsupported in a majority GTID-based shard", candidate)
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v does not report MySQL GTID-based positions and has semi-sync enabled. Replicas without MySQL GTID-based positions are unsupported in a majority MySQL GTID-based shard", candidate)
 			}
-			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not report MySQL GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
+			logger.Warningf("tablet %s is a member of a MySQL GTID-based shard, but it does not report MySQL GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
 			continue
 		}
 		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary

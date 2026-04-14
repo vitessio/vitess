@@ -135,7 +135,7 @@ func FindPositionsOfAllCandidates(
 	for alias, afterStatus := range replicationStatusMapAfter {
 		candidateInfo, ok := candidateInfoMap[alias]
 		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica && !candidateInfo.IsGTIDBased {
-			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without GTID positions is unsupported")
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v is a semi-sync replica without MySQL GTID positions; this is unsupported in a MySQL GTID-based shard", alias)
 		}
 
 		if afterStatus.RelayLogPosition.IsZero() {
@@ -304,10 +304,11 @@ func stopReplicationAndBuildStatusMaps(
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
-		m          sync.Mutex
-		errChan    = make(chan concurrency.Error)
-		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
-		res        = &replicationSnapshot{
+		m              sync.Mutex
+		errChan        = make(chan concurrency.Error)
+		allTablets     = make([]*topodatapb.Tablet, 0, len(tabletMap))
+		nonGTIDTablets = sets.New[string]()
+		res            = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
 			reachableTablets:   []*topodatapb.Tablet{},
@@ -367,13 +368,18 @@ func stopReplicationAndBuildStatusMaps(
 				beforeStatus := replication.ProtoToReplicationStatus(stopReplicationStatus.Before)
 				if beforeStatus.IsSemiSyncAcker() {
 					err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-						"tablet %v is a non-GTID replica with semi-sync enabled; this is unsupported in a GTID-based shard", alias)
+						"tablet %v is a non-GTID replica with semi-sync enabled; this is unsupported in a MySQL GTID-based shard", alias)
 					return
 				}
 			}
 			// Do not add to reachableTablets: replication was intentionally left
 			// running on this tablet (After == nil), so it cannot count as
 			// "reached and stopped" for the haveRevoked safety check.
+			// Track it as non-GTID so we can exclude it from allTablets in the
+			// haveRevoked check below.
+			m.Lock()
+			nonGTIDTablets.Insert(alias)
+			m.Unlock()
 			logger.Warningf("tablet %v does not use MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
 			return
 		}
@@ -452,8 +458,19 @@ func stopReplicationAndBuildStatusMaps(
 		}
 	}
 
+	// Exclude non-GTID tablets from allTablets for the haveRevoked check.
+	// These tablets had replication intentionally left running (After == nil)
+	// and are not eligible for promotion, so they should not affect the
+	// safety calculation.
+	tabletsForRevoke := make([]*topodatapb.Tablet, 0, len(allTablets))
+	for _, tablet := range allTablets {
+		if !nonGTIDTablets.Has(topoproto.TabletAliasString(tablet.Alias)) {
+			tabletsForRevoke = append(tabletsForRevoke, tablet)
+		}
+	}
+
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
+	revokeSuccessful := haveRevoked(durability, res.reachableTablets, tabletsForRevoke)
 	if !revokeSuccessful {
 		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}

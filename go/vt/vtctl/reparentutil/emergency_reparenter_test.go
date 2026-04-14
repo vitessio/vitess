@@ -2266,8 +2266,9 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 
 		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
 			Before: &replicationdatapb.Status{
-				IoState:  int32(replication.ReplicationStateRunning),
-				SqlState: int32(replication.ReplicationStateRunning),
+				IoState:          int32(replication.ReplicationStateRunning),
+				SqlState:         int32(replication.ReplicationStateRunning),
+				RelayLogPosition: relayLogPosition,
 			},
 			After: &replicationdatapb.Status{
 				SourceUuid:       sourceUUID,
@@ -2277,8 +2278,9 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 
 		alreadyStoppedIOStatus := &replicationdatapb.StopReplicationStatus{
 			Before: &replicationdatapb.Status{
-				IoState:  int32(replication.ReplicationStateStopped),
-				SqlState: int32(replication.ReplicationStateRunning),
+				IoState:          int32(replication.ReplicationStateStopped),
+				SqlState:         int32(replication.ReplicationStateRunning),
+				RelayLogPosition: relayLogPosition,
 			},
 			After: &replicationdatapb.Status{
 				SourceUuid:       sourceUUID,
@@ -2346,6 +2348,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
+				Type:     topodatapb.TabletType_PRIMARY,
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
@@ -2354,6 +2357,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 					Cell: "zone1",
 					Uid:  101,
 				},
+				Type:     topodatapb.TabletType_REPLICA,
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
@@ -2362,6 +2366,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 					Cell: "zone1",
 					Uid:  102,
 				},
+				Type:     topodatapb.TabletType_REPLICA,
 				Keyspace: keyspace,
 				Shard:    shard,
 			},

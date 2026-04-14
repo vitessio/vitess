@@ -654,8 +654,14 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
-		if status, ok := statusMap[alias]; ok {
-			fs, err := ReplicaWasRunning(status)
+		// Tablets not in statusMap were skipped during stop-replication (e.g.,
+		// non-GTID/file-based replicas with After == nil). We still point them
+		// at the new primary, but we must not enable semi-sync on them — doing
+		// so would recreate the unsupported mixed topology that ERS is designed
+		// to handle gracefully.
+		_, inStatusMap := statusMap[alias]
+		if inStatusMap {
+			fs, err := ReplicaWasRunning(statusMap[alias])
 			if err != nil {
 				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
 				rec.RecordError(err)
@@ -666,7 +672,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
+		isSemiSync := inStatusMap && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, isSemiSync, 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)

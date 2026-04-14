@@ -1832,7 +1832,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
-							Uid:  103,
+							Uid:  105,
 						},
 						Type: topodatapb.TabletType_BACKUP,
 					},
