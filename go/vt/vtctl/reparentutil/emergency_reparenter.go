@@ -705,8 +705,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	//
 	// This goroutine also cancels replCtx after all replicas finish, so that
 	// replicas that are still in-flight can complete their SetReplicationSource
-	// calls even when this function returns early (after the first successful
-	// replica). On primary failure, replCancel() is called immediately below,
+	// calls even when this function returns early. For non-intermediate
+	// reparents, this function returns after the first successful replica;
+	// for intermediate reparents, it waits for all replicas to finish.
+	// On primary failure, replCancel() is called immediately below,
 	// which is safe because cancel functions are idempotent.
 	go func() {
 		replWg.Wait()
