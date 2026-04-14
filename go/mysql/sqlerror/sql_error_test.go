@@ -54,7 +54,7 @@ func TestDemuxResourceExhaustedErrors(t *testing.T) {
 }
 
 func TestNewSQLErrorFromError(t *testing.T) {
-	var tCases = []struct {
+	tCases := []struct {
 		err error
 		num ErrorCode
 		ha  HandlerErrorCode
@@ -154,6 +154,16 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			err: vterrors.NewErrorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NoDB, "no db selected"),
 			num: ERNoDb,
 			ss:  SSNoDB,
+		},
+		{
+			err: fmt.Errorf("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			num: ERMasterInfo,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: fmt.Errorf("ERROR 1872 (HY000): Replica failed to initialize applier metadata structure from the repository"),
+			num: ERReplicaApplierMetadataInitRepository,
+			ss:  SSUnknownSQLState,
 		},
 		{
 			err: fmt.Errorf("just some random text here"),

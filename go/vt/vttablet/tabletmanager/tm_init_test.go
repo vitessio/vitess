@@ -24,10 +24,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -39,6 +41,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -684,9 +688,7 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	return mysqld
 }
 
-var (
-	exporter = servenv.NewExporter("TestTabletManager", "")
-)
+var exporter = servenv.NewExporter("TestTabletManager", "")
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
 	// reset stats
@@ -824,7 +826,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Failure due to timeout",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
@@ -845,7 +848,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Success for externally managed tablet",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -868,7 +872,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Empty timeout",
 			waitTime:  0,
 			errWanted: "",
@@ -878,7 +883,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 				return tc, func() {}
 			},
-		}, {
+		},
+		{
 			name:      "Empty config",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -960,4 +966,83 @@ func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUse
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
 	conn.Close()
+}
+
+// TestInitReplicationRecovery verifies replica startup initialization self-heals recoverable
+// init failures returned from SetReplicationSource.
+func TestInitReplicationRecovery(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+
+	tm := &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		BatchCtx:               ctx,
+		TopoServer:             ts,
+		MysqlDaemon:            fakeMysqlDaemon,
+		tmc:                    newFakeTMClient(),
+		tabletAlias:            tablet.Alias,
+		_waitForGrantsComplete: make(chan struct{}),
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: tablet,
+			},
+		},
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityNone)
+
+	primary := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  2,
+		},
+		Hostname: "primary-host",
+		PortMap: map[string]int32{
+			"vt":   1234,
+			"grpc": 3456,
+		},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, primary))
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+
+	// Make StartReplication return a recoverable init error and expect the
+	// startup path to self-heal by restarting replication. SetReplicationSource
+	// is called with startReplicationAfter=false so recovery only applies to
+	// the separate StartReplication call.
+	fakeMysqlDaemon.SetPrimaryPositionLocked(pos)
+	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	// initializeReplication should now succeed and return the primary position
+	// after routing the recoverable error through RestartReplication.
+	gotPosition, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }

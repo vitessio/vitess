@@ -99,7 +99,8 @@ func (tm *TabletManager) RestoreData(
 	restoreToTimetamp time.Time,
 	restoreToPos string,
 	allowedBackupEngines []string,
-	mysqlShutdownTimeout time.Duration) error {
+	mysqlShutdownTimeout time.Duration,
+) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -157,7 +158,6 @@ func (tm *TabletManager) RestoreData(
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
-
 	tablet := tm.Tablet()
 	originalType := tablet.Type
 	// Try to restore. Depending on the reason for failure, we may be ok.
@@ -334,7 +334,7 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, 0, false, true); err != nil {
+	if err := tm.setReplicationSourceRecoverable(ctx, "//", 0, 0, false, true); err != nil {
 		return vterrors.Wrap(err, "failed to disable replication")
 	}
 
