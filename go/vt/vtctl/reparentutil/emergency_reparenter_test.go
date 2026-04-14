@@ -6146,6 +6146,7 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 		shards               []*vtctldatapb.Shard
 		tablets              []*topodatapb.Tablet
 		shouldErr            bool
+		errShouldContain     string
 		expectedNewPrimary   string
 	}{
 		{
@@ -6399,10 +6400,11 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 					Hostname: "file-based-semi-sync-replica",
 				},
 			},
-			keyspace:  "testkeyspace",
-			shard:     "-",
-			cells:     []string{"zone1"},
-			shouldErr: true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			shouldErr:        true,
+			errShouldContain: "non-GTID replica with semi-sync enabled",
 		},
 	}
 
@@ -6440,7 +6442,10 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.errShouldContain != "" {
+					assert.ErrorContains(t, err, tt.errShouldContain)
+				}
 				return
 			}
 
