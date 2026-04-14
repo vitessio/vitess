@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -693,7 +694,7 @@ func TestJSONType(t *testing.T) {
 		},
 		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
-	if !want.Equal(qr) {
+	if !reflect.DeepEqual(qr, want) {
 		// MariaDB 10.3 has different behavior.
 		want2 := want.Copy()
 		want2.Fields[1].Type = sqltypes.Blob
