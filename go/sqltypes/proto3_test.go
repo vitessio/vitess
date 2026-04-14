@@ -371,12 +371,9 @@ func TestResultToProto3_CachedRows(t *testing.T) {
 }
 
 func TestResultToProto3_NilAndEmptyCache(t *testing.T) {
-	// Nil result.
 	require.Nil(t, ResultToProto3(nil))
-
-	// CacheProto3Rows on nil is a no-op.
 	var nilResult *Result
-	nilResult.CacheProto3Rows() // should not panic
+	nilResult.CacheProto3Rows() // does not panic
 
 	// Empty rows: cache is not set.
 	result := &Result{
@@ -402,13 +399,11 @@ func TestShallowCopy_PropagatesProto3RowCache(t *testing.T) {
 	require.NotNil(t, result.proto3Rows)
 
 	shallow := result.ShallowCopy()
-	// ShallowCopy shares the same row data, so the cache should propagate.
 	require.Equal(t, result.proto3Rows, shallow.proto3Rows)
 }
 
 func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
-	// resultWithCache returns a single-row Result with proto3Rows already cached.
-	resultWithCache := func(t *testing.T) *Result {
+	resultWithProto3FieldPopulated := func(t *testing.T) *Result {
 		t.Helper()
 		result := &Result{
 			Fields: []*querypb.Field{{Name: "col1", Type: VarChar}},
@@ -422,7 +417,7 @@ func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
 	}
 
 	t.Run("AppendResult", func(t *testing.T) {
-		result := resultWithCache(t)
+		result := resultWithProto3FieldPopulated(t)
 		result.AppendResult(&Result{
 			Rows: [][]Value{{
 				TestValue(VarChar, "world"),
@@ -436,9 +431,13 @@ func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
 	})
 
 	t.Run("Repair", func(t *testing.T) {
-		result := resultWithCache(t)
+		result := resultWithProto3FieldPopulated(t)
 		result.Repair([]*querypb.Field{{Name: "col1", Type: VarBinary}})
 		require.Nil(t, result.proto3Rows, "Repair must invalidate proto3Rows cache")
+
+		// Verify ResultToProto3 re-encodes with the repaired field types.
+		p3 := ResultToProto3(result)
+		require.Len(t, p3.Rows, 1)
 	})
 }
 
