@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -457,11 +458,11 @@ func makeTestResult(numRows int) *Result {
 	rows := make([][]Value, numRows)
 	for i := range rows {
 		rows[i] = []Value{
-			TestValue(Int64, fmt.Sprintf("%d", i)),
+			TestValue(Int64, strconv.Itoa(i)),
 			TestValue(VarChar, fmt.Sprintf("val-%06d", i)),
 			TestValue(VarChar, fmt.Sprintf("val-%06d-longervalue", i)),
 			TestValue(Float64, fmt.Sprintf("%d.%02d", i/100, i%100)),
-			TestValue(Int64, fmt.Sprintf("%d", i%2)),
+			TestValue(Int64, strconv.Itoa(i%2)),
 		}
 	}
 	return &Result{
