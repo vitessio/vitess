@@ -228,6 +228,7 @@ type replicationSnapshot struct {
 	primaryStatusMap   map[string]*replicationdatapb.PrimaryStatus
 	reachableTablets   []*topodatapb.Tablet
 	tabletsBackupState map[string]bool
+	nonGTIDTablets     sets.Set[string]
 }
 
 // replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
@@ -308,15 +309,15 @@ func stopReplicationAndBuildStatusMaps(
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
-		m              sync.Mutex
-		errChan        = make(chan concurrency.Error)
-		allTablets     = make([]*topodatapb.Tablet, 0, len(tabletMap))
-		nonGTIDTablets = sets.New[string]()
-		res            = &replicationSnapshot{
+		m          sync.Mutex
+		errChan    = make(chan concurrency.Error)
+		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
+		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
 			reachableTablets:   []*topodatapb.Tablet{},
 			tabletsBackupState: map[string]bool{},
+			nonGTIDTablets:     sets.New[string](),
 		}
 	)
 
@@ -382,7 +383,7 @@ func stopReplicationAndBuildStatusMaps(
 			// Track it as non-GTID so we can exclude it from allTablets in the
 			// haveRevoked check below.
 			m.Lock()
-			nonGTIDTablets.Insert(alias)
+			res.nonGTIDTablets.Insert(alias)
 			m.Unlock()
 			logger.Warningf("tablet %v does not use MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
 			return
@@ -468,7 +469,7 @@ func stopReplicationAndBuildStatusMaps(
 	// safety calculation.
 	tabletsForRevoke := make([]*topodatapb.Tablet, 0, len(allTablets))
 	for _, tablet := range allTablets {
-		if !nonGTIDTablets.Has(topoproto.TabletAliasString(tablet.Alias)) {
+		if !res.nonGTIDTablets.Has(topoproto.TabletAliasString(tablet.Alias)) {
 			tabletsForRevoke = append(tabletsForRevoke, tablet)
 		}
 	}

@@ -334,7 +334,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
 		// These are the candidates that we can use to find a replacement.
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, validCandidateTablets, opts)
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, stoppedReplicationSnapshot.nonGTIDTablets, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -370,7 +370,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, opts, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, stoppedReplicationSnapshot.nonGTIDTablets, opts, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
@@ -549,6 +549,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	candidateInfoMap map[string]*CandidateInfo,
+	nonGTIDTablets sets.Set[string],
 	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
@@ -561,7 +562,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, candidateInfoMap, opts, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, candidateInfoMap, nonGTIDTablets, opts, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -590,6 +591,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	candidateInfoMap map[string]*CandidateInfo,
+	nonGTIDTablets sets.Set[string],
 	opts EmergencyReparentOptions,
 	intermediateReparent bool, // intermediateReparent represents whether the reparenting of the replicas is the final reparent or not.
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
@@ -669,13 +671,19 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		}
 
 		// Non-GTID tablets (file-based replicas with After == nil) are excluded
-		// from statusMap and candidateInfoMap by stopReplicationAndBuildStatusMaps.
-		// We still point them at the new primary, but we must not enable semi-sync
-		// on them — doing so would recreate the unsupported mixed topology
-		// (semi-sync + non-GTID) under the new primary. Tablets absent from
-		// candidateInfoMap are treated as non-GTID.
-		candidateInfo, hasCandidateInfo := candidateInfoMap[alias]
-		isNonGTID := !hasCandidateInfo || !candidateInfo.IsGTIDBased
+		// from statusMap and candidateInfoMap by stopReplicationAndBuildStatusMaps
+		// and tracked in nonGTIDTablets. We still point them at the new primary,
+		// but we must not enable semi-sync on them — doing so would recreate the
+		// unsupported mixed topology (semi-sync + non-GTID) under the new primary.
+		// We use the explicit nonGTIDTablets set rather than candidateInfoMap
+		// membership, because the demoted primary is also absent from
+		// candidateInfoMap (it takes the DemotePrimary path) but is GTID-based.
+		isNonGTID := nonGTIDTablets.Has(alias)
+		if !isNonGTID {
+			if candidateInfo, ok := candidateInfoMap[alias]; ok && !candidateInfo.IsGTIDBased {
+				isNonGTID = true
+			}
+		}
 		isSemiSync := !isNonGTID && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
 		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, isSemiSync, 0)
 		if err != nil {

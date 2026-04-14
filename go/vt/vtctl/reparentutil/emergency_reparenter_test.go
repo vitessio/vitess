@@ -2861,7 +2861,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			candidateInfoMap := map[string]*CandidateInfo{}
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.emergencyReparentOps, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, sets.New[string](), tt.emergencyReparentOps, false)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4108,7 +4108,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			candidateInfoMap := map[string]*CandidateInfo{}
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.emergencyReparentOps, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, sets.New[string](), tt.emergencyReparentOps, false /* intermediateReparent */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4688,7 +4688,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			candidateInfoMap := map[string]*CandidateInfo{}
-			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.validCandidateTablets, tt.emergencyReparentOps)
+			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, sets.New[string](), tt.validCandidateTablets, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4980,7 +4980,7 @@ func TestParentContextCancelled(t *testing.T) {
 		cancel()
 	}()
 	candidateInfoMap := map[string]*CandidateInfo{}
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, candidateInfoMap, emergencyReparentOps, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, candidateInfoMap, sets.New[string](), emergencyReparentOps, true)
 	require.NoError(t, err)
 }
 
