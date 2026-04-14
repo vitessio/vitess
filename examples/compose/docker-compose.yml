@@ -1,0 +1,329 @@
+name: vitess-example
+
+services:
+  vitess-lite:
+    build:
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
+    profiles: [build]
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    command:
+      - etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtctld:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtctld-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "15000:15000"
+      - "15999:15999"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15000/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtgate:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtgate-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "15001:15001"
+      - "15306:15306"
+      - "15991:15991"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15001/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  vtorc:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtorc-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "16000:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - ../common/vtorc:/vt/config/vtorc:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vtadmin:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtadmin-up.sh"]
+    ports:
+      - "14200:14200"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - ./vtadmin:/vt/config/vtadmin:ro
+      - vtadmin-web-build:/vt/web/vtadmin/build
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vtadmin-web:
+    image: nginx@sha256:e7257f1ef28ba17cf7c248cb8ccf6f0c6e0228ab9c315c152f9c203cd34cf6d1
+    ports:
+      - "14201:80"
+    volumes:
+      - vtadmin-web-build:/usr/share/nginx/html:ro
+      - ./vtadmin-web.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - vtadmin
+
+  # Commerce keyspace tablets (profile: commerce)
+  vttablet100:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=100
+      - KEYSPACE=commerce
+    ports:
+      - "15100:15000"
+      - "16100:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet101:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=101
+      - KEYSPACE=commerce
+    ports:
+      - "15101:15000"
+      - "16101:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet102:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=102
+      - KEYSPACE=commerce
+    ports:
+      - "15102:15000"
+      - "16102:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Customer keyspace tablets (profile: customer)
+  vttablet200:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=200
+      - KEYSPACE=customer
+    ports:
+      - "15200:15000"
+      - "16200:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet201:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=201
+      - KEYSPACE=customer
+    ports:
+      - "15201:15000"
+      - "16201:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet202:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=202
+      - KEYSPACE=customer
+    ports:
+      - "15202:15000"
+      - "16202:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Sharded customer keyspace tablets (profile: sharded)
+  vttablet300:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=300
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15300:15000"
+      - "16300:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet301:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=301
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15301:15000"
+      - "16301:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet302:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=302
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15302:15000"
+      - "16302:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet400:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=400
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15400:15000"
+      - "16400:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet401:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=401
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15401:15000"
+      - "16401:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet402:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=402
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15402:15000"
+      - "16402:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+volumes:
+  vtadmin-web-build:
