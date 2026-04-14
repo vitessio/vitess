@@ -973,15 +973,19 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
 		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
 		// should not be considered a valid source of writes that no other tablet has.
-		errantGTIDs, err := replication.FindErrantGTIDs(validCandidates[alias].Combined, replication.SID{}, maxLenPositions)
+		candidatePositions := validCandidates[alias]
+		if candidatePositions == nil || candidatePositions.IsZero() {
+			continue
+		}
+		errantGTIDs, err := replication.FindErrantGTIDs(candidatePositions.Combined, replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs))
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs))
 			continue
 		}
-		updatedValidCandidates[alias] = validCandidates[alias]
+		updatedValidCandidates[alias] = candidatePositions
 	}
 
 	return updatedValidCandidates, nil
