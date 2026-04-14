@@ -130,5 +130,5 @@ func TestAlreadyRegisteredPolicy(t *testing.T) {
 		return
 	}
 
-	assert.NoError(t, err)
+	assert.Failf(t, "unexpected process result", "process ran with err %v, want exit status 1", err)
 }

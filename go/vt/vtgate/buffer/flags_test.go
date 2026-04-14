@@ -17,7 +17,6 @@ limitations under the License.
 package buffer
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -66,7 +65,5 @@ func TestVerifyFlags(t *testing.T) {
 		"--enable-buffer",
 		"--buffer-keyspace-shards", "ks1,ks1/0",
 	})
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "has overlapping entries") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, verifyFlags(), "has overlapping entries")
 }

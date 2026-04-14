@@ -1408,9 +1408,8 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 		<-tx1Started
 		_, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and `name` = 1')" {
-			assert.NoError(t, err)
-		}
+		assert.ErrorContains(t, err, "hot row protection: too many queued transactions")
+		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 		// No commit necessary because the Begin failed.
 	})
 
@@ -1495,9 +1494,8 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		<-tx1Started
 
 		_, _, err := tsv.BeginExecute(ctxTx2, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
-			assert.NoError(t, err)
-		}
+		assert.ErrorContains(t, err, "context canceled")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 		// No commit necessary because the Begin failed.
 	})
 

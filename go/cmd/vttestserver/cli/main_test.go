@@ -535,7 +535,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			require.NoError(t, err)
+			require.FailNowf(t, "timeout", "Failed to start consul daemon in time. Consul is returning error: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
