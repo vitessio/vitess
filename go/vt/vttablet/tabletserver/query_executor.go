@@ -753,6 +753,9 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			} else {
 				defer conn.Recycle()
 				res, err := qre.execDBConn(conn.Conn, sql, true)
+				if qre.tsv.config.ConsolidatorCacheProto3Rows {
+					res.CacheProto3Rows()
+				}
 				q.SetResult(res)
 				q.SetErr(err)
 			}
