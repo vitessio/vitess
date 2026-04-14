@@ -1014,6 +1014,25 @@ func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 		assert.Equal(t, "insert into t(c1, c2) values (3, 'c')", executed[1])
 	})
 
+	t.Run("split accounts for on duplicate key suffix", func(t *testing.T) {
+		tpWithOnDup := *tp
+		tpWithOnDup.BulkInsertOnDup = sqlparser.BuildParsedQuery(" on duplicate key update c2=values(c2)")
+
+		rows := []*querypb.Row{makeRow(1, "a"), makeRow(2, "b")}
+		var executed []string
+		buf := &bytes2.Buffer{}
+		// Two rows fit without the suffix, but exceed this limit once the ON DUPLICATE
+		// KEY UPDATE clause is appended. One row plus the suffix still fits.
+		_, err := tpWithOnDup.applyBulkInsert(buf, rows, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 82)
+		require.NoError(t, err)
+		require.Len(t, executed, 2)
+		assert.Equal(t, "insert into t(c1, c2) values (1, 'a') on duplicate key update c2=values(c2)", executed[0])
+		assert.Equal(t, "insert into t(c1, c2) values (2, 'b') on duplicate key update c2=values(c2)", executed[1])
+	})
+
 	t.Run("single row exceeds limit", func(t *testing.T) {
 		longVal := strings.Repeat("x", 100)
 		rows := []*querypb.Row{makeRow(1, longVal)}
@@ -1035,6 +1054,63 @@ func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 		}, 40) // Force each row into its own statement
 		require.NoError(t, err)
 		assert.Equal(t, uint64(3), result.RowsAffected)
+	})
+}
+
+func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
+	tp := &TablePlan{
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":a_c1", ":a_c2",
+		),
+		BulkInsertOnDup: sqlparser.BuildParsedQuery(" on duplicate key update c2=values(c2)"),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip:     map[string]bool{},
+		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+	}
+
+	makeRowInsert := func(id int, val string) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{
+			After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(int64(id)),
+				sqltypes.NewVarChar(val),
+			}),
+		}
+	}
+
+	t.Run("split accounts for on duplicate key suffix", func(t *testing.T) {
+		rowInserts := []*binlogdatapb.RowChange{
+			makeRowInsert(1, "a"),
+			makeRowInsert(2, "b"),
+		}
+		expectedFirst := "insert into t(c1, c2) values (1, 'a') on duplicate key update c2=values(c2)"
+		expectedSecond := "insert into t(c1, c2) values (2, 'b') on duplicate key update c2=values(c2)"
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowInserts, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, int64(len(expectedFirst)))
+		require.NoError(t, err)
+		require.Len(t, executed, 2)
+		assert.Equal(t, expectedFirst, executed[0])
+		assert.Equal(t, expectedSecond, executed[1])
+	})
+
+	t.Run("single row exceeds limit", func(t *testing.T) {
+		longVal := strings.Repeat("x", 100)
+		rowInserts := []*binlogdatapb.RowChange{makeRowInsert(1, longVal)}
+		expected := "insert into t(c1, c2) values (1, '" + longVal + "') on duplicate key update c2=values(c2)"
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowInserts, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 10)
+		require.NoError(t, err)
+		require.Len(t, executed, 1, "single row must still execute even if it exceeds maxQuerySize")
+		assert.Equal(t, expected, executed[0])
 	})
 }
 

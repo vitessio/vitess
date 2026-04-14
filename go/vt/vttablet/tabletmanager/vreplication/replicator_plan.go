@@ -52,6 +52,14 @@ import (
 // negative to always use the tree encoding.
 var maxJSONBufferSize int64 = 1024 * 1024 // 1 MiB
 
+func appendCastJSONForSQL(buf *bytes2.Buffer, raw []byte) {
+	// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
+	// regardless of connection charset, matching the JSON_OBJECT path behavior.
+	buf.WriteString("CAST(_utf8mb4")
+	sqltypes.MakeTrusted(querypb.Type_VARCHAR, raw).EncodeSQLBytes2(buf)
+	buf.WriteString(" as JSON)")
+}
+
 // marshalJSONForSQL converts raw text JSON bytes to a SQL expression suitable
 // for INSERT/UPDATE statements. For values larger than maxJSONBufferSize it
 // uses CAST(... AS JSON) to avoid the ~60x memory amplification of parsing
@@ -59,10 +67,9 @@ var maxJSONBufferSize int64 = 1024 * 1024 // 1 MiB
 // JSON_OBJECT/JSON_ARRAY tree encoding.
 func marshalJSONForSQL(raw []byte) (*sqltypes.Value, error) {
 	if maxJSONBufferSize >= 0 && int64(len(raw)) > maxJSONBufferSize {
-		// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
-		// regardless of connection charset, matching the JSON_OBJECT path behavior.
-		castExpr := "CAST(_utf8mb4" + sqltypes.EncodeStringSQL(string(raw)) + " as JSON)"
-		v := sqltypes.MakeTrusted(querypb.Type_RAW, []byte(castExpr))
+		buf := &bytes2.Buffer{}
+		appendCastJSONForSQL(buf, raw)
+		v := sqltypes.MakeTrusted(querypb.Type_RAW, buf.Bytes())
 		return &v, nil
 	}
 	return vjson.MarshalSQLValue(raw)
@@ -282,6 +289,10 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 
 func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
 	insertPrefix := tp.BulkInsertFront.Query + " values "
+	insertSuffixLen := 0
+	if tp.BulkInsertOnDup != nil {
+		insertSuffixLen = len(tp.BulkInsertOnDup.Query)
+	}
 
 	flush := func(final bool) (*sqltypes.Result, error) {
 		if tp.BulkInsertOnDup != nil {
@@ -312,7 +323,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 
 		// If the buffer exceeds maxQuerySize and we have more than one
 		// row, flush everything before this row and start a new statement.
-		if maxQuerySize > 0 && int64(sqlbuffer.Len()) > maxQuerySize && rowCount > 1 {
+		if maxQuerySize > 0 && int64(sqlbuffer.Len()+insertSuffixLen) > maxQuerySize && rowCount > 1 {
 			// Roll back to before this row was appended.
 			sqlbuffer.Truncate(beforeLen)
 			result, err := flush(false)
@@ -681,6 +692,9 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	prefix.WriteString(tp.BulkInsertFront.Query)
 	prefix.WriteString(" values ")
 	insertPrefix := prefix.String()
+	if tp.BulkInsertOnDup != nil {
+		maxQuerySize -= int64(len(tp.BulkInsertOnDup.Query))
+	}
 	maxQuerySize -= int64(len(insertPrefix))
 	values := &strings.Builder{}
 
@@ -724,7 +738,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}
@@ -830,12 +844,8 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				// Large JSON value: use CAST(... AS JSON) to avoid the ~60x memory
 				// amplification of parsing text JSON into a Go tree. The input is already
 				// valid text JSON (from MySQL SELECT or binlog text conversion).
-				// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
-				// regardless of connection charset, matching the JSON_OBJECT path behavior.
-				buf.WriteString("CAST(_utf8mb4")
 				raw := row.Values[offset : offset+length]
-				sqltypes.MakeTrusted(querypb.Type_VARCHAR, raw).EncodeSQLBytes2(buf)
-				buf.WriteString(" as JSON)")
+				appendCastJSONForSQL(buf, raw)
 			} else { // A JSON value (which may be a JSON null literal value)
 				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)
