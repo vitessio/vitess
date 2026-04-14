@@ -672,6 +672,9 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
+		// Non-GTID tablets are not in statusMap, so inStatusMap is false and
+		// isSemiSync is always false for them. This prevents recreating the
+		// unsupported mixed topology (semi-sync + non-GTID) under the new primary.
 		isSemiSync := inStatusMap && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
 		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, isSemiSync, 0)
 		if err != nil {

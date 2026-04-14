@@ -273,8 +273,8 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedCandidateInfoMap, isGTIDBasedMap)
+			actual, candidateInfoMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			require.EqualValues(t, tt.expectedCandidateInfoMap, candidateInfoMap)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

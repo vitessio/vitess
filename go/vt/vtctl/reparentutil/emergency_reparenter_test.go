@@ -6104,9 +6104,9 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			erp := &EmergencyReparenter{
 				tmc: tt.tmc,
 			}
-			validCandidates, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			validCandidates, candidateInfoMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
-			require.Len(t, isGTIDBasedMap, len(validCandidates))
+			require.Len(t, candidateInfoMap, len(validCandidates))
 			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -6164,6 +6164,7 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
+					"zone1-0000000103": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -6281,7 +6282,7 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 			shard:              "-",
 			cells:              []string{"zone1"},
 			shouldErr:          false,
-			expectedNewPrimary: "zone1-0000000100",
+			expectedNewPrimary: "zone1-0000000102",
 		},
 		{
 			name:                 "file-based replica with semi-sync fails ERS",
@@ -6441,11 +6442,10 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 
 			assert.NoError(t, err)
 
-			// Verify the correct tablet was promoted
-			si, err := ts.GetShard(ctx, tt.keyspace, tt.shard)
-			require.NoError(t, err)
-			require.NotNil(t, si.PrimaryAlias)
-			require.Equal(t, tt.expectedNewPrimary, topoproto.TabletAliasString(si.PrimaryAlias))
+			// Verify the correct tablet was promoted via the reparent event,
+			// not the topo shard record (which mock PromoteReplica does not update).
+			require.NotNil(t, ev.NewPrimary)
+			require.Equal(t, tt.expectedNewPrimary, topoproto.TabletAliasString(ev.NewPrimary.Alias))
 		})
 	}
 }

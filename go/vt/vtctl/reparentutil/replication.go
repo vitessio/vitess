@@ -134,6 +134,10 @@ func FindPositionsOfAllCandidates(
 	var hasNonZeroRelayPos bool
 	for alias, afterStatus := range replicationStatusMapAfter {
 		candidateInfo, ok := candidateInfoMap[alias]
+		// Defense-in-depth: stopReplicationAndBuildStatusMaps already excludes
+		// non-GTID tablets from statusMap (After == nil), so this check should
+		// not fire under current flow. It guards against future callers that
+		// may build replicationStatusMapAfter differently.
 		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica && !candidateInfo.IsGTIDBased {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v is a semi-sync replica without MySQL GTID positions; this is unsupported in a MySQL GTID-based shard", alias)
 		}
