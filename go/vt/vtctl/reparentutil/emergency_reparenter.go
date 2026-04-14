@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -910,7 +909,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]
 		if candidatePositions == nil || candidatePositions.IsZero() {
-			log.Warn("skipping candidate during errant GTID detection: nil or zero positions", slog.String("candidate", candidate))
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
 
