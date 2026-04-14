@@ -1161,6 +1161,7 @@ func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Ro
 		func(sql string) (*sqltypes.Result, error) {
 			return vbc.ExecuteWithRetry(ctx, sql)
 		},
+		vbc.maxBatchSize,
 	)
 }
 

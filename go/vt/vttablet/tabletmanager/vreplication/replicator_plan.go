@@ -43,6 +43,31 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// maxJSONBufferSize is the threshold (in bytes of raw text JSON) above which
+// VReplication encodes JSON column values using CAST(... AS JSON) instead of
+// the default JSON_OBJECT(...)/JSON_ARRAY(...) tree encoding. The tree encoding
+// has ~60x memory amplification and can OOM tablets on large JSON values.
+// Values below this threshold use the existing tree encoding which preserves
+// MySQL-specific JSON type information. Set to 0 to always use CAST, or
+// negative to always use the tree encoding.
+var maxJSONBufferSize int64 = 1024 * 1024 // 1 MiB
+
+// marshalJSONForSQL converts raw text JSON bytes to a SQL expression suitable
+// for INSERT/UPDATE statements. For values larger than maxJSONBufferSize it
+// uses CAST(... AS JSON) to avoid the ~60x memory amplification of parsing
+// the JSON into a Go object tree. For smaller values it uses the traditional
+// JSON_OBJECT/JSON_ARRAY tree encoding.
+func marshalJSONForSQL(raw []byte) (*sqltypes.Value, error) {
+	if maxJSONBufferSize >= 0 && int64(len(raw)) > maxJSONBufferSize {
+		// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
+		// regardless of connection charset, matching the JSON_OBJECT path behavior.
+		castExpr := "CAST(_utf8mb4" + sqltypes.EncodeStringSQL(string(raw)) + " as JSON)"
+		v := sqltypes.MakeTrusted(querypb.Type_RAW, []byte(castExpr))
+		return &v, nil
+	}
+	return vjson.MarshalSQLValue(raw)
+}
+
 // ReplicatorPlan is the execution plan for the replicator. It contains
 // plans for all the tables it's replicating. Every phase of vreplication
 // builds its own instance of the ReplicatorPlan. This is because the plan
@@ -255,23 +280,70 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	sqlbuffer.Reset()
-	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
-	sqlbuffer.WriteString(" values ")
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	insertPrefix := tp.BulkInsertFront.Query + " values "
 
-	for i, row := range rows {
-		if i > 0 {
+	flush := func(final bool) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		if final {
+			// Last flush: safe to use StringUnsafe since we won't reuse the buffer.
+			return executor(sqlbuffer.StringUnsafe())
+		}
+		// Mid-batch flush: must copy because we'll reuse the buffer for the next batch.
+		return executor(sqlbuffer.String())
+	}
+
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(insertPrefix)
+
+	var lastResult *sqltypes.Result
+	rowCount := 0
+	for _, row := range rows {
+		beforeLen := sqlbuffer.Len()
+		if rowCount > 0 {
 			sqlbuffer.WriteString(", ")
 		}
 		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
 			return nil, err
 		}
+		rowCount++
+
+		// If the buffer exceeds maxQuerySize and we have more than one
+		// row, flush everything before this row and start a new statement.
+		if maxQuerySize > 0 && int64(sqlbuffer.Len()) > maxQuerySize && rowCount > 1 {
+			// Roll back to before this row was appended.
+			sqlbuffer.Truncate(beforeLen)
+			result, err := flush(false)
+			if err != nil {
+				return nil, err
+			}
+			if lastResult == nil {
+				lastResult = result
+			} else {
+				lastResult.RowsAffected += result.RowsAffected
+			}
+
+			// Start a new INSERT with this row.
+			sqlbuffer.Reset()
+			sqlbuffer.WriteString(insertPrefix)
+			if err := tp.appendFromRow(sqlbuffer, row); err != nil {
+				return nil, err
+			}
+			rowCount = 1
+		}
 	}
-	if tp.BulkInsertOnDup != nil {
-		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+
+	result, err := flush(true)
+	if err != nil {
+		return nil, err
 	}
-	return executor(sqlbuffer.StringUnsafe())
+	if lastResult != nil {
+		lastResult.RowsAffected += result.RowsAffected
+		return lastResult, nil
+	}
+	return result, nil
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
@@ -414,7 +486,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
-					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
+					newVal, err = marshalJSONForSQL(afterVals[i].Raw())
 					if err != nil {
 						return nil, err
 					}
@@ -485,7 +557,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// If the JSON column was NOT updated then the JSON column is marked as partial
 						// and the diff is empty as a way to exclude it from the AFTER image. So we
 						// want to use the BEFORE image value.
-						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
+						beforeVal, err := marshalJSONForSQL(bindvars["b_"+field.Name].Value)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
 								tp.TargetName, field.Name)
@@ -635,7 +707,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
 					jsVal = &sqltypes.NULL
 				} else { // A JSON value (which may be a JSON null literal value)
-					jsVal, err = vjson.MarshalSQLValue(vals[n].Raw())
+					jsVal, err = marshalJSONForSQL(vals[n].Raw())
 					if err != nil {
 						return nil, err
 					}
@@ -754,6 +826,16 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		case querypb.Type_JSON:
 			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
+			} else if maxJSONBufferSize >= 0 && length > maxJSONBufferSize {
+				// Large JSON value: use CAST(... AS JSON) to avoid the ~60x memory
+				// amplification of parsing text JSON into a Go tree. The input is already
+				// valid text JSON (from MySQL SELECT or binlog text conversion).
+				// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
+				// regardless of connection charset, matching the JSON_OBJECT path behavior.
+				buf.WriteString("CAST(_utf8mb4")
+				raw := row.Values[offset : offset+length]
+				sqltypes.MakeTrusted(querypb.Type_VARCHAR, raw).EncodeSQLBytes2(buf)
+				buf.WriteString(" as JSON)")
 			} else { // A JSON value (which may be a JSON null literal value)
 				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)

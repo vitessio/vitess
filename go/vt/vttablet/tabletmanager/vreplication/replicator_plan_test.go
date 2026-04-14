@@ -964,3 +964,226 @@ func TestAppendFromRow(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
+	tp := &TablePlan{
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":c1", ":c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	makeRow := func(id int, val string) *querypb.Row {
+		return sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(int64(id)),
+			sqltypes.NewVarChar(val),
+		})
+	}
+
+	t.Run("no limit", func(t *testing.T) {
+		rows := []*querypb.Row{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c")}
+		var executed []string
+		buf := &bytes2.Buffer{}
+		_, err := tp.applyBulkInsert(buf, rows, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 0)
+		require.NoError(t, err)
+		require.Len(t, executed, 1)
+		assert.Equal(t, "insert into t(c1, c2) values (1, 'a'), (2, 'b'), (3, 'c')", executed[0])
+	})
+
+	t.Run("split after second row", func(t *testing.T) {
+		rows := []*querypb.Row{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c")}
+		var executed []string
+		buf := &bytes2.Buffer{}
+		// Set limit small enough that 3 rows exceed it but 2 rows don't.
+		// "insert into t(c1, c2) values (1, 'a'), (2, 'b')" = 51 chars
+		_, err := tp.applyBulkInsert(buf, rows, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 55)
+		require.NoError(t, err)
+		require.Len(t, executed, 2)
+		assert.Equal(t, "insert into t(c1, c2) values (1, 'a'), (2, 'b')", executed[0])
+		assert.Equal(t, "insert into t(c1, c2) values (3, 'c')", executed[1])
+	})
+
+	t.Run("single row exceeds limit", func(t *testing.T) {
+		longVal := strings.Repeat("x", 100)
+		rows := []*querypb.Row{makeRow(1, longVal)}
+		var executed []string
+		buf := &bytes2.Buffer{}
+		_, err := tp.applyBulkInsert(buf, rows, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 10) // Very small limit — single row exceeds it
+		require.NoError(t, err)
+		require.Len(t, executed, 1, "single row must still execute even if it exceeds maxQuerySize")
+	})
+
+	t.Run("rows affected accumulated", func(t *testing.T) {
+		rows := []*querypb.Row{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c")}
+		buf := &bytes2.Buffer{}
+		result, err := tp.applyBulkInsert(buf, rows, func(sql string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 40) // Force each row into its own statement
+		require.NoError(t, err)
+		assert.Equal(t, uint64(3), result.RowsAffected)
+	})
+}
+
+func TestMarshalJSONForSQL(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		wantCAST bool // true if expected to use CAST path
+	}{
+		{
+			name:     "small object uses tree encoding",
+			input:    `{"key": "value"}`,
+			wantCAST: false,
+		},
+		{
+			name:     "small array uses tree encoding",
+			input:    `[1, 2, 3]`,
+			wantCAST: false,
+		},
+		{
+			name:     "large value uses CAST",
+			input:    `[` + strings.Repeat(`"test",`, 200000) + `"end"]`,
+			wantCAST: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := marshalJSONForSQL([]byte(tc.input))
+			require.NoError(t, err)
+
+			sql := result.RawStr()
+			if tc.wantCAST {
+				assert.Contains(t, sql, "CAST(")
+				assert.Contains(t, sql, " as JSON)")
+			} else {
+				assert.NotContains(t, sql, "CAST(")
+			}
+		})
+	}
+}
+
+func TestMarshalJSONForSQLCorrectness(t *testing.T) {
+	// Verify that both encoding paths produce valid SQL expressions for the
+	// same JSON input. We can't compare SQL strings directly (they use
+	// different formats), but we can verify both produce non-empty output.
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{name: "object", input: `{"key": "value", "num": 42}`},
+		{name: "array of ints", input: `[1, 2, 3, 930701976723823]`},
+		{name: "nested", input: `{"a": [1, {"b": true}], "c": null}`},
+		{name: "special chars", input: `{"q": "it's a \"test\"", "bs": "back\\slash"}`},
+		{name: "unicode", input: `{"emoji": "hello \u0041"}`},
+		{name: "empty object", input: `{}`},
+		{name: "empty array", input: `[]`},
+		{name: "boolean", input: `true`},
+		{name: "null", input: `null`},
+		{name: "number", input: `42`},
+		{name: "large integer (original bug #8686)", input: `{"keywordSourceId": 930701976723823}`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(tc.input)
+
+			// Force CAST path
+			saved := maxJSONBufferSize
+			maxJSONBufferSize = 0
+			t.Cleanup(func() { maxJSONBufferSize = saved })
+
+			castResult, err := marshalJSONForSQL(raw)
+			require.NoError(t, err)
+			assert.Contains(t, castResult.RawStr(), "CAST(", "expected CAST encoding")
+
+			// Force tree path
+			maxJSONBufferSize = -1
+			treeResult, err := marshalJSONForSQL(raw)
+			require.NoError(t, err)
+
+			// Both should be non-empty valid SQL expressions
+			assert.NotEmpty(t, castResult.RawStr())
+			assert.NotEmpty(t, treeResult.RawStr())
+		})
+	}
+
+	// Verify the specific bug from issue #8686: large integers must not
+	// be converted to scientific notation in either path.
+	t.Run("large integer preserved in CAST path", func(t *testing.T) {
+		saved := maxJSONBufferSize
+		maxJSONBufferSize = 0
+		t.Cleanup(func() { maxJSONBufferSize = saved })
+
+		raw := []byte(`{"keywordSourceId": 930701976723823}`)
+		result, err := marshalJSONForSQL(raw)
+		require.NoError(t, err)
+		assert.Contains(t, result.RawStr(), "930701976723823")
+		assert.NotContains(t, result.RawStr(), "e+")
+	})
+}
+
+func TestAppendFromRowLargeJSON(t *testing.T) {
+	// Verify that large JSON values (> maxJSONBufferSize) use CAST path in appendFromRow.
+	// Build a JSON array > 1MB.
+	largeJSON := `[` + strings.Repeat(`12345678,`, 150000) + `0]`
+	require.Greater(t, len(largeJSON), 1024*1024, "test JSON must exceed 1MB threshold")
+
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(largeJSON)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	assert.Contains(t, result, "CAST(")
+	assert.Contains(t, result, " as JSON)")
+}
+
+func TestAppendFromRowSmallJSON(t *testing.T) {
+	// Verify that small JSON values use the tree encoding (JSON_OBJECT/JSON_ARRAY).
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"key": "value"}`)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	assert.Contains(t, result, "JSON_OBJECT(")
+}
