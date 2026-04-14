@@ -371,10 +371,10 @@ func createComparisonSubQuery(
 // Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out.
 // Returns the rewritten expression and extracted SubQuery operators.
 //
-// For each subquery found, the method resolves against existing operators in the builder:
-//   - Same subquery + same opcode → reuse the existing operator and its bind var name
-//   - Same subquery + different opcode → create a new operator with a fresh bind var name
-//   - New subquery → create a new operator
+// Each subquery occurrence gets its own operator and bind var name, even if
+// the same subquery text appears multiple times. MySQL evaluates each
+// occurrence independently (observable with volatile functions like UUID(),
+// RAND(), or locking reads), so coalescing would change semantics.
 func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
@@ -385,14 +385,6 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	var allSubqs []*SubQuery
 
 	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, filterType opcode.PulloutOpcode) {
-		// Check if an equivalent operator already exists in this builder.
-		if existing := sqb.findEquivalent(ctx, sq, filterType); existing != nil {
-			allSubqs = append(allSubqs, existing)
-			sqb.replaceSubqueryNode(cursor, existing.ArgName, filterType, isDML)
-			return
-		}
-		// Reserve a fresh name — don't use GetReservedArgumentFor's cache,
-		// since the same subquery in a different opcode needs a distinct name.
 		argName := ctx.ReservedVars.ReserveSubQuery()
 		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
@@ -432,17 +424,6 @@ func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argNam
 	} else {
 		cursor.Replace(sqlparser.NewColName(argName))
 	}
-}
-
-// findEquivalent looks for an existing uncorrelated SubQuery in this builder
-// that matches the given subquery expression and pullout opcode.
-func (sqb *SubQueryBuilder) findEquivalent(ctx *plancontext.PlanningContext, subq *sqlparser.Subquery, filterType opcode.PulloutOpcode) *SubQuery {
-	for _, sq := range sqb.Inner {
-		if sq.FilterType == filterType && !sq.correlated && ctx.SemTable.EqualsExpr(sq.originalSubquery, subq) {
-			return sq
-		}
-	}
-	return nil
 }
 
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
