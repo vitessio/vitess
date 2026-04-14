@@ -668,12 +668,14 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		// Non-GTID tablets (file-based replicas with After == nil) are tracked
-		// in candidateInfoMap. We still point them at the new primary, but we
-		// must not enable semi-sync on them — doing so would recreate the
-		// unsupported mixed topology (semi-sync + non-GTID) under the new primary.
+		// Non-GTID tablets (file-based replicas with After == nil) are excluded
+		// from statusMap and candidateInfoMap by stopReplicationAndBuildStatusMaps.
+		// We still point them at the new primary, but we must not enable semi-sync
+		// on them — doing so would recreate the unsupported mixed topology
+		// (semi-sync + non-GTID) under the new primary. Tablets absent from
+		// candidateInfoMap are treated as non-GTID.
 		candidateInfo, hasCandidateInfo := candidateInfoMap[alias]
-		isNonGTID := hasCandidateInfo && !candidateInfo.IsGTIDBased
+		isNonGTID := !hasCandidateInfo || !candidateInfo.IsGTIDBased
 		isSemiSync := !isNonGTID && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
 		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, isSemiSync, 0)
 		if err != nil {
