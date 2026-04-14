@@ -337,9 +337,9 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 	logger logutil.Logger,
 ) (map[string]*RelayLogPositions, error) {
 	shardUsesGTID := isGTIDBasedShard(tabletMap, candidateInfoMap)
-	// Fail early if 100% of candidates are not GTID-based. GTIDs is a requirement of Vitess.
+	// Fail early if 100% of candidates are not MySQL GTID-based. MySQL GTIDs are a requirement of Vitess here.
 	if len(tabletMap) > 0 && !shardUsesGTID {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shards without GTID-based candidates are unsupported")
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shards without MySQL GTID-based candidates are unsupported")
 	}
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {
@@ -351,13 +351,14 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the candidate info map; this is an impossible situation", candidate)
 		}
-		// We ignore file-based replicas, unless they are a semi-sync acker, in which case we are no longer certain
-		// it is safe to continue, as the file-based replica may contain the most up-to-date changes.
+		// We ignore replicas that do not report MySQL GTID-based positions, unless they are a semi-sync
+		// acker, in which case we are no longer certain it is safe to continue, as the replica may contain
+		// the most up-to-date changes.
 		if !candidateInfo.IsGTIDBased {
 			if candidateInfo.IsSemiSyncReplica {
-				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v is a file-based replica with semi-sync enabled. file-based replicas with semi-sync are unsupported in a majority GTID-based shard", candidate)
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v does not report MySQL GTID-based positions and has semi-sync enabled. Replicas without MySQL GTID-based positions are unsupported in a majority GTID-based shard", candidate)
 			}
-			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not have GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
+			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not report MySQL GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
 			continue
 		}
 		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
