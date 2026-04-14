@@ -131,6 +131,7 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
+	var hasNonZeroRelayPos bool
 	for alias, afterStatus := range replicationStatusMapAfter {
 		candidateInfo, ok := candidateInfoMap[alias]
 		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica && !candidateInfo.IsGTIDBased {
@@ -138,10 +139,9 @@ func FindPositionsOfAllCandidates(
 		}
 
 		if afterStatus.RelayLogPosition.IsZero() {
-			// Potentially bail. If any other tablet is detected to have
-			// GTID-based relay log positions, we will return the error recorded
-			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
+		} else {
+			hasNonZeroRelayPos = true
 		}
 
 		positionMap[alias] = &RelayLogPositions{
@@ -150,7 +150,11 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
-	if isGTIDBasedShard && emptyRelayPosErrorRecorder.HasErrors() {
+	// Only error on zero relay log positions when there is a mix of zero and
+	// non-zero positions (indicating a real problem). If ALL positions are zero
+	// (e.g. fresh cluster), allow it through — downstream errant GTID detection
+	// will be skipped via hasNonZeroRelayLogPositions().
+	if isGTIDBasedShard && hasNonZeroRelayPos && emptyRelayPosErrorRecorder.HasErrors() {
 		return nil, nil, emptyRelayPosErrorRecorder.Error()
 	}
 
@@ -333,11 +337,9 @@ func stopReplicationAndBuildStatusMaps(
 					return
 				}
 			}
-			// The tablet was successfully contacted, so count it as reachable for the
-			// haveRevoked safety check, even though it won't be a candidate.
-			m.Lock()
-			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
-			m.Unlock()
+			// Do not add to reachableTablets: replication was intentionally left
+			// running on this tablet (After == nil), so it cannot count as
+			// "reached and stopped" for the haveRevoked safety check.
 			logger.Warningf("tablet %v does not use MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
 			return
 		}

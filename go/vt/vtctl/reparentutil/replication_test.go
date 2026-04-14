@@ -1437,21 +1437,15 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			},
 			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			// Only the GTID-based replica should be reachable. The non-GTID
+			// replica had replication left running (After == nil), so it must
+			// not count as "reached and stopped" for the haveRevoked safety check.
 			expectedTabletsReachable: []*topodatapb.Tablet{
 				{
 					Type: topodatapb.TabletType_REPLICA,
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
-					},
-				},
-				{
-					// Non-GTID replica is still reachable (contacted successfully),
-					// just not a candidate.
-					Type: topodatapb.TabletType_REPLICA,
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  101,
 					},
 				},
 			},
