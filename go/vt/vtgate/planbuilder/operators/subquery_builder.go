@@ -75,7 +75,7 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	if subq == nil {
 		return nil
 	}
-	argName := ctx.GetReservedArgumentFor(subq)
+	argName := ctx.ReservedVars.ReserveSubQuery()
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
@@ -368,7 +368,13 @@ func createComparisonSubQuery(
 }
 
 // pullOutValueSubqueries extracts all subqueries from an expression and replaces them with arguments.
-// Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out. Returns the rewritten expression and extracted SubQuery operators.
+// Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out.
+// Returns the rewritten expression and extracted SubQuery operators.
+//
+// Each subquery occurrence gets its own operator and bind var name, even if
+// the same subquery text appears multiple times. MySQL evaluates each
+// occurrence independently (observable with volatile functions like UUID(),
+// RAND(), or locking reads), so coalescing would change semantics.
 func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
@@ -376,42 +382,48 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.Clone(expr)
-	sqe := extractSubQueries(ctx, expr, isDML)
-	if sqe == nil {
-		return nil, nil
-	}
 	var allSubqs []*SubQuery
 
-	for idx, subq := range sqe.subq {
-		argName := sqe.cols[idx]
-		if existing := sqb.findByArgName(argName); existing != nil {
-			allSubqs = append(allSubqs, existing)
-			continue
-		}
-		sqInner := createSubquery(ctx, original, subq, outerID, original, argName, sqe.pullOutCode[idx], true)
+	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, filterType opcode.PulloutOpcode) {
+		argName := ctx.ReservedVars.ReserveSubQuery()
+		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
+		sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
 	}
 
-	return sqe.new, allSubqs
-}
-
-func (sqb *SubQueryBuilder) findByArgName(name string) *SubQuery {
-	for _, sq := range sqb.Inner {
-		if sq.ArgName == name {
-			return sq
+	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Subquery:
+			t := getOpCodeFromParent(cursor.Parent())
+			if t == nil {
+				return true
+			}
+			replaceWithArg(cursor, node, *t)
+		case *sqlparser.ExistsExpr:
+			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
 		}
+		return true
+	}).(sqlparser.Expr)
+
+	if len(allSubqs) == 0 {
+		return nil, nil
 	}
-	return nil
+	return expr, allSubqs
 }
 
-// subqueryExtraction holds the result of extracting subqueries from an expression.
-// Contains the rewritten expression with arguments replacing subqueries, the extracted subquery nodes, their pullout opcodes, and generated argument names.
-type subqueryExtraction struct {
-	new         sqlparser.Expr
-	subq        []*sqlparser.Subquery
-	pullOutCode []opcode.PulloutOpcode
-	cols        []string
+// replaceSubqueryNode replaces the current cursor node with the appropriate
+// argument placeholder for the given bind var name and opcode.
+func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
+	if isDML {
+		if filterType.NeedsListArg() {
+			cursor.Replace(sqlparser.NewListArg(argName))
+		} else {
+			cursor.Replace(sqlparser.NewArgument(argName))
+		}
+	} else {
+		cursor.Replace(sqlparser.NewColName(argName))
+	}
 }
 
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
@@ -430,45 +442,4 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 		}
 	}
 	return &code
-}
-
-// extractSubQueries recursively walks an expression tree to find and extract all subqueries.
-// Replaces subqueries with arguments (for DML) or column names (for SELECT). Returns nil if no subqueries found.
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
-	sqe := &subqueryExtraction{}
-	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
-		sqName := ctx.GetReservedArgumentFor(sq)
-		sqe.cols = append(sqe.cols, sqName)
-		if isDML {
-			if t.NeedsListArg() {
-				cursor.Replace(sqlparser.NewListArg(sqName))
-			} else {
-				cursor.Replace(sqlparser.NewArgument(sqName))
-			}
-		} else {
-			cursor.Replace(sqlparser.NewColName(sqName))
-		}
-		sqe.subq = append(sqe.subq, sq)
-	}
-
-	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.Subquery:
-			t := getOpCodeFromParent(cursor.Parent())
-			if t == nil {
-				return true
-			}
-			replaceWithArg(cursor, node, *t)
-			sqe.pullOutCode = append(sqe.pullOutCode, *t)
-		case *sqlparser.ExistsExpr:
-			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
-		}
-		return true
-	}).(sqlparser.Expr)
-	if len(sqe.subq) == 0 {
-		return nil
-	}
-	sqe.new = expr
-	return sqe
 }
