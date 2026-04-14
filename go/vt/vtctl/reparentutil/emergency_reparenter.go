@@ -984,13 +984,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-<<<<<<< HEAD
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
-||||||| parent of 36b23caab2 (`EmergencyReparentShard`: fix nil pointer panic in errant GTID detection (#19848))
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs))
-=======
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs))
->>>>>>> 36b23caab2 (`EmergencyReparentShard`: fix nil pointer panic in errant GTID detection (#19848))
+			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs)
 			continue
 		}
 		updatedValidCandidates[alias] = candidatePositions
