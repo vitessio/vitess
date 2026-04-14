@@ -30,6 +30,7 @@
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
         - [Connection Pool Waiter Cap](#vttablet-conn-pool-waiter-cap)
+        - [Consolidator Proto3 Row Caching](#vttablet-consolidator-cache-proto3-rows)
     - **[Tracing](#minor-changes-tracing)**
         - [OpenTelemetry tracing support](#tracing-opentelemetry)
         - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
@@ -273,6 +274,20 @@ the query, stream and transaction connection pools. The limits are set with the 
 * `--queryserver-config-txpool-waiter-cap`.
 
 All of the above have a default value of `0`, meaning no limit, thus preserving the behavior of the previous version.
+
+#### <a id="vttablet-consolidator-cache-proto3-rows"/>Consolidator Proto3 Row Caching</a>
+
+The new `--consolidator-cache-proto3-rows` flag caches proto3 row encoding during query consolidation, reducing memory usage when multiple clients execute the same SELECT query simultaneously.
+
+When multiple clients consolidate on the same query, the consolidator shares a single result set. Previously, each client encoded the result to proto3 independently, causing redundant memory allocations. A 100MB result with 50 consolidated waiters produced approximately 5GB of transient allocations.
+
+With this flag enabled, the proto3 row encoding is computed once by the consolidator leader and shared across all waiters. Benchmarks show memory usage dropping from 95MB to 8KB for 50 waiters with 10,000 rows.
+
+**Flag details:**
+
+- `--consolidator-cache-proto3-rows` (default `false`): Caches the proto3 row encoding in consolidated query results.
+
+This feature is disabled by default for safe rollout. Once validated in production, consider enabling it to reduce memory pressure on tablets with high query consolidation.
 
 ### <a id="minor-changes-tracing"/>Tracing</a>
 
