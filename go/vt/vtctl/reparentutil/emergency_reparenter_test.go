@@ -5869,3 +5869,90 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 		})
 	}
 }
+
+// TestEmergencyReparenterFindErrantGTIDs_NilPosition is a regression test
+// for a bug where a nil *RelayLogPositions entry in validCandidates would
+// cause a nil pointer panic. The test includes:
+//   - zone1-0000000102: valid candidate with max reparent journal length
+//   - zone1-0000000103: nil position with max reparent journal length (exercises the maxLenCandidates loop)
+//   - zone1-0000000104: nil position with a lower reparent journal length (exercises the lagged-candidate loop)
+func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	erp := &EmergencyReparenter{
+		tmc: &testutil.TabletManagerClient{
+			ReadReparentJournalInfoResults: map[string]int32{
+				"zone1-0000000102": 2,
+				"zone1-0000000103": 2,
+				"zone1-0000000104": 1,
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000102": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000102",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+		"zone1-0000000103": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000103",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+		"zone1-0000000104": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000104",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  104,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000102": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+		"zone1-0000000103": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-99"),
+				SourceUuid:       u1,
+			},
+		},
+		"zone1-0000000104": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-90"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	// Construct validCandidates with nil entries for zone1-0000000103 and
+	// zone1-0000000104. zone1-0000000103 has the same reparent journal length
+	// as zone1-0000000102 (maxLen), so it exercises the nil guard in the
+	// maxLenCandidates loop. zone1-0000000104 has a lower reparent journal
+	// length, so it exercises the nil guard in the lagged-candidate loop.
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000102": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+		"zone1-0000000103": nil,
+		"zone1-0000000104": nil,
+	}
+
+	candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second)
+	require.NoError(t, err)
+	require.Contains(t, candidates, "zone1-0000000102")
+}
