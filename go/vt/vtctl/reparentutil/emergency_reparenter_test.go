@@ -2860,7 +2860,8 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
+			candidateInfoMap := map[string]*CandidateInfo{}
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.emergencyReparentOps, false)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4106,7 +4107,8 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
+			candidateInfoMap := map[string]*CandidateInfo{}
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.emergencyReparentOps, false /* intermediateReparent */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4685,7 +4687,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.validCandidateTablets, tt.emergencyReparentOps)
+			candidateInfoMap := map[string]*CandidateInfo{}
+			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, candidateInfoMap, tt.validCandidateTablets, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4976,7 +4979,8 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true)
+	candidateInfoMap := map[string]*CandidateInfo{}
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, candidateInfoMap, emergencyReparentOps, true)
 	require.NoError(t, err)
 }
 
@@ -6464,9 +6468,10 @@ func Test_hasNonZeroRelayLogPositions(t *testing.T) {
 	nonZeroPosition.Combined.GTIDSet = nonZeroPosition.Combined.GTIDSet.AddGTID(gtid1)
 
 	tests := []struct {
-		name            string
-		validCandidates map[string]*RelayLogPositions
-		expectedResult  bool
+		name             string
+		validCandidates  map[string]*RelayLogPositions
+		primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		expectedResult   bool
 	}{
 		{
 			name: "all zero positions",
@@ -6475,36 +6480,64 @@ func Test_hasNonZeroRelayLogPositions(t *testing.T) {
 				"zone1-0000000101": {},
 				"zone1-0000000102": {},
 			},
-			expectedResult: false,
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedResult:   false,
 		},
 		{
-			name: "one non-zero position",
+			name: "one non-zero position from replica",
 			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": nonZeroPosition,
 				"zone1-0000000102": {},
 			},
-			expectedResult: true,
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedResult:   true,
 		},
 		{
-			name: "all non-zero positions",
+			name: "all non-zero positions from replicas",
 			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": nonZeroPosition,
 				"zone1-0000000101": nonZeroPosition,
 				"zone1-0000000102": nonZeroPosition,
 			},
-			expectedResult: true,
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedResult:   true,
 		},
 		{
-			name:            "empty candidates map",
-			validCandidates: map[string]*RelayLogPositions{},
-			expectedResult:  false,
+			name:             "empty candidates map",
+			validCandidates:  map[string]*RelayLogPositions{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedResult:   false,
+		},
+		{
+			name: "non-zero positions only from primaryStatusMap (initialization)",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": nonZeroPosition,
+				"zone1-0000000101": nonZeroPosition,
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000100": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+				"zone1-0000000101": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "mix of replica and primary positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": nonZeroPosition,
+				"zone1-0000000101": nonZeroPosition,
+				"zone1-0000000102": {},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000100": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+			},
+			expectedResult: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := hasNonZeroRelayLogPositions(tt.validCandidates)
+			result := hasNonZeroRelayLogPositions(tt.validCandidates, tt.primaryStatusMap)
 			assert.Equal(t, tt.expectedResult, result)
 		})
 	}

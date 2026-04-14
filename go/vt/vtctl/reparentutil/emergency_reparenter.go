@@ -279,7 +279,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Run errant GTID detection only if we have non-zero relay log positions.
 	// For fresh clusters with no replication history, all positions will be zero and we skip this step.
-	if hasNonZeroRelayLogPositions(validCandidates) {
+	if hasNonZeroRelayLogPositions(validCandidates, stoppedReplicationSnapshot.primaryStatusMap) {
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
@@ -334,7 +334,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
 		// These are the candidates that we can use to find a replacement.
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, validCandidateTablets, opts)
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -370,7 +370,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, candidateInfoMap, opts, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
@@ -548,6 +548,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	source *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	candidateInfoMap map[string]*CandidateInfo,
 	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
@@ -560,7 +561,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, candidateInfoMap, opts, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -588,6 +589,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	newPrimaryTablet *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	candidateInfoMap map[string]*CandidateInfo,
 	opts EmergencyReparentOptions,
 	intermediateReparent bool, // intermediateReparent represents whether the reparenting of the replicas is the final reparent or not.
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
@@ -654,14 +656,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
-		// Tablets not in statusMap were skipped during stop-replication (e.g.,
-		// non-GTID/file-based replicas with After == nil). We still point them
-		// at the new primary, but we must not enable semi-sync on them — doing
-		// so would recreate the unsupported mixed topology that ERS is designed
-		// to handle gracefully.
-		_, inStatusMap := statusMap[alias]
-		if inStatusMap {
-			fs, err := ReplicaWasRunning(statusMap[alias])
+		if status, ok := statusMap[alias]; ok {
+			fs, err := ReplicaWasRunning(status)
 			if err != nil {
 				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
 				rec.RecordError(err)
@@ -672,10 +668,13 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		// Non-GTID tablets are not in statusMap, so inStatusMap is false and
-		// isSemiSync is always false for them. This prevents recreating the
+		// Non-GTID tablets (file-based replicas with After == nil) are tracked
+		// in candidateInfoMap. We still point them at the new primary, but we
+		// must not enable semi-sync on them — doing so would recreate the
 		// unsupported mixed topology (semi-sync + non-GTID) under the new primary.
-		isSemiSync := inStatusMap && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
+		candidateInfo, hasCandidateInfo := candidateInfoMap[alias]
+		isNonGTID := hasCandidateInfo && !candidateInfo.IsGTIDBased
+		isSemiSync := !isNonGTID && policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
 		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, isSemiSync, 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
@@ -886,11 +885,16 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	return notPreferredValidTablets, nil
 }
 
-// hasNonZeroRelayLogPositions checks if any candidate has non-zero relay log positions.
-// Returns false if all candidates have zero positions, which is typical for fresh clusters
-// that have never had replication set up.
-func hasNonZeroRelayLogPositions(validCandidates map[string]*RelayLogPositions) bool {
-	for _, position := range validCandidates {
+// hasNonZeroRelayLogPositions checks if any replica candidate has non-zero relay log positions.
+// Returns false if all candidates have zero relay log positions, which is typical for fresh
+// clusters that have never had replication set up. Tablets from primaryStatusMap are excluded
+// because their Combined field contains the executed position, not a relay log position.
+func hasNonZeroRelayLogPositions(validCandidates map[string]*RelayLogPositions, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) bool {
+	for alias, position := range validCandidates {
+		// Skip primaries — their Combined is the executed position, not relay log.
+		if _, isPrimary := primaryStatusMap[alias]; isPrimary {
+			continue
+		}
 		if !position.IsZero() {
 			return true
 		}
