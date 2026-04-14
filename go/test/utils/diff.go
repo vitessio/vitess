@@ -78,7 +78,7 @@ func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got any, errM
 // Usage in Test*() function:
 //
 // testutils.MustMatch(t, want, got, "something doesn't match")
-var MustMatch = MustMatchFn(".proto3Rows")
+var MustMatch = MustMatchFn()
 
 // Skips fields of pathNames for cmp.Diff.
 // Similar to standard cmpopts.IgnoreFields, but allows unexported fields.
