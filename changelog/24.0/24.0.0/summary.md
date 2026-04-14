@@ -20,6 +20,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [Binlog Streaming Support](#vtgate-binlog-dump)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -28,6 +29,7 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+        - [Connection Pool Waiter Cap](#vttablet-conn-pool-waiter-cap)
     - **[Tracing](#minor-changes-tracing)**
         - [OpenTelemetry tracing support](#tracing-opentelemetry)
         - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
@@ -175,6 +177,37 @@ To enable session mode, set the flag when starting VTGate:
 --vtgate-balancer-mode=session
 ```
 
+#### <a id="vtgate-binlog-dump"/>Binlog Streaming Support</a>
+
+VTGate now supports GTID-based binlog streaming through two protocols:
+
+- **MySQL protocol**: Clients can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication command—no special VStream-aware adapters or direct MySQL access required.
+- **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice.proto` provides native gRPC access for custom clients without the MySQL protocol dependency.
+
+Note: Only GTID-based streaming is supported. File/position-based streaming is not available through either `COM_BINLOG_DUMP` or `COM_BINLOG_DUMP_GTID` and returns an error.
+
+This feature is disabled by default. Enable it with `--enable-binlog-dump`.
+
+**New flags:**
+
+- `--enable-binlog-dump`: Enables binlog dump support. Without this flag, binlog dump requests return an error.
+- `--binlog-dump-authorized-users`: Comma-separated list of users authorized to execute binlog dump operations, or `%` to allow all users.
+
+**Requirements:**
+
+When initiating a binlog dump connection, clients must specify:
+- An empty filename
+- A file position (`filepos`) of 4
+- A GTID position
+
+For gRPC clients, specify the keyspace, shard, and optionally the tablet type or tablet alias directly in the `BinlogDumpGTIDRequest`.
+
+**Limitations:**
+
+- Each stream operates on a single tablet—no data aggregation across shards.
+- No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
+- Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
+
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
 #### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
@@ -231,6 +264,15 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
+
+#### <a id="vttablet-conn-pool-waiter-cap"/>Tablet Connection Pool Waiter Cap</a>
+VTTablet now allows to set a limit on the number of requests waiting to get a connection from the connection pool, for 
+the query, stream and transaction connection pools. The limits are set with the following flags:
+* `--queryserver-config-query-pool-waiter-cap`.
+* `--queryserver-config-stream-pool-waiter-cap`.
+* `--queryserver-config-txpool-waiter-cap`.
+
+All of the above have a default value of `0`, meaning no limit, thus preserving the behavior of the previous version.
 
 ### <a id="minor-changes-tracing"/>Tracing</a>
 
