@@ -354,18 +354,14 @@ func TestResultToProto3_CachedRows(t *testing.T) {
 		}},
 	}
 
-	// Without cache: produces correct proto3.
 	uncached := ResultToProto3(result)
 	require.Len(t, uncached.Rows, 2)
 
-	// Pre-cache the rows.
 	result.CacheProto3Rows()
 
-	// With cache: produces identical proto3.
 	cached := ResultToProto3(result)
 	require.True(t, proto.Equal(uncached, cached), "cached and uncached proto3 results differ")
 
-	// Verify the cached rows are the exact same slice (pointer identity).
 	require.Same(t, cached.Rows[0], result.proto3Rows[0])
 	require.Same(t, cached.Rows[1], result.proto3Rows[1])
 }
@@ -375,14 +371,12 @@ func TestResultToProto3_NilAndEmptyCache(t *testing.T) {
 	var nilResult *Result
 	nilResult.CacheProto3Rows() // does not panic
 
-	// Empty rows: cache is not set.
 	result := &Result{
 		Fields: []*querypb.Field{{Name: "col1", Type: VarChar}},
 	}
 	result.CacheProto3Rows()
 	require.Nil(t, result.proto3Rows)
 
-	// ResultToProto3 still works.
 	p3 := ResultToProto3(result)
 	require.NotNil(t, p3)
 	require.Empty(t, p3.Rows)
@@ -425,7 +419,6 @@ func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
 		})
 		require.Nil(t, result.proto3Rows, "AppendResult must invalidate proto3Rows cache")
 
-		// Verify ResultToProto3 returns all rows, not the stale cached version.
 		p3 := ResultToProto3(result)
 		require.Len(t, p3.Rows, 2)
 	})
@@ -435,7 +428,6 @@ func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
 		result.Repair([]*querypb.Field{{Name: "col1", Type: VarBinary}})
 		require.Nil(t, result.proto3Rows, "Repair must invalidate proto3Rows cache")
 
-		// Verify ResultToProto3 re-encodes with the repaired field types.
 		p3 := ResultToProto3(result)
 		require.Len(t, p3.Rows, 1)
 	})
@@ -452,7 +444,6 @@ func TestCopy_DoesNotPropagateProto3RowCache(t *testing.T) {
 	require.NotNil(t, result.proto3Rows)
 
 	deep := result.Copy()
-	// Deep copy creates new rows, so the cache must not be carried over.
 	require.Nil(t, deep.proto3Rows)
 }
 
