@@ -118,6 +118,7 @@ var (
 const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
+	DefaultMaxRetryBackoff       = 10 * time.Second
 
 	// healthCheckTemplate is the HTML code to display a TabletsCacheStatusList, it takes a parameter for the title
 	// as the template can be used for both HealthCheck's cache and healthy tablets list.
@@ -283,8 +284,14 @@ type HealthCheckImpl struct {
 	// Immutable fields set at construction time.
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
-	ts                 *topo.Server
-	cell               string
+	// maxRetryBackoff caps the exponential backoff on stream reconnection
+	// attempts. This is separate from healthCheckTimeout, which controls
+	// how long to wait for a health response before marking a tablet down.
+	// A lower maxRetryBackoff ensures vtgates reconnect quickly after a
+	// tablet recovers from a prolonged outage.
+	maxRetryBackoff time.Duration
+	ts              *topo.Server
+	cell            string
 	// mu protects all the following fields.
 	mu sync.Mutex
 	// authoritative map of tabletHealth by alias
@@ -370,6 +377,7 @@ func NewHealthCheck(
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
+		maxRetryBackoff:    DefaultMaxRetryBackoff,
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
@@ -406,6 +414,12 @@ func NewHealthCheck(
 	}
 
 	return hc
+}
+
+// SetMaxRetryBackoff sets the maximum delay between health check stream
+// reconnection attempts. This must be called before AddTablet.
+func (hc *HealthCheckImpl) SetMaxRetryBackoff(d time.Duration) {
+	hc.maxRetryBackoff = d
 }
 
 // AddTablet adds the tablet, and starts health check.

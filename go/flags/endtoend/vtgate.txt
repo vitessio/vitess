@@ -102,6 +102,7 @@ Flags:
       --grpc-use-effective-callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
       --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
+      --healthcheck-max-retry-backoff duration                            maximum delay between health check stream reconnection attempts (default 10s)
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             help for vtgate

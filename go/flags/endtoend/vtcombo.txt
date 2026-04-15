@@ -170,6 +170,7 @@ Flags:
       --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
       --health-check-interval duration                                   Interval between health checks (default 20s)
+      --healthcheck-max-retry-backoff duration                            maximum delay between health check stream reconnection attempts (default 10s)
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
       --heartbeat-enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.

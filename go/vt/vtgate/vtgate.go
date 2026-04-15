@@ -90,6 +90,11 @@ var (
 	healthCheckRetryDelay = 2 * time.Millisecond
 	// healthCheckTimeout is the timeout on the RPC call to tablets
 	healthCheckTimeout = time.Minute
+	// healthCheckMaxRetryBackoff caps the exponential backoff on health
+	// check stream reconnection attempts. This is intentionally lower than
+	// healthCheckTimeout to ensure vtgates reconnect quickly after a tablet
+	// recovers from a prolonged outage.
+	healthCheckMaxRetryBackoff = discovery.DefaultMaxRetryBackoff
 
 	// System settings related flags
 	sysVarSetEnabled = true
@@ -196,6 +201,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
+	utils.SetFlagDurationVar(fs, &healthCheckMaxRetryBackoff, "healthcheck-max-retry-backoff", healthCheckMaxRetryBackoff, "maximum delay between health check stream reconnection attempts")
 	utils.SetFlagIntVar(fs, &maxPayloadSize, "max-payload-size", maxPayloadSize, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
 	utils.SetFlagIntVar(fs, &warnPayloadSize, "warn-payload-size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	utils.SetFlagBoolVar(fs, &sysVarSetEnabled, "enable-system-settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")

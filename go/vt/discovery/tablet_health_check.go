@@ -324,9 +324,11 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		case <-time.After(retryDelay):
 			// Exponentially back-off to prevent tight-loop.
 			retryDelay *= 2
-			// Limit the retry delay backoff to the health check timeout
-			if retryDelay > hc.healthCheckTimeout {
-				retryDelay = hc.healthCheckTimeout
+			// Limit the retry delay backoff to maxRetryBackoff so that
+			// vtgates reconnect quickly after a tablet recovers from a
+			// prolonged outage.
+			if retryDelay > hc.maxRetryBackoff {
+				retryDelay = hc.maxRetryBackoff
 			}
 		}
 	}

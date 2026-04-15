@@ -115,13 +115,15 @@ type TabletGateway struct {
 	balancerMode balancer.Mode
 }
 
-func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
+func createHealthCheck(ctx context.Context, retryDelay, timeout, maxRetryBackoff time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
 	filters, err := discovery.NewVTGateHealthCheckFilters()
 	if err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
-	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, filters)
+	hc := discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, filters)
+	hc.SetMaxRetryBackoff(maxRetryBackoff)
+	return hc
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
@@ -137,7 +139,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 				os.Exit(1)
 			}
 		}
-		hc = createHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, topoServer, localCell, CellsToWatch)
+		hc = createHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, healthCheckMaxRetryBackoff, topoServer, localCell, CellsToWatch)
 	}
 	gw := &TabletGateway{
 		hc:                hc,
