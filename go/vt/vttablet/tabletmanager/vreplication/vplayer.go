@@ -137,23 +137,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
 	if batchMode {
-		// relayLogMaxSize is effectively the limit used when not batching.
-		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
-		// We explicitly do NOT want to batch this, we want to send it down the wire
-		// immediately so we use ExecuteFetch directly.
-		res, err := vr.dbClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
-		if err != nil {
-			log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
-		} else {
-			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
-			}
-		}
-		// Leave 64 bytes of room for the commit to be sure that we have a more than
-		// ample buffer left. The default value of max_allowed_packet is 4MiB in 5.7
-		// and 64MiB in 8.0 -- and the default for max_relay_log_size is 250000
-		// bytes -- so we have plenty of room.
-		maxAllowedPacket -= 64
+		maxAllowedPacket := vr.maxQuerySize(vr.dbClient)
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
 				return vr.dbClient.Execute(sql)
