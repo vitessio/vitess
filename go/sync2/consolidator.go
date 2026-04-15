@@ -40,6 +40,7 @@ type PendingResult interface {
 	SetResult(*sqltypes.Result)
 	Result() *sqltypes.Result
 	Wait()
+	HasWaiters() bool
 	AddWaiterCounter(int64) *int64
 }
 
@@ -63,11 +64,12 @@ type pendingResult struct {
 	// executing is used to block additional requests.
 	// The original request holds a write lock while additional ones are blocked
 	// on acquiring a read lock (see Wait() below.)
-	executing    sync.RWMutex
-	consolidator *consolidator
-	query        string
-	result       *sqltypes.Result
-	err          error
+	executing            sync.RWMutex
+	consolidator         *consolidator
+	query                string
+	result               *sqltypes.Result
+	err                  error
+	perResultWaiterCount atomic.Int64
 }
 
 // Create adds a query to currently executing queries and acquires a
@@ -78,6 +80,7 @@ func (co *consolidator) Create(query string) (PendingResult, bool) {
 	defer co.mu.Unlock()
 	var r *pendingResult
 	if r, ok := co.queries[query]; ok {
+		r.perResultWaiterCount.Add(1)
 		r.AddWaiterCounter(1)
 		return r, false
 	}
@@ -115,6 +118,10 @@ func (rs *pendingResult) SetErr(err error) {
 // SetResult sets any result returned by the query.
 func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 	rs.result = res
+}
+
+func (rs *pendingResult) HasWaiters() bool {
+	return rs.perResultWaiterCount.Load() > 0
 }
 
 // Wait waits for the original query to complete execution. Wait should

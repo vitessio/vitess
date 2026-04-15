@@ -117,6 +117,10 @@ func (fr *FakePendingResult) Wait() {
 	fr.WaitCalls++
 }
 
+func (fr *FakePendingResult) HasWaiters() bool {
+	return fr.WaiterCount > 0
+}
+
 // AddWaiterCounter records the call and simulates waiter count changes.
 func (fr *FakePendingResult) AddWaiterCounter(delta int64) *int64 {
 	fr.AddWaiterCounterCalls = append(fr.AddWaiterCounterCalls, delta)

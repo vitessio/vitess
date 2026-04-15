@@ -54,6 +54,31 @@ func TestAddWaiterCount(t *testing.T) {
 	}
 }
 
+func TestHasWaiters(t *testing.T) {
+	con := NewConsolidator()
+	sql := "select * from SomeTable"
+
+	orig, created := con.Create(sql)
+	if !created {
+		t.Fatalf("expected consolidator to register a new entry")
+	}
+	if orig.HasWaiters() {
+		t.Fatalf("expected no waiters for a fresh entry")
+	}
+
+	dup, created := con.Create(sql)
+	if created {
+		t.Fatalf("did not expect consolidator to register a new entry")
+	}
+	_ = dup
+	if !orig.HasWaiters() {
+		t.Fatalf("expected waiters after a duplicate Create")
+	}
+
+	orig.SetResult(&sqltypes.Result{})
+	orig.Broadcast()
+}
+
 func TestConsolidator(t *testing.T) {
 	con := NewConsolidator()
 	sql := "select * from SomeTable"
