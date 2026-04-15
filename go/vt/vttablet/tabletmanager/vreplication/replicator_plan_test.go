@@ -1116,24 +1116,20 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 
 func TestMarshalJSONForSQL(t *testing.T) {
 	testCases := []struct {
-		name     string
-		input    string
-		wantCAST bool // true if expected to use CAST path
+		name  string
+		input string
 	}{
 		{
-			name:     "small object uses tree encoding",
-			input:    `{"key": "value"}`,
-			wantCAST: false,
+			name:  "small object",
+			input: `{"key": "value"}`,
 		},
 		{
-			name:     "small array uses tree encoding",
-			input:    `[1, 2, 3]`,
-			wantCAST: false,
+			name:  "small array",
+			input: `[1, 2, 3]`,
 		},
 		{
-			name:     "large value uses CAST",
-			input:    `[` + strings.Repeat(`"test",`, 200000) + `"end"]`,
-			wantCAST: true,
+			name:  "large value uses streaming path",
+			input: `[` + strings.Repeat(`"test",`, 200000) + `"end"]`,
 		},
 	}
 
@@ -1143,20 +1139,16 @@ func TestMarshalJSONForSQL(t *testing.T) {
 			require.NoError(t, err)
 
 			sql := result.RawStr()
-			if tc.wantCAST {
-				assert.Contains(t, sql, "CAST(")
-				assert.Contains(t, sql, " as JSON)")
-			} else {
-				assert.NotContains(t, sql, "CAST(")
-			}
+			// Both tree and streaming paths produce JSON_ARRAY/JSON_OBJECT format.
+			assert.True(t, strings.HasPrefix(sql, "JSON_ARRAY(") || strings.HasPrefix(sql, "JSON_OBJECT("),
+				"expected JSON_ARRAY or JSON_OBJECT prefix, got: %.80s...", sql)
 		})
 	}
 }
 
 func TestMarshalJSONForSQLCorrectness(t *testing.T) {
-	// Verify that both encoding paths produce valid SQL expressions for the
-	// same JSON input. We can't compare SQL strings directly (they use
-	// different formats), but we can verify both produce non-empty output.
+	// Verify that both encoding paths (tree and streaming) produce valid SQL
+	// expressions for the same JSON input. Both use JSON_OBJECT/JSON_ARRAY format.
 	testCases := []struct {
 		name  string
 		input string
@@ -1178,29 +1170,26 @@ func TestMarshalJSONForSQLCorrectness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := []byte(tc.input)
 
-			// Force CAST path
+			// Force streaming path
 			saved := maxJSONBufferSize
 			maxJSONBufferSize = 0
 			t.Cleanup(func() { maxJSONBufferSize = saved })
 
-			castResult, err := marshalJSONForSQL(raw)
+			streamResult, err := marshalJSONForSQL(raw)
 			require.NoError(t, err)
-			assert.Contains(t, castResult.RawStr(), "CAST(", "expected CAST encoding")
+			assert.NotEmpty(t, streamResult.RawStr())
 
 			// Force tree path
 			maxJSONBufferSize = -1
 			treeResult, err := marshalJSONForSQL(raw)
 			require.NoError(t, err)
-
-			// Both should be non-empty valid SQL expressions
-			assert.NotEmpty(t, castResult.RawStr())
 			assert.NotEmpty(t, treeResult.RawStr())
 		})
 	}
 
 	// Verify the specific bug from issue #8686: large integers must not
 	// be converted to scientific notation in either path.
-	t.Run("large integer preserved in CAST path", func(t *testing.T) {
+	t.Run("large integer preserved in streaming path", func(t *testing.T) {
 		saved := maxJSONBufferSize
 		maxJSONBufferSize = 0
 		t.Cleanup(func() { maxJSONBufferSize = saved })
@@ -1237,8 +1226,8 @@ func TestAppendFromRowLargeJSON(t *testing.T) {
 	err := tp.appendFromRow(buf, row)
 	require.NoError(t, err)
 	result := buf.String()
-	assert.Contains(t, result, "CAST(")
-	assert.Contains(t, result, " as JSON)")
+	// The streaming path produces JSON_ARRAY format, same as the tree encoding.
+	assert.Contains(t, result, "JSON_ARRAY(")
 }
 
 func TestAppendFromRowSmallJSON(t *testing.T) {
@@ -1262,4 +1251,84 @@ func TestAppendFromRowSmallJSON(t *testing.T) {
 	require.NoError(t, err)
 	result := buf.String()
 	assert.Contains(t, result, "JSON_OBJECT(")
+}
+
+func BenchmarkMarshalJSONForSQLLargePaths(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	if int64(len(raw)) <= maxJSONBufferSize {
+		b.Fatalf("benchmark JSON must exceed maxJSONBufferSize: got %d, threshold %d", len(raw), maxJSONBufferSize)
+	}
+
+	benchmarkJSONPath := func(b *testing.B, threshold int64) {
+		saved := maxJSONBufferSize
+		maxJSONBufferSize = threshold
+		b.Cleanup(func() {
+			maxJSONBufferSize = saved
+		})
+		b.ReportAllocs()
+		b.SetBytes(int64(len(raw)))
+		for i := 0; i < b.N; i++ {
+			result, err := marshalJSONForSQL(raw)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if len(result.Raw()) == 0 {
+				b.Fatal("marshalJSONForSQL returned empty SQL")
+			}
+		}
+	}
+
+	b.Run("tree", func(b *testing.B) {
+		benchmarkJSONPath(b, -1)
+	})
+	b.Run("cast", func(b *testing.B) {
+		benchmarkJSONPath(b, 0)
+	})
+}
+
+func BenchmarkAppendFromRowLargeJSONPaths(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	if int64(len(raw)) <= maxJSONBufferSize {
+		b.Fatalf("benchmark JSON must exceed maxJSONBufferSize: got %d, threshold %d", len(raw), maxJSONBufferSize)
+	}
+
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, raw),
+	})
+
+	benchmarkAppend := func(b *testing.B, threshold int64) {
+		saved := maxJSONBufferSize
+		maxJSONBufferSize = threshold
+		b.Cleanup(func() {
+			maxJSONBufferSize = saved
+		})
+		buf := &bytes2.Buffer{}
+		b.ReportAllocs()
+		b.SetBytes(int64(len(raw)))
+		for i := 0; i < b.N; i++ {
+			buf.Reset()
+			if err := tp.appendFromRow(buf, row); err != nil {
+				b.Fatal(err)
+			}
+			if buf.Len() == 0 {
+				b.Fatal("appendFromRow returned empty SQL")
+			}
+		}
+	}
+
+	b.Run("tree", func(b *testing.B) {
+		benchmarkAppend(b, -1)
+	})
+	b.Run("cast", func(b *testing.B) {
+		benchmarkAppend(b, 0)
+	})
 }

@@ -137,6 +137,90 @@ func testPlayerCopyRespectsMaxQuerySize(t *testing.T) {
 	})
 }
 
+// TestPlayerCopyTablesJSONCAST verifies that JSON values round-trip correctly through MySQL
+// when using the CAST(_utf8mb4'...' AS JSON) encoding path. This exercises the code path used
+// for large JSON values (>maxJSONBufferSize) by forcing maxJSONBufferSize=0 so all JSON goes
+// through the CAST path regardless of size.
+func TestPlayerCopyTablesJSONCAST(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesJSONCAST, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesJSONCAST(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	saved := maxJSONBufferSize
+	maxJSONBufferSize = 0
+	defer func() { maxJSONBufferSize = saved }()
+
+	execStatements(t, []string{
+		"create table src(id int, j json, primary key(id))",
+		fmt.Sprintf("create table %s.dst(id int, j json, primary key(id))", vrepldb),
+		`insert into src values(1, '{"foo": "bar"}')`,
+		`insert into src values(2, JSON_ARRAY(123456789012345678901234567890, "abcd"))`,
+		`insert into src values(3, '{"flag": true, "items": [1, false, null]}')`,
+		`insert into src values(4, '{"val": 1.5}')`,
+		`insert into src values(5, 'null')`,
+		`insert into src values(6, null)`,
+		`insert into src values(7, '{}')`,
+		`insert into src values(8, '[]')`,
+		`insert into src values(9, '{"keywordSourceId": 930701976723823}')`,
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+		playerEngine.Close()
+		playerEngine.Open(context.WithoutCancel(t.Context()))
+	})
+
+	expectNontxQueries(t, qh.Expect(
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"/insert into dst",
+		"/insert into _vt.copy_state",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
+		"/update _vt.vreplication set state='Running",
+	), recvTimeout)
+
+	expectData(t, "dst", [][]string{
+		{"1", `{"foo": "bar"}`},
+		{"2", `[123456789012345678901234567890, "abcd"]`},
+		{"3", `{"flag": true, "items": [1, false, null]}`},
+		{"4", `{"val": 1.5}`},
+		{"5", "null"},
+		{"6", ""},
+		{"7", "{}"},
+		{"8", "[]"},
+		{"9", `{"keywordSourceId": 930701976723823}`},
+	})
+}
+
 type vcopierTestCase struct {
 	vreplicationExperimentalFlags     int64
 	vreplicationParallelInsertWorkers int

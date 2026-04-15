@@ -44,31 +44,25 @@ import (
 )
 
 // maxJSONBufferSize is the threshold (in bytes of raw text JSON) above which
-// VReplication encodes JSON column values using CAST(... AS JSON) instead of
-// the default JSON_OBJECT(...)/JSON_ARRAY(...) tree encoding. The tree encoding
-// has ~60x memory amplification and can OOM tablets on large JSON values.
-// Values below this threshold use the existing tree encoding which preserves
-// MySQL-specific JSON type information. Set to 0 to always use CAST, or
-// negative to always use the tree encoding.
+// VReplication encodes JSON column values using a streaming JSON-to-SQL
+// converter instead of the default tree-based vjson.MarshalSQLValue. The tree
+// encoding has ~60x memory amplification and can OOM tablets on large JSON.
+// Both paths produce the same JSON_OBJECT(...)/JSON_ARRAY(...) SQL format.
+// Set to 0 to always use the streaming path, or negative to always use the
+// tree encoding.
 var maxJSONBufferSize int64 = 1024 * 1024 // 1 MiB
-
-func appendCastJSONForSQL(buf *bytes2.Buffer, raw []byte) {
-	// Use _utf8mb4 introducer to ensure MySQL interprets the string as UTF-8
-	// regardless of connection charset, matching the JSON_OBJECT path behavior.
-	buf.WriteString("CAST(_utf8mb4")
-	sqltypes.MakeTrusted(querypb.Type_VARCHAR, raw).EncodeSQLBytes2(buf)
-	buf.WriteString(" as JSON)")
-}
 
 // marshalJSONForSQL converts raw text JSON bytes to a SQL expression suitable
 // for INSERT/UPDATE statements. For values larger than maxJSONBufferSize it
-// uses CAST(... AS JSON) to avoid the ~60x memory amplification of parsing
-// the JSON into a Go object tree. For smaller values it uses the traditional
-// JSON_OBJECT/JSON_ARRAY tree encoding.
+// uses a streaming converter that emits JSON_OBJECT/JSON_ARRAY SQL directly
+// without building an intermediate tree, avoiding the ~60x memory amplification.
+// For smaller values it uses the traditional tree-based encoding.
 func marshalJSONForSQL(raw []byte) (*sqltypes.Value, error) {
 	if maxJSONBufferSize >= 0 && int64(len(raw)) > maxJSONBufferSize {
 		buf := &bytes2.Buffer{}
-		appendCastJSONForSQL(buf, raw)
+		if err := appendStreamJSONForSQL(buf, raw); err != nil {
+			return nil, err
+		}
 		v := sqltypes.MakeTrusted(querypb.Type_RAW, buf.Bytes())
 		return &v, nil
 	}
@@ -841,11 +835,12 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
 			} else if maxJSONBufferSize >= 0 && length > maxJSONBufferSize {
-				// Large JSON value: use CAST(... AS JSON) to avoid the ~60x memory
-				// amplification of parsing text JSON into a Go tree. The input is already
-				// valid text JSON (from MySQL SELECT or binlog text conversion).
+				// Large JSON value: use streaming JSON-to-SQL conversion to avoid the
+				// ~60x memory amplification of parsing text JSON into a Go tree.
 				raw := row.Values[offset : offset+length]
-				appendCastJSONForSQL(buf, raw)
+				if err := appendStreamJSONForSQL(buf, raw); err != nil {
+					return err
+				}
 			} else { // A JSON value (which may be a JSON null literal value)
 				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)
