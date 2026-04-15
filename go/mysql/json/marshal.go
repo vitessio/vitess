@@ -491,7 +491,7 @@ func (w *sqlWriter) writeNumber(top bool) error {
 	// Use the parser's readFloat to validate number grammar, rejecting
 	// malformed inputs like "1+2", "1..2", or "1e+" that a simple
 	// character-class loop would accept.
-	n, ok := readFloat(hack.String(w.data[w.pos:]))
+	n, ok := readFloat(w.data[w.pos:])
 	if !ok || n == 0 {
 		return fmt.Errorf("invalid number at position %d in JSON", w.pos)
 	}
