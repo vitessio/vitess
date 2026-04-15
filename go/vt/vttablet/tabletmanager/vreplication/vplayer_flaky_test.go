@@ -3135,6 +3135,84 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 	}
 }
 
+// TestPlayerJSONDocsStreamSQL verifies that JSON values round-trip correctly through MySQL when
+// using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerJSONDocsStreamSQL(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table vitess_json(id int auto_increment, val json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, val json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	type testcase struct {
+		name  string
+		input string
+		data  [][]string
+	}
+	var testcases []testcase
+	id := 0
+	addTestCase := func(name, val string) {
+		id++
+		testcases = append(testcases, testcase{
+			name:  name,
+			input: fmt.Sprintf("insert into vitess_json(val) values (%s)", encodeString(val)),
+			data: [][]string{
+				{strconv.Itoa(id), val},
+			},
+		})
+	}
+	addTestCase("singleDoc", jsonSingleDoc)
+	addTestCase("multipleDocs", jsonMultipleDocs)
+	longString := strings.Repeat("aa", math.MaxInt16)
+	largeObject := fmt.Sprintf(singleLargeObjectTemplate, longString)
+	addTestCase("singleLargeObject", largeObject)
+	largeArray := fmt.Sprintf(`[1, 1234567890, "a", true, %s]`, largeObject)
+	addTestCase("singleLargeArray", largeArray)
+	addTestCase("largeArrayDoc", repeatJSON(jsonSingleDoc, 140, largeJSONArrayCollection))
+	addTestCase("largeObjectDoc", repeatJSON(jsonSingleDoc, 140, largeJSONObjectCollection))
+	// Edge cases identified in code review for type-fidelity between CAST and JSON_OBJECT paths.
+	addTestCase("booleans", `{"flag": true, "off": false}`)
+	addTestCase("largeInteger", `{"keywordSourceId": 930701976723823}`)
+	addTestCase("decimal", `{"val": 1.5}`)
+	addTestCase("emptyObject", `{}`)
+	addTestCase("emptyArray", `[]`)
+	addTestCase("jsonNull", `null`)
+	id = 0
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			id++
+			execStatements(t, []string{tcase.input})
+			want := qh.Expect(
+				"begin",
+				"/insert into vitess_json",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			)
+			expectDBClientQueries(t, want)
+			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
+		})
+	}
+}
+
 func TestVReplicationLogs(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	dbClient := playerEngine.dbClientFactoryDba()
