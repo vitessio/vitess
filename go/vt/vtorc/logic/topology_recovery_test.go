@@ -1067,6 +1067,161 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 	}
 }
 
+// TestReconcileStaleTopoPrimaryTopoTimeout verifies that reconcileStaleTopoPrimary
+// returns when the topology type change blocks until the remote operation timeout.
+func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+			_, err = orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
+
+		const (
+			keyspace = "ks"
+			shard    = "0"
+		)
+
+		primaryTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:             "primary",
+			MysqlHostname:        "primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+			PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+		}
+
+		staleTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:             "stale-primary",
+			MysqlHostname:        "stale-primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 500},
+			PortMap:              map[string]int32{"vt": 15200, "grpc": 15201},
+		}
+
+		require.NoError(t, inst.SaveTablet(primaryTablet))
+		require.NoError(t, inst.SaveTablet(staleTablet))
+
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+		}
+		keyspaceInfo.SetKeyspaceName(keyspace)
+		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+		ctx := t.Context()
+
+		seededTS, topoFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+		t.Cleanup(seededTS.Close)
+
+		require.NoError(t, seededTS.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+		require.NoError(t, seededTS.CreateShard(ctx, keyspace, shard))
+		require.NoError(t, seededTS.CreateTablet(ctx, primaryTablet))
+		require.NoError(t, seededTS.CreateTablet(ctx, staleTablet))
+
+		require.NoError(t, seededTS.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.ServerAddress = memorytopo.UnreachableServerAddr
+			return nil
+		}))
+
+		blockedTS, err := topo.NewWithFactory(topoFactory, "", "")
+		require.NoError(t, err)
+		t.Cleanup(blockedTS.Close)
+
+		oldTS := ts
+		oldTMC := tmc
+		oldRemoteOpTimeout := topo.RemoteOperationTimeout
+
+		t.Cleanup(func() {
+			ts = oldTS
+			tmc = oldTMC
+			topo.RemoteOperationTimeout = oldRemoteOpTimeout
+		})
+
+		ts = blockedTS
+		topo.RemoteOperationTimeout = 100 * time.Millisecond
+
+		mockController := gomock.NewController(t)
+		t.Cleanup(mockController.Finish)
+
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		mockTMC.EXPECT().
+			DemotePrimary(gomock.Any(), gomock.Any(), true).
+			Return(&replicationdatapb.PrimaryStatus{}, nil).
+			Times(1)
+
+		mockTMC.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			Times(1)
+
+		tmc = mockTMC
+
+		analysisEntry := &inst.DetectionAnalysis{
+			Analysis:              inst.StaleTopoPrimary,
+			AnalyzedInstanceAlias: staleTablet.Alias,
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard,
+		}
+
+		logger := log.NewPrefixedLogger("test-stale-primary-topo-timeout")
+
+		type reconcileResult struct {
+			attempted        bool
+			topologyRecovery *TopologyRecovery
+			err              error
+		}
+
+		recoveryCtx, cancel := context.WithCancel(ctx)
+		t.Cleanup(func() {
+			cancel()
+			synctest.Wait()
+		})
+
+		resultCh := make(chan reconcileResult, 1)
+		go func() {
+			attempted, topologyRecovery, err := reconcileStaleTopoPrimary(recoveryCtx, analysisEntry, logger)
+			resultCh <- reconcileResult{
+				attempted:        attempted,
+				topologyRecovery: topologyRecovery,
+				err:              err,
+			}
+		}()
+
+		synctest.Wait()
+
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
+		select {
+		case result := <-resultCh:
+			require.True(t, result.attempted, "recovery must be attempted")
+			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
+			require.ErrorContains(t, result.err, "failed to set tablet type to REPLICA in topology")
+			require.ErrorContains(t, result.err, context.DeadlineExceeded.Error(), "reconcileStaleTopoPrimary must timeout and return when the topo type change blocks indefinitely")
+		default:
+			require.FailNowf(t, "reconcileStaleTopoPrimary did not return", "expected timeout after %s when the topo type change hangs indefinitely", topo.RemoteOperationTimeout)
+		}
+
+		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+		require.NoError(t, err)
+		require.Empty(t, activeRecoveries, "recovery row must be resolved after reconcileStaleTopoPrimary returns")
+	})
+}
+
 // TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
 func TestRestartDirectReplicasTimeout(t *testing.T) {
 	orcDB, fromCache, err := db.OpenVTOrcWithCache()
