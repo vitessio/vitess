@@ -137,13 +137,13 @@ func testPlayerCopyRespectsMaxQuerySize(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyTablesJSONCAST verifies that JSON values round-trip correctly through MySQL
-// when using the JSON_OBJECT/JSON_ARRAY SQL encoding path.
-func TestPlayerCopyTablesJSONCAST(t *testing.T) {
-	testVcopierTestCases(t, testPlayerCopyTablesJSONCAST, commonVcopierTestCases())
+// TestPlayerCopyTablesJSONStreamSQL verifies that JSON values round-trip correctly through MySQL
+// when using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerCopyTablesJSONStreamSQL(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesJSONStreamSQL, commonVcopierTestCases())
 }
 
-func testPlayerCopyTablesJSONCAST(t *testing.T) {
+func testPlayerCopyTablesJSONStreamSQL(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{

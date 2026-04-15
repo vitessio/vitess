@@ -3135,9 +3135,9 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 	}
 }
 
-// TestPlayerJSONDocsCAST verifies that JSON values round-trip correctly through MySQL when using
-// the JSON_OBJECT/JSON_ARRAY SQL encoding path.
-func TestPlayerJSONDocsCAST(t *testing.T) {
+// TestPlayerJSONDocsStreamSQL verifies that JSON values round-trip correctly through MySQL when
+// using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerJSONDocsStreamSQL(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
