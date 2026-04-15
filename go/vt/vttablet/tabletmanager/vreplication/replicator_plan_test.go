@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
+	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1135,7 +1136,7 @@ func TestMarshalJSONForSQL(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := marshalJSONForSQL([]byte(tc.input))
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
 			require.NoError(t, err)
 
 			sql := result.RawStr()
@@ -1171,7 +1172,7 @@ func TestMarshalJSONForSQLCorrectness(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := marshalJSONForSQL([]byte(tc.input))
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
 			require.NoError(t, err)
 			assert.Contains(t, result.RawStr(), tc.contains)
 		})
@@ -1181,7 +1182,7 @@ func TestMarshalJSONForSQLCorrectness(t *testing.T) {
 	// be converted to scientific notation.
 	t.Run("large integer preserved", func(t *testing.T) {
 		raw := []byte(`{"keywordSourceId": 930701976723823}`)
-		result, err := marshalJSONForSQL(raw)
+		result, err := vjson.MarshalSQLValue(raw)
 		require.NoError(t, err)
 		assert.Contains(t, result.RawStr(), "930701976723823")
 		assert.NotContains(t, result.RawStr(), "e+")
@@ -1241,7 +1242,7 @@ func BenchmarkMarshalJSONForSQL(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(raw)))
 	for i := 0; i < b.N; i++ {
-		result, err := marshalJSONForSQL(raw)
+		result, err := vjson.MarshalSQLValue(raw)
 		if err != nil {
 			b.Fatal(err)
 		}

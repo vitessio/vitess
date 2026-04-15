@@ -230,7 +230,7 @@ func (w *sqlWriter) skipWhitespace() {
 }
 
 func (w *sqlWriter) writeValue(top bool, depth int) error {
-	if depth > MaxDepth {
+	if depth >= MaxDepth {
 		return fmt.Errorf("too big depth for the nested JSON; it exceeds %d", MaxDepth)
 	}
 	w.skipWhitespace()
@@ -362,6 +362,9 @@ func (w *sqlWriter) writeStringContent() error {
 	for w.pos < len(w.data) {
 		ch := w.data[w.pos]
 		if ch == '\\' {
+			if w.pos+1 >= len(w.data) {
+				return errors.New("unterminated string in JSON")
+			}
 			hasEscape = true
 			w.pos += 2 // skip '\' and the escaped character
 			continue
@@ -485,22 +488,18 @@ func parseHex4(s []byte) rune {
 }
 
 func (w *sqlWriter) writeNumber(top bool) error {
+	// Use the parser's readFloat to validate number grammar, rejecting
+	// malformed inputs like "1+2", "1..2", or "1e+" that a simple
+	// character-class loop would accept.
+	n, ok := readFloat(hack.String(w.data[w.pos:]))
+	if !ok || n == 0 {
+		return fmt.Errorf("invalid number at position %d in JSON", w.pos)
+	}
 	if top {
 		w.buf.WriteString("CAST(")
 	}
-	start := w.pos
-	for w.pos < len(w.data) {
-		ch := w.data[w.pos]
-		if (ch >= '0' && ch <= '9') || ch == '-' || ch == '+' || ch == '.' || ch == 'e' || ch == 'E' {
-			w.pos++
-		} else {
-			break
-		}
-	}
-	if w.pos == start {
-		return errors.New("empty number in JSON")
-	}
-	w.buf.Write(w.data[start:w.pos])
+	w.buf.Write(w.data[w.pos : w.pos+n])
+	w.pos += n
 	if top {
 		w.buf.WriteString(" as JSON)")
 	}

@@ -43,12 +43,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// marshalJSONForSQL converts raw text JSON bytes to a SQL expression suitable
-// for INSERT/UPDATE statements.
-func marshalJSONForSQL(raw []byte) (*sqltypes.Value, error) {
-	return vjson.MarshalSQLValue(raw)
-}
-
 // ReplicatorPlan is the execution plan for the replicator. It contains
 // plans for all the tables it's replicating. Every phase of vreplication
 // builds its own instance of the ReplicatorPlan. This is because the plan
@@ -471,7 +465,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
-					newVal, err = marshalJSONForSQL(afterVals[i].Raw())
+					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
 					if err != nil {
 						return nil, err
 					}
@@ -542,7 +536,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// If the JSON column was NOT updated then the JSON column is marked as partial
 						// and the diff is empty as a way to exclude it from the AFTER image. So we
 						// want to use the BEFORE image value.
-						beforeVal, err := marshalJSONForSQL(bindvars["b_"+field.Name].Value)
+						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
 								tp.TargetName, field.Name)
@@ -695,7 +689,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
 					jsVal = &sqltypes.NULL
 				} else { // A JSON value (which may be a JSON null literal value)
-					jsVal, err = marshalJSONForSQL(vals[n].Raw())
+					jsVal, err = vjson.MarshalSQLValue(vals[n].Raw())
 					if err != nil {
 						return nil, err
 					}
