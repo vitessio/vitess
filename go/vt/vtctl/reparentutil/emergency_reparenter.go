@@ -670,8 +670,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		}
 
 		replicaMutex.Lock()
+		defer replicaMutex.Unlock()
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
-		replicaMutex.Unlock()
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		// We do this only when we do not want to wait for all the replicas.
@@ -703,13 +703,17 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// time of slowest replica, instead of the time of the fastest successful
 	// replica, and we want ERS to be fast.
 	//
-	// This goroutine also cancels replCtx after all replicas finish, so that
+	// For non-intermediate reparents, this function returns after the first
+	// successful replica; for intermediate reparents, it waits for all
+	// replicas to finish. On primary failure, replCancel() is called
+	// immediately below, which is safe because cancel functions are
+	// idempotent.
+	//
+	// This goroutine cancels replCtx after all replicas finish, so that
 	// replicas that are still in-flight can complete their SetReplicationSource
-	// calls even when this function returns early. For non-intermediate
-	// reparents, this function returns after the first successful replica;
-	// for intermediate reparents, it waits for all replicas to finish.
-	// On primary failure, replCancel() is called immediately below,
-	// which is safe because cancel functions are idempotent.
+	// calls even when this function returns early. replCancel is NOT deferred
+	// at the function level because the success path intentionally keeps
+	// replCtx alive for background RPCs to finish.
 	go func() {
 		replWg.Wait()
 		allReplicasDoneCancel()

@@ -384,6 +384,9 @@ func stopReplicationAndBuildStatusMaps(
 	}
 
 	numGoRoutines := len(tabletMap) - ignoredTablets.Len()
+	if numGoRoutines <= 0 && ignoredTablets.Len() > 0 {
+		return res, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tablets available to stop replication on (all %d tablets were ignored)", len(tabletMap))
+	}
 	// In general we want to wait for n-1 tablets to respond, since we know the primary tablet is down.
 	requiredSuccesses := numGoRoutines - 1
 	if waitForAllTablets {
