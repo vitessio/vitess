@@ -17,6 +17,8 @@ limitations under the License.
 package flagutil
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,4 +57,44 @@ func TestNewOptionalString(t *testing.T) {
 
 	require.Equal(t, "value", optStr.Get())
 	require.Equal(t, true, optStr.IsSet())
+}
+
+func TestNewOptionalInt64(t *testing.T) {
+	fl := NewOptionalInt64(42)
+	require.NotEmpty(t, fl)
+	require.Equal(t, false, fl.IsSet())
+
+	require.Equal(t, "42", fl.String())
+	require.Equal(t, "int64", fl.Type())
+
+	err := fl.Set("not a number")
+	require.ErrorContains(t, err, "parse error")
+
+	err = fl.Set("99")
+	require.NoError(t, err)
+	require.Equal(t, int64(99), fl.Get())
+	require.Equal(t, true, fl.IsSet())
+}
+
+func TestNewOptionalFlag_Custom(t *testing.T) {
+	parseBool := func(s string) (bool, error) {
+		return strconv.ParseBool(s)
+	}
+	formatBool := func(v bool) string {
+		return fmt.Sprintf("%t", v)
+	}
+
+	fl := NewOptionalFlag(false, parseBool, formatBool, "bool")
+	require.Equal(t, false, fl.IsSet())
+	require.Equal(t, "false", fl.String())
+	require.Equal(t, "bool", fl.Type())
+
+	err := fl.Set("not-a-bool")
+	require.Error(t, err)
+	require.Equal(t, false, fl.IsSet())
+
+	err = fl.Set("true")
+	require.NoError(t, err)
+	require.Equal(t, true, fl.Get())
+	require.Equal(t, true, fl.IsSet())
 }
