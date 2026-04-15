@@ -138,19 +138,13 @@ func testPlayerCopyRespectsMaxQuerySize(t *testing.T) {
 }
 
 // TestPlayerCopyTablesJSONCAST verifies that JSON values round-trip correctly through MySQL
-// when using the CAST(_utf8mb4'...' AS JSON) encoding path. This exercises the code path used
-// for large JSON values (>maxJSONBufferSize) by forcing maxJSONBufferSize=0 so all JSON goes
-// through the CAST path regardless of size.
+// when using the JSON_OBJECT/JSON_ARRAY SQL encoding path.
 func TestPlayerCopyTablesJSONCAST(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyTablesJSONCAST, commonVcopierTestCases())
 }
 
 func testPlayerCopyTablesJSONCAST(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-
-	saved := maxJSONBufferSize
-	maxJSONBufferSize = 0
-	defer func() { maxJSONBufferSize = saved }()
 
 	execStatements(t, []string{
 		"create table src(id int, j json, primary key(id))",

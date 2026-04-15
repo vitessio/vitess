@@ -1147,53 +1147,39 @@ func TestMarshalJSONForSQL(t *testing.T) {
 }
 
 func TestMarshalJSONForSQLCorrectness(t *testing.T) {
-	// Verify that both encoding paths (tree and streaming) produce valid SQL
-	// expressions for the same JSON input. Both use JSON_OBJECT/JSON_ARRAY format.
 	testCases := []struct {
-		name  string
-		input string
+		name     string
+		input    string
+		contains string
 	}{
-		{name: "object", input: `{"key": "value", "num": 42}`},
-		{name: "array of ints", input: `[1, 2, 3, 930701976723823]`},
-		{name: "nested", input: `{"a": [1, {"b": true}], "c": null}`},
-		{name: "special chars", input: `{"q": "it's a \"test\"", "bs": "back\\slash"}`},
-		{name: "unicode", input: `{"emoji": "hello \u0041"}`},
-		{name: "empty object", input: `{}`},
-		{name: "empty array", input: `[]`},
-		{name: "boolean", input: `true`},
-		{name: "null", input: `null`},
-		{name: "number", input: `42`},
-		{name: "large integer (original bug #8686)", input: `{"keywordSourceId": 930701976723823}`},
+		{name: "object", input: `{"key": "value", "num": 42}`, contains: "JSON_OBJECT("},
+		{name: "array of ints", input: `[1, 2, 3, 930701976723823]`, contains: "JSON_ARRAY("},
+		{name: "nested", input: `{"a": [1, {"b": true}], "c": null}`, contains: "JSON_OBJECT("},
+		{name: "special chars", input: `{"bs": "back\\slash", "q": "it's a \"test\""}`, contains: "JSON_OBJECT("},
+		{name: "unicode", input: `{"emoji": "hello \u0041"}`, contains: "JSON_OBJECT("},
+		{name: "empty object", input: `{}`, contains: "JSON_OBJECT()"},
+		{name: "empty array", input: `[]`, contains: "JSON_ARRAY()"},
+		{name: "boolean", input: `true`, contains: "true"},
+		{name: "null", input: `null`, contains: "null"},
+		{name: "number", input: `42`, contains: "42"},
+		{name: "string", input: `"hello world"`, contains: "hello world"},
+		{name: "large integer (original bug #8686)", input: `{"keywordSourceId": 930701976723823}`, contains: "930701976723823"},
+		{name: "control escapes", input: `{"cr": "a\rb", "newline": "a\nb", "tab": "a\tb"}`, contains: "JSON_OBJECT("},
+		{name: "solidus escape", input: `{"path": "a\/b"}`, contains: "JSON_OBJECT("},
+		{name: "surrogate pair", input: `{"emoji": "\uD83D\uDE00"}`, contains: "JSON_OBJECT("},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			raw := []byte(tc.input)
-
-			// Force streaming path
-			saved := maxJSONBufferSize
-			maxJSONBufferSize = 0
-			t.Cleanup(func() { maxJSONBufferSize = saved })
-
-			streamResult, err := marshalJSONForSQL(raw)
+			result, err := marshalJSONForSQL([]byte(tc.input))
 			require.NoError(t, err)
-			assert.NotEmpty(t, streamResult.RawStr())
-
-			// Force tree path
-			maxJSONBufferSize = -1
-			treeResult, err := marshalJSONForSQL(raw)
-			require.NoError(t, err)
-			assert.NotEmpty(t, treeResult.RawStr())
+			assert.Contains(t, result.RawStr(), tc.contains)
 		})
 	}
 
 	// Verify the specific bug from issue #8686: large integers must not
-	// be converted to scientific notation in either path.
-	t.Run("large integer preserved in streaming path", func(t *testing.T) {
-		saved := maxJSONBufferSize
-		maxJSONBufferSize = 0
-		t.Cleanup(func() { maxJSONBufferSize = saved })
-
+	// be converted to scientific notation.
+	t.Run("large integer preserved", func(t *testing.T) {
 		raw := []byte(`{"keywordSourceId": 930701976723823}`)
 		result, err := marshalJSONForSQL(raw)
 		require.NoError(t, err)
@@ -1203,10 +1189,7 @@ func TestMarshalJSONForSQLCorrectness(t *testing.T) {
 }
 
 func TestAppendFromRowLargeJSON(t *testing.T) {
-	// Verify that large JSON values (> maxJSONBufferSize) use CAST path in appendFromRow.
-	// Build a JSON array > 1MB.
 	largeJSON := `[` + strings.Repeat(`12345678,`, 150000) + `0]`
-	require.Greater(t, len(largeJSON), 1024*1024, "test JSON must exceed 1MB threshold")
 
 	tp := &TablePlan{
 		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
@@ -1253,45 +1236,23 @@ func TestAppendFromRowSmallJSON(t *testing.T) {
 	assert.Contains(t, result, "JSON_OBJECT(")
 }
 
-func BenchmarkMarshalJSONForSQLLargePaths(b *testing.B) {
+func BenchmarkMarshalJSONForSQL(b *testing.B) {
 	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
-	if int64(len(raw)) <= maxJSONBufferSize {
-		b.Fatalf("benchmark JSON must exceed maxJSONBufferSize: got %d, threshold %d", len(raw), maxJSONBufferSize)
-	}
-
-	benchmarkJSONPath := func(b *testing.B, threshold int64) {
-		saved := maxJSONBufferSize
-		maxJSONBufferSize = threshold
-		b.Cleanup(func() {
-			maxJSONBufferSize = saved
-		})
-		b.ReportAllocs()
-		b.SetBytes(int64(len(raw)))
-		for i := 0; i < b.N; i++ {
-			result, err := marshalJSONForSQL(raw)
-			if err != nil {
-				b.Fatal(err)
-			}
-			if len(result.Raw()) == 0 {
-				b.Fatal("marshalJSONForSQL returned empty SQL")
-			}
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		result, err := marshalJSONForSQL(raw)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(result.Raw()) == 0 {
+			b.Fatal("marshalJSONForSQL returned empty SQL")
 		}
 	}
-
-	b.Run("tree", func(b *testing.B) {
-		benchmarkJSONPath(b, -1)
-	})
-	b.Run("stream", func(b *testing.B) {
-		benchmarkJSONPath(b, 0)
-	})
 }
 
-func BenchmarkAppendFromRowLargeJSONPaths(b *testing.B) {
+func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
 	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
-	if int64(len(raw)) <= maxJSONBufferSize {
-		b.Fatalf("benchmark JSON must exceed maxJSONBufferSize: got %d, threshold %d", len(raw), maxJSONBufferSize)
-	}
-
 	tp := &TablePlan{
 		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 			":c1",
@@ -1305,30 +1266,16 @@ func BenchmarkAppendFromRowLargeJSONPaths(b *testing.B) {
 		sqltypes.MakeTrusted(querypb.Type_JSON, raw),
 	})
 
-	benchmarkAppend := func(b *testing.B, threshold int64) {
-		saved := maxJSONBufferSize
-		maxJSONBufferSize = threshold
-		b.Cleanup(func() {
-			maxJSONBufferSize = saved
-		})
-		buf := &bytes2.Buffer{}
-		b.ReportAllocs()
-		b.SetBytes(int64(len(raw)))
-		for i := 0; i < b.N; i++ {
-			buf.Reset()
-			if err := tp.appendFromRow(buf, row); err != nil {
-				b.Fatal(err)
-			}
-			if buf.Len() == 0 {
-				b.Fatal("appendFromRow returned empty SQL")
-			}
+	buf := &bytes2.Buffer{}
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		if err := tp.appendFromRow(buf, row); err != nil {
+			b.Fatal(err)
+		}
+		if buf.Len() == 0 {
+			b.Fatal("appendFromRow returned empty SQL")
 		}
 	}
-
-	b.Run("tree", func(b *testing.B) {
-		benchmarkAppend(b, -1)
-	})
-	b.Run("stream", func(b *testing.B) {
-		benchmarkAppend(b, 0)
-	})
 }
