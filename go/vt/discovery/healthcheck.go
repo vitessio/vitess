@@ -419,6 +419,9 @@ func NewHealthCheck(
 // SetMaxRetryBackoff sets the maximum delay between health check stream
 // reconnection attempts. This must be called before AddTablet.
 func (hc *HealthCheckImpl) SetMaxRetryBackoff(d time.Duration) {
+	if d <= 0 {
+		return
+	}
 	hc.maxRetryBackoff = d
 }
 
