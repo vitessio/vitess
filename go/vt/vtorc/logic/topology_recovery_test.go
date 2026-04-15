@@ -392,9 +392,6 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 
 	orcDB, err := db.OpenVTOrc()
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, orcDB.Close())
-	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
