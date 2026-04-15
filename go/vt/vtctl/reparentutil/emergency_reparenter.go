@@ -703,17 +703,13 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// time of slowest replica, instead of the time of the fastest successful
 	// replica, and we want ERS to be fast.
 	//
-	// For non-intermediate reparents, this function returns after the first
-	// successful replica; for intermediate reparents, it waits for all
-	// replicas to finish. On primary failure, replCancel() is called
-	// immediately below, which is safe because cancel functions are
-	// idempotent.
-	//
-	// This goroutine cancels replCtx after all replicas finish, so that
+	// This goroutine also cancels replCtx after all replicas finish, so that
 	// replicas that are still in-flight can complete their SetReplicationSource
-	// calls even when this function returns early. replCancel is NOT deferred
-	// at the function level because the success path intentionally keeps
-	// replCtx alive for background RPCs to finish.
+	// calls even when this function returns early. For non-intermediate
+	// reparents, this function returns after the first successful replica;
+	// for intermediate reparents, it waits for all replicas to finish.
+	// On primary failure, replCancel() is called immediately below,
+	// which is safe because cancel functions are idempotent.
 	go func() {
 		replWg.Wait()
 		allReplicasDoneCancel()
