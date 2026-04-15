@@ -1306,7 +1306,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	})
 
 	// Update the tablet's type directly in the topology to REPLICA.
-	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
+	_, err = changeTabletTypeInTopo(ctx, analyzedTablet, topodatapb.TabletType_REPLICA)
 	if err != nil {
 		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen
 		// if we race with the goroutine above and `SetReplicationSource` already changed the type to REPLICA
@@ -1326,6 +1326,14 @@ func forceDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replic
 	defer cancel()
 
 	return tmc.DemotePrimary(ctx, tablet, true)
+}
+
+// changeTabletTypeInTopo updates the tablet type in topology for the given tablet.
+func changeTabletTypeInTopo(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return topotools.ChangeType(ctx, ts, tablet.Alias, tabletType, nil)
 }
 
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.

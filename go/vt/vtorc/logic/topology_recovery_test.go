@@ -682,11 +682,8 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					DemotePrimary(gomock.Any(), gomock.Any(), true).
 					DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.PrimaryStatus, error) {
 						if tt.demotePrimaryDelay > 0 {
-							select {
-							case <-ctx.Done():
-								return nil, ctx.Err()
-							case <-time.After(tt.demotePrimaryDelay):
-							}
+							<-ctx.Done()
+							return nil, ctx.Err()
 						}
 
 						if tt.demotePrimaryErr != nil {
