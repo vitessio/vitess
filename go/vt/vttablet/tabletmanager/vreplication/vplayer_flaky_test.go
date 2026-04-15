@@ -3136,14 +3136,9 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 }
 
 // TestPlayerJSONDocsCAST verifies that JSON values round-trip correctly through MySQL when using
-// the CAST(_utf8mb4'...' AS JSON) encoding path. This exercises the code path used for large
-// JSON values by forcing maxJSONBufferSize=0 so all JSON goes through CAST regardless of size.
+// the JSON_OBJECT/JSON_ARRAY SQL encoding path.
 func TestPlayerJSONDocsCAST(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-
-	saved := maxJSONBufferSize
-	maxJSONBufferSize = 0
-	defer func() { maxJSONBufferSize = saved }()
 
 	execStatements(t, []string{
 		"create table vitess_json(id int auto_increment, val json, primary key(id))",
