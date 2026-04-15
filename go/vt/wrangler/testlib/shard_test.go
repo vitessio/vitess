@@ -18,7 +18,6 @@ package testlib
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -56,22 +55,18 @@ func TestDeleteShardCleanup(t *testing.T) {
 
 	// Now try to delete the shard without even_if_serving or
 	// recursive flag, should fail on serving check first.
-	if err := vp.Run([]string{
+	require.ErrorContains(t, vp.Run([]string{
 		"DeleteShard",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err == nil || !strings.Contains(err.Error(), "is still serving, cannot delete it") {
-		require.NoError(t, err)
-	}
+	}), "is still serving, cannot delete it")
 
 	// Now try to delete the shard with even_if_serving, but
 	// without recursive flag, should fail on existing tablets.
-	if err := vp.Run([]string{
+	require.ErrorContains(t, vp.Run([]string{
 		"DeleteShard",
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
-		require.NoError(t, err)
-	}
+	}), "use -recursive or remove them manually")
 
 	// Now try to delete the shard with even_if_serving and recursive,
 	// it should just work.

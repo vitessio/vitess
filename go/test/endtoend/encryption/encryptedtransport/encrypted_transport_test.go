@@ -304,7 +304,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		assert.NoError(t, err)
+		return 1, err
 	}
 
 	// create all certs

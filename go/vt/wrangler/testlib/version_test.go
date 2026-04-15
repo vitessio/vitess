@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -111,7 +110,5 @@ func TestVersion(t *testing.T) {
 	sourceReplicaGitRev = "different fake git rev"
 	err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace})
 	fmt.Printf("ERROR %v", err)
-	if err == nil || !strings.Contains(err.Error(), "is different than replica") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, err, "is different than replica")
 }

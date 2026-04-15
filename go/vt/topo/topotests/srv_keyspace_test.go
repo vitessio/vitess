@@ -69,9 +69,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(err, topo.NoNode) {
-		assert.NoError(t, err)
-	}
+	assert.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 }
 
 func TestWatchSrvKeyspace(t *testing.T) {
@@ -183,9 +181,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(err, topo.NoNode) {
-		assert.NoError(t, err)
-	}
+	assert.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 
 	// Create initial value
 	wanted := &topodatapb.SrvKeyspace{}
