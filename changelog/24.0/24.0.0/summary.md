@@ -21,6 +21,7 @@
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
         - [Binlog Streaming Support](#vtgate-binlog-dump)
+        - [Health check retry backoff configuration](#vtgate-healthcheck-max-retry-backoff)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -207,6 +208,18 @@ For gRPC clients, specify the keyspace, shard, and optionally the tablet type or
 - Each stream operates on a single tablet—no data aggregation across shards.
 - No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
 - Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
+
+#### <a id="vtgate-healthcheck-max-retry-backoff"/>Health check retry backoff configuration</a>
+
+VTGate now supports a new `--healthcheck-max-retry-backoff` flag to control the maximum backoff duration between health check reconnection attempts, independently from `--healthcheck-timeout`.
+
+Previously, both the timeout for marking a tablet as down and the cap on retry backoff used the same 60-second value from `--healthcheck-timeout`. After a prolonged tablet outage, VTGate health check streams would break and retry delays would escalate up to 60 seconds. When the tablet recovered, VTGates could take up to 60 seconds to reconnect—creating a window where some VTGates had no healthy replicas for a shard even though the tablet was serving.
+
+The new flag decouples these concerns:
+- `--healthcheck-timeout`: How long to wait for a `StreamHealth` response before marking a tablet as down (default: 60s).
+- `--healthcheck-max-retry-backoff`: Maximum backoff between reconnection attempts (default: 10s).
+
+With the new defaults, the backoff sequence changes from `5s→10s→20s→40s→60s` to `5s→10s→10s→10s`, allowing faster reconnection after tablet recovery while keeping the timeout behavior unchanged.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
