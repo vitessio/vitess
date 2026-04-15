@@ -16,6 +16,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
+        - [Reduced memory usage for large JSON columns](#vreplication-streaming-json)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -148,6 +149,14 @@ VReplication workflows now automatically retry with different tablets when encou
 When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
 
 This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
+
+#### <a id="vreplication-streaming-json"/>Reduced memory usage for large JSON columns</a>
+
+VReplication now uses a streaming JSON-to-SQL converter when handling tables with large JSON columns. Previously, encoding large JSON values required parsing into an intermediate object tree before serializing to SQL, which could cause out-of-memory (OOM) errors on tablets with limited memory. The new streaming approach reads JSON token-by-token and emits SQL directly, reducing memory usage from approximately 56x to 8x relative to the input JSON size.
+
+This applies to both the copy and replay phases of VReplication workflows such as MoveTables and Reshard. Tables with JSON columns that previously caused vttablet OOM errors now process efficiently.
+
+See [#19878](https://github.com/vitessio/vitess/pull/19878) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
