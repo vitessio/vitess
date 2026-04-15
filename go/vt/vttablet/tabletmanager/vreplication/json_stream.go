@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	vjson "vitess.io/vitess/go/mysql/json"
 
@@ -44,8 +45,9 @@ func appendStreamJSONForSQL(buf *bytes2.Buffer, raw []byte) error {
 	if err := streamMarshalValue(dec, buf, true, 0); err != nil {
 		return err
 	}
-	// Reject trailing tokens so we match vjson.ParseBytes behavior.
-	if dec.More() {
+	// Require EOF so we match vjson.ParseBytes behavior. dec.More() is not
+	// sufficient — it only checks for ] or }, so inputs like "1]" slip through.
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return errors.New("unexpected trailing data after JSON value")
 	}
 	return nil
