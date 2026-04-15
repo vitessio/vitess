@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"slices"
@@ -968,35 +967,25 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
-		logger.Warning("skipping recovery, active or recent recovery exists",
-			slog.String("tablet", aliasString),
-			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
-		)
+		logger.Warningf("skipping recovery, active or recent recovery exists: tablet=%s recovery=%s", aliasString, ReconcileStaleTopoPrimaryRecoveryName)
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
 
-	logger.Info("demoting stale topo primary",
-		slog.String("analysis", string(analysisEntry.Analysis)),
-		slog.String("tablet", aliasString),
-	)
+	logger.Infof("demoting stale topo primary: analysis=%s tablet=%s", analysisEntry.Analysis, aliasString)
 
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-			logger.Error(
-				"failed to resolve recovery",
-				slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
-				slog.Any("error", err),
-			)
+			logger.Errorf("failed to resolve recovery for %q: %v", ReconcileStaleTopoPrimaryRecoveryName, err)
 		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(alias)
 	if err != nil {
-		logger.Error("failed to read tablet, aborting recovery", slog.String("tablet", aliasString))
+		logger.Errorf("failed to read tablet %q, aborting recovery", aliasString)
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
@@ -1010,21 +999,21 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	wg.Go(func() {
 		// Demote the tablet, forcing it to become read-only and drop pending transactions.
 		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
-			logger.Error("failed to demote stale primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			logger.Errorf("failed to demote stale primary %q: %v", aliasString, err)
 			return
 		}
 
-		logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
+		logger.Infof("successfully demoted stale primary %q", aliasString)
 
 		primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 		if err != nil {
-			logger.Error("failed to find shard primary", slog.String("tablet", aliasString), slog.Any("error", err))
+			logger.Errorf("failed to find shard primary for %q: %v", aliasString, err)
 			return
 		}
 
 		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 		if err != nil {
-			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
+			logger.Errorf("failed to read durability policy for %q: %v", aliasString, err)
 			return
 		}
 
@@ -1033,11 +1022,11 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		// Point the tablet's replication at the current primary. This also changes the tablet's type
 		// to REPLICA and attempts to update the topology.
 		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
-			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
+			logger.Errorf("failed to set replication source for %q: %v", aliasString, err)
 			return
 		}
 
-		logger.Info("successfully set replication source", slog.String("tablet", aliasString))
+		logger.Infof("successfully set replication source for %q", aliasString)
 	})
 
 	// Update the tablet's type directly in the topology to REPLICA.
@@ -1051,7 +1040,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		}
 	}
 
-	logger.Info("successfully updated topo type to REPLICA", slog.String("tablet", aliasString))
+	logger.Infof("successfully updated topo type to REPLICA for %q", aliasString)
 	return true, topologyRecovery, nil
 }
 
