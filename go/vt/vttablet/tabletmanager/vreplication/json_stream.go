@@ -19,7 +19,10 @@ package vreplication
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+
+	vjson "vitess.io/vitess/go/mysql/json"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
@@ -38,10 +41,20 @@ import (
 func appendStreamJSONForSQL(buf *bytes2.Buffer, raw []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
-	return streamMarshalValue(dec, buf, true)
+	if err := streamMarshalValue(dec, buf, true, 0); err != nil {
+		return err
+	}
+	// Reject trailing tokens so we match vjson.ParseBytes behavior.
+	if dec.More() {
+		return errors.New("unexpected trailing data after JSON value")
+	}
+	return nil
 }
 
-func streamMarshalValue(dec *json.Decoder, buf *bytes2.Buffer, top bool) error {
+func streamMarshalValue(dec *json.Decoder, buf *bytes2.Buffer, top bool, depth int) error {
+	if depth > vjson.MaxDepth {
+		return fmt.Errorf("too big depth for the nested JSON; it exceeds %d", vjson.MaxDepth)
+	}
 	tok, err := dec.Token()
 	if err != nil {
 		return fmt.Errorf("reading JSON token: %w", err)
@@ -50,9 +63,9 @@ func streamMarshalValue(dec *json.Decoder, buf *bytes2.Buffer, top bool) error {
 	case json.Delim:
 		switch v {
 		case '{':
-			return streamMarshalObject(dec, buf)
+			return streamMarshalObject(dec, buf, depth)
 		case '[':
-			return streamMarshalArray(dec, buf)
+			return streamMarshalArray(dec, buf, depth)
 		default:
 			return fmt.Errorf("unexpected JSON delimiter: %v", v)
 		}
@@ -73,7 +86,7 @@ func streamMarshalValue(dec *json.Decoder, buf *bytes2.Buffer, top bool) error {
 	}
 }
 
-func streamMarshalObject(dec *json.Decoder, buf *bytes2.Buffer) error {
+func streamMarshalObject(dec *json.Decoder, buf *bytes2.Buffer, depth int) error {
 	buf.WriteString("JSON_OBJECT(")
 	first := true
 	for dec.More() {
@@ -96,7 +109,7 @@ func streamMarshalObject(dec *json.Decoder, buf *bytes2.Buffer) error {
 		buf.WriteString(", ")
 
 		// Value.
-		if err := streamMarshalValue(dec, buf, false); err != nil {
+		if err := streamMarshalValue(dec, buf, false, depth+1); err != nil {
 			return err
 		}
 	}
@@ -108,7 +121,7 @@ func streamMarshalObject(dec *json.Decoder, buf *bytes2.Buffer) error {
 	return nil
 }
 
-func streamMarshalArray(dec *json.Decoder, buf *bytes2.Buffer) error {
+func streamMarshalArray(dec *json.Decoder, buf *bytes2.Buffer, depth int) error {
 	buf.WriteString("JSON_ARRAY(")
 	first := true
 	for dec.More() {
@@ -117,7 +130,7 @@ func streamMarshalArray(dec *json.Decoder, buf *bytes2.Buffer) error {
 		}
 		first = false
 
-		if err := streamMarshalValue(dec, buf, false); err != nil {
+		if err := streamMarshalValue(dec, buf, false, depth+1); err != nil {
 			return err
 		}
 	}

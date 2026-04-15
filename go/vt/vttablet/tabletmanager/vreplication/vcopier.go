@@ -728,10 +728,14 @@ func (vc *vcopier) newCopyWorkerFactory(parallelism int, maxQuerySize int64) fun
 			if err != nil {
 				return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
 			}
+			// Query maxQuerySize from the worker's own connection since it may
+			// differ from the controller's session if @@global.max_allowed_packet
+			// was changed after the controller connection was opened.
+			workerMaxQuerySize := vc.vr.maxQuerySize(dbClient)
 			return newVCopierCopyWorker(
 				true, /* close db client */
 				dbClient,
-				maxQuerySize,
+				workerMaxQuerySize,
 			), nil
 		}
 	}
