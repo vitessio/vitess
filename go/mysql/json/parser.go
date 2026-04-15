@@ -513,7 +513,7 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func readFloat(s string) (i int, ok bool) {
+func readFloat[S string | []byte](s S) (i int, ok bool) {
 	// optional sign
 	if i >= len(s) {
 		return
