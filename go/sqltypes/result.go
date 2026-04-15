@@ -127,8 +127,7 @@ func (result *Result) Copy() *Result {
 			out.Rows = append(out.Rows, CopyRow(r))
 		}
 	}
-	// proto3Rows is not copied: consolidation uses ShallowCopy since the
-	// point is to share, not duplicate row data.
+	// proto3Rows is intentionally not propagated: callers may modify Rows
 	return out
 }
 
@@ -142,7 +141,7 @@ func (result *Result) ShallowCopy() *Result {
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
 		Rows:                result.Rows,
-		proto3Rows:          result.proto3Rows,
+		// proto3Rows is intentionally not propagated: callers may modify Rows
 	}
 }
 

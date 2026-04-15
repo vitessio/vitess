@@ -383,7 +383,7 @@ func TestResultToProto3_NilAndEmptyCache(t *testing.T) {
 	require.Empty(t, p3.Rows)
 }
 
-func TestShallowCopy_PropagatesProto3RowCache(t *testing.T) {
+func TestCopy_DoesNotPropagateProto3RowCache(t *testing.T) {
 	result := &Result{
 		Fields: []*querypb.Field{{Name: "col1", Type: Int64}},
 		Rows: [][]Value{{
@@ -393,8 +393,8 @@ func TestShallowCopy_PropagatesProto3RowCache(t *testing.T) {
 	result.CacheProto3Rows()
 	require.NotNil(t, result.proto3Rows)
 
-	shallow := result.ShallowCopy()
-	require.Equal(t, result.proto3Rows, shallow.proto3Rows)
+	require.Nil(t, result.ShallowCopy().proto3Rows)
+	require.Nil(t, result.Copy().proto3Rows)
 }
 
 func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
@@ -432,20 +432,6 @@ func TestMutations_InvalidateCachedProto3Rows(t *testing.T) {
 		p3 := ResultToProto3(result)
 		require.Len(t, p3.Rows, 1)
 	})
-}
-
-func TestCopy_DoesNotPropagateProto3RowCache(t *testing.T) {
-	result := &Result{
-		Fields: []*querypb.Field{{Name: "col1", Type: Int64}},
-		Rows: [][]Value{{
-			TestValue(Int64, "42"),
-		}},
-	}
-	result.CacheProto3Rows()
-	require.NotNil(t, result.proto3Rows)
-
-	deep := result.Copy()
-	require.Nil(t, deep.proto3Rows)
 }
 
 // makeTestResult builds a Result with numRows rows, each containing 5 columns
