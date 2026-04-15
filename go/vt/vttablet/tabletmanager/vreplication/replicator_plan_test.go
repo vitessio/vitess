@@ -1281,7 +1281,7 @@ func BenchmarkMarshalJSONForSQLLargePaths(b *testing.B) {
 	b.Run("tree", func(b *testing.B) {
 		benchmarkJSONPath(b, -1)
 	})
-	b.Run("cast", func(b *testing.B) {
+	b.Run("stream", func(b *testing.B) {
 		benchmarkJSONPath(b, 0)
 	})
 }
@@ -1328,7 +1328,7 @@ func BenchmarkAppendFromRowLargeJSONPaths(b *testing.B) {
 	b.Run("tree", func(b *testing.B) {
 		benchmarkAppend(b, -1)
 	})
-	b.Run("cast", func(b *testing.B) {
+	b.Run("stream", func(b *testing.B) {
 		benchmarkAppend(b, 0)
 	})
 }
