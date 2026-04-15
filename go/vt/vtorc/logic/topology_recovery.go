@@ -968,7 +968,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		logger.Warningf("skipping recovery, active or recent recovery exists: tablet=%s recovery=%s", aliasString, ReconcileStaleTopoPrimaryRecoveryName)
-		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another reconcileStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
@@ -996,7 +996,10 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 
 	// On a best-effort basis, attempt to demote the tablet and configure replication concurrently
 	// with the topology type update below. Failures here will not fail the overall recovery.
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
 		// Demote the tablet, forcing it to become read-only and drop pending transactions.
 		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
 			logger.Errorf("failed to demote stale primary %q: %v", aliasString, err)
@@ -1027,7 +1030,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		}
 
 		logger.Infof("successfully set replication source for %q", aliasString)
-	})
+	}()
 
 	// Update the tablet's type directly in the topology to REPLICA.
 	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
