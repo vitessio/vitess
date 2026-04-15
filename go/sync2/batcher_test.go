@@ -20,6 +20,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // makeAfterFnWithLatch returns a fake alternative to time.After that blocks until
@@ -35,7 +37,7 @@ func makeAfterFnWithLatch(t *testing.T) (func(time.Duration) <-chan time.Time, f
 		select {
 		case latch <- time.Now():
 		default:
-			t.Errorf("Previous batch still hasn't been released")
+			assert.Fail(t, "Previous batch still hasn't been released")
 		}
 	}
 	return afterFn, releaseFn
@@ -52,9 +54,7 @@ func TestBatcher(t *testing.T) {
 	startWaiter := func(testcase string, want int) {
 		go func() {
 			id := b.Wait()
-			if id != want {
-				t.Errorf("%s: got %d, want %d", testcase, id, want)
-			}
+			assert.Equal(t, want, id, testcase)
 			waitersFinished.Add(1)
 		}()
 	}
@@ -63,7 +63,7 @@ func TestBatcher(t *testing.T) {
 		for count := 0; val.Load() != expected; count++ {
 			time.Sleep(50 * time.Millisecond)
 			if count > 5 {
-				t.Errorf("Timed out waiting for %s to be %v", name, expected)
+				assert.Fail(t, "Timed out waiting", "%s to be %v", name, expected)
 				return
 			}
 		}
@@ -73,9 +73,7 @@ func TestBatcher(t *testing.T) {
 		// Wait for all the waiters to register
 		awaitVal("Batcher.waiters for "+name, &b.waiters, n)
 		// Release the batch and wait for the batcher to catch up.
-		if waitersFinished.Load() != 0 {
-			t.Errorf("Waiters finished before being released")
-		}
+		assert.Equal(t, int32(0), waitersFinished.Load(), "Waiters finished before being released")
 		releaseBatch()
 		awaitVal("Batcher.waiters for "+name, &b.waiters, 0)
 		// Make sure the waiters actually run so they can verify their batch number.
