@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"slices"
@@ -68,6 +69,7 @@ var (
 		ElectNewPrimaryRecoveryName,
 		FixPrimaryRecoveryName,
 		FixReplicaRecoveryName,
+		ReconcileStaleTopoPrimaryRecoveryName,
 	}
 
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
@@ -394,13 +396,7 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		return fixPrimaryFunc
 	case inst.StaleTopoPrimary:
-<<<<<<< HEAD
-		return demoteStaleTopoPrimaryFunc
-||||||| parent of 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
-		recoveryFunc = demoteStaleTopoPrimaryFunc
-=======
-		recoveryFunc = reconcileStaleTopoPrimaryFunc
->>>>>>> 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
+		return reconcileStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
@@ -967,56 +963,40 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 // NotConnectedToPrimary to set up replication correctly.
 func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	alias := analysisEntry.AnalyzedInstanceAlias
+	aliasString := alias
 
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
-<<<<<<< HEAD
-||||||| parent of 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
-		logger.Warn("skipping recovery, active or recent recovery exists",
-			slog.String("tablet", aliasString),
-			slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
-		)
-
-=======
-		logger.Warn("skipping recovery, active or recent recovery exists",
+		logger.Warning("skipping recovery, active or recent recovery exists",
 			slog.String("tablet", aliasString),
 			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 		)
-
->>>>>>> 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
-		logger.Warning(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
 
-	logger.Infof("Analysis: %v, will demote stale topo primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	logger.Info("demoting stale topo primary",
+		slog.String("analysis", string(analysisEntry.Analysis)),
+		slog.String("tablet", aliasString),
+	)
+
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		if err := resolveRecovery(topologyRecovery, nil); err != nil {
-<<<<<<< HEAD
-			logger.Errorf("failed to resolve recovery for %q: %v", DemoteStaleTopoPrimaryRecoveryName, err)
-||||||| parent of 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
-			logger.Error(
-				"failed to resolve recovery",
-				slog.String("recovery", DemoteStaleTopoPrimaryRecoveryName),
-				slog.Any("error", err),
-			)
-=======
 			logger.Error(
 				"failed to resolve recovery",
 				slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 				slog.Any("error", err),
 			)
->>>>>>> 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
 		}
 	}()
 
 	analyzedTablet, err := inst.ReadTablet(alias)
 	if err != nil {
-		logger.Errorf("Failed to read instance %q, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		logger.Error("failed to read tablet, aborting recovery", slog.String("tablet", aliasString))
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
@@ -1063,88 +1043,16 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Update the tablet's type directly in the topology to REPLICA.
 	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
 	if err != nil {
-<<<<<<< HEAD
-		logger.Infof("Could not compute primary for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard)
-		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
-||||||| parent of 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
-		logger.Error("failed to find primary for shard",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
-=======
 		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen
 		// if we race with the goroutine above and `SetReplicationSource` already changed the type to REPLICA
 		// before we update the topology. Any other error is considered a failure, and we'll try again next iteration.
 		if !topo.IsErrType(err, topo.NoUpdateNeeded) {
 			return true, topologyRecovery, vterrors.Wrap(err, "failed to set tablet type to REPLICA in topology")
 		}
->>>>>>> 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
 	}
 
-<<<<<<< HEAD
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-	if err != nil {
-		logger.Infof("Could not read the durability policy for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard)
-		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
-	}
-
-	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = forceDemotePrimary(ctx, analyzedTablet)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
-	}
-	logger.Info("Successfully demoted the stale primary " + analysisEntry.AnalyzedInstanceAlias)
-
-	// Set tablet to REPLICA in topology.
-	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
-	}
-
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
-	}
-
-	return true, topologyRecovery, err
-||||||| parent of 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-	if err != nil {
-		logger.Error("failed to read durability policy",
-			slog.String("keyspace", analyzedTablet.Keyspace),
-			slog.String("shard", analyzedTablet.Shard),
-		)
-		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
-	}
-
-	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
-	_, err = forceDemotePrimary(ctx, analyzedTablet)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
-	}
-	logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
-
-	// Set tablet to REPLICA in topology.
-	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
-	}
-
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
-	if err != nil {
-		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
-	}
-
-	return true, topologyRecovery, err
-=======
 	logger.Info("successfully updated topo type to REPLICA", slog.String("tablet", aliasString))
 	return true, topologyRecovery, nil
->>>>>>> 190209c09e (vtorc: change `StaleTopoPrimary` recovery to be best-effort (#19502))
 }
 
 // forceDemotePrimary calls the DemotePrimary RPC for the given tablet.
