@@ -28,7 +28,7 @@ const TransactionActions: React.FC<TransactionActionsProps> = ({ refetchTransact
                 loadingText="Concluding"
                 mutation={concludeTransactionMutation}
                 successText="Concluded transaction"
-                errorText={`Error occured while concluding the transaction (ID: ${dtid})`}
+                errorText={`Error occurred while concluding the transaction (ID: ${dtid})`}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Conclude Transaction'}
                 refetchTransactions={refetchTransactions}

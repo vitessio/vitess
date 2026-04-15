@@ -338,7 +338,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 loadingText="Starting"
                 mutation={startWorkflowMutation}
                 successText="Started workflow"
-                errorText={`Error occured while starting workflow ${name}`}
+                errorText={`Error occurred while starting workflow ${name}`}
                 errorDescription={startWorkflowMutation.error ? startWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Start Workflow'}
@@ -362,7 +362,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 loadingText="Stopping"
                 mutation={stopWorkflowMutation}
                 successText="Stopped workflow"
-                errorText={`Error occured while stopping workflow ${name}`}
+                errorText={`Error occurred while stopping workflow ${name}`}
                 errorDescription={stopWorkflowMutation.error ? stopWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Stop Workflow'}
@@ -388,7 +388,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={switchTrafficMutation}
                 description={`Switch traffic for the ${name} workflow.`}
                 successText="Switched Traffic"
-                errorText={`Error occured while switching traffic for workflow ${name}`}
+                errorText={`Error occurred while switching traffic for workflow ${name}`}
                 errorDescription={switchTrafficMutation.error ? switchTrafficMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Switch Traffic'}
@@ -410,7 +410,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={reverseTrafficMutation}
                 description={`Reverse traffic for the ${name} workflow.`}
                 successText="Reversed Traffic"
-                errorText={`Error occured while reversing traffic for workflow ${name}`}
+                errorText={`Error occurred while reversing traffic for workflow ${name}`}
                 errorDescription={reverseTrafficMutation.error ? reverseTrafficMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Reverse Traffic'}
@@ -432,7 +432,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 loadingText="Cancelling"
                 mutation={cancelWorkflowMutation}
                 successText="Cancel Workflow"
-                errorText={`Error occured while cancelling workflow ${name}`}
+                errorText={`Error occurred while cancelling workflow ${name}`}
                 errorDescription={cancelWorkflowMutation.error ? cancelWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Cancel Workflow'}
@@ -494,7 +494,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 loadingText="Completing"
                 hideSuccessDialog={true}
                 mutation={completeMoveTablesMutation}
-                errorText={`Error occured while completing workflow ${name}`}
+                errorText={`Error occurred while completing workflow ${name}`}
                 errorDescription={completeMoveTablesMutation.error ? completeMoveTablesMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Complete Workflow'}
