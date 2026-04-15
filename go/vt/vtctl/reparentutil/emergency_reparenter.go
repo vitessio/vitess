@@ -670,8 +670,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		}
 
 		replicaMutex.Lock()
-		defer replicaMutex.Unlock()
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
+		replicaMutex.Unlock()
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		// We do this only when we do not want to wait for all the replicas.
