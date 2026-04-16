@@ -606,7 +606,7 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 	if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
 		Keyspace:         req.TableKeyspace,
 		Workflow:         req.Name,
-		KeepData:         true,
+		KeepData:         new(true),
 		KeepRoutingRules: true,
 	}); derr != nil {
 		return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
@@ -716,8 +716,8 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 			if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
 				Keyspace:         req.TableKeyspace,
 				Workflow:         req.Name,
-				KeepData:         true, // Not relevant
-				KeepRoutingRules: true, // Not relevant
+				KeepData:         new(true), // Not relevant
+				KeepRoutingRules: true,      // Not relevant
 			}); derr != nil {
 				return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
 			}
@@ -1462,6 +1462,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesComplete")
 	defer span.Finish()
 
+	keepData, warnings := resolveWorkflowKeepData(req.GetWorkflow(), req.KeepData)
 	opts := []WorkflowActionOption{}
 	if req.IgnoreSourceKeyspace {
 		opts = append(opts, IgnoreSourceKeyspace())
@@ -1490,13 +1491,14 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	var dryRunResults *[]string
 
 	if state.WorkflowType == TypeMigrate {
-		dryRunResults, err = s.finalizeMigrateWorkflow(ctx, ts, strings.Join(ts.tables, ","), false, req.KeepData, req.KeepRoutingRules, req.DryRun)
+		dryRunResults, err = s.finalizeMigrateWorkflow(ctx, ts, strings.Join(ts.tables, ","), false, keepData, req.KeepRoutingRules, req.DryRun)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to finalize the %s workflow in the %s keyspace",
 				req.Workflow, req.TargetKeyspace)
 		}
 		resp := &vtctldatapb.MoveTablesCompleteResponse{
-			Summary: summary,
+			Summary:  summary,
+			Warnings: warnings,
 		}
 		if dryRunResults != nil {
 			resp.DryRunResults = *dryRunResults
@@ -1514,12 +1516,13 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	} else {
 		renameTable = DropTable
 	}
-	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun, opts...); err != nil {
+	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, keepData, req.KeepRoutingRules, false, req.DryRun, opts...); err != nil {
 		return nil, err
 	}
 
 	resp := &vtctldatapb.MoveTablesCompleteResponse{
-		Summary: summary,
+		Summary:  summary,
+		Warnings: warnings,
 	}
 	if dryRunResults != nil {
 		resp.DryRunResults = *dryRunResults
@@ -1589,9 +1592,10 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
-	span.Annotate("keep_data", req.KeepData)
 	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
 	span.Annotate("shards", req.Shards)
+	keepData, warnings := resolveWorkflowKeepData(req.GetWorkflow(), req.KeepData)
+	span.Annotate("keep_data", keepData)
 
 	opts := []WorkflowActionOption{}
 	if req.IgnoreSourceKeyspace {
@@ -1623,7 +1627,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	defer workflowUnlock(&err)
 
 	if state.WorkflowType == TypeMigrate {
-		_, err := s.finalizeMigrateWorkflow(ctx, ts, "", true, req.GetKeepData(), req.GetKeepRoutingRules(), false)
+		_, err := s.finalizeMigrateWorkflow(ctx, ts, "", true, keepData, req.GetKeepRoutingRules(), false)
 		return nil, err
 	}
 
@@ -1654,7 +1658,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 				ts.workflowType)
 		}
 		// We need to delete the rows that the target tables would have for the tenant.
-		if !req.GetKeepData() {
+		if !keepData {
 			if err := s.deleteTenantData(ctx, ts, req.DeleteBatchSize); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to fully delete all migrated data for tenant %s, please retry the operation",
 					ts.options.TenantId)
@@ -1664,7 +1668,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false, opts...); err != nil {
+		if _, err := s.dropTargets(ctx, ts, keepData, req.GetKeepRoutingRules(), false, opts...); err != nil {
 			if topo.IsErrType(err, topo.NoNode) {
 				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
 			}
@@ -1683,6 +1687,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
 	response.Summary = fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace", req.Workflow, req.Keyspace)
+	response.Warnings = warnings
 	details := make([]*vtctldatapb.WorkflowDeleteResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowDeleteResponse_TabletInfo{

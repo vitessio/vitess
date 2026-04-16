@@ -305,7 +305,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				TargetKeyspace:   targetKeyspaceName,
 				Workflow:         workflowName,
 				KeepRoutingRules: true,
-				KeepData:         true,
+				KeepData:         new(true),
 			},
 			expectedSourceQueries: []*queryResult{
 				{
@@ -823,7 +823,7 @@ func TestWorkflowDelete(t *testing.T) {
 			req: &vtctldatapb.WorkflowDeleteRequest{
 				Keyspace: targetKeyspaceName,
 				Workflow: workflowName,
-				KeepData: true,
+				KeepData: new(true),
 			},
 			expectedSourceQueries: []*queryResult{
 				{

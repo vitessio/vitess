@@ -617,6 +617,19 @@ func ReverseWorkflowName(workflow string) string {
 	return workflow + reverseSuffix
 }
 
+func resolveWorkflowKeepData(workflow string, keepData *bool) (bool, []string) {
+	if keepData != nil {
+		return *keepData, nil
+	}
+	if !strings.HasSuffix(workflow, reverseSuffix) {
+		return false, nil
+	}
+
+	return true, []string{
+		fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflow),
+	}
+}
+
 // Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
