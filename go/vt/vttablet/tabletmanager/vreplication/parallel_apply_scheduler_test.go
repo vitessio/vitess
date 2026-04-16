@@ -364,6 +364,31 @@ func TestApplySchedulerAdvanceCommittedSequenceDoesNotBypassInflightMetaParent(t
 	requireReadyTxn(t, s, metaChild)
 }
 
+func TestApplySchedulerMergedSequencesUnblockCommitParentChild(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	batchedParent := &applyTxn{order: 1, writeset: []uint64{1}, mergedSequences: []int64{10}}
+	metaChild := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true}
+
+	require.NoError(t, s.enqueue(batchedParent))
+	require.NoError(t, s.enqueue(metaChild))
+
+	gotParent, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, batchedParent, gotParent)
+
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(gotParent))
+
+	s.mu.Lock()
+	require.Equal(t, int64(10), s.lastCommittedSequence)
+	s.mu.Unlock()
+
+	requireReadyTxn(t, s, metaChild)
+}
+
 func TestApplySchedulerWaitForIdleReturnsWhenIdle(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)

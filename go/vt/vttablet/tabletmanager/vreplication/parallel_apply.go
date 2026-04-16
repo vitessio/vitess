@@ -1769,13 +1769,23 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Apply events on the current active connection. This runs
 		// concurrently with the commitLoop committing the previous
 		// transaction on the other connection (double-buffering).
+		activeApplyClient := worker.client
+		stopInterrupt := context.AfterFunc(ctx, func() {
+			if activeApplyClient != nil {
+				activeApplyClient.Close()
+			}
+		})
 		vp.serialMu.Lock()
 		workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
 		workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
 		vp.serialMu.Unlock()
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
+				stopInterrupt()
 				worker.rollback()
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				return err
 			}
 		}
@@ -1784,9 +1794,14 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// all workers execute their batches concurrently here, while the
 		// commitLoop only needs to do a cheap COMMIT + position update.
 		if err := worker.flushWorkerBatch(); err != nil {
+			stopInterrupt()
 			worker.rollback()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
+		stopInterrupt()
 
 		// Wait for the previous transaction's commit to complete. Because
 		// we waited AFTER applying the current transaction, the apply and

@@ -1008,6 +1008,98 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 	require.ErrorContains(t, err, workerApplyErr.Error())
 }
 
+type blockingBatchDBClient struct {
+	recordingDBClient
+	blockMulti chan struct{}
+	entered    chan struct{}
+}
+
+func (b *blockingBatchDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	b.queries = append(b.queries, query)
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+	<-b.blockMulti
+	return []*sqltypes.Result{{}}, nil
+}
+
+func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.batchMode = true
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {
+			TargetName:       "t1",
+			IdentityColumns:  []string{"id"},
+			Insert:           sqlparser.BuildParsedQuery("insert into t1 values (:a_id)"),
+			Fields:           []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+			PKIndices:        []bool{true},
+			PKReferences:     []string{"id"},
+			Stats:            vp.vr.stats,
+			TablePlanBuilder: &tablePlanBuilder{},
+			WorkflowConfig:   vp.vr.workflowConfig,
+		},
+	}}
+	vp.tablePlans["t1"] = vp.replicatorPlan.TablePlans["t1"]
+	vp.tablePlansVersion.Store(1)
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 1)
+	blockingClient := &blockingBatchDBClient{
+		blockMulti: make(chan struct{}),
+		entered:    make(chan struct{}, 1),
+	}
+	workerClient := newVDBClient(blockingClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	workerClient.maxBatchSize = 1024
+	worker := &applyWorker{
+		ctx:       ctx,
+		conns:     [2]*vdbClient{workerClient, workerClient},
+		client:    workerClient,
+		batchMode: true,
+	}
+	worker.bindFunctions()
+
+	txn := acquireApplyTxn()
+	t.Cleanup(func() {
+		close(blockingClient.blockMulti)
+	})
+	txn.order = 1
+	txn.payload = &applyTxnPayload{events: []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+			}},
+		},
+	}}}
+	require.NoError(t, scheduler.enqueue(txn))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+	}()
+
+	select {
+	case <-blockingClient.entered:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for blocking batch flush")
+	}
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("workerLoop remained stuck after cancellation while batch flush was blocked")
+	}
+}
+
 func TestApplyEventsParallelCancelledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
 
