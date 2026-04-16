@@ -17,9 +17,11 @@ limitations under the License.
 package sync2
 
 import (
-	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -49,9 +51,7 @@ func TestAddWaiterCount(t *testing.T) {
 	wgAdd.Wait()
 	wgSub.Wait()
 
-	if *pr.AddWaiterCounter(0) != 0 {
-		t.Fatalf("Expect 0 totalWaiterCount but got: %v", *pr.AddWaiterCounter(0))
-	}
+	require.Equal(t, int64(0), *pr.AddWaiterCounter(0), "expected 0 totalWaiterCount")
 }
 
 func TestConsolidator(t *testing.T) {
@@ -59,23 +59,15 @@ func TestConsolidator(t *testing.T) {
 	sql := "select * from SomeTable"
 
 	want := []ConsolidatorCacheItem{}
-	if !reflect.DeepEqual(con.Items(), want) {
-		t.Fatalf("expected consolidator to have no items")
-	}
+	require.Equal(t, want, con.Items(), "expected consolidator to have no items")
 
 	orig, added := con.Create(sql)
-	if !added {
-		t.Fatalf("expected consolidator to register a new entry")
-	}
+	require.True(t, added, "expected consolidator to register a new entry")
 
-	if !reflect.DeepEqual(con.Items(), want) {
-		t.Fatalf("expected consolidator to still have no items")
-	}
+	require.Equal(t, want, con.Items(), "expected consolidator to still have no items")
 
 	dup, added := con.Create(sql)
-	if added {
-		t.Fatalf("did not expect consolidator to register a new entry")
-	}
+	require.False(t, added, "did not expect consolidator to register a new entry")
 
 	result := &sqltypes.Result{}
 	go func() {
@@ -84,24 +76,16 @@ func TestConsolidator(t *testing.T) {
 	}()
 	dup.Wait()
 
-	if orig.Result() != result {
-		t.Errorf("failed to pass result")
-	}
-	if orig.Result() != dup.Result() {
-		t.Fatalf("failed to share the result")
-	}
+	assert.Equal(t, result, orig.Result(), "failed to pass result")
+	require.Equal(t, orig.Result(), dup.Result(), "failed to share the result")
 
 	want = []ConsolidatorCacheItem{{Query: sql, Count: 1}}
-	if !reflect.DeepEqual(con.Items(), want) {
-		t.Fatalf("expected consolidator to have one items %v", con.Items())
-	}
+	require.Equal(t, want, con.Items(), "expected consolidator to have one item")
 
 	// Running the query again should add a new entry since the original
 	// query execution completed
 	second, added := con.Create(sql)
-	if !added {
-		t.Fatalf("expected consolidator to register a new entry")
-	}
+	require.True(t, added, "expected consolidator to register a new entry")
 
 	go func() {
 		second.SetResult(result)
@@ -110,7 +94,5 @@ func TestConsolidator(t *testing.T) {
 	dup.Wait()
 
 	want = []ConsolidatorCacheItem{{Query: sql, Count: 2}}
-	if !reflect.DeepEqual(con.Items(), want) {
-		t.Fatalf("expected consolidator to have two items %v", con.Items())
-	}
+	require.Equal(t, want, con.Items(), "expected consolidator to have two items")
 }
