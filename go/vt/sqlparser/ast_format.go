@@ -59,9 +59,9 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.SelectExprs)
 
 	if len(node.From) == 0 {
-		buf.WriteLiteral(" from dual")
+		buf.literal(" from dual")
 	} else {
-		buf.WriteLiteral(" from ")
+		buf.literal(" from ")
 		prefix := ""
 		for _, expr := range node.From {
 			buf.astPrintf(node, "%s%v", prefix, expr)
