@@ -5542,6 +5542,42 @@
     "plan": "column 'y' not found"
   },
   {
+    "comment": "Subquery can reference parent alias even when parent has FROM clause",
+    "query": "SELECT id AS foobar, (SELECT foobar) FROM user WHERE id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id AS foobar, (SELECT foobar) FROM user WHERE id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id as foobar, (select foobar from dual where 1 != 1) from `user` where 1 != 1",
+        "Query": "select id as foobar, (select foobar from dual) from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Same-scope alias reference in SELECT without FROM should fail",
+    "query": "SELECT 1 AS x, x",
+    "plan": "column 'x' not found"
+  },
+  {
+    "comment": "Same-scope alias reference in WHERE without FROM should fail",
+    "query": "SELECT 1 AS x WHERE x = 1",
+    "plan": "column 'x' not found"
+  },
+  {
     "comment": "duplicate uncorrelated subqueries each get their own pullout",
     "query": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
     "plan": {

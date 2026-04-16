@@ -299,6 +299,16 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		if !thisDeps.empty() {
 			return thisDeps.get(colName)
 		}
+		// For parent scopes only (not the original scope), check if a
+		// SELECT alias satisfies the column reference. Table columns from
+		// resolveColumnInScope above take precedence over aliases.
+		// Same-scope alias references (e.g. SELECT 1 AS x, x) are not
+		// valid in MySQL, so this is gated on !first.
+		if !first && colName.Qualifier.IsEmpty() {
+			if sel, ok := current.stmt.(*sqlparser.Select); ok && hasMatchingAlias(sel, colName.Name.String()) {
+				return dependency{}, nil
+			}
+		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
 			first &&
@@ -459,14 +469,6 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
 		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
-	}
-	// For virtual dual scopes (SELECT with no FROM clause), check if the
-	// column matches a SELECT alias. This allows subqueries like (SELECT x)
-	// to reference aliases from an outer SELECT without a FROM clause.
-	if deps.empty() && len(current.tables) == 0 && expr.Qualifier.IsEmpty() {
-		if sel, ok := current.stmt.(*sqlparser.Select); ok && len(sel.From) == 0 && hasMatchingAlias(sel, expr.Name.String()) {
-			return createUncertain(EmptyTableSet(), EmptyTableSet()), nil
-		}
 	}
 	return deps, nil
 }
