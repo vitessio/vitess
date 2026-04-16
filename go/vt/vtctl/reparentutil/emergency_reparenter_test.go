@@ -1100,7 +1100,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:            "-",
 			cells:            []string{"zone1"},
 			shouldErr:        true,
-			errShouldContain: "primary elect zone1-0000000200 has errant GTIDs",
+			errShouldContain: "primary elect zone1-0000000200 is not a valid candidate",
 		},
 		{
 			name:       "requested primary-elect is not winning primary-elect",

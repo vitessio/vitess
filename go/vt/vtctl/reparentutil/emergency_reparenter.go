@@ -524,7 +524,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
 		if !ok {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v is not a valid candidate (may have errant GTIDs or non-GTID replication)", requestedPrimaryAlias)
 		}
 		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
 		// otherwise, we should let it catchup to the most advanced tablet and not change the intermediate source
@@ -657,6 +657,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		defer replWg.Done()
 		erp.logger.Infof("setting new primary on replica %v", alias)
 
+		// Non-GTID tablets are absent from statusMap (their replication was
+		// intentionally left running), so forceStart stays false for them.
 		forceStart := false
 		if status, ok := statusMap[alias]; ok {
 			fs, err := ReplicaWasRunning(status)
@@ -675,9 +677,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		// and tracked in nonGTIDTablets. We still point them at the new primary,
 		// but we must not enable semi-sync on them — doing so would recreate the
 		// unsupported mixed topology (semi-sync + non-GTID) under the new primary.
-		// We use the explicit nonGTIDTablets set rather than candidateInfoMap
-		// membership, because the demoted primary is also absent from
-		// candidateInfoMap (it takes the DemotePrimary path) but is GTID-based.
+		// We check nonGTIDTablets first because it tracks replicas whose
+		// replication was left running; candidateInfoMap is the fallback for
+		// tablets that went through FindPositionsOfAllCandidates but were
+		// identified as non-GTID there.
 		isNonGTID := nonGTIDTablets.Has(alias)
 		if !isNonGTID {
 			if candidateInfo, ok := candidateInfoMap[alias]; ok && !candidateInfo.IsGTIDBased {

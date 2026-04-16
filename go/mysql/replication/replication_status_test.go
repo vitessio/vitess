@@ -333,3 +333,73 @@ func TestFilePosShouldGetPosition(t *testing.T) {
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
 }
+
+func TestIsSemiSyncAcker(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   ReplicationStatus
+		expected bool
+	}{
+		{
+			name: "IO healthy, both enabled and status true",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateRunning,
+				SemiSyncReplicaEnabled: true,
+				SemiSyncReplicaStatus:  true,
+			},
+			expected: true,
+		},
+		{
+			name: "IO healthy, enabled but status false",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateRunning,
+				SemiSyncReplicaEnabled: true,
+				SemiSyncReplicaStatus:  false,
+			},
+			expected: false,
+		},
+		{
+			name: "IO healthy, not enabled",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateRunning,
+				SemiSyncReplicaEnabled: false,
+				SemiSyncReplicaStatus:  false,
+			},
+			expected: false,
+		},
+		{
+			name: "IO stopped, enabled (fallback to SemiSyncReplicaEnabled)",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateStopped,
+				SemiSyncReplicaEnabled: true,
+				SemiSyncReplicaStatus:  false,
+			},
+			expected: true,
+		},
+		{
+			name: "IO stopped, not enabled",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateStopped,
+				SemiSyncReplicaEnabled: false,
+				SemiSyncReplicaStatus:  false,
+			},
+			expected: false,
+		},
+		{
+			name: "IO connecting with error, enabled (fallback)",
+			status: ReplicationStatus{
+				IOState:                ReplicationStateConnecting,
+				LastIOError:            "connection refused",
+				SemiSyncReplicaEnabled: true,
+				SemiSyncReplicaStatus:  false,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.IsSemiSyncAcker())
+		})
+	}
+}

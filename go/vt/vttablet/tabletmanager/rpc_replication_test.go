@@ -24,9 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -36,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -718,4 +721,72 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+// TestStopReplicationAndGetStatus_GTIDFlavorDetection verifies that
+// StopReplicationAndGetStatus returns After=nil (without stopping replication)
+// for non-MySQL-GTID replicas, and returns both Before and After for MySQL GTID replicas.
+func TestStopReplicationAndGetStatus_GTIDFlavorDetection(t *testing.T) {
+	tests := []struct {
+		name             string
+		relayLogPosition replication.Position
+		position         replication.Position
+		expectAfterNil   bool
+	}{
+		{
+			name:             "MySQL56 GTID relay log position returns After",
+			relayLogPosition: replication.MustParsePosition("MySQL56", "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"),
+			expectAfterNil:   false,
+		},
+		{
+			name:             "file-based relay log position returns After=nil",
+			relayLogPosition: replication.MustParsePosition("FilePos", "mysql-bin.0001:10"),
+			expectAfterNil:   true,
+		},
+		{
+			name:           "MariaDB executed position returns After=nil",
+			position:       replication.MustParsePosition("MariaDB", "0-1-100"),
+			expectAfterNil: true,
+		},
+		{
+			name:           "MySQL56 executed position (no relay log) returns After",
+			position:       replication.MustParsePosition("MySQL56", "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"),
+			expectAfterNil: false,
+		},
+		{
+			name:           "empty positions (fresh replica) returns After",
+			expectAfterNil: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			fakeMysqlDaemon.Replicating = true
+			fakeMysqlDaemon.IOThreadRunning = true
+			fakeMysqlDaemon.CurrentRelayLogPosition = tc.relayLogPosition
+			fakeMysqlDaemon.CurrentPrimaryPosition = tc.position
+
+			if !tc.expectAfterNil {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+					"STOP REPLICA IO_THREAD",
+				}
+			}
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOTHREADONLY)
+			require.NoError(t, err)
+
+			require.NotNil(t, resp.Status)
+			require.NotNil(t, resp.Status.Before)
+
+			if tc.expectAfterNil {
+				assert.Nil(t, resp.Status.After)
+			} else {
+				assert.NotNil(t, resp.Status.After)
+			}
+
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
 }

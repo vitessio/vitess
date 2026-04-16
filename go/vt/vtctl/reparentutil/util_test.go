@@ -1771,6 +1771,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 		tabletMap        map[string]*topo.TabletInfo
 		candidateInfoMap map[string]*CandidateInfo
 		result           map[string]*RelayLogPositions
+		err              string
 	}{
 		{
 			name: "remove invalid tablets",
@@ -1931,13 +1932,81 @@ func TestRestrictValidCandidates(t *testing.T) {
 				"zone1-0000000101": {},
 			},
 		},
+		{
+			name: "error: all non-GTID candidates",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: false},
+				"zone1-0000000101": {IsGTIDBased: false},
+			},
+			err: "shards without MySQL GTID-based candidates are unsupported",
+		},
+		{
+			name: "error: non-GTID semi-sync replica in GTID shard",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: true},
+				"zone1-0000000101": {IsGTIDBased: false, IsSemiSyncReplica: true},
+			},
+			err: "does not report MySQL GTID-based positions and has semi-sync enabled",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, test.candidateInfoMap, logger)
-			assert.NoError(t, err)
+			if test.err != "" {
+				require.ErrorContains(t, err, test.err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})
 	}

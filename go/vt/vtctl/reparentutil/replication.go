@@ -104,8 +104,11 @@ func FindPositionsOfAllCandidates(
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
+		if statuspb.Before == nil {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "tablet %s has nil Before status in statusMap", alias)
+		}
 		if statuspb.After == nil {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "tablet %v has nil After status in statusMap; this should have been filtered by stopReplicationAndBuildStatusMaps", alias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "tablet %s has nil After status in statusMap; this should have been filtered by stopReplicationAndBuildStatusMaps", alias)
 		}
 		beforeStatus := replication.ProtoToReplicationStatus(statuspb.Before)
 		afterStatus := replication.ProtoToReplicationStatus(statuspb.After)
@@ -126,6 +129,11 @@ func FindPositionsOfAllCandidates(
 			IsSemiSyncReplica: beforeStatus.IsSemiSyncAcker(),
 		}
 		if _, ok := beforeStatus.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			candidateInfoMap[alias].IsGTIDBased = true
+			isGTIDBasedShard = true
+		} else if _, ok := beforeStatus.Position.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			// Fallback: relay log position may be empty on freshly initialized
+			// replicas, but the executed position can still indicate GTID flavor.
 			candidateInfoMap[alias].IsGTIDBased = true
 			isGTIDBasedShard = true
 		}

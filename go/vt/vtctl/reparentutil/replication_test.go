@@ -236,7 +236,7 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			shouldErr:                true,
 		},
 		{
-			name: "unsupported replica with file positons in GTID-based shard and semi-sync",
+			name: "unsupported replica with file positions in GTID-based shard and semi-sync",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					Before: &replicationdatapb.Status{

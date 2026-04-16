@@ -97,8 +97,14 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 	return s.SQLState == ReplicationStateRunning
 }
 
-// IsSemiSyncAcker returns true on tablets that are actively semi-sync replicas.
+// IsSemiSyncAcker returns true on tablets that are semi-sync replicas.
+// When the IO thread is stopped (e.g. primary is down), SemiSyncReplicaStatus
+// goes false even though the replica is still configured as a semi-sync acker.
+// In that case we fall back to SemiSyncReplicaEnabled alone.
 func (s *ReplicationStatus) IsSemiSyncAcker() bool {
+	if !s.IOHealthy() {
+		return s.SemiSyncReplicaEnabled
+	}
 	return s.SemiSyncReplicaEnabled && s.SemiSyncReplicaStatus
 }
 
