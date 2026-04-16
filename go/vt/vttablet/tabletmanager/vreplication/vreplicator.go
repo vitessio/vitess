@@ -90,7 +90,8 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	SqlMaxAllowedPacket = "select @@session.max_allowed_packet as max_allowed_packet"
+	SqlMaxAllowedPacket  = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -501,6 +502,23 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 	}
 	insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message)
 	return nil
+}
+
+func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
+	maxQuerySize := int64(vr.workflowConfig.RelayLogMaxSize)
+	res, err := dbc.DBClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+	} else {
+		if maxQuerySize, err = res.Rows[0][0].ToInt64(); err != nil {
+			log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+			maxQuerySize = int64(vr.workflowConfig.RelayLogMaxSize)
+		}
+	}
+	if maxQuerySize > maxQuerySizeHeadroom {
+		maxQuerySize -= maxQuerySizeHeadroom
+	}
+	return maxQuerySize
 }
 
 func (vr *vreplicator) insertLog(typ, message string) {

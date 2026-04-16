@@ -5878,15 +5878,13 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 //   - zone1-0000000104: nil position with a lower reparent journal length (exercises the lagged-candidate loop)
 func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	u1 := "00000000-0000-0000-0000-000000000001"
-	erp := &EmergencyReparenter{
-		tmc: &testutil.TabletManagerClient{
-			ReadReparentJournalInfoResults: map[string]int32{
-				"zone1-0000000102": 2,
-				"zone1-0000000103": 2,
-				"zone1-0000000104": 1,
-			},
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000102": 2,
+			"zone1-0000000103": 2,
+			"zone1-0000000104": 1,
 		},
-	}
+	}, nil)
 	tabletMap := map[string]*topo.TabletInfo{
 		"zone1-0000000102": {
 			Tablet: &topodatapb.Tablet{

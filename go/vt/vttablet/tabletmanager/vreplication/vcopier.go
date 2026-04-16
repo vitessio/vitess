@@ -137,6 +137,7 @@ type vcopierCopyWorker struct {
 	closeDbClient   bool
 	copyStateInsert *sqlparser.ParsedQuery
 	isOpen          bool
+	maxQuerySize    int64
 	pkfields        []*querypb.Field
 	sqlbuffer       bytes2.Buffer
 	tablePlan       *TablePlan
@@ -207,9 +208,11 @@ func newVCopierCopyWorkQueue(
 func newVCopierCopyWorker(
 	closeDbClient bool,
 	vdbClient *vdbClient,
+	maxQuerySize int64,
 ) *vcopierCopyWorker {
 	return &vcopierCopyWorker{
 		closeDbClient: closeDbClient,
+		maxQuerySize:  maxQuerySize,
 		vdbClient:     vdbClient,
 	}
 }
@@ -406,7 +409,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	defer copyStateGCTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
-	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
+	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
 	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.close()
 
@@ -717,16 +721,21 @@ func (vc *vcopier) newCopyWorkQueue(
 	return newVCopierCopyWorkQueue(concurrent, parallelism, workerFactory)
 }
 
-func (vc *vcopier) newCopyWorkerFactory(parallelism int) func(context.Context) (*vcopierCopyWorker, error) {
+func (vc *vcopier) newCopyWorkerFactory(parallelism int, maxQuerySize int64) func(context.Context) (*vcopierCopyWorker, error) {
 	if parallelism > 1 {
 		return func(ctx context.Context) (*vcopierCopyWorker, error) {
 			dbClient, err := vc.vr.newClientConnection(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
 			}
+			// Query maxQuerySize from the worker's own connection since it may
+			// differ from the controller's session if @@global.max_allowed_packet
+			// was changed after the controller connection was opened.
+			workerMaxQuerySize := vc.vr.maxQuerySize(dbClient)
 			return newVCopierCopyWorker(
 				true, /* close db client */
 				dbClient,
+				workerMaxQuerySize,
 			), nil
 		}
 	}
@@ -734,6 +743,7 @@ func (vc *vcopier) newCopyWorkerFactory(parallelism int) func(context.Context) (
 		return newVCopierCopyWorker(
 			false, /* close db client */
 			vc.vr.dbClient,
+			maxQuerySize,
 		), nil
 	}
 }
@@ -1161,6 +1171,7 @@ func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Ro
 		func(sql string) (*sqltypes.Result, error) {
 			return vbc.ExecuteWithRetry(ctx, sql)
 		},
+		vbc.maxQuerySize,
 	)
 }
 
