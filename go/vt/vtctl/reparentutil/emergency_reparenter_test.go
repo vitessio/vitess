@@ -3194,6 +3194,11 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		err                  string
 	}{
 		{
+			name:            "no valid candidates",
+			validCandidates: map[string]*RelayLogPositions{},
+			tabletMap:       map[string]*topo.TabletInfo{},
+			err:             "no valid candidates for emergency reparent",
+		}, {
 			name: "choose most advanced",
 			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionMostAdvanced,
