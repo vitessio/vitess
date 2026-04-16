@@ -281,6 +281,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		if err != nil {
 			return err
 		}
+		if len(validCandidates) == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+		}
 	}
 
 	// Find the intermediate source for replication that we want other tablets to replicate from.
