@@ -42,17 +42,23 @@ type binder struct {
 	// that this map is joined with using USING.
 	// This information is used to expand `*` correctly, and is not available post-analysis
 	usingJoinInfo map[TableSet]map[string]TableSet
+
+	// availableAliases tracks which AliasedExpr nodes have been fully
+	// walked. This is used to reject forward references to aliases in
+	// subqueries, matching MySQL's behavior.
+	availableAliases map[*sqlparser.AliasedExpr]struct{}
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		recursive:     map[sqlparser.Expr]TableSet{},
-		direct:        map[sqlparser.Expr]TableSet{},
-		scoper:        scoper,
-		org:           org,
-		tc:            tc,
-		typer:         typer,
-		usingJoinInfo: map[TableSet]map[string]TableSet{},
+		recursive:        map[sqlparser.Expr]TableSet{},
+		direct:           map[sqlparser.Expr]TableSet{},
+		scoper:           scoper,
+		org:              org,
+		tc:               tc,
+		typer:            typer,
+		usingJoinInfo:    map[TableSet]map[string]TableSet{},
+		availableAliases: map[*sqlparser.AliasedExpr]struct{}{},
 	}
 }
 
@@ -74,6 +80,11 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		return b.bindUpdateExpr(node)
 	case *sqlparser.OverClause:
 		return b.bindOverClause(node)
+	case *sqlparser.AliasedExpr:
+		if node.As.NotEmpty() {
+			b.availableAliases[node] = struct{}{}
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -299,6 +310,25 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		if !thisDeps.empty() {
 			return thisDeps.get(colName)
 		}
+		// For parent scopes only (not the original scope), check if a
+		// SELECT alias satisfies the column reference. Table columns from
+		// resolveColumnInScope above take precedence over aliases.
+		// Same-scope alias references (e.g. SELECT 1 AS x, x) are not
+		// valid in MySQL, so this is gated on !first.
+		if !first && colName.Qualifier.IsEmpty() {
+			if sel, ok := current.stmt.(*sqlparser.Select); ok {
+				if ae := b.findMatchingAlias(sel, colName.Name.String()); ae != nil {
+					// Use the dependencies of the aliased expression so the
+					// reference is correctly tracked as correlated.
+					// We use .dependencies() instead of direct map lookup
+					// to handle compound expressions (e.g. user_id+1 AS foobar).
+					recursive := b.recursive.dependencies(ae.Expr)
+					direct := b.direct.dependencies(ae.Expr)
+					typ := b.typer.exprType(ae.Expr)
+					return dependency{certain: true, recursive: recursive, direct: direct, typ: typ}, nil
+				}
+			}
+		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
 			first &&
@@ -461,6 +491,24 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
 	}
 	return deps, nil
+}
+
+func (b *binder) findMatchingAlias(sel *sqlparser.Select, name string) *sqlparser.AliasedExpr {
+	lowered := strings.ToLower(name)
+	for _, selExpr := range sel.SelectExprs.Exprs {
+		ae, ok := selExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		if ae.As.Lowered() != lowered {
+			continue
+		}
+		if _, available := b.availableAliases[ae]; !available {
+			return nil
+		}
+		return ae
+	}
+	return nil
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
