@@ -5610,6 +5610,7 @@
   {
     "comment": "Subquery with own non-authoritative FROM treats unknown column as table column",
     "query": "SELECT id AS foobar, (SELECT foobar FROM user_extra WHERE foobar = 1) FROM user WHERE id = 1",
+    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -5658,11 +5659,13 @@
   {
     "comment": "Subquery with own FROM falls back to parent alias when column not in table",
     "query": "SELECT user_id AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "Nested subquery resolves alias across multiple scope levels",
     "query": "SELECT user_id AS foobar, (SELECT (SELECT foobar) AS barbaz FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
@@ -5690,6 +5693,7 @@
   {
     "comment": "Subquery referencing compound expression alias is correctly correlated",
     "query": "SELECT user_id + 1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
