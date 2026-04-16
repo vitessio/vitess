@@ -171,8 +171,8 @@ function get_started() {
     waitForKeyspaceToBeServing commerce - 1
     sleep 5
 
-    applySchemaWithRetry create_commerce_schema.sql commerce drop_all_commerce_tables.sql
-    vtctldclient ApplyVSchema --vschema-file="vschema_commerce_initial.json" commerce
+    applySchemaWithRetry ../common/create_commerce_schema.sql commerce drop_all_commerce_tables.sql
+    vtctldclient ApplyVSchema --vschema-file="../common/vschema_commerce_initial.json" commerce
     if [ $? -ne 0 ]; then
       echo "ApplySchema failed for initial commerce"
       printMysqlErrorFiles
@@ -377,23 +377,23 @@ function move_tables() {
 
 function resharding() {
   echo "Create new schemas for new shards"
-  applySchemaWithRetry create_commerce_seq.sql commerce
+  applySchemaWithRetry ../common/create_commerce_seq.sql commerce
   sleep 4
-  vtctldclient ApplyVSchema --vschema-file="vschema_commerce_seq.json" commerce
+  vtctldclient ApplyVSchema --vschema-file="../common/vschema_commerce_seq.json" commerce
   if [ $? -ne 0 ]; then
     echo "ApplyVschema commerce_seq during resharding failed"
     printMysqlErrorFiles
     exit 1
   fi
   sleep 4
-  vtctldclient ApplyVSchema --vschema-file="vschema_customer_sharded.json" customer
+  vtctldclient ApplyVSchema --vschema-file="../common/vschema_customer_sharded.json" customer
   if [ $? -ne 0 ]; then
     echo "ApplyVschema customer_sharded during resharding failed"
     printMysqlErrorFiles
     exit 1
   fi
   sleep 4
-  applySchemaWithRetry create_customer_sharded.sql customer
+  applySchemaWithRetry ../common/create_customer_sharded.sql customer
   sleep 4
 
   echo "Apply 302_new_shards.yaml"
