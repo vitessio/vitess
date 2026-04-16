@@ -53,10 +53,10 @@ type FakePendingResult struct {
 	WaitCalls int
 	// AddWaiterCounterCalls can be used to inspect AddWaiterCounter calls.
 	AddWaiterCounterCalls []int64
-	// WaiterCount simulates the current waiter count
 	WaiterCount int64
-	err         error
-	result      *sqltypes.Result
+	PerResultWaiterCount int64
+	err                  error
+	result               *sqltypes.Result
 }
 
 var (
@@ -118,7 +118,7 @@ func (fr *FakePendingResult) Wait() {
 }
 
 func (fr *FakePendingResult) HasWaiters() bool {
-	return fr.WaiterCount > 0
+	return fr.PerResultWaiterCount > 0
 }
 
 // AddWaiterCounter records the call and simulates waiter count changes.
