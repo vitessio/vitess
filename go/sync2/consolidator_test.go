@@ -66,11 +66,10 @@ func TestHasWaiters(t *testing.T) {
 		t.Fatalf("expected no waiters for a fresh entry")
 	}
 
-	dup, created := con.Create(sql)
+	_, created = con.Create(sql)
 	if created {
 		t.Fatalf("did not expect consolidator to register a new entry")
 	}
-	_ = dup
 	if !orig.HasWaiters() {
 		t.Fatalf("expected waiters after a duplicate Create")
 	}
