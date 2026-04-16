@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -828,6 +829,64 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 	mockDB.Wait()
 }
 
+func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFails(t *testing.T) {
+	vp, mockDB := testVPlayer(t)
+	ctx := testCtx(t)
+
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	vp.vr.workflowConfig.StoreCompressedGTID = false
+
+	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.sql_mode", &sqltypes.Result{})
+	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
+	mockDB.AddInvariant("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1", sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables))
+	mockDB.AddInvariant("select @@session.sql_mode as sql_mode", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("sql_mode", "varchar"),
+		"STRICT_TRANS_TABLES",
+	))
+	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	))
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
+	mockDB.ExpectRequestRE("update _vt\\.vreplication set pos=", &sqltypes.Result{}, nil)
+	mockDB.AddInvariant("rollback", &sqltypes.Result{})
+	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		return vp.dbClient.Execute(sql)
+	}
+	vp.commit = vp.dbClient.Commit
+
+	if vp.vr.vre == nil {
+		vp.vr.vre = &Engine{}
+	}
+	if vp.vr.vre.throttlerClient == nil {
+		vp.vr.vre.throttlerClient = throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope)
+	}
+	if vp.vr.vre.dbClientFactoryFiltered == nil {
+		vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return mockDB }
+	}
+
+	stopPos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	vp.stopPos = stopPos
+
+	relay := newRelayLog(ctx, 10, 100)
+	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: replication.EncodePosition(stopPos)}
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 100}
+	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
+	require.NoError(t, relay.Send([]*binlogdatapb.VEvent{validGTID, commitEvent, invalidGTID}))
+
+	err = vp.applyEventsParallel(ctx, relay)
+	require.NoError(t, err)
+	mockDB.Wait()
+}
+
 func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFails(t *testing.T) {
 	vp, mockDB := testVPlayer(t)
 	ctx := testCtx(t)
@@ -1012,6 +1071,7 @@ type blockingBatchDBClient struct {
 	recordingDBClient
 	blockMulti chan struct{}
 	entered    chan struct{}
+	closed     chan struct{}
 }
 
 func (b *blockingBatchDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
@@ -1020,8 +1080,20 @@ func (b *blockingBatchDBClient) ExecuteFetchMulti(query string, maxrows int) ([]
 	case b.entered <- struct{}{}:
 	default:
 	}
-	<-b.blockMulti
+	select {
+	case <-b.blockMulti:
+	case <-b.closed:
+		return nil, context.Canceled
+	}
 	return []*sqltypes.Result{{}}, nil
+}
+
+func (b *blockingBatchDBClient) Close() {
+	select {
+	case <-b.closed:
+	default:
+		close(b.closed)
+	}
 }
 
 func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
@@ -1052,6 +1124,7 @@ func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
 	blockingClient := &blockingBatchDBClient{
 		blockMulti: make(chan struct{}),
 		entered:    make(chan struct{}, 1),
+		closed:     make(chan struct{}),
 	}
 	workerClient := newVDBClient(blockingClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 	workerClient.maxBatchSize = 1024
@@ -1179,6 +1252,67 @@ func TestScheduleItems_GTIDAndROWAndCOMMIT(t *testing.T) {
 	assert.Len(t, got.payload.events, 1) // ROW event only
 	assert.Equal(t, binlogdatapb.VEventType_ROW, got.payload.events[0].Type)
 	assert.True(t, got.payload.rowOnly)
+}
+
+func TestScheduleItemsBackpressuresOutstandingOrderedTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+	scheduler.maxOutstandingOrders = 3
+	state := &parallelScheduleState{
+		lastFlushTime:        time.Now(),
+		lastHeartbeatRefresh: time.Now(),
+		maxBatchedCommits:    1,
+	}
+
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName: "t1",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	vp.tablePlansVersion.Store(1)
+
+	batch := make([]*binlogdatapb.VEvent, 0, 12)
+	for i := 1; i <= 4; i++ {
+		gtid := fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", i)
+		value := strconv.Itoa(i)
+		batch = append(batch,
+			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: gtid},
+			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+				TableName: "t1",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{Values: []byte(value), Lengths: []int64{int64(len(value))}},
+				}},
+			}, Timestamp: int64(100 + i)},
+			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT},
+		)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{batch})
+	}()
+
+	assert.Eventually(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return int64(scheduler.pendingCount) >= scheduler.maxOutstandingOrders
+	}, 200*time.Millisecond, 5*time.Millisecond)
+
+	assert.Never(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return int64(scheduler.pendingCount) > scheduler.maxOutstandingOrders
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	assert.Never(t, func() bool {
+		return len(errCh) > 0
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
 func TestScheduleLoopCanceledContext(t *testing.T) {

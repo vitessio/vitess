@@ -416,6 +416,7 @@ func TestVCopierCopyAllForwardsWorkflowOverridesToSourceVStreamTables(t *testing
 	streamer := &capturingVStreamerClient{vstreamTablesErr: errors.New("stream tables failed")}
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
+	mockDB.ExpectRequest(SqlMaxAllowedPacket, sqltypes.MakeTestResult(sqltypes.MakeTestFields("max_allowed_packet", "int64"), "67108864"), nil)
 	config, err := vttablet.NewVReplicationConfig(map[string]string{
 		"vreplication-net-read-timeout":             "123",
 		"vreplication-parallel-replication-workers": "4",
@@ -442,6 +443,7 @@ func TestVCopierCopyTableForwardsWorkflowOverridesToSourceVStreamRows(t *testing
 	streamer := &capturingVStreamerClient{vstreamRowsErr: errors.New("stream rows failed")}
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.ExpectRequest("SELECT rows_copied FROM _vt.vreplication WHERE id=1", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"), nil)
+	mockDB.ExpectRequest(SqlMaxAllowedPacket, sqltypes.MakeTestResult(sqltypes.MakeTestFields("max_allowed_packet", "int64"), "67108864"), nil)
 	config, err := vttablet.NewVReplicationConfig(map[string]string{
 		"vreplication-net-read-timeout":             "123",
 		"vreplication-parallel-replication-workers": "4",

@@ -489,6 +489,68 @@ func TestApplySchedulerNextReadyWaitsForBlockedPendingAfterClose(t *testing.T) {
 	require.ErrorIs(t, err, io.EOF)
 }
 
+func TestApplySchedulerEnqueueBlocksWhenOutstandingOrdersReachCap(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := newApplyScheduler(ctx)
+	s.maxOutstandingOrders = 2
+
+	require.NoError(t, s.enqueue(&applyTxn{order: 1, noConflict: true}))
+	require.NoError(t, s.enqueue(&applyTxn{order: 2, noConflict: true}))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.enqueue(&applyTxn{order: 3, noConflict: true})
+	}()
+
+	assert.Never(t, func() bool {
+		return len(errCh) > 0
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	s.mu.Lock()
+	s.lastCommittedOrder = 1
+	s.cond.Broadcast()
+	s.mu.Unlock()
+
+	assert.Eventually(t, func() bool {
+		return len(errCh) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+	require.NoError(t, <-errCh)
+
+	s.mu.Lock()
+	require.Equal(t, 3, s.pendingCount)
+	s.mu.Unlock()
+}
+
+func TestApplySchedulerLaterNoConflictBypassesBlockedEarlierTxn(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	blocker := &applyTxn{order: 1, writeset: []uint64{100}}
+	require.NoError(t, s.enqueue(blocker))
+
+	gotBlocker, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, blocker, gotBlocker)
+
+	blocked := &applyTxn{order: 2, writeset: []uint64{100}}
+	stopTxn1 := &applyTxn{order: 3, noConflict: true}
+	require.NoError(t, s.enqueue(blocked))
+	require.NoError(t, s.enqueue(stopTxn1))
+
+	requireReadyTxn(t, s, stopTxn1)
+
+	// The first bypass leaves a nil gap in pending. A second noConflict txn
+	// must still be discoverable while the earlier normal txn remains blocked.
+	stopTxn2 := &applyTxn{order: 4, noConflict: true}
+	require.NoError(t, s.enqueue(stopTxn2))
+	requireReadyTxn(t, s, stopTxn2)
+
+	require.NoError(t, s.markCommitted(gotBlocker))
+	requireReadyTxn(t, s, blocked)
+}
+
 func TestApplySchedulerPendingCompaction(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)

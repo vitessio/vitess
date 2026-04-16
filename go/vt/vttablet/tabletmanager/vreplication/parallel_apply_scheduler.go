@@ -92,6 +92,9 @@ type applyScheduler struct {
 	// lastCommittedOrder is the highest transaction order number that
 	// has been committed, used for diagnostics.
 	lastCommittedOrder int64
+	// maxOutstandingOrders caps how many ordered transactions may exist ahead
+	// of durable commit progress. Zero disables the cap.
+	maxOutstandingOrders int64
 
 	// inflightWriteset maps writeset key hashes to reference counts.
 	// A transaction is blocked if any of its writeset keys are present
@@ -145,6 +148,15 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	}
 	if s.closed {
 		return io.EOF
+	}
+	for s.maxOutstandingOrders > 0 && txn.order > 0 && txn.order-s.lastCommittedOrder > s.maxOutstandingOrders {
+		s.cond.Wait()
+		if err := s.ctx.Err(); err != nil {
+			return err
+		}
+		if s.closed {
+			return io.EOF
+		}
 	}
 	if txn.hasCommitMeta && s.lastCommittedSequence == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && s.pendingCount == 0 && txn.commitParent > 0 {
 		s.lastCommittedSequence = txn.commitParent
@@ -238,13 +250,18 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	return nil
 }
 
-// popReadyLocked scans the pending queue for the first ready transaction.
-// It skips noConflict transactions (always ready) but stops at the first
-// non-ready non-noConflict transaction to prevent head-of-line deadlocks
-// with the commitLoop's strict ordering.
+// popReadyLocked scans the pending queue for the first dispatchable transaction.
+// Once it encounters a blocked ordered transaction, it continues scanning only
+// for later noConflict transactions. This preserves the deadlock protection for
+// normal ordered work while still allowing position-only and OTHER/IGNORE stop
+// transactions to bypass the blocked head and reach the commitLoop.
 func (s *applyScheduler) popReadyLocked() *applyTxn {
+	blockedOrdered := false
 	for i := s.pendingOff; i < len(s.pending); i++ {
 		txn := s.pending[i]
+		if txn == nil {
+			continue
+		}
 		if txn.noConflict {
 			// noConflict transactions are always ready and don't affect
 			// inflight counters, so we can safely skip past them when
@@ -255,17 +272,21 @@ func (s *applyScheduler) popReadyLocked() *applyTxn {
 			}
 			continue
 		}
+		if blockedOrdered {
+			continue
+		}
 		if s.isReadyLocked(txn) {
 			s.removePendingLocked(i)
 			return txn
 		}
-		// A non-noConflict transaction is not ready. We must NOT skip past it
-		// to dispatch a later-order transaction, because doing so could create
-		// a deadlock: the later transaction's inflight state may prevent this
+		// A non-noConflict transaction is not ready. We must NOT skip past it to
+		// dispatch a later ordered transaction, because doing so could create a
+		// deadlock: the later transaction's inflight state may prevent this
 		// earlier transaction from ever becoming ready, while the commitLoop
-		// (which requires strict ordering) waits for this earlier transaction
-		// to be committed before it can commit the later one.
-		return nil
+		// (which requires strict ordering) waits for this earlier transaction to
+		// be committed before it can commit the later one. Keep scanning only so
+		// later noConflict transactions can bypass this blocked ordered head.
+		blockedOrdered = true
 	}
 	return nil
 }

@@ -739,6 +739,10 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	// Buffer 4x worker count to decouple worker throughput from commit
 	// latency. Workers block when commitCh is full, stalling the pipeline.
 	commitCh := make(chan *applyTxn, workerCount*4)
+	// Cap total ordered work in the parallel pipeline to approximately one
+	// applying transaction per worker plus the commit buffer. This provides
+	// end-to-end backpressure when commitLoop is stalled on an early order.
+	scheduler.maxOutstandingOrders = int64(workerCount + cap(commitCh))
 	applyErr := make(chan error, 2)
 	commitLoopErr := make(chan error, 1)
 	workerErr := make(chan error, workerCount)
