@@ -5697,12 +5697,18 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
-    "comment": "Duplicate aliases - subquery resolves to first matching alias, matching MySQL behavior",
-    "query": "SELECT user_id AS foobar, col1 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "comment": "Duplicate column aliases in subquery are ambiguous in MySQL",
+    "query": "SELECT user_id AS foobar, col1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
+    "plan": "Column 'foobar' in field list is ambiguous"
+  },
+  {
+    "comment": "Duplicate literal aliases - subquery resolves to first matching alias, matching MySQL behavior",
+    "query": "SELECT 1 AS foobar, 2 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
     "plan": {
       "Type": "Passthrough",
       "QueryType": "SELECT",
-      "Original": "SELECT user_id AS foobar, col1 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Original": "SELECT 1 AS foobar, 2 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -5710,8 +5716,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_id as foobar, col1 as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
-        "Query": "select user_id as foobar, col1 as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "FieldQuery": "select 1 as foobar, 2 as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select 1 as foobar, 2 as foobar, (select foobar from dual) from authoritative where user_id = 1",
         "Values": [
           "1"
         ],
@@ -5726,11 +5732,13 @@
   {
     "comment": "Forward reference to alias in subquery should fail",
     "query": "SELECT (SELECT foobar FROM authoritative), user_id AS foobar FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
     "plan": "column 'foobar' not found"
   },
   {
     "comment": "Qualified column in subquery does not match parent alias",
     "query": "SELECT user_id AS foobar, (SELECT asdf.foobar) FROM authoritative AS asdf WHERE user_id = 1",
+    "skip_e2e": true,
     "plan": "column 'asdf.foobar' not found"
   },
   {

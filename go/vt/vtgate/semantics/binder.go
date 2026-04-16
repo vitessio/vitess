@@ -317,7 +317,11 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		// valid in MySQL, so this is gated on !first.
 		if !first && colName.Qualifier.IsEmpty() {
 			if sel, ok := current.stmt.(*sqlparser.Select); ok {
-				if ae := b.findMatchingAlias(sel, colName.Name.Lowered()); ae != nil {
+				ae, err := b.findMatchingAlias(sel, colName.Name.Lowered())
+				if err != nil {
+					return dependency{}, err
+				}
+				if ae != nil {
 					// Use the dependencies of the aliased expression so the
 					// reference is correctly tracked as correlated.
 					// We use .dependencies() instead of direct map lookup
@@ -493,7 +497,8 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	return deps, nil
 }
 
-func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) *sqlparser.AliasedExpr {
+func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlparser.AliasedExpr, error) {
+	var match *sqlparser.AliasedExpr
 	for _, selExpr := range sel.SelectExprs.Exprs {
 		ae, ok := selExpr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -503,11 +508,22 @@ func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) *sqlpa
 			continue
 		}
 		if _, available := b.availableAliases[ae]; !available {
-			return nil
+			return nil, nil
 		}
-		return ae
+		if match == nil {
+			match = ae
+			continue
+		}
+		// MySQL only reports ambiguity when two different bare column
+		// references share the same alias. Literals and expressions
+		// are allowed to duplicate.
+		_, matchIsCol := match.Expr.(*sqlparser.ColName)
+		_, thisIsCol := ae.Expr.(*sqlparser.ColName)
+		if matchIsCol && thisIsCol {
+			return nil, newAmbiguousColumnError(sqlparser.NewColName(lowered))
+		}
 	}
-	return nil
+	return match, nil
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
