@@ -391,7 +391,6 @@ func (vs *vstream) stream(ctx context.Context) error {
 		maxStreamAgeExceeded = make(chan struct{})
 
 		go func() {
-			defer close(maxStreamAgeExceeded)
 			ageTimer := time.NewTimer(maxAge + jitter)
 			defer ageTimer.Stop()
 
@@ -405,6 +404,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 				vs.once.Do(func() {
 					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
 				})
+				vs.cancel()
+				close(maxStreamAgeExceeded)
 			case <-ctx.Done():
 			}
 		}()
