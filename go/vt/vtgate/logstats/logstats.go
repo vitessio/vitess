@@ -51,6 +51,7 @@ type LogStats struct {
 	CommitTime              time.Duration
 	Error                   error
 	TablesUsed              []string
+	RoutingIndexesUsed      [][3]string        // [keyspace, vindex_name, table] — vindexes used for shard routing
 	SessionUUID             string
 	CachedPlan              bool
 	ActiveKeyspace          string // ActiveKeyspace is the selected keyspace `use ks`

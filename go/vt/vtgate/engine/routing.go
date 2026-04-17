@@ -125,6 +125,10 @@ type RoutingParameters struct {
 
 	// Values specifies the vindex values to use for routing.
 	Values []evalengine.Expr
+
+	// RoutingTable is the name of the table whose vindex is used for routing.
+	// Used for Insights telemetry reporting.
+	RoutingTable string
 }
 
 func (code Opcode) IsSingleShard() bool {

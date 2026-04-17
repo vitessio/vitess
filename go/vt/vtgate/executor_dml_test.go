@@ -3284,3 +3284,73 @@ func TestConsistentLookupInsert(t *testing.T) {
 		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10)", 0)
 	})
 }
+
+func TestRoutingIndexesUsed(t *testing.T) {
+	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	wantUser := [][3]string{{"TestExecutor", "hash_index", "user"}}
+
+	// SELECT routed by primary vindex
+	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
+	require.NoError(t, err)
+	ls := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "SELECT routing indexes")
+
+	sbc1.Queries = nil
+
+	// UPDATE routed by primary vindex
+	_, err = executorExec(ctx, executor, session, "update user set a = 2 where id = 1", nil)
+	require.NoError(t, err)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "UPDATE routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// DELETE routed by primary vindex
+	// Use user_extra which has no owned vindexes, avoiding extra VindexDelete log entries.
+	wantUserExtra := [][3]string{{"TestExecutor", "hash_index", "user_extra"}}
+	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
+	require.NoError(t, err)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from user_extra where user_id = 1", 1)
+	assert.Equal(t, wantUserExtra, ls.RoutingIndexesUsed, "DELETE routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// INSERT routed by primary vindex
+	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	require.NoError(t, err)
+	// INSERT generates SavePoint + VindexCreate log entries before the main INSERT
+	for {
+		ls = getQueryLog(logChan)
+		require.NotNil(t, ls)
+		if ls.Method == "TestExecute" && ls.StmtType == "INSERT" {
+			break
+		}
+	}
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// INSERT ... SELECT routed by primary vindex
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
+	session2 := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	_, err = executorExecSession(ctx, executor, session2, "insert into user(id, v, name) select 1, 2, 'myname' from dual", nil)
+	require.NoError(t, err)
+	for {
+		ls = getQueryLog(logChan)
+		require.NotNil(t, ls)
+		if ls.Method == "TestExecute" && ls.StmtType == "INSERT" {
+			break
+		}
+	}
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT SELECT routing indexes")
+}

@@ -45,6 +45,9 @@ type ShardedRouting struct {
 
 	keyspace *vindexes.Keyspace
 
+	// tableName is the name of the primary table being routed, used for Insights vindex tracking
+	tableName string
+
 	RouteOpCode engine.Opcode
 
 	// SeenPredicates contains all the predicates that have had a chance to influence routing.
@@ -58,6 +61,7 @@ func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTa
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
+		tableName:   vtable.Name.String(),
 	}
 
 	if vtable.Pinned != nil {
@@ -166,6 +170,7 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 
 func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = tr.keyspace
+	rp.RoutingTable = tr.tableName
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
 		rp.Values = tr.Selected.Values
@@ -186,6 +191,7 @@ func (tr *ShardedRouting) Clone() Routing {
 		}),
 		Selected:       selected,
 		keyspace:       tr.keyspace,
+		tableName:      tr.tableName,
 		RouteOpCode:    tr.RouteOpCode,
 		SeenPredicates: slices.Clone(tr.SeenPredicates),
 	}
