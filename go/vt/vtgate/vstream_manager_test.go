@@ -2036,6 +2036,57 @@ func TestVStreamMaxStreamAge(t *testing.T) {
 	}
 }
 
+func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+
+	fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	flags := &vtgatepb.VStreamFlags{
+		MaxStreamAgeSeconds: 1,
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(30 * time.Second):
+				return nil
+			}
+		})
+	}()
+
+	select {
+	case err := <-done:
+		t.Logf("VStream returned error: %v (code: %v)", err, vterrors.Code(err))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "vstream exceeded maximum age")
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	case <-time.After(10 * time.Second):
+		t.Fatal("VStream did not terminate within 10s despite max age of 1s; blocked send prevented max-age preemption")
+	}
+}
+
 func TestKeyspaceHasBeenSharded(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

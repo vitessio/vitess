@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"regexp"
 	"strings"
@@ -159,9 +160,6 @@ type vstream struct {
 	// At what point, without any activity in the stream, should we consider it dead.
 	streamLivenessTimer *time.Timer
 
-	streamAgeTimer  *time.Timer
-	streamAgeJitter time.Duration
-
 	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous, chunked delivery.
 	// Smaller transactions are sent without locking for better parallelism.
 	transactionChunkSizeBytes int
@@ -221,8 +219,20 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	log.Info(fmt.Sprintf("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v, max_stream_age_seconds=%v", flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
-		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize, flags.GetMaxStreamAgeSeconds()))
+	log.Info("VStream flags",
+		slog.Bool("minimize_skew", flags.GetMinimizeSkew()),
+		slog.Uint64("heartbeat_interval", uint64(flags.GetHeartbeatInterval())),
+		slog.Bool("stop_on_reshard", flags.GetStopOnReshard()),
+		slog.String("cells", flags.Cells),
+		slog.String("cell_preference", flags.CellPreference),
+		slog.String("tablet_order", flags.TabletOrder),
+		slog.Bool("stream_keyspace_heartbeats", flags.GetStreamKeyspaceHeartbeats()),
+		slog.Bool("include_reshard_journal_events", flags.GetIncludeReshardJournalEvents()),
+		slog.Any("tables_to_copy", flags.TablesToCopy),
+		slog.Bool("exclude_keyspace_from_table_name", flags.GetExcludeKeyspaceFromTableName()),
+		slog.Int64("transaction_chunk_size", flags.TransactionChunkSize),
+		slog.Uint64("max_stream_age_seconds", uint64(flags.GetMaxStreamAgeSeconds())),
+	)
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -373,12 +383,31 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
-	if vs.streamAgeTimer == nil && vs.flags.GetMaxStreamAgeSeconds() > 0 {
+	var maxStreamAgeExceeded chan struct{}
+	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
 		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
 		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
-		vs.streamAgeJitter = time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
-		vs.streamAgeTimer = time.NewTimer(maxAge + vs.streamAgeJitter)
-		defer vs.streamAgeTimer.Stop()
+		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+		maxStreamAgeExceeded = make(chan struct{})
+
+		go func() {
+			defer close(maxStreamAgeExceeded)
+			ageTimer := time.NewTimer(maxAge + jitter)
+			defer ageTimer.Stop()
+
+			select {
+			case <-ageTimer.C:
+				log.Info("vstream exceeded maximum age",
+					slog.Duration("max_age", maxAge),
+					slog.Duration("jitter", jitter),
+				)
+				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
+				vs.once.Do(func() {
+					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
+				})
+			case <-ctx.Done():
+			}
+		}()
 	}
 
 	vs.wg.Go(func() {
@@ -396,7 +425,20 @@ func (vs *vstream) stream(ctx context.Context) error {
 	for _, sgtid := range copylist {
 		vs.startOneStream(ctx, sgtid)
 	}
-	vs.wg.Wait()
+
+	if maxStreamAgeExceeded != nil {
+		streamingCompleted := make(chan struct{})
+		go func() {
+			vs.wg.Wait()
+			close(streamingCompleted)
+		}()
+		select {
+		case <-streamingCompleted:
+		case <-maxStreamAgeExceeded:
+		}
+	} else {
+		vs.wg.Wait()
+	}
 
 	return vs.getError()
 }
@@ -415,11 +457,6 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 		heartbeat = timer.C
 		resetHeartbeat = func() { timer.Reset(d) }
-	}
-
-	var streamAgeExpired <-chan time.Time
-	if vs.streamAgeTimer != nil {
-		streamAgeExpired = vs.streamAgeTimer.C
 	}
 
 	send := func(evs []*binlogdatapb.VEvent) error {
@@ -469,14 +506,6 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			log.Info("Error in vstream: " + msg)
 			vs.once.Do(func() {
 				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream is fully throttled or otherwise hung")
-			})
-			return
-		case <-streamAgeExpired:
-			maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
-			msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, vs.streamAgeJitter)
-			log.Info(msg)
-			vs.once.Do(func() {
-				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
 			})
 			return
 		}
