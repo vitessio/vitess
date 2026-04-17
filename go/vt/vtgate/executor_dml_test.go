@@ -3294,7 +3294,7 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	wantUser := [][3]string{{"TestExecutor", "hash_index", "user"}}
+	wantUser := [][2]string{{"TestExecutor", "hash_index"}}
 
 	// SELECT routed by primary vindex
 	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
@@ -3315,11 +3315,10 @@ func TestRoutingIndexesUsed(t *testing.T) {
 
 	// DELETE routed by primary vindex
 	// Use user_extra which has no owned vindexes, avoiding extra VindexDelete log entries.
-	wantUserExtra := [][3]string{{"TestExecutor", "hash_index", "user_extra"}}
 	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
 	require.NoError(t, err)
 	ls = testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from user_extra where user_id = 1", 1)
-	assert.Equal(t, wantUserExtra, ls.RoutingIndexesUsed, "DELETE routing indexes")
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "DELETE routing indexes")
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil

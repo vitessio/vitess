@@ -851,9 +851,9 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field RoutingIndexesUsed [][3]string
+	// field RoutingIndexesUsed [][2]string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.RoutingIndexesUsed)) * int64(48))
+		size += hack.RuntimeAllocSize(int64(cap(cached.RoutingIndexesUsed)) * int64(32))
 		for _, elem := range cached.RoutingIndexesUsed {
 			for _, elem := range elem {
 				size += hack.RuntimeAllocSize(int64(len(elem)))
@@ -1046,7 +1046,7 @@ func (cached *RoutingParameters) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(112)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -1086,8 +1086,6 @@ func (cached *RoutingParameters) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field RoutingTable string
-	size += hack.RuntimeAllocSize(int64(len(cached.RoutingTable)))
 	return size
 }
 
