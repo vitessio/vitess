@@ -1390,7 +1390,26 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 			requiresEmulation: false,
 		},
 		{
-			name:  "replace with cascading child foreign key",
+			name:  "replace with on-delete cascading child foreign key",
+			query: "replace into t1 (col) values (1)",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "replace with on-update cascading child foreign key does not require emulation",
 			query: "replace into t1 (col) values (1)",
 			fakeSi: &FakeSI{
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
@@ -1406,7 +1425,7 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 					},
 				},
 			},
-			requiresEmulation: true,
+			requiresEmulation: false,
 		},
 		{
 			name:  "insert on duplicate key update with cascading child foreign key on duplicate column",
@@ -1460,9 +1479,14 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 // actionForStmt returns the child foreign key action getter that matches the
 // semantics used by each DML statement's planbuilder.
 func actionForStmt(stmt sqlparser.Statement) func(vindexes.ChildFKInfo) sqlparser.ReferenceAction {
-	switch stmt.(type) {
+	switch s := stmt.(type) {
 	case *sqlparser.Delete:
 		return vindexes.DeleteAction
+	case *sqlparser.Insert:
+		if s.Action == sqlparser.ReplaceAct {
+			return vindexes.DeleteAction
+		}
+		return vindexes.UpdateAction
 	default:
 		return vindexes.UpdateAction
 	}
