@@ -293,54 +293,61 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 // We need to do this if:
 // * Any of the foreign keys (parent or child) are cross shard.
 // * Any of the foreign keys (parent or child) are cross keyspace.
-// * Any of the child foreign keys have an action other than RESTRICT or NO ACTION.
-func (st *SemTable) RequiresForeignKeyEmulation(updExprs sqlparser.UpdateExprs) bool {
+// * Any of the child foreign keys have an action (ON DELETE for DELETE/REPLACE,
+//   ON UPDATE for UPDATE) that is not treated as RESTRICT (see
+//   sqlparser.ReferenceAction.IsRestrict).
+//
+// getAction selects which child foreign key action to inspect and should match
+// the one passed to RemoveNonRequiredForeignKeys for the same statement.
+func (st *SemTable) RequiresForeignKeyEmulation(getAction func(fk vindexes.ChildFKInfo) sqlparser.ReferenceAction) bool {
 	if !st.ForeignKeysPresent() {
 		return false
 	}
 
-	for _, updateExpr := range updExprs {
-		deps := st.RecursiveDeps(updateExpr.Name)
-		if deps.NumberOfTables() != 1 {
-			// The column is ambiguous or unresolved (for example, it comes from
-			// a derived table whose projection spans multiple base tables).
-			// Conservatively require emulation so vtgate re-validates all
-			// involved foreign keys rather than pushing to MySQL.
+	for ts, parentFks := range st.parentForeignKeysInvolved {
+		if len(parentFks) == 0 {
+			continue
+		}
+		if ts.NumberOfTables() != 1 {
+			// Ambiguous or unresolved table for the involved foreign keys (for
+			// example, a derived table whose projection spans multiple base
+			// tables). Conservatively require emulation rather than pushing to
+			// MySQL.
 			return true
 		}
-		updatedTable := st.Tables[deps.TableOffset()].GetVindexTable()
-
-		parentFks := st.parentForeignKeysInvolved[deps]
+		updatedTable := st.Tables[ts.TableOffset()].GetVindexTable()
 		for _, parentFk := range parentFks {
-			parentTable := parentFk.Table
-
 			// Cross-keyspace foreign keys require verification.
-			if parentTable.Keyspace.Name != updatedTable.Keyspace.Name {
+			if parentFk.Table.Keyspace.Name != updatedTable.Keyspace.Name {
 				return true
 			}
-
 			// Non shard-scoped foreign keys require verification.
-			if !isShardScoped(parentTable, updatedTable, parentFk.ParentColumns, parentFk.ChildColumns) {
+			if !isShardScoped(parentFk.Table, updatedTable, parentFk.ParentColumns, parentFk.ChildColumns) {
 				return true
 			}
 		}
+	}
 
-		childFks := st.childForeignKeysInvolved[deps]
+	for ts, childFks := range st.childForeignKeysInvolved {
+		if len(childFks) == 0 {
+			continue
+		}
+		if ts.NumberOfTables() != 1 {
+			return true
+		}
+		updatedTable := st.Tables[ts.TableOffset()].GetVindexTable()
 		for _, childFk := range childFks {
-			childTable := childFk.Table
-
 			// Cross-keyspace foreign keys require verification.
-			if updatedTable.Keyspace.Name != childTable.Keyspace.Name {
+			if updatedTable.Keyspace.Name != childFk.Table.Keyspace.Name {
 				return true
 			}
-
 			// Non shard-scoped foreign keys require verification.
-			if !isShardScoped(updatedTable, childTable, childFk.ParentColumns, childFk.ChildColumns) {
+			if !isShardScoped(updatedTable, childFk.Table, childFk.ParentColumns, childFk.ChildColumns) {
 				return true
 			}
-
-			// If the action is other than RESTRICT / NO ACTION / DEFAULT, we need to verify.
-			if !childFk.OnUpdate.IsRestrict() {
+			// If the action is other than RESTRICT / NO ACTION / DEFAULT,
+			// we need to verify.
+			if !getAction(childFk).IsRestrict() {
 				return true
 			}
 		}
@@ -350,13 +357,8 @@ func (st *SemTable) RequiresForeignKeyEmulation(updExprs sqlparser.UpdateExprs) 
 }
 
 func (st *SemTable) ClearForeignKeys() {
-	for ts := range st.childForeignKeysInvolved {
-		delete(st.childForeignKeysInvolved, ts)
-	}
-
-	for ts := range st.parentForeignKeysInvolved {
-		delete(st.parentForeignKeysInvolved, ts)
-	}
+	clear(st.childForeignKeysInvolved)
+	clear(st.parentForeignKeysInvolved)
 }
 
 // RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.

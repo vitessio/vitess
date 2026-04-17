@@ -1184,6 +1184,250 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 			requiresEmulation: false,
 		},
 		{
+			name:  "child foreign key with set null action",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.SetNull, sqlparser.SetNull),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "child foreign key with set default action",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.SetDefault, sqlparser.SetDefault),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "multi-expression update where one column has a cascading child foreign key",
+			query: "update t1 set col = 1, col2 = 2 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+							ckInfo(t3Table, []string{"col2"}, []string{"col2"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "multi-target update where one target has a cascading child foreign key",
+			query: "update t1, t2 set t1.col = 1, t2.col = 2",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+					"t2": {
+						Name:     sqlparser.NewIdentifierCS("t2"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "delete with shard-scoped restrict child foreign key",
+			query: "delete from t1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "delete with cascading child foreign key",
+			query: "delete from t1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "delete with cross-keyspace child foreign key",
+			query: "delete from t1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name:      vschemapb.Keyspace_managed,
+					otherUnshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(&vindexes.BaseTable{
+								Keyspace: otherUnshardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+							}, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "insert with shard-scoped parent foreign key",
+			query: "insert into t1 (col) values (1)",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "insert with cross-keyspace parent foreign key",
+			query: "insert into t1 (col) values (1)",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name:      vschemapb.Keyspace_managed,
+					otherUnshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(&vindexes.BaseTable{
+								Keyspace: otherUnshardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+							}, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "replace with shard-scoped restrict child foreign key",
+			query: "replace into t1 (col) values (1)",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "replace with cascading child foreign key",
+			query: "replace into t1 (col) values (1)",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "insert on duplicate key update with cascading child foreign key on duplicate column",
+			query: "insert into t1 (col) values (1) on duplicate key update col = 2",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
 			name:  "no foreign keys",
 			query: "update t1 set col = 1 where foo = 3",
 			fakeSi: &FakeSI{
@@ -1207,9 +1451,20 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 			require.NoError(t, err)
 			semTable, err := Analyze(stmt, unshardedKeyspace.Name, tt.fakeSi)
 			require.NoError(t, err)
-			got := semTable.RequiresForeignKeyEmulation(stmt.(*sqlparser.Update).Exprs)
+			got := semTable.RequiresForeignKeyEmulation(actionForStmt(stmt))
 			require.EqualValues(t, tt.requiresEmulation, got)
 		})
+	}
+}
+
+// actionForStmt returns the child foreign key action getter that matches the
+// semantics used by each DML statement's planbuilder.
+func actionForStmt(stmt sqlparser.Statement) func(vindexes.ChildFKInfo) sqlparser.ReferenceAction {
+	switch stmt.(type) {
+	case *sqlparser.Delete:
+		return vindexes.DeleteAction
+	default:
+		return vindexes.UpdateAction
 	}
 }
 
@@ -1222,11 +1477,6 @@ func TestRequiresForeignKeyEmulationAmbiguousDeps(t *testing.T) {
 	t1 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t1"), Keyspace: ks}
 	t2 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t2"), Keyspace: ks}
 	t3 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t3"), Keyspace: ks}
-
-	colName := sqlparser.NewColName("col")
-	updateExprs := sqlparser.UpdateExprs{
-		&sqlparser.UpdateExpr{Name: colName, Expr: sqlparser.NewIntLiteral("1")},
-	}
 
 	tests := []struct {
 		name string
@@ -1249,14 +1499,13 @@ func TestRequiresForeignKeyEmulationAmbiguousDeps(t *testing.T) {
 					&RealTable{Table: t2},
 					&RealTable{Table: t3},
 				},
-				Recursive: ExprDependencies{colName: tt.deps},
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
-					SingleTableSet(0): {vindexes.ChildFKInfo{Table: t2}},
+					tt.deps: {vindexes.ChildFKInfo{Table: t2}},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			}
 			require.NotPanics(t, func() {
-				require.True(t, st.RequiresForeignKeyEmulation(updateExprs))
+				require.True(t, st.RequiresForeignKeyEmulation(vindexes.UpdateAction))
 			})
 		})
 	}

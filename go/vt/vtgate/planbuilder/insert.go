@@ -44,10 +44,14 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
-	// Remove all the foreign keys that don't require any handling.
-	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
-	if err != nil {
-		return nil, err
+	if !ctx.SemTable.RequiresForeignKeyEmulation(vindexes.UpdateAction) {
+		ctx.SemTable.ClearForeignKeys()
+	} else {
+		// Remove all the foreign keys that don't require any handling.
+		err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if ks != nil {
 		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
