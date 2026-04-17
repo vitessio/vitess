@@ -137,18 +137,40 @@ func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	onDup := fz.getInsertOnDuplicateClause(insertType, tableName)
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
+		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value), onDup)
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.IntN(1 + fz.maxValForCol)
 		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, cola, colb) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
+		return fmt.Sprintf("%s %vinto %v (id, cola, colb) values (%v, %v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue), onDup)
 	} else {
 		colValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, col) values (%v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue))
+		return fmt.Sprintf("%s %vinto %v (id, col) values (%v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), onDup)
 	}
+}
+
+// getInsertOnDuplicateClause randomly returns an ON DUPLICATE KEY UPDATE
+// clause with a leading space (or empty string) for the given table shape.
+// Only applies to INSERT (not REPLACE).
+func (fz *fuzzer) getInsertOnDuplicateClause(insertType, tableName string) string {
+	if insertType != "insert" || rand.IntN(2) == 0 {
+		return ""
+	}
+	if tableName == "fk_t20" {
+		colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		return fmt.Sprintf(" on duplicate key update col = %v, col2 = %v", colValue, col2Value)
+	}
+	if isMultiColFkTable(tableName) {
+		colaValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		colbValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		return fmt.Sprintf(" on duplicate key update cola = %v, colb = %v", colaValue, colbValue)
+	}
+	colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+	return fmt.Sprintf(" on duplicate key update col = %v", colValue)
 }
 
 // generateUpdateDMLQuery generates a UPDATE query from the parameters for the fuzzer.
@@ -409,35 +431,74 @@ func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
+	// Decide up-front whether this INSERT should carry an ON DUPLICATE KEY
+	// UPDATE clause. REPLACE does not support ON DUPLICATE.
+	useOnDup := insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)'", insertType),
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)%s'", insertType, onDupPreparedSuffix(useOnDup, "col = ?, col2 = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
-			"execute stmt_insert using @id, @col, @col2",
 		}
+		execArgs := "@id, @col, @col2"
+		if useOnDup {
+			newCol := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			newCol2 := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			queries = append(queries,
+				fmt.Sprintf("SET @new_col = %v", newCol),
+				fmt.Sprintf("SET @new_col2 = %v", newCol2),
+			)
+			execArgs += ", @new_col, @new_col2"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.IntN(1 + fz.maxValForCol)
 		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)'", insertType, tableName),
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)%s'", insertType, tableName, onDupPreparedSuffix(useOnDup, "cola = ?, colb = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
 			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
-			"execute stmt_insert using @id, @cola, @colb",
 		}
+		execArgs := "@id, @cola, @colb"
+		if useOnDup {
+			newCola := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			newColb := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			queries = append(queries,
+				fmt.Sprintf("SET @new_cola = %v", newCola),
+				fmt.Sprintf("SET @new_colb = %v", newColb),
+			)
+			execArgs += ", @new_cola, @new_colb"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	} else {
 		colValue := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)'", insertType, tableName),
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)%s'", insertType, tableName, onDupPreparedSuffix(useOnDup, "col = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
-			"execute stmt_insert using @id, @col",
 		}
+		execArgs := "@id, @col"
+		if useOnDup {
+			newCol := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			queries = append(queries, fmt.Sprintf("SET @new_col = %v", newCol))
+			execArgs += ", @new_col"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	}
+}
+
+// onDupPreparedSuffix returns the ON DUPLICATE KEY UPDATE clause (with a
+// leading space) to embed inside a `prepare stmt from '...'` string, or
+// empty string when not applicable.
+func onDupPreparedSuffix(useOnDup bool, assignments string) string {
+	if !useOnDup {
+		return ""
+	}
+	return " on duplicate key update " + assignments
 }
 
 // getPreparedUpdateQueries gets the list of queries to run for executing an UPDATE using prepared statements.
@@ -493,17 +554,42 @@ func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query str
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
+	useOnDup := insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
+		query = fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName)
+		params = []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
+		if useOnDup {
+			query += " on duplicate key update col = ?, col2 = ?"
+			params = append(params,
+				convertIntValueToString(rand.IntN(1+fz.maxValForCol)),
+				convertIntValueToString(rand.IntN(1+fz.maxValForCol)),
+			)
+		}
+		return query, params
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.IntN(1 + fz.maxValForCol)
 		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
+		query = fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName)
+		params = []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
+		if useOnDup {
+			query += " on duplicate key update cola = ?, colb = ?"
+			params = append(params,
+				convertIntValueToString(rand.IntN(1+fz.maxValForCol)),
+				convertIntValueToString(rand.IntN(1+fz.maxValForCol)),
+			)
+		}
+		return query, params
 	} else {
 		colValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue)}
+		query = fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName)
+		params = []any{idValue, convertIntValueToString(colValue)}
+		if useOnDup {
+			query += " on duplicate key update col = ?"
+			params = append(params, convertIntValueToString(rand.IntN(1+fz.maxValForCol)))
+		}
+		return query, params
 	}
 }
 
