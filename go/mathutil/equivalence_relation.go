@@ -26,7 +26,7 @@ type UnknownElementError struct {
 }
 
 func (e *UnknownElementError) Error() string {
-	return fmt.Sprintf("unknown element %s", e.element)
+	return "unknown element " + e.element
 }
 
 type UnknownClassError struct {

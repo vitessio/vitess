@@ -20,7 +20,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -32,6 +31,9 @@ import java.util.Comparator;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * ConnectionProperties manages configuration properties for Vitess JDBC connections.
+ */
 public class ConnectionProperties {
 
   private static final ArrayList<java.lang.reflect.Field> PROPERTY_LIST = new ArrayList<>();

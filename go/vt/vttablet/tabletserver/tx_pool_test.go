@@ -41,8 +41,7 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -77,8 +76,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -98,8 +96,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -118,8 +115,7 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -148,8 +144,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -162,8 +157,7 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -192,8 +186,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 // db connection. DBConn.Exec() is going to reconnect and retry automatically
 // due to this connection error and the BEGIN will succeed.
 func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool := primeTxPoolWithConnection(t, ctx)
 	defer db.Close()
@@ -233,8 +226,7 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 }
 
 func TestTxPoolBeginWithError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, limiter, closer := setup(t)
 	defer closer()
@@ -288,8 +280,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 }
 
 func TestTxPoolWaitTimeoutError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -316,8 +307,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 }
 
 func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sql := "alter table test_table add test_column int"
 	db, txPool, _, closer := setup(t)
@@ -339,8 +329,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 }
 
 func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
@@ -410,8 +399,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -458,8 +446,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -490,8 +477,7 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -527,8 +513,7 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 2
@@ -569,8 +554,7 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 }
 
 func TestTxTimeoutReservedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -611,8 +595,7 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 }
 
 func TestTxTimeoutReusedReservedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -766,8 +749,7 @@ func TestTxPoolBeginStatements(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%v:%v:readOnly:%v", tc.txIsolationLevel, tc.txAccessModes, tc.readOnly), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			options := &querypb.ExecuteOptions{
 				TransactionIsolation:  tc.txIsolationLevel,
@@ -785,6 +767,37 @@ func TestTxPoolBeginStatements(t *testing.T) {
 			require.Equal(t, tc.expBeginSQL, beginSQL)
 		})
 	}
+}
+
+func TestGetTransactionTimeout(t *testing.T) {
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	txPool.env.Config().Oltp.TxTimeout = 5 * time.Millisecond
+
+	// No options should use workload timeout
+	timeout := getTransactionTimeout(nil, txPool.env.Config(), querypb.ExecuteOptions_OLTP)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with no timeout should use workload timeout
+	options := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with larger timeout should use smaller workload timeout
+	options.TransactionTimeout = new(int64(10)) // ms
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with smaller timeout should use smaller session timeout
+	options.TransactionTimeout = new(int64(3)) // ms
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 3*time.Millisecond, timeout)
+
+	// Options with explicit zero timeout should use larger workload timeout
+	options.TransactionTimeout = new(int64(0))
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
 }
 
 func newTxPool() (*TxPool, *fakeLimiter) {

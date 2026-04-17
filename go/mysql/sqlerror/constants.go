@@ -84,11 +84,12 @@ const (
 	ERKeyDoesNotExist       = ErrorCode(1176)
 
 	// permissions
-	ERDBAccessDenied            = ErrorCode(1044)
-	ERAccessDeniedError         = ErrorCode(1045)
-	ERKillDenied                = ErrorCode(1095)
-	ERNoPermissionToCreateUsers = ErrorCode(1211)
-	ERSpecifiedAccessDenied     = ErrorCode(1227)
+	ERDBAccessDenied               = ErrorCode(1044)
+	ERAccessDeniedError            = ErrorCode(1045)
+	ERKillDenied                   = ErrorCode(1095)
+	ERNoPermissionToCreateUsers    = ErrorCode(1211)
+	ERSpecifiedAccessDenied        = ErrorCode(1227)
+	ERBinlogCreateRoutineNeedSuper = ErrorCode(1419)
 
 	// failed precondition
 	ERNoDb                          = ErrorCode(1046)
@@ -104,6 +105,7 @@ const (
 	ERDupUnique                     = ErrorCode(1169)
 	ERRequiresPrimaryKey            = ErrorCode(1173)
 	ERCantDoThisDuringAnTransaction = ErrorCode(1179)
+	ERMasterInfo                    = ErrorCode(1201)
 	ERReadOnlyTransaction           = ErrorCode(1207)
 	ERCannotAddForeign              = ErrorCode(1215)
 	ERNoReferencedRow               = ErrorCode(1216)
@@ -124,9 +126,20 @@ const (
 	ErSPNotVarArg                   = ErrorCode(1414)
 	ERRowIsReferenced2              = ErrorCode(1451)
 	ErNoReferencedRow2              = ErrorCode(1452)
+	ERSourceHasPurgedRequiredGtids  = ErrorCode(1789)
 	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
-	ERInnodbReadOnly                = ErrorCode(1874)
+
+	// MySQL used 1871/1872 for master-info and relay-log-info initialization
+	// errors through 8.0.32, and reassigned those numbers in 8.0.33 to
+	// connection-metadata and applier-metadata initialization errors. These
+	// errnos therefore map to different metadata types depending on version.
+	ERReplicaMasterInfoInitRepository         = ErrorCode(1871)
+	ERReplicaRelayLogInfoInitRepository       = ErrorCode(1872)
+	ERReplicaConnectionMetadataInitRepository = ErrorCode(1871)
+	ERReplicaApplierMetadataInitRepository    = ErrorCode(1872)
+
+	ERInnodbReadOnly = ErrorCode(1874)
 
 	ERVectorConversion = ErrorCode(6138)
 
@@ -298,6 +311,12 @@ const (
 	ErrNotImplementedForCartesianSRS = ErrorCode(3704)
 	ErrNotImplementedForProjectedSRS = ErrorCode(3705)
 	ErrNonPositiveRadius             = ErrorCode(3706)
+
+	// ERRestartServerFailed is ER_RESTART_SERVER_FAILED.
+	// Returned when CLONE INSTANCE FROM completes data transfer but mysqld cannot
+	// restart itself because it is not managed by a supervisor process. The clone
+	// data has already been transferred successfully when this error is returned.
+	ERRestartServerFailed = ErrorCode(3707)
 
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)

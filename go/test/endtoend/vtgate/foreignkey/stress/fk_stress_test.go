@@ -345,7 +345,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -377,7 +377,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -401,7 +401,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func queryTablet(t *testing.T, tablet *cluster.Vttablet, query string, expectError string) *sqltypes.Result {
@@ -473,12 +472,9 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		replica := replica
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -562,7 +558,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		testName = fmt.Sprintf("%s/%s", testName, tcase.notes)
 	}
 	t.Run(testName, func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		t.Run("create schema", func(t *testing.T) {
 			createInitialSchema(t, tcase)
@@ -594,11 +590,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				var wg sync.WaitGroup
 				for i := 0; i < maxConcurrency; i++ {
 					tableName := tableNames[i%len(tableNames)]
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
+					wg.Go(func() {
 						runSingleConnection(ctx, t, tableName, tcase, sleepInterval)
-					}()
+					})
 				}
 
 				if testOnlineDDL {
@@ -653,7 +647,6 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
-
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
 		validateReplicationIsHealthy(t, replicaFK)
@@ -799,7 +792,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
 func createInitialSchema(t *testing.T, tcase *testCase) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -957,7 +950,7 @@ func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	query := fmt.Sprintf("select count(*) from %s", tableName)
+	query := "select count(*) from " + tableName
 	for {
 		if _, err := conn.ExecuteFetch(query, 1, false); err == nil {
 			return // good
@@ -1007,7 +1000,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
-	queryResult := queryTablet(t, tablet, fmt.Sprintf("show create table %s", tableName), "")
+	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
 	require.Equal(t, len(queryResult.Rows), 1)
 	row := queryResult.Rows[0]
@@ -1162,7 +1155,7 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tcase *testCase, sleepInterval time.Duration) {
-	log.Infof("Running single connection on %s", tableName)
+	log.Info("Running single connection on " + tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1185,7 +1178,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tc
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -1194,10 +1187,10 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tc
 
 // populateTables randomly populates all test tables. This is done sequentially.
 func populateTables(t *testing.T, tcase *testCase) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1234,13 +1227,13 @@ func populateTables(t *testing.T, tcase *testCase) {
 			t.Run(tableName, func(t *testing.T) {
 				t.Run("populating", func(t *testing.T) {
 					// populate parent, then child, child2, then grandchild
-					for i := 0; i < maxTableRows/2; i++ {
+					for range maxTableRows / 2 {
 						generateInsert(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateUpdate(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateDelete(t, tableName, conn)
 					}
 				})
@@ -1352,13 +1345,13 @@ func testSelectTableMetrics(
 	writeMetrics[tableName].mu.Lock()
 	defer writeMetrics[tableName].mu.Unlock()
 
-	log.Infof("%s %s", tableName, writeMetrics[tableName].String())
+	log.Info(fmt.Sprintf("%s %s", tableName, writeMetrics[tableName].String()))
 
 	rs := queryTablet(t, tablet, fmt.Sprintf(selectCountRowsStatement, tableName), "")
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 	assert.NotZero(t, numRows)

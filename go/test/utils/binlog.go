@@ -42,8 +42,8 @@ func SetBinlogRowImageOptions(mode string, partialJSON bool, cnfDir string) erro
 	os.Remove(cnfPath)
 	extraCnf := strings.TrimSpace(os.Getenv(ExtraCnf))
 	if extraCnf != "" {
-		cnfs := strings.Split(extraCnf, ":")
-		for _, cnf := range cnfs {
+		cnfs := strings.SplitSeq(extraCnf, ":")
+		for cnf := range cnfs {
 			if !strings.Contains(cnf, BinlogRowImageCnf) {
 				newCnfs = append(newCnfs, cnf)
 			}

@@ -166,7 +166,7 @@ func testPanic[T any](t testing.TB, f func() func(v *viper.Viper) func(key strin
 	}()
 
 	fn := f()
-	assert.Failf(t, fmt.Sprintf("%s should panic", fnName), "%s should panic; got %+v", fnName, fn)
+	assert.Failf(t, fnName+" should panic", "%s should panic; got %+v", fnName, fn)
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {

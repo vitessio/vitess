@@ -22,18 +22,17 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -151,10 +150,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	var (
 		stoppedReplicationSnapshot *replicationSnapshot
+
+		// replicasToRestart is the list of replicas that need replication to be restarted
+		// in the case of an error after their IO threads have been stopped, but before
+		// the ERS restarts them as part of a successful reparent.
+		replicasToRestart []*topodatapb.Tablet
+
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		validCandidates            map[string]replication.Position
+		validCandidates            map[string]*RelayLogPositions
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
@@ -162,6 +167,32 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		isIdeal                    bool
 		isGTIDBased                bool
 	)
+
+	defer func() {
+		// If we succeeded, or there are no replicas that need replication restarted,
+		// we can return early.
+		if err == nil || len(replicasToRestart) == 0 {
+			return
+		}
+
+		// We create a new context with a fresh timeout so that the parent context does not cancel early while
+		// we attempt to restart replication on the stopped replicas.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+		defer cancel()
+
+		// Make sure we still have the shard lock.
+		if lockErr := topo.CheckShardLocked(ctx, keyspace, shard); lockErr != nil {
+			erp.logger.Warningf("skipping replication restart cleanup because the shard lock was lost for %s/%s: %v", keyspace, shard, lockErr)
+			return
+		}
+
+		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, replicasToRestart, opts.durability)
+		if cleanupErr == nil {
+			return
+		}
+
+		err = vterrors.Wrapf(err, "restart replication cleanup failed: %v", cleanupErr)
+	}()
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -206,7 +237,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, shardInfo.PrimaryAlias, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
+
+	// If stoppedReplicationSnapshot is not nil, it means we have stopped replication on at
+	// least one replica. We'll keep track of the replicas that had their IO threads stopped
+	// so we can restart them later in case of an error that causes us to return early and
+	// leaves replication stopped. We do this before checking the error so that we ensure we
+	// handle partial failures (where we've stopped some replicas but failed on others) correctly.
+	if stoppedReplicationSnapshot != nil {
+		replicasToRestart = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
+	}
+
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -239,6 +280,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
+		}
+		if len(validCandidates) == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 	}
 
@@ -276,6 +320,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
+
+	// Relay logs have been successfully applied and we're ready to start repointing replicas,
+	// so we no longer need to restart replication manually in the event of an error.
+	replicasToRestart = nil
 
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
 	newPrimary := intermediateSource
@@ -328,9 +376,49 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	return err
 }
 
+// restartReplicationOnStoppedReplicas restarts replication on replicas whose IO threads were
+// stopped by ERS before the operation aborted.
+func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
+	ctx context.Context,
+	prevPrimary *topodatapb.Tablet,
+	replicas []*topodatapb.Tablet,
+	durability policy.Durabler,
+) error {
+	erp.logger.Infof("restarting replication on %d replicas whose IO threads were stopped by ERS", len(replicas))
+
+	rec := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+
+	// Start replication on each stopped replica concurrently.
+	for _, replica := range replicas {
+		alias := topoproto.TabletAliasString(replica.Alias)
+
+		semiSync := false
+		if prevPrimary != nil {
+			semiSync = policy.IsReplicaSemiSync(durability, prevPrimary, replica)
+		}
+
+		wg.Go(func() {
+			erp.logger.Infof("restarting replication on %q after failed ERS", alias)
+			if err := erp.tmc.StartReplication(ctx, replica, semiSync); err != nil {
+				err := vterrors.Wrapf(err, "failed to restart replication on %q after failed ERS", alias)
+				rec.RecordError(err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return rec.Error()
+	}
+
+	return nil
+}
+
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
-	validCandidates map[string]replication.Position,
+	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
@@ -396,11 +484,14 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
 func (erp *EmergencyReparenter) findMostAdvanced(
-	validCandidates map[string]replication.Position,
+	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
+	if len(validCandidates) == 0 {
+		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
 	if err != nil {
@@ -504,13 +595,14 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
 	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
 ) ([]*topodatapb.Tablet, error) {
-
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
 		replicaMutex               sync.Mutex
 	)
 
-	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
+	// WithoutCancel preserves ctx values (tracing, caller ID) but lets replicas
+	// finish SetReplicationSource RPCs after the parent context is cancelled.
+	replCtx, replCancel := context.WithTimeout(context.WithoutCancel(ctx), opts.WaitReplicasTimeout)
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
@@ -616,9 +708,18 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// in the main body of promoteNewPrimary, we would be bound to the
 	// time of slowest replica, instead of the time of the fastest successful
 	// replica, and we want ERS to be fast.
+	//
+	// This goroutine also cancels replCtx after all replicas finish, so that
+	// replicas that are still in-flight can complete their SetReplicationSource
+	// calls even when this function returns early. For non-intermediate
+	// reparents, this function returns after the first successful replica;
+	// for intermediate reparents, it waits for all replicas to finish.
+	// On primary failure, replCancel() is called immediately below,
+	// which is safe because cancel functions are idempotent.
 	go func() {
 		replWg.Wait()
 		allReplicasDoneCancel()
+		replCancel()
 	}()
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
@@ -628,15 +729,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 	}
-
-	// We should only cancel the context that all the replicas are using when they are done.
-	// Since this function can return early when only 1 replica succeeds, if we cancel this context as a deferred call from this function,
-	// then we would end up having cancelled the context for the replicas who have not yet finished running all the commands.
-	// This leads to some replicas not starting replication properly. So we must wait for all the replicas to finish before cancelling this context.
-	go func() {
-		replWg.Wait()
-		defer replCancel()
-	}()
 
 	select {
 	case <-replSuccessCtx.Done():
@@ -668,7 +760,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			return replicasStartedReplication, nil
 		}
 	}
-
 }
 
 // isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
@@ -791,11 +882,11 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 // The caller of this function (ERS) will then choose from among the list of candidate tablets, based on higher-level criteria.
 func (erp *EmergencyReparenter) findErrantGTIDs(
 	ctx context.Context,
-	validCandidates map[string]replication.Position,
+	validCandidates map[string]*RelayLogPositions,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
-) (map[string]replication.Position, error) {
+) (map[string]*RelayLogPositions, error) {
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
@@ -820,8 +911,14 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 
 	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
 	var maxLenPositions []replication.Position
-	updatedValidCandidates := make(map[string]replication.Position)
+	updatedValidCandidates := make(map[string]*RelayLogPositions)
 	for _, candidate := range maxLenCandidates {
+		candidatePositions := validCandidates[candidate]
+		if candidatePositions == nil || candidatePositions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
+			continue
+		}
+
 		status, ok := statusMap[candidate]
 		if !ok {
 			// If the tablet is not in the status map, and has the maximum length of the reparent journal,
@@ -834,7 +931,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// 4. During this ERS call, both A and B are seen online. They would both report being primary tablets with the same reparent journal length.
 			// Even in this case, the best we can do is not run errant GTID detection on either, and let the split brain detection code
 			// deal with it, if A in fact has errant GTIDs.
-			maxLenPositions = append(maxLenPositions, validCandidates[candidate])
+			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
 			updatedValidCandidates[candidate] = validCandidates[candidate]
 			continue
 		}
@@ -844,7 +941,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			if otherCandidate == candidate {
 				continue
 			}
-			otherPositions = append(otherPositions, validCandidates[otherCandidate])
+			otherPosition := validCandidates[otherCandidate]
+			if otherPosition != nil && !otherPosition.IsZero() {
+				otherPositions = append(otherPositions, otherPosition.Combined)
+			}
 		}
 		// Run errant GTID detection and throw away any tablet that has errant GTIDs.
 		afterStatus := replication.ProtoToReplicationStatus(status.After)
@@ -853,10 +953,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
 			continue
 		}
-		maxLenPositions = append(maxLenPositions, validCandidates[candidate])
+		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
 		updatedValidCandidates[candidate] = validCandidates[candidate]
 	}
 
@@ -882,15 +982,19 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
 		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
 		// should not be considered a valid source of writes that no other tablet has.
-		errantGTIDs, err := replication.FindErrantGTIDs(validCandidates[alias], replication.SID{}, maxLenPositions)
+		candidatePositions := validCandidates[alias]
+		if candidatePositions == nil || candidatePositions.IsZero() {
+			continue
+		}
+		errantGTIDs, err := replication.FindErrantGTIDs(candidatePositions.Combined, replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs))
 			continue
 		}
-		updatedValidCandidates[alias] = validCandidates[alias]
+		updatedValidCandidates[alias] = candidatePositions
 	}
 
 	return updatedValidCandidates, nil
@@ -899,7 +1003,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 // gatherReparenJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
 func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	ctx context.Context,
-	validCandidates map[string]replication.Position,
+	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 ) (map[string]int32, error) {

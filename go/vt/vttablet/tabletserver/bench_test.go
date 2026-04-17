@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
 
@@ -36,8 +35,10 @@ import (
 // BenchmarkExecuteVarBinary-4          100          14610045 ns/op
 // BenchmarkExecuteExpression-4        1000           1047798 ns/op
 
-var benchQuery = "select a from test_table where v = :vtg1 and v0 = :vtg2 and v1 = :vtg3 and v2 = :vtg4 and v3 = :vtg5 and v4 = :vtg6 and v5 = :vtg7 and v6 = :vtg8 and v7 = :vtg9 and v8 = :vtg10 and v9 = :vtg11"
-var benchVarValue []byte
+var (
+	benchQuery    = "select a from test_table where v = :vtg1 and v0 = :vtg2 and v1 = :vtg3 and v2 = :vtg4 and v3 = :vtg5 and v4 = :vtg6 and v5 = :vtg7 and v6 = :vtg8 and v7 = :vtg9 and v8 = :vtg10 and v9 = :vtg11"
+	benchVarValue []byte
+)
 
 func init() {
 	// benchQuerySize is the approximate size of the query.
@@ -54,8 +55,7 @@ func init() {
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
@@ -70,16 +70,15 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
-	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(ctx, &target, benchQuery, bv, 0, 0, nil); err != nil {
+	for b.Loop() {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}
 }
 
 func BenchmarkExecuteExpression(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
@@ -97,8 +96,8 @@ func BenchmarkExecuteExpression(b *testing.B) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
-	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(ctx, &target, benchQuery, bv, 0, 0, nil); err != nil {
+	for b.Loop() {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}

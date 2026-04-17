@@ -103,8 +103,21 @@ type VStreamReader interface {
 
 // VStream streams binlog events.
 func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (VStreamReader, error) {
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
+}
+
+// BinlogDumpGTIDReader is returned by BinlogDumpGTID.
+type BinlogDumpGTIDReader interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() (*vtgatepb.BinlogDumpResponse, error)
+}
+
+// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+func (conn *VTGateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error) {
+	return conn.impl.BinlogDumpGTID(ctx, keyspace, shard, tabletType, tabletAlias, binlogFilename, binlogPosition, gtidSet, flags)
 }
 
 // VTGateSession exposes the Vitess Execution API to the clients.
@@ -172,6 +185,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	return fields, paramsCount, err
 }
 
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
+}
+
 //
 // The rest of this file is for the protocol implementations.
 //
@@ -203,6 +221,9 @@ type Impl interface {
 	// VStream streams binlogevents
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error)
 
+	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+	BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error)
+
 	// Close must be called for releasing resources.
 	Close()
 }
@@ -223,7 +244,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	defer dialersM.Unlock()
 
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists, overwriting it", name)
+		log.Warn(fmt.Sprintf("Dialer %s already exists, overwriting it", name))
 	}
 	dialers[name] = dialer
 }
@@ -261,4 +282,15 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 // the *VTGateConn.
 func Dial(ctx context.Context, address string) (*VTGateConn, error) {
 	return DialProtocol(ctx, vtgateProtocol, address)
+}
+
+// DialCustom creates a new VTGateConn with the given DialerFunc.
+func DialCustom(ctx context.Context, dialer DialerFunc, address string) (*VTGateConn, error) {
+	impl, err := dialer(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &VTGateConn{
+		impl: impl,
+	}, nil
 }

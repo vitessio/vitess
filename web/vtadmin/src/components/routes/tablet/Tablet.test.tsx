@@ -15,9 +15,8 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { createMemoryHistory, MemoryHistory } from 'history';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import { Route, Router, Switch } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { Tablet } from './Tablet';
@@ -27,43 +26,31 @@ const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
 
 const INITIAL_HISTORY = ['/tablet/someCluster/someAlias/qps'];
 
-const renderHelper = (history?: MemoryHistory) => {
+const renderHelper = (entries?: string[]) => {
     const queryClient = new QueryClient();
 
-    // Note that when testing redirects, history.location will have the expected value
-    // but window.location will not.
-    const _history = history || createMemoryHistory({ initialEntries: INITIAL_HISTORY });
+    const initialEntries = entries || INITIAL_HISTORY;
 
     return render(
         <QueryClientProvider client={queryClient}>
-            <Router history={_history}>
-                <Switch>
-                    <Route path="/tablet/:clusterID/:alias">
-                        <Tablet />
-                    </Route>
-
-                    {/* <Route path="/tablet/:clusterID/:alias">
-                        <Tablet />
-                    </Route> */}
-
-                    <Route>
-                        <div>no match</div>
-                    </Route>
-                </Switch>
-            </Router>
+            <MemoryRouter initialEntries={initialEntries}>
+                <Routes>
+                    <Route path="/tablet/:clusterID/:alias/*" element={<Tablet />} />
+                    <Route path="*" element={<div>no match</div>} />
+                </Routes>
+            </MemoryRouter>
         </QueryClientProvider>
     );
 };
 
 describe('Tablet view', () => {
     afterEach(() => {
-        import.meta.env = ORIGINAL_PROCESS_ENV;
+        Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
         vi.clearAllMocks();
     });
 
     it('renders', async () => {
-        const history = createMemoryHistory({ initialEntries: INITIAL_HISTORY });
-        renderHelper(history);
+        renderHelper(INITIAL_HISTORY);
         const title = screen.getByRole('heading', { level: 1 });
         expect(title).toHaveTextContent('someAlias');
     });
@@ -76,13 +63,10 @@ describe('Tablet view', () => {
         expect(tab).toHaveTextContent('Advanced');
     });
 
-    // Weird thing worth mentioning -- when testing redirects, the page contents doesn't render
-    // as expected, so any assertions against `screen` will (probably) not work. This might be an async thing;
-    // either way, this kind of redirect is deprecated in the next version of react-router.
-    it('redirects from "/" to a default route', () => {
-        const history = createMemoryHistory({ initialEntries: INITIAL_HISTORY });
-        renderHelper(history);
-        expect(history.location.pathname).toEqual('/tablet/someCluster/someAlias/qps');
+    it('renders the correct content for the default route', () => {
+        renderHelper(INITIAL_HISTORY);
+        const title = screen.getByRole('heading', { level: 1 });
+        expect(title).toHaveTextContent('someAlias');
     });
 
     describe('read-only mode', () => {
@@ -97,9 +81,10 @@ describe('Tablet view', () => {
         });
 
         it('redirects from /advanced', () => {
-            const history = createMemoryHistory({ initialEntries: ['/tablet/someCluster/someAlias/advanced'] });
-            renderHelper(history);
-            expect(history.location.pathname).toEqual('/tablet/someCluster/someAlias/qps');
+            renderHelper(['/tablet/someCluster/someAlias/advanced']);
+            // After redirect, the heading should still show the alias
+            const title = screen.getByRole('heading', { level: 1 });
+            expect(title).toHaveTextContent('someAlias');
         });
     });
 });

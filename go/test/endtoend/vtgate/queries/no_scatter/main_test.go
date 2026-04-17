@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vschema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--no-scatter") + "=true"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

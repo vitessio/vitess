@@ -16,7 +16,6 @@ limitations under the License.
 
 package heartbeat
 
-//revive:disable because that's the name I want to use
 type HeartbeatWriter interface {
 	RequestHeartbeats()
 }

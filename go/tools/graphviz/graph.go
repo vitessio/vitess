@@ -17,6 +17,7 @@ limitations under the License.
 package graphviz
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,7 @@ func escape(s string) string {
 func (n *Node) AddAttribute(s string) {
 	n.attrs = append(n.attrs, escape(s))
 }
+
 func (n *Node) AddTooltip(s string) {
 	n.tooltip = escape(s)
 }
@@ -66,14 +68,15 @@ node [shape=record, fontsize=10]
 `)
 	for _, node := range g.nodes {
 		labels := node.Name
+		var labelsSb71 strings.Builder
 		for i, attr := range node.attrs {
 			if i == 0 {
-				labels += "|{" + attr
+				labelsSb71.WriteString("|{" + attr)
 			} else {
-				labels += "|" + attr
+				labelsSb71.WriteString("|" + attr)
 			}
-
 		}
+		labels += labelsSb71.String()
 		labels += "}"
 		if node.tooltip != "" {
 			dot.WriteString(fmt.Sprintf(`n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip))
@@ -144,7 +147,6 @@ const htmlTemplate = `
 `
 
 func (g *Graph) Render() error {
-
 	dot := g.produceDot()
 
 	browsers := func() []string {
@@ -197,7 +199,7 @@ func (g *Graph) Render() error {
 		}
 	}
 
-	return fmt.Errorf("failed to open browser for SVG debugging")
+	return errors.New("failed to open browser for SVG debugging")
 }
 
 func New() *Graph {

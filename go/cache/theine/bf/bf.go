@@ -25,16 +25,9 @@ func (d *Bloomfilter) EnsureCapacity(capacity int) {
 	}
 	capacity = int(nextPowerOfTwo(uint32(capacity)))
 	bits := float64(capacity) * -math.Log(d.FalsePositiveRate) / (math.Log(2.0) * math.Log(2.0)) // in bits
-	m := nextPowerOfTwo(uint32(bits))
+	m := max(nextPowerOfTwo(uint32(bits)), 1024)
 
-	if m < 1024 {
-		m = 1024
-	}
-
-	k := uint32(0.7 * float64(m) / float64(capacity))
-	if k < 2 {
-		k = 2
-	}
+	k := max(uint32(0.7*float64(m)/float64(capacity)), 2)
 	d.Capacity = capacity
 	d.M = m
 	d.Filter = newbv(m)

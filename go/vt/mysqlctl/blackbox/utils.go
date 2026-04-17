@@ -87,8 +87,8 @@ func AssertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogge
 
 func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
 	// Set up local backup directory
-	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	backupRoot = fmt.Sprintf("testdata/builtinbackup_test_%s", id)
+	id := strconv.FormatInt(time.Now().UnixNano(), 10)
+	backupRoot = "testdata/builtinbackup_test_" + id
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")
@@ -173,7 +173,7 @@ func SetBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 
 func createBackupDir(root string, dirs ...string) error {
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path.Join(root, dir), 0755); err != nil {
+		if err := os.MkdirAll(path.Join(root, dir), 0o755); err != nil {
 			return err
 		}
 	}
@@ -182,12 +182,12 @@ func createBackupDir(root string, dirs ...string) error {
 }
 
 func createBackupFiles(root string, fileCount int, ext string) error {
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		f, err := os2.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
 		if err != nil {
 			return err
 		}
-		if _, err := f.Write([]byte("hello, world!")); err != nil {
+		if _, err := f.WriteString("hello, world!"); err != nil {
 			return err
 		}
 		defer f.Close()

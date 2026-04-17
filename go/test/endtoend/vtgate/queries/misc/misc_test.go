@@ -172,7 +172,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 	for _, workload := range []string{"olap", "oltp"} {
 		for _, tx := range []bool{true, false} {
 			mcmp, closer := start(t)
-			_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1000, false)
 			require.NoError(t, err)
 			if tx {
 				_, err := mcmp.VtConn.ExecuteFetch("begin", 1000, false)
@@ -207,7 +207,6 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 
 	runTests := func(mcmp *utils.MySQLCompare) {
 		for _, test := range tests {
-
 			lastInsertID := getVal()
 			query := fmt.Sprintf(test, lastInsertID)
 
@@ -345,7 +344,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	// create the value and argument slices used to build the prepare stmt
 	var vals []any
 	var params []string
-	for i := 0; i < paramCount; i++ {
+	for i := range paramCount {
 		vals = append(vals, i)
 		params = append(params, "?")
 	}
@@ -372,6 +371,51 @@ func TestHighNumberOfParams(t *testing.T) {
 		count++
 	}
 	require.Equal(t, 5, count)
+}
+
+// TestPreparedStatementInOLAP verifies that streaming prepared statements
+// return correct binary-encoded rows when result fields are only sent in the
+// first chunk.
+func TestPreparedStatementInOLAP(t *testing.T) {
+	_, closer := start(t)
+	defer closer()
+
+	// Use the binary protocol by disabling client-side parameter interpolation.
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s?interpolateParams=false", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Pin a single connection so the session variable persists across operations.
+	conn, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Seed test data and switch to OLAP streaming mode.
+	_, err = conn.ExecContext(t.Context(), "delete from t1")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "insert into t1(id1, id2) values (1, 2)")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(t.Context(), "set workload = olap")
+	require.NoError(t, err)
+
+	// Select 7 columns: the null bitmap crosses a byte boundary at this count,
+	// making corruption from missing fields visible.
+	stmt, err := conn.PrepareContext(t.Context(), "select id1, id2, id1, id2, id1, id2, id1 from t1 where id1 = ?")
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	// Verify every column decoded correctly; corruption would show as NULL or
+	// wrong values.
+	var c1, c2, c3, c4, c5, c6, c7 int64
+	err = stmt.QueryRow(1).Scan(&c1, &c2, &c3, &c4, &c5, &c6, &c7)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), c1)
+	require.Equal(t, int64(2), c2)
+	require.Equal(t, int64(1), c3)
+	require.Equal(t, int64(2), c4)
+	require.Equal(t, int64(1), c5)
+	require.Equal(t, int64(2), c6)
+	require.Equal(t, int64(1), c7)
 }
 
 func TestPrepareStatements(t *testing.T) {
@@ -454,7 +498,7 @@ func TestAnalyze(t *testing.T) {
 
 	for _, workload := range []string{"olap", "oltp"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			utils.Exec(t, mcmp.VtConn, "analyze table t1")
 			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
 			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
@@ -574,7 +618,7 @@ func TestJoinTypes(t *testing.T) {
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 			// No result from the RHS, but the RHS uses LHS's values in a few places
 			// There used to be instances where the query sent to vttablet looked like this:
 			//
@@ -786,7 +830,7 @@ func TestSemiJoin(t *testing.T) {
 	// Test that the semi join works as intended
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
 		})

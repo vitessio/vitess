@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,10 +48,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
@@ -65,6 +62,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -76,21 +78,13 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var (
-	staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
-)
+var staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
 
 var (
-	// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
-	// https://github.com/vitessio/vitess/issues/13927
-	// The fix is in release-18.0
-	// TODO: remove in release-19.0
-	fixCompletedTimestampDone bool
+	emptyResult                           = &sqltypes.Result{}
+	acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
+	copyAlgorithm                         = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 )
-
-var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
-var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
 	migrationCheckInterval  = 1 * time.Minute
@@ -102,9 +96,10 @@ var (
 )
 
 const (
-	defaultCutOverThreshold = 10 * time.Second
-	minCutOverThreshold     = 5 * time.Second
-	maxCutOverThreshold     = 30 * time.Second
+	defaultCutOverThreshold  = 10 * time.Second
+	minCutOverThreshold      = 5 * time.Second
+	maxCutOverThreshold      = 30 * time.Second
+	waitTimeoutDuringCutOver = 365 * 24 * time.Hour // maximum MySQL wait_timeout
 )
 
 func init() {
@@ -119,7 +114,6 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 }
 
 const (
-	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationFailMinutes                = 180
 	staleMigrationWarningMinutes             = 5
 	progressPctStarted               float64 = 0
@@ -287,7 +281,7 @@ func (e *Executor) Open() error {
 	if atomic.LoadInt64(&e.isOpen) > 0 || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
-	log.Infof("onlineDDL Executor Open()")
+	log.Info("onlineDDL Executor Open()")
 
 	e.reviewedRunningMigrationsFlag = false // will be set as "true" by reviewRunningMigrations()
 	e.ownedRunningMigrations.Range(func(k, _ any) bool {
@@ -318,7 +312,7 @@ func (e *Executor) Close() {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return
 	}
-	log.Infof("onlineDDL Executor Close()")
+	log.Info("onlineDDL Executor Close()")
 
 	e.ticks.Stop()
 	e.pool.Close()
@@ -340,12 +334,7 @@ func (e *Executor) matchesShards(commaDelimitedShards string) bool {
 		// Nothing explicitly defined, so implicitly all shards are allowed
 		return true
 	}
-	for _, shard := range shards {
-		if shard == e.shard {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(shards, e.shard)
 }
 
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
@@ -474,7 +463,8 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	return createTable, nil
 }
 
-// executeDirectly runs a DDL query directly on the backend MySQL server
+// executeDirectly runs a DDL query directly on the backend MySQL server.
+// This is primarily used for CREATE/DROP/RENAME TABLE statements.
 func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...sqlerror.ErrorCode) (acceptableErrorCodeFound bool, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
@@ -504,18 +494,19 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		}
 		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
 	}
+	restoreLockWaitTimeout, err := e.initDBConnectionLockWaitTimeout(conn, onlineDDL.CutOverThreshold)
+	if err != nil {
+		return false, vterrors.Wrap(err, "failed to set lock_wait_timeout on direct connection")
+	}
+	defer restoreLockWaitTimeout()
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
-
 	if err != nil {
 		// let's see if this error is actually acceptable
 		if merr, ok := err.(*sqlerror.SQLError); ok {
-			for _, acceptableCode := range acceptableMySQLErrorCodes {
-				if merr.Num == acceptableCode {
-					// we don't consider this to be an error.
-					acceptableErrorCodeFound = true
-					err = nil
-					break
-				}
+			if slices.Contains(acceptableMySQLErrorCodes, merr.Num) {
+				// we don't consider this to be an error.
+				acceptableErrorCodeFound = true
+				err = nil
 			}
 		}
 	}
@@ -619,7 +610,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string, del
 	}
 	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
-		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
+		log.Error(fmt.Sprintf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err))
 	}
 	if deleteEntry {
 		if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
@@ -649,7 +640,7 @@ func (e *Executor) startVReplication(ctx context.Context, tablet *topodatapb.Tab
 // This is done on a best-effort basis, by issuing `KILL` and `KILL QUERY` commands. As MySQL goes,
 // it is not guaranteed that the queries/transactions will terminate in a timely manner.
 func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid string, tableName string, excludeIds ...int64) error {
-	log.Infof("killTableLockHoldersAndAccessors %v:, table-%v", uuid, tableName)
+	log.Info(fmt.Sprintf("killTableLockHoldersAndAccessors %v:, table-%v", uuid, tableName))
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return err
@@ -657,12 +648,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 	defer conn.Close()
 
 	skipKill := func(threadId int64) bool {
-		for _, excludeId := range excludeIds {
-			if threadId == excludeId {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(excludeIds, threadId)
 	}
 	{
 		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
@@ -677,18 +663,18 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 			return vterrors.Wrapf(err, "finding queries potentially operating on table")
 		}
 
-		log.Infof("killTableLockHoldersAndAccessors %v: found %v potential queries", uuid, len(rs.Rows))
+		log.Info(fmt.Sprintf("killTableLockHoldersAndAccessors %v: found %v potential queries", uuid, len(rs.Rows)))
 		// Now that we have some list of queries, we actually parse them to find whether the query actually references our table:
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64("id", 0)
 			if skipKill(threadId) {
-				log.Infof("killTableLockHoldersAndAccessors %v: skipping thread %v as it is excluded", uuid, threadId)
+				log.Info(fmt.Sprintf("killTableLockHoldersAndAccessors %v: skipping thread %v as it is excluded", uuid, threadId))
 				continue
 			}
 			infoQuery := row.AsString("info", "")
 			stmt, err := e.env.Environment().Parser().Parse(infoQuery)
 			if err != nil {
-				log.Error(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unable to parse processlist Info query: %v", infoQuery))
+				log.Error(fmt.Sprint(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unable to parse processlist Info query: %v", infoQuery)))
 				continue
 			}
 			queryUsesTable := false
@@ -711,10 +697,10 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 			}, stmt)
 
 			if queryUsesTable {
-				log.Infof("killTableLockHoldersAndAccessors %v: killing query %v: %.100s", uuid, threadId, infoQuery)
+				log.Info(fmt.Sprintf("killTableLockHoldersAndAccessors %v: killing query %v: %.100s", uuid, threadId, infoQuery))
 				killQuery := fmt.Sprintf("KILL QUERY %d", threadId)
 				if _, err := conn.Conn.ExecuteFetch(killQuery, 1, false); err != nil {
-					log.Error(vterrors.Errorf(vtrpcpb.Code_ABORTED, "could not kill query %v. Ignoring", threadId))
+					log.Error(fmt.Sprint(vterrors.Errorf(vtrpcpb.Code_ABORTED, "could not kill query %v. Ignoring", threadId)))
 				}
 			}
 		}
@@ -736,18 +722,18 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 		if err != nil {
 			return vterrors.Wrapf(err, "finding transactions locking table `%s` %s", tableName, description)
 		}
-		log.Infof("terminateTransactions %v: found %v transactions locking table `%s` %s", uuid, len(rs.Rows), tableName, description)
+		log.Info(fmt.Sprintf("terminateTransactions %v: found %v transactions locking table `%s` %s", uuid, len(rs.Rows), tableName, description))
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64(column, 0)
 			if skipKill(threadId) {
-				log.Infof("terminateTransactions %v: skipping thread %v as it is excluded", uuid, threadId)
+				log.Info(fmt.Sprintf("terminateTransactions %v: skipping thread %v as it is excluded", uuid, threadId))
 				continue
 			}
-			log.Infof("terminateTransactions %v: killing connection %v with transaction locking table `%s` %s", uuid, threadId, tableName, description)
+			log.Info(fmt.Sprintf("terminateTransactions %v: killing connection %v with transaction locking table `%s` %s", uuid, threadId, tableName, description))
 			killConnection := fmt.Sprintf("KILL %d", threadId)
 			_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
 			if err != nil {
-				log.Errorf("terminateTransactions %v: unable to kill the connection %d locking table `%s` %s: %v", uuid, threadId, tableName, description, err)
+				log.Error(fmt.Sprintf("terminateTransactions %v: unable to kill the connection %d locking table `%s` %s: %v", uuid, threadId, tableName, description, err))
 			}
 		}
 		return nil
@@ -899,11 +885,26 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
 
+	renameWasSuccessful := false
 	lockConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
 	defer lockConn.Recycle()
+	defer func() {
+		// Always attempt UNLOCK TABLES first, as it releases locks immediately on this
+		// connection. Then kill the connection as a fallback to guarantee any held locks
+		// are released, even if UNLOCK TABLES were to fail.
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := lockConn.Conn.Exec(unlockCtx, sqlUnlockTables, 1, false); err != nil {
+			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
+			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+	}()
+
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 3*onlineDDL.CutOverThreshold)
@@ -911,30 +912,38 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
+	lockConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, lockConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on locking connection")
+	}
+	defer lockConnRestoreWaitTimeout()
 
 	renameCompleteChan := make(chan error)
-	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
-	}
-	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
-	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
 	defer renameConn.Recycle()
 	defer func() {
 		if !renameWasSuccessful {
 			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
 			if err != nil {
-				log.Warningf("Failed to kill connection being used to rename tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
+				log.Warn(fmt.Sprintf("Failed to kill connection being used to rename tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
 			}
 		}
 	}()
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
+	}
 	defer renameConnRestoreLockWaitTimeout()
+	renameConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, renameConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
+	}
+	defer renameConnRestoreWaitTimeout()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
@@ -948,7 +957,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
 		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
 		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
-		log.Infof("@@rename_table_preserve_foreign_key supported")
+		log.Info("@@rename_table_preserve_foreign_key supported")
 	}
 
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
@@ -984,7 +993,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	defer bufferingContextCancel()
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
-		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+		log.Info(fmt.Sprintf("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID))
 		timeout := onlineDDL.CutOverThreshold + qrBufferExtraTimeout
 
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, timeout, bufferQueries)
@@ -999,16 +1008,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				return vterrors.Wrapf(err, "refreshing table state")
 			}
 		}
-		log.Infof("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+		log.Info(fmt.Sprintf("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID))
 		return nil
 	}
 
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			log.Infof("re-enabling writes in migration %v", onlineDDL.UUID)
+			log.Info(fmt.Sprintf("re-enabling writes in migration %v", onlineDDL.UUID))
 			toggleBuffering(false)
-			go log.Infof("cutOverVReplMigration %v: unbuffered queries", s.workflow)
+			go log.Info(fmt.Sprintf("cutOverVReplMigration %v: unbuffered queries", s.workflow))
 		})
 	}
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "buffering queries")
@@ -1041,7 +1050,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
 		// the original table. We will actually make the table disappear, creating a void.
-		testSuiteBeforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		testSuiteBeforeTableName := onlineDDL.Table + "_before"
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
@@ -1076,7 +1085,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "RENAME found")
 
 		if shouldForceCutOver {
-			log.Infof("cutOverVReplMigration %v: force cut-over requested, killing table lock holders and accessors while RENAME is in place", s.workflow)
+			log.Info(fmt.Sprintf("cutOverVReplMigration %v: force cut-over requested, killing table lock holders and accessors while RENAME is in place", s.workflow))
 			if err := e.killTableLockHoldersAndAccessors(killWhileRenamingContext, onlineDDL.UUID, onlineDDL.Table, lockConn.Conn.ID(), renameConn.Conn.ID()); err != nil {
 				return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 			}
@@ -1106,21 +1115,21 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "timeout while waiting for post-lock pos: %v", err)
 		return vterrors.Wrapf(err, "failed waiting for pos after locking")
 	}
-	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, replication.EncodePosition(postWritesPos))
+	go log.Info(fmt.Sprintf("cutOverVReplMigration %v: done waiting for position %v", s.workflow, replication.EncodePosition(postWritesPos)))
 	// Stop vreplication
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "stopping vreplication")
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(s.id, "stopped for online DDL cutover")); err != nil {
 		return vterrors.Wrapf(err, "failed stopping vreplication")
 	}
-	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
+	go log.Info(fmt.Sprintf("cutOverVReplMigration %v: stopped vreplication", s.workflow))
 
 	defer func() {
 		if !renameWasSuccessful {
 			// Restarting vreplication
 			if err := e.startVReplication(ctx, tablet.Tablet, s.workflow); err != nil {
-				log.Errorf("cutOverVReplMigration %v: failed restarting vreplication after cutover failure: %v", s.workflow, err)
+				log.Error(fmt.Sprintf("cutOverVReplMigration %v: failed restarting vreplication after cutover failure: %v", s.workflow, err))
 			}
-			go log.Infof("cutOverVReplMigration %v: started vreplication after cutover failure", s.workflow)
+			go log.Info(fmt.Sprintf("cutOverVReplMigration %v: started vreplication after cutover failure", s.workflow))
 		}
 	}()
 
@@ -1128,7 +1137,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	{
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			testSuiteAfterTableName := onlineDDL.Table + "_after"
 			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
 			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
@@ -1187,7 +1196,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	// Tables are now swapped! Migration is successful
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "re-enabling writes")
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
-	go log.Infof("cutOverVReplMigration %v: marking as complete", s.workflow)
+	go log.Info(fmt.Sprintf("cutOverVReplMigration %v: marking as complete", s.workflow))
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
 
@@ -1225,20 +1234,63 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+// initConnectionSessionTimeout saves the current value of the given session variable, sets it to the given duration,
+// and returns a deferred restore function.
+func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	saveQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @%s=@@session.%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
 	}
-	timeoutSeconds := int64(lockWaitTimeout.Seconds())
-	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
+		return deferFunc, vterrors.Wrapf(err, "could not read %s", variable)
+	}
+	setQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=%%a", variable),
+		sqltypes.Int64BindVariable(int64(timeout.Seconds())),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
+	restoreQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=@%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Exec(restoreCtx, restoreQuery, 0, false)
+	}
+	return deferFunc, nil
+}
+
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function.
+func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
+	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
+}
+
+// initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
+func (e *Executor) initDBConnectionLockWaitTimeout(conn *dbconnpool.DBConnection, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+	deferFunc = func() {}
+
+	if _, err := conn.ExecuteFetch("set @lock_wait_timeout=@@session.lock_wait_timeout", 0, false); err != nil {
+		return deferFunc, vterrors.Wrap(err, "could not read lock_wait_timeout")
+	}
+	timeoutSeconds := int64(lockWaitTimeout.Seconds())
+	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.ExecuteFetch(setQuery, 0, false); err != nil {
+		return deferFunc, err
+	}
+	deferFunc = func() {
+		conn.ExecuteFetch("set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
 	}
 	return deferFunc, nil
 }
@@ -1497,7 +1549,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 }
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlSelectMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -1548,7 +1599,7 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (foundRunning bool, err error) {
-	log.Infof("terminateMigration: request to terminate %s", onlineDDL.UUID)
+	log.Info("terminateMigration: request to terminate " + onlineDDL.UUID)
 	// It's possible the killing the migration fails for whatever reason, in which case
 	// the logic will retry killing it later on.
 	// Whatever happens in this function, this executor stops owning the given migration.
@@ -1571,7 +1622,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
-	log.Infof("CancelMigration: request to cancel %s with message: %v", uuid, message)
+	log.Info(fmt.Sprintf("CancelMigration: request to cancel %s with message: %v", uuid, message))
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -1585,7 +1636,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled:
-		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
+		log.Info(fmt.Sprintf("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status))
 		return emptyResult, nil
 	}
 	// From this point on, we're actually cancelling a migration
@@ -1604,16 +1655,16 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
-		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
+		log.Info(fmt.Sprintf("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status))
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
 	if migrationFound {
-		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
+		log.Info(fmt.Sprintf("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status))
 		rowsAffected = 1
 	} else {
-		log.Infof("CancelMigration: migration %s wasn't found to be running", uuid)
+		log.Info(fmt.Sprintf("CancelMigration: migration %s wasn't found to be running", uuid))
 	}
 	if err != nil {
 		return result, err
@@ -1628,7 +1679,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 // cancelMigrations attempts to abort a list of migrations
 func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (err error) {
 	for _, migration := range cancellable {
-		log.Infof("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message)
+		log.Info(fmt.Sprintf("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message))
 		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser); err != nil {
 			return err
 		}
@@ -1647,18 +1698,18 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, 
 	if err != nil {
 		return result, err
 	}
-	log.Infof("CancelPendingMigrations: iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("CancelPendingMigrations: iterating %v migrations", len(uuids)))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("CancelPendingMigrations: cancelling %s", uuid)
+		log.Info("CancelPendingMigrations: cancelling " + uuid)
 		res, err := e.CancelMigration(ctx, uuid, message, issuedByUser)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("CancelPendingMigrations: done iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations", len(uuids)))
 	return result, nil
 }
 
@@ -1737,10 +1788,11 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 
 	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in scheduleNextMigration()")
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
+
 		postponeLaunch := row.AsBool("postpone_launch", false)
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		readyToComplete := row.AsBool("ready_to_complete", false)
@@ -1762,13 +1814,13 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			}
 		}
 
-		if !(isImmediateOperation && postponeCompletion) {
+		if !isImmediateOperation || !postponeCompletion {
 			// Any non-postponed migration can be scheduled
 			// postponed ALTER can be scheduled (because vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
-				log.Infof("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err)
+				log.Info(fmt.Sprintf("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err))
 				e.triggerNextCheckInterval()
 			})
 			if err != nil {
@@ -2134,7 +2186,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
-
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
@@ -2262,6 +2313,7 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
 	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
+	failedMigrations.Add(1)
 	if withError != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}
@@ -2544,7 +2596,6 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // executeSpecialAlterDirectDDLActionMigration executes a special plan using a direct ALTER TABLE statement.
 func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-
 	forceCutOverAfter, err := onlineDDL.StrategySetting().ForceCutOverAfter()
 	if err != nil {
 		return err
@@ -2556,7 +2607,7 @@ func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Conte
 	// Buffer queries while issuing the ALTER TABLE statement (we assume this ALTER is going to be quick,
 	// as in ALGORITHM=INSTANT or a quick partition operation)
 	toggleBuffering := func(bufferQueries bool) {
-		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+		log.Info(fmt.Sprintf("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID))
 		timeout := onlineDDL.CutOverThreshold + qrBufferExtraTimeout
 
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, timeout, bufferQueries)
@@ -2564,7 +2615,7 @@ func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Conte
 			// unbuffer existing queries:
 			bufferingContextCancel()
 		}
-		log.Infof("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+		log.Info(fmt.Sprintf("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID))
 	}
 	defer toggleBuffering(false)
 	toggleBuffering(true)
@@ -2894,6 +2945,34 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 	return nil, nil
 }
 
+// reviewInOrderMigrations reviews all pending migrations that are also `--in-order` to see whether
+// they should be failed due to prior failed/cancelled migrations in same context.
+func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, uuid := range pendingMigrationsUUIDs {
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		wasFailed, err := e.validateInOrderMigration(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if wasFailed {
+			log.Info(fmt.Sprintf("reviewInOrderMigrations: failing in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid))
+		} else {
+			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+			if err := e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
+				return vterrors.Wrapf(err, "failed to update in order completion pending count for migration %s", uuid)
+			}
+		}
+	}
+	return nil
+}
+
 // runNextMigration picks up to one 'ready' migration that is able to run, and executes it.
 // Possible scenarios:
 // - no migration is in 'ready' state -- nothing to be done
@@ -2931,7 +3010,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			onlineDDL.SQL = sqlparser.String(ddlStmt)
 		}
 	}
-	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
+	log.Info(fmt.Sprintf("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID))
 	e.executeMigration(ctx, onlineDDL)
 	return nil
 }
@@ -3101,6 +3180,25 @@ func shouldCutOverAccordingToBackoff(
 	return false, false
 }
 
+// getInOrderCompletionPendingCount returns a count of migrations that must cut-over in-order, before the
+// provided migration is able to proceed. This count is relevant only if the migration uses the
+// --in-order-completion option.
+func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
+	if len(pendingMigrationsUUIDs) == 0 {
+		return 0
+	}
+	var pendingCount uint64
+	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
+		if pendingMigrationsUUID == onlineDDL.UUID {
+			// found all migrations we must wait for if
+			// we found ourself in the pending list.
+			break
+		}
+		pendingCount++
+	}
+	return pendingCount
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3195,7 +3293,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
 				if !s.isRunning() {
-					log.Infof("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String())
+					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))
 					return nil
 				}
 				// This VRepl migration may have started from outside this tablet, so
@@ -3209,7 +3307,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
 					_ = e.updateMigrationTablet(ctx, uuid)
-					log.Infof("migration %s adopted by tablet %s", uuid, e.TabletAliasString())
+					log.Info(fmt.Sprintf("migration %s adopted by tablet %s", uuid, e.TabletAliasString()))
 				}
 				_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 				_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
@@ -3249,17 +3347,22 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// understand whether "now is a good time" or "not there yet"
 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 				if !isReady {
+					// The migration is not ready yet.
 					return nil
+				}
+				if strategySetting.IsInOrderCompletion() {
+					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+					if pendingMigrationsCount > 0 {
+						postponeCompletion = true
+					}
+					// Update in_order_completion_pending_count state if we are waiting or if we find we are no longer waiting (0).
+					if err = e.updateInOrderCompletionPendingCount(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
+						return err
+					}
 				}
 				if postponeCompletion {
 					// override. Even if migration is ready, we do not complete it.
 					return nil
-				}
-				if strategySetting.IsInOrderCompletion() {
-					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-						// wait for earlier pending migrations to complete
-						return nil
-					}
 				}
 				shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
 					shouldForceCutOver, forceCutOverAfter, sinceReadyToComplete, sinceLastCutoverAttempt, cutoverAttempts,
@@ -3269,7 +3372,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				if err := e.cutOverVReplMigration(ctx, s, shouldForceCutOver); err != nil {
 					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
-					log.Errorf("cutOverVReplMigration failed %s: err=%v", onlineDDL.UUID, err)
+					log.Error(fmt.Sprintf("cutOverVReplMigration failed %s: err=%v", onlineDDL.UUID, err))
 
 					if sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); isSQLErr && sqlErr != nil {
 						// let's see if this error is actually acceptable
@@ -3305,7 +3408,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			// If we find such a migration, we do nothing. We're only looking for migrations we really
 			// don't have any information of.
 			if !uuidsFoundRunning[uuid] && !uuidsFoundPending[uuid] {
-				log.Infof("removing migration %s from ownedRunningMigrations because it's not running and not pending", uuid)
+				log.Info(fmt.Sprintf("removing migration %s from ownedRunningMigrations because it's not running and not pending", uuid))
 				e.ownedRunningMigrations.Delete(uuid)
 			}
 			return true
@@ -3346,7 +3449,7 @@ func (e *Executor) monitorStaleMigrations(ctx context.Context) error {
 		}
 		livenessTimestamp := row.AsString("liveness_timestamp", "")
 		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness for %v minutes, since %v", onlineDDL.UUID, staleMinutes, livenessTimestamp)
-		log.Warning("warnStaleMigrations: %s", message)
+		log.Warn("warnStaleMigrations: " + message)
 
 		maxStaleMinutes = max(maxStaleMinutes, staleMinutes)
 	}
@@ -3378,7 +3481,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Infof("reviewStaleMigrations: stale migration found: %s", onlineDDL.UUID)
+		log.Info("reviewStaleMigrations: stale migration found: " + onlineDDL.UUID)
 		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness in the past %v minutes", onlineDDL.UUID, staleMigrationFailMinutes)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
 			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
@@ -3398,6 +3501,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		failedMigrations.Add(1)
 		defer e.triggerNextCheckInterval()
 		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
@@ -3497,17 +3601,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	// v18 fix. Remove in v19
-	if !fixCompletedTimestampDone {
-		if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-			// This query fixes a bug where stale migrations were marked as 'cancelled' or 'failed' without updating 'completed_timestamp'
-			// Running this query retroactively sets completed_timestamp
-			// This fix is created in v18 and can be removed in v19
-			return err
-		}
-		fixCompletedTimestampDone = true
-	}
-
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
@@ -3523,7 +3616,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		artifacts := row["artifacts"].ToString()
 		logPath := row["log_path"].ToString()
 
-		log.Infof("Executor.gcArtifacts: will GC artifacts for migration %s", uuid)
+		log.Info("Executor.gcArtifacts: will GC artifacts for migration " + uuid)
 		// Remove tables:
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 
@@ -3534,7 +3627,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			// is shared for multiple artifacts in this loop, we differentiate via timestamp.
 			// Also, the timestamp we create is in the past, so that the table GC mechanism can
 			// take it away from there on next iteration.
-			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
+			log.Info(fmt.Sprintf("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid))
 			timestampInThePast := timeNow.Add(time.Duration(-i) * time.Second).UTC()
 			toTableName, err := e.gcArtifactTable(ctx, artifactTable, uuid, timestampInThePast)
 			if err == nil {
@@ -3544,7 +3637,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			} else {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}
-			log.Infof("Executor.gcArtifacts: renamed away artifact %s to %s", artifactTable, toTableName)
+			log.Info(fmt.Sprintf("Executor.gcArtifacts: renamed away artifact %s to %s", artifactTable, toTableName))
 		}
 
 		// Remove logs:
@@ -3566,7 +3659,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
-		log.Infof("Executor.gcArtifacts: done migration %s", uuid)
+		log.Info("Executor.gcArtifacts: done migration " + uuid)
 	}
 
 	return nil
@@ -3592,36 +3685,39 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 	if e.keyspace == "" {
-		log.Errorf("Executor.onMigrationCheckTick(): empty keyspace")
+		log.Error("Executor.onMigrationCheckTick(): empty keyspace")
 		return
 	}
 
 	ctx := context.Background()
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.reviewQueuedMigrations(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
+	}
+	if err := e.reviewInOrderMigrations(ctx); err != nil {
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.runNextMigration(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.monitorStaleMigrations(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 	if err := e.gcArtifacts(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 }
 
@@ -3638,7 +3734,7 @@ func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid str
 	}
 	_, err = e.execQuery(ctx, bound)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, error=%v", uuid, err)
+		log.Error(fmt.Sprintf("FAIL updateMigrationStartedTimestamp: uuid=%s, error=%v", uuid, err))
 	}
 	return err
 }
@@ -3656,7 +3752,7 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 	}
 	_, err = e.execQuery(ctx, bound)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationStartedTimestamp: uuid=%s, timestampColumn=%v, error=%v", uuid, timestampColumn, err)
+		log.Error(fmt.Sprintf("FAIL updateMigrationStartedTimestamp: uuid=%s, timestampColumn=%v, error=%v", uuid, timestampColumn, err))
 	}
 	return err
 }
@@ -3709,9 +3805,9 @@ func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, 
 	return err
 }
 
-func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...interface{}) error {
+func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...any) error {
 	msg := fmt.Sprintf(stage, args...)
-	log.Infof("updateMigrationStage: uuid=%s, stage=%s", uuid, msg)
+	log.Info(fmt.Sprintf("updateMigrationStage: uuid=%s, stage=%s", uuid, msg))
 	query, err := sqlparser.ParseAndBind(sqlUpdateStage,
 		sqltypes.StringBindVariable(msg),
 		sqltypes.StringBindVariable(uuid),
@@ -3764,7 +3860,7 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, uuid string) error {
-	log.Infof("updateMigrationStatus: transitioning migration: %s into status failed or cancelled", uuid)
+	log.Info(fmt.Sprintf("updateMigrationStatus: transitioning migration: %s into status failed or cancelled", uuid))
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatusFailedOrCancelled,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -3776,7 +3872,7 @@ func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, u
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
-	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
+	log.Info(fmt.Sprintf("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status)))
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
 		sqltypes.StringBindVariable(string(status)),
 		sqltypes.StringBindVariable(uuid),
@@ -3786,7 +3882,7 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 	}
 	_, err = e.execQuery(ctx, query)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationStatus: uuid=%s, query=%v, error=%v", uuid, query, err)
+		log.Error(fmt.Sprintf("FAIL updateMigrationStatus: uuid=%s, query=%v, error=%v", uuid, query, err))
 	}
 	return err
 }
@@ -3804,7 +3900,7 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 }
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
-	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
+	log.Info(fmt.Sprintf("updateMigrationMessage: uuid=%s, message=%s", uuid, message))
 
 	maxlen := 16383
 	update := func(message string) error {
@@ -3834,7 +3930,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes []string) error {
+	revertibleNotes []string,
+) error {
 	notes := strings.Join(revertibleNotes, "\n")
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
@@ -4041,13 +4138,18 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
 		}
 	}
-	log.Infof("updateMigrationReadyToComplete: uuid=%s, isReady=%t", uuid, isReady)
+	log.Info(fmt.Sprintf("updateMigrationReadyToComplete: uuid=%s, isReady=%t", uuid, isReady))
 
 	if isReady {
 		// We set progress to 100%. Remember that progress is based on table rows estimation. We can get here
 		// with progress 87% or another value that is way off. But once we realize the migration is ready to complete,
 		// we know row copy is fully complete _and_ that vplayer is not far behind. So it's a better DX to report 100%.
 		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
+			return err
+		}
+		// We also set the ETA seconds to zero because progress is 100% and the migration is ready to complete, so ETA
+		// should also be zero.
+		if err = e.updateMigrationETASeconds(ctx, uuid, 0); err != nil {
 			return err
 		}
 	}
@@ -4057,6 +4159,22 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateInOrderCompletionPendingCount(
+	ctx context.Context,
+	uuid string,
+	pendingCompletions uint64,
+) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateInOrderCompletionPendingCount,
+		sqltypes.Uint64BindVariable(pendingCompletions),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4114,7 +4232,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in CLEANUP: %s", uuid)
 	}
-	log.Infof("CleanupMigration: request to cleanup migration %s", uuid)
+	log.Info("CleanupMigration: request to cleanup migration " + uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4128,7 +4246,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
+	log.Info(fmt.Sprintf("CleanupMigration: migration %s marked as ready to clean up", uuid))
 	defer e.triggerNextCheckInterval()
 	return rs, nil
 }
@@ -4140,7 +4258,7 @@ func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.R
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
-	log.Infof("CleanupMigration: request to cleanup all terminal migrations")
+	log.Info("CleanupMigration: request to cleanup all terminal migrations")
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4148,7 +4266,7 @@ func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.R
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("CleanupMigration: %v migrations marked as ready to clean up", rs.RowsAffected)
+	log.Info(fmt.Sprintf("CleanupMigration: %v migrations marked as ready to clean up", rs.RowsAffected))
 	defer e.triggerNextCheckInterval()
 	return rs, nil
 }
@@ -4168,7 +4286,7 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in FORCE_CUTOVER: %s", uuid)
 	}
-	log.Infof("ForceCutOverMigration: request to force cut-over migration %s", uuid)
+	log.Info("ForceCutOverMigration: request to force cut-over migration " + uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4183,7 +4301,7 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 		return nil, err
 	}
 	e.triggerNextCheckInterval()
-	log.Infof("ForceCutOverMigration: migration %s marked for forced cut-over", uuid)
+	log.Info(fmt.Sprintf("ForceCutOverMigration: migration %s marked for forced cut-over", uuid))
 	return rs, nil
 }
 
@@ -4197,18 +4315,18 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *s
 	if err != nil {
 		return result, err
 	}
-	log.Infof("ForceCutOverPendingMigrations: iterating %v migrations", len(uuids))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(uuids)))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("ForceCutOverPendingMigrations: applying to %s", uuid)
+		log.Info("ForceCutOverPendingMigrations: applying to " + uuid)
 		res, err := e.ForceCutOverMigration(ctx, uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("ForceCutOverPendingMigrations: done iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations", len(uuids)))
 	return result, nil
 }
 
@@ -4224,7 +4342,7 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cut-over threshold value: %s. Try '5s' to '30s'", thresholdString)
 	}
 
-	log.Infof("SetMigrationCutOverThreshold: request to set cut-over threshold to %v on migration %s", threshold, uuid)
+	log.Info(fmt.Sprintf("SetMigrationCutOverThreshold: request to set cut-over threshold to %v on migration %s", threshold, uuid))
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4244,7 +4362,7 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 		return nil, err
 	}
 	e.triggerNextCheckInterval()
-	log.Infof("SetMigrationCutOverThreshold: migration %s cut-over threshold was set to", uuid, threshold)
+	log.Info(fmt.Sprintf("SetMigrationCutOverThreshold: migration %s cut-over threshold was set to %v", uuid, threshold))
 	return rs, nil
 }
 
@@ -4260,7 +4378,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 		// Does not apply to this shard!
 		return &sqltypes.Result{}, nil
 	}
-	log.Infof("CompleteMigration: request to complete migration %s", uuid)
+	log.Info("CompleteMigration: request to complete migration " + uuid)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -4276,7 +4394,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("CompleteMigration: migration %s marked as unpostponed", uuid)
+	log.Info(fmt.Sprintf("CompleteMigration: migration %s marked as unpostponed", uuid))
 	return rs, nil
 }
 
@@ -4291,18 +4409,18 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	if err != nil {
 		return result, err
 	}
-	log.Infof("CompletePendingMigrations: iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(uuids)))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("CompletePendingMigrations: completing %s", uuid)
+		log.Info("CompletePendingMigrations: completing " + uuid)
 		res, err := e.CompleteMigration(ctx, uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("CompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations", len(uuids)))
 	return result, nil
 }
 
@@ -4314,7 +4432,7 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in POSTPONE COMPLETE: %s", uuid)
 	}
-	log.Infof("PostponeCompleteMigration: request to postpone complete migration %s", uuid)
+	log.Info("PostponeCompleteMigration: request to postpone complete migration " + uuid)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -4330,7 +4448,7 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("PostponeCompleteMigration: migration %s marked as postponed", uuid)
+	log.Info(fmt.Sprintf("PostponeCompleteMigration: migration %s marked as postponed", uuid))
 	return rs, nil
 }
 
@@ -4345,18 +4463,18 @@ func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (resul
 	if err != nil {
 		return result, err
 	}
-	log.Infof("PostponeCompletePendingMigrations: iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(uuids)))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("PostponeCompletePendingMigrations: postpone completion of %s", uuid)
+		log.Info("PostponeCompletePendingMigrations: postpone completion of " + uuid)
 		res, err := e.PostponeCompleteMigration(ctx, uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("PostponeCompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations", len(uuids)))
 	return result, nil
 }
 
@@ -4372,7 +4490,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 		// Does not apply  to this shard!
 		return &sqltypes.Result{}, nil
 	}
-	log.Infof("LaunchMigration: request to launch migration %s", uuid)
+	log.Info("LaunchMigration: request to launch migration " + uuid)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -4388,7 +4506,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("LaunchMigration: migration %s marked as unpostponed", uuid)
+	log.Info(fmt.Sprintf("LaunchMigration: migration %s marked as unpostponed", uuid))
 	return rs, nil
 }
 
@@ -4407,18 +4525,18 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		return result, err
 	}
 	rows := r.Named().Rows
-	log.Infof("LaunchMigrations: iterating %v migrations %s", len(rows))
+	log.Info(fmt.Sprintf("LaunchMigrations: iterating %v migrations", len(rows)))
 	result = &sqltypes.Result{}
 	for _, row := range rows {
 		uuid := row["migration_uuid"].ToString()
-		log.Infof("LaunchMigrations: unpostponing %s", uuid)
+		log.Info("LaunchMigrations: unpostponing " + uuid)
 		res, err := e.LaunchMigration(ctx, uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("LaunchMigrations: done iterating %v migrations %s", len(uuids))
+	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(uuids)))
 	return result, nil
 }
 
@@ -4529,7 +4647,7 @@ func (e *Executor) SubmitMigration(
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	log.Infof("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt))
+	log.Info(fmt.Sprintf("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt)))
 	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
 		// This validation should have taken place on submission. However, the query may have mutated
 		// during transfer, and this validation is here to catch any malformed mutation.
@@ -4553,7 +4671,7 @@ func (e *Executor) SubmitMigration(
 		return nil, vterrors.Wrapf(err, "while checking whether migration %s exists", onlineDDL.UUID)
 	}
 	if storedMigration != nil {
-		log.Infof("SubmitMigration: migration %s already exists with migration_context=%s, table=%s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.Table)
+		log.Info(fmt.Sprintf("SubmitMigration: migration %s already exists with migration_context=%s, table=%s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.Table))
 		// A migration already exists with the same UUID. This is fine, we allow re-submitting migrations
 		// with the same UUID, as we provide idempotency.
 		// So we will _mostly_ ignore the request: we will not submit a new migration. However, we will do
@@ -4578,7 +4696,7 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
+	log.Info(fmt.Sprintf("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table))
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
@@ -4625,9 +4743,8 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
-
 	}
-	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
+	log.Info(fmt.Sprintf("SubmitMigration: migration %s submitted", onlineDDL.UUID))
 
 	defer e.triggerNextCheckInterval()
 
@@ -4649,7 +4766,7 @@ func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (re
 	whereExpr := ""
 	if showBasic.Filter != nil {
 		if showBasic.Filter.Filter != nil {
-			whereExpr = fmt.Sprintf(" where %s", sqlparser.String(showBasic.Filter.Filter))
+			whereExpr = " where " + sqlparser.String(showBasic.Filter.Filter)
 		} else if showBasic.Filter.Like != "" {
 			lit := sqlparser.String(sqlparser.NewStrLiteral(showBasic.Filter.Like))
 			whereExpr = fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
@@ -4694,7 +4811,8 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string,
+) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
@@ -4708,17 +4826,20 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+			startedMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusComplete:
 		{
 			progressPct = progressPctFull
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			successfulMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusFailed:
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			failedMigrations.Add(1)
 		}
 	}
 	if err != nil {

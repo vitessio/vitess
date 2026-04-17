@@ -9,6 +9,8 @@ The following is the full list, alphabetically ordered.
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
+* Mohamed Hamza ([mhamza15](https://github.com/mhamza15)) mhamza@fastmail.com
+* Nick Van Wiggeren ([nickvanw](https://github.com/nickvanw)) nick@planetscale.com
 * Noble Mittal ([beingnoble03](https://github.com/beingnoble03)) noble@planetscale.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
@@ -41,7 +43,7 @@ systay, harshit-gangal, frouioui, dbussink
 shlomi-noach, dbussink
 
 ### Cluster Management
-dbussink
+dbussink, timvaillancourt
 
 ### Java
 harshit-gangal
@@ -54,6 +56,12 @@ beingnoble03, rohit-nayak-ps
 
 ### Messaging
 derekperkins, mattlord
+
+### High Availability
+mattlord, timvaillancourt
+
+### Security
+timvaillancourt
 
 ## Past Maintainers
 We thank the following past maintainers for their contributions.

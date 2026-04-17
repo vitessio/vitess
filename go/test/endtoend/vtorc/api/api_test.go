@@ -35,7 +35,7 @@ import (
 func TestAPIEndpoints(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
@@ -85,7 +85,7 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
-	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(i int, response string) bool {
 		return response != "null"
 	})
 
@@ -111,24 +111,49 @@ func TestAPIEndpoints(t *testing.T) {
 	t.Run("Check Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtorc, "AnalysisChangeWrite")
 		utils.CheckVarExists(t, vtorc, "AuditWrite")
+		utils.CheckVarExists(t, vtorc, "CurrentErrantGTIDCount")
+		utils.CheckVarExists(t, vtorc, "DetectedProblems")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesAttempt")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesFail")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesInstancePollSecondsExceeded")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesQueueLength")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesRecentCount")
+		utils.CheckVarExists(t, vtorc, "DiscoveryWorkers")
+		utils.CheckVarExists(t, vtorc, "DiscoveryWorkersActive")
+		utils.CheckVarExists(t, vtorc, "DiscoveryInstanceTimings")
+		utils.CheckVarExists(t, vtorc, "FailedRecoveries")
 		utils.CheckVarExists(t, vtorc, "InstanceRead")
 		utils.CheckVarExists(t, vtorc, "InstanceReadTopology")
+		utils.CheckVarExists(t, vtorc, "PendingRecoveries")
+		utils.CheckVarExists(t, vtorc, "RecoveriesCount")
+		utils.CheckVarExists(t, vtorc, "ShardLocksActive")
+		utils.CheckVarExists(t, vtorc, "ShardLockTimings")
+		utils.CheckVarExists(t, vtorc, "SuccessfulRecoveries")
+		utils.CheckVarExists(t, vtorc, "TabletsWatchedByCell")
+		utils.CheckVarExists(t, vtorc, "TabletsWatchedByShard")
 
 		// Metrics registered in prometheus
 		utils.CheckMetricExists(t, vtorc, "vtorc_analysis_change_write")
 		utils.CheckMetricExists(t, vtorc, "vtorc_audit_write")
+		utils.CheckMetricExists(t, vtorc, "vtorc_detected_problems")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_attempt")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_fail")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_instance_poll_seconds_exceeded")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_queue_length")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_recent_count")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_instance_timings_bucket")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers_active")
+		utils.CheckMetricExists(t, vtorc, "vtorc_errant_gtid_tablet_count")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
+		utils.CheckMetricExists(t, vtorc, "vtorc_pending_recoveries")
+		utils.CheckMetricExists(t, vtorc, "vtorc_recoveries_count")
+		utils.CheckMetricExists(t, vtorc, "vtorc_shard_locks_active")
+		utils.CheckMetricExists(t, vtorc, "vtorc_shard_lock_timings_bucket")
+		utils.CheckMetricExists(t, vtorc, "vtorc_successful_recoveries")
+		utils.CheckMetricExists(t, vtorc, "vtorc_tablets_watched_by_cell")
+		utils.CheckMetricExists(t, vtorc, "vtorc_tablets_watched_by_shard")
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
@@ -139,15 +164,15 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
 
-	t.Run("Replication Analysis API", func(t *testing.T) {
+	t.Run("Detection Analysis API", func(t *testing.T) {
 		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// We know VTOrc won't fix this since we disabled global recoveries!
 		// Wait until VTOrc picks up on this issue and verify
-		// that we see a not null result on the api/replication-analysis page
-		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		// that we see a not null result on the api/detection-analysis page
+		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
@@ -155,25 +180,25 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
@@ -297,7 +322,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 
 func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlias string, countWanted int) {
 	vars := vtorc.GetVars()
-	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]interface{})
+	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]any)
 	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
 	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
 	gtidCount := utils.GetIntFromValue(gtidCountVal)

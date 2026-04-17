@@ -30,7 +30,7 @@ type verifyPeerCertificateFunc func([][]byte, [][]*x509.Certificate) error
 
 func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
-		log.Warningf("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
+		log.Warn("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
 	}
 
 	for _, revoked := range crl.RevokedCertificateEntries {

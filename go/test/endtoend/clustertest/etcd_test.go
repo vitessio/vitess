@@ -19,6 +19,7 @@ package clustertest
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,7 +28,6 @@ import (
 )
 
 func TestEtcdServer(t *testing.T) {
-
 	// Confirm the basic etcd cluster health.
 	etcdHealthURL := fmt.Sprintf("http://%s:%d/health", clusterInstance.Hostname, clusterInstance.TopoPort)
 	testURL(t, etcdHealthURL, "generic etcd health url")
@@ -40,7 +40,7 @@ func TestEtcdServer(t *testing.T) {
 		clientv3.WithLimit(1),
 	}
 	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{net.JoinHostPort(clusterInstance.TopoProcess.Host, fmt.Sprintf("%d", clusterInstance.TopoProcess.Port))},
+		Endpoints:   []string{net.JoinHostPort(clusterInstance.TopoProcess.Host, strconv.Itoa(clusterInstance.TopoProcess.Port))},
 		DialTimeout: 5 * time.Second,
 	})
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestEtcdServer(t *testing.T) {
 	keyPrefixes := []string{
 		// At a minimum, this prefix confirms that we have a functioning
 		// global topo server with a valid cell from the test env.
-		fmt.Sprintf("/vitess/global/cells/%s", cell),
+		"/vitess/global/cells/" + cell,
 	}
 	for _, keyPrefix := range keyPrefixes {
 		res, err := cli.Get(cli.Ctx(), keyPrefix, etcdClientOptions...)

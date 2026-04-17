@@ -68,7 +68,7 @@ func TestTableSet_LargeTablesConstituents(t *testing.T) {
 	var expected []TableSet
 	var table int
 
-	for t := 0; t < 256; t++ {
+	for range 256 {
 		table += rand.IntN(GapSize) + 1
 		expected = append(expected, SingleTableSet(table))
 		ts = ts.WithTable(table)
@@ -81,11 +81,11 @@ func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 	const SetRange = 256
 	const Blocks = 64
 
-	var tablesets = make([]TableSet, 64)
+	tablesets := make([]TableSet, 64)
 
 	for i := range tablesets {
 		setrng := i * SetRange
-		for tid := 0; tid < SetRange; tid++ {
+		for tid := range SetRange {
 			tablesets[i] = tablesets[i].WithTable(setrng + tid)
 		}
 	}
@@ -95,7 +95,7 @@ func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 		result = result.Merge(ts)
 	}
 
-	var expected = make([]TableSet, SetRange*Blocks)
+	expected := make([]TableSet, SetRange*Blocks)
 	for tid := range expected {
 		expected[tid] = SingleTableSet(tid)
 	}
@@ -107,11 +107,11 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 	const SetRange = 256
 	const Blocks = 64
 
-	var tablesets = make([]TableSet, 64)
+	tablesets := make([]TableSet, 64)
 
 	for i := range tablesets {
 		setrng := i * SetRange
-		for tid := 0; tid < SetRange; tid++ {
+		for tid := range SetRange {
 			tablesets[i] = tablesets[i].WithTable(setrng + tid)
 		}
 	}
@@ -121,7 +121,7 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 		result = result.Merge(ts)
 	}
 
-	var expected = make([]TableSet, SetRange*Blocks)
+	expected := make([]TableSet, SetRange*Blocks)
 	for tid := range expected {
 		expected[tid] = SingleTableSet(tid)
 	}
@@ -130,7 +130,7 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 }
 
 func TestTableSet_LargeOffset(t *testing.T) {
-	for tid := 0; tid < 1024; tid++ {
+	for tid := range 1024 {
 		ts := SingleTableSet(tid)
 		assert.Equal(t, tid, ts.TableOffset())
 	}

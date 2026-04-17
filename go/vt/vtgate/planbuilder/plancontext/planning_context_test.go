@@ -197,7 +197,7 @@ func (v *vschema) FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable,
 	panic("implement me")
 }
 
-func (v *vschema) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+func (v *vschema) FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	// TODO implement me
 	panic("implement me")
 }

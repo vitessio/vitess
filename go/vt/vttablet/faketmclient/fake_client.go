@@ -283,6 +283,11 @@ func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tab
 	return nil
 }
 
+// RestartReplication is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	return nil
+}
+
 // StartReplicationUntilAfter is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
 	return nil
@@ -373,7 +378,7 @@ func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Conte
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, nil
 }
 

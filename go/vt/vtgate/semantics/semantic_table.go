@@ -88,6 +88,7 @@ type (
 		Union           bool
 		RecursiveCTE    bool
 		LastInsertIDArg bool // LastInsertIDArg is true if the query has a LAST_INSERT_ID(x) with an argument
+		WindowFunc      bool
 	}
 
 	// MirrorInfo stores information used to produce mirror
@@ -609,7 +610,20 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 		if !ok {
 			return
 		}
-		st.CopyDependencies(f, t)
+
+		// Not all expressions are valid map keys
+		if !ValidAsMapKey(t) || !ValidAsMapKey(f) {
+			return
+		}
+
+		if _, ok := t.(*sqlparser.ColName); ok {
+			// If this is introducing a new column, we should copy all dependencies over
+			// as we can't recalculate them later
+			st.CopyDependencies(f, t)
+		} else {
+			// Otherwise, we only copy over the type information
+			st.CopyExprInfo(f, t)
+		}
 	case *sqlparser.Union:
 		t, ok := to.(*sqlparser.Union)
 		if !ok {
@@ -626,7 +640,7 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
 	t, toOK := to.(sqlparser.Expr)
-	if !(fromOK && toOK) {
+	if !fromOK || !toOK {
 		return
 	}
 	st.CopyDependencies(f, t)
@@ -960,7 +974,7 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 				continue outer
 			}
 
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if st.EqualsExpr(expr, exprs[j]) {
 					continue outer
 				}

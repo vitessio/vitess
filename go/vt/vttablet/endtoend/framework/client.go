@@ -19,6 +19,7 @@ package framework
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
@@ -103,7 +104,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if clientFoundRows {
 		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
 	}
-	state, err := client.server.Begin(client.ctx, client.target, options)
+	state, err := client.server.Begin(client.ctx, nil, client.target, options)
 	if err != nil {
 		return err
 	}
@@ -204,6 +205,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	}
 	state, qr, err := client.server.BeginExecute(
 		client.ctx,
+		nil,
 		client.target,
 		preQueries,
 		query,
@@ -223,6 +225,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(
 		client.ctx,
+		nil,
 		client.target,
 		query,
 		bindvars,
@@ -241,6 +244,7 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]*quer
 func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(client.ctx,
+		nil,
 		client.target,
 		query,
 		bindvars,
@@ -265,6 +269,7 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 	result := &sqltypes.Result{}
 	state, err := client.server.BeginStreamExecute(
 		client.ctx,
+		nil,
 		client.target,
 		preQueries,
 		query,
@@ -289,7 +294,7 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 
 // Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
-	return client.server.StreamExecute(client.ctx, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
+	return client.server.StreamExecute(client.ctx, nil, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
 }
 
 // MessageStream streams messages from the message table.
@@ -316,7 +321,7 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
-	state, qr, err := client.server.ReserveExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	state, qr, err := client.server.ReserveExecute(client.ctx, nil, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.reservedID = state.ReservedID
 	if err != nil {
 		return nil, err
@@ -330,7 +335,7 @@ func (client *QueryClient) ReserveStreamExecute(query string, preQueries []strin
 		return nil, errors.New("already reserved a connection")
 	}
 	result := &sqltypes.Result{}
-	state, err := client.server.ReserveStreamExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	state, err := client.server.ReserveStreamExecute(client.ctx, nil, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -353,7 +358,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	state, qr, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	state, qr, err := client.server.ReserveBeginExecute(client.ctx, nil, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = state.TransactionID
 	client.reservedID = state.ReservedID
 	client.sessionStateChanges = state.SessionStateChanges
@@ -372,7 +377,7 @@ func (client *QueryClient) ReserveBeginStreamExecute(query string, preQueries []
 		return nil, errors.New("already in transaction")
 	}
 	result := &sqltypes.Result{}
-	state, err := client.server.ReserveBeginStreamExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	state, err := client.server.ReserveBeginStreamExecute(client.ctx, nil, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -440,9 +445,7 @@ func (client *QueryClient) GetSchema(
 ) (schemaDef map[string]string, udfs []*querypb.UDFInfo, err error) {
 	schemaDef = make(map[string]string)
 	err = client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
-		for tableName, schemaDefinition := range schemaRes.TableDefinition {
-			schemaDef[tableName] = schemaDefinition
-		}
+		maps.Copy(schemaDef, schemaRes.TableDefinition)
 		udfs = append(udfs, schemaRes.Udfs...)
 		return nil
 	})

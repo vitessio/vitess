@@ -19,8 +19,10 @@ package srvtopo
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
+	"maps"
 	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -44,8 +46,7 @@ import (
 
 // TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
 func TestGetSrvKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	srvTopoCacheTTL = 200 * time.Millisecond
 	srvTopoCacheRefresh = 80 * time.Millisecond
@@ -100,7 +101,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Wait a bit to give the watcher enough time to update the value.
 	time.Sleep(10 * time.Millisecond)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -110,9 +110,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// make sure the HTML template works
 	funcs := map[string]any{}
-	for k, v := range StatusFuncs {
-		funcs[k] = v
-	}
+	maps.Copy(funcs, StatusFuncs)
 	templ := template.New("").Funcs(funcs)
 	templ, err = templ.Parse(TopoTemplate)
 	if err != nil {
@@ -297,7 +295,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Now test with a new error in which the topo service is locked during
 	// the test which prevents all queries from proceeding.
-	forceErr = fmt.Errorf("test topo error with factory locked")
+	forceErr = errors.New("test topo error with factory locked")
 	factory.SetError(forceErr)
 	factory.Lock()
 	go func() {
@@ -363,8 +361,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 // TestSrvKeyspaceCachedError will test we properly re-try to query
 // the topo server upon failure.
 func TestSrvKeyspaceCachedError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
@@ -400,8 +397,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 // TestGetSrvKeyspaceCreated will test we properly get the initial
 // value if the SrvKeyspace already exists.
 func TestGetSrvKeyspaceCreated(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
@@ -436,8 +432,7 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 
 func TestWatchSrvVSchema(t *testing.T) {
 	srvTopoCacheRefresh = 10 * time.Millisecond
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -522,8 +517,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 
 	time.Sleep(1 * time.Second)
@@ -555,7 +549,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
 	}
 
-	forceErr := fmt.Errorf("force test error")
+	forceErr := errors.New("force test error")
 	factory.SetError(forceErr)
 
 	// Lock the topo for half the duration of the cache TTL to ensure our
@@ -653,13 +647,13 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	// Force another error and lock the topo. Then wait for the TTL to
 	// expire and verify that the context timeout unblocks the request.
-	forceErr = fmt.Errorf("force long test error")
+	forceErr = errors.New("force long test error")
 	factory.SetError(forceErr)
 	factory.Lock()
 
 	time.Sleep(srvTopoCacheTTL)
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2) //nolint
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2)
 	defer timeoutCancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	if err != context.DeadlineExceeded {
@@ -674,8 +668,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 // This specifically tests the fix for the issue where cached errors were being
 // returned immediately without attempting to get fresh data.
 func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 
 	// Use short intervals for faster testing
@@ -705,7 +698,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	require.ElementsMatch(t, names, expectedNames, "Initial GetSrvKeyspaceNames returned wrong names")
 
 	// Phase 2: Force an error to get it cached
-	testErr := fmt.Errorf("test error - service unavailable")
+	testErr := errors.New("test error - service unavailable")
 	factory.SetError(testErr)
 
 	// Wait for the cache TTL to expire so the cached value is no longer valid
@@ -733,7 +726,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	errorCount := int32(0)
 
 	startTime := time.Now()
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 
@@ -779,8 +772,7 @@ func (w *watched) equals(other *watched) bool {
 }
 
 func TestSrvKeyspaceWatcher(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
@@ -809,7 +801,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	waitForEntries := func(entryCount int) []watched {
 		var current []watched
-		var expire = time.Now().Add(5 * time.Second)
+		expire := time.Now().Add(5 * time.Second)
 
 		for time.Now().Before(expire) {
 			current = allSeen()
@@ -859,7 +851,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		want = &topodatapb.SrvKeyspace{
 			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 				{
@@ -867,7 +859,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 					ShardReferences: []*topodatapb.ShardReference{
 						{
 							// This may not be a valid shard spec, but is fine for unit test purposes
-							Name:     fmt.Sprintf("%d", i),
+							Name:     strconv.Itoa(i),
 							KeyRange: keyRange[0],
 						},
 					},
@@ -882,7 +874,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	seen4 := waitForEntries(8)
 	assert.Len(t, seen4, 8)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		w := seen4[3+i]
 		assert.Nil(t, w.err)
 	}
@@ -905,8 +897,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 }
 
 func TestSrvKeyspaceListener(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	srvTopoCacheTTL = 100 * time.Millisecond
 	srvTopoCacheRefresh = 40 * time.Millisecond
@@ -941,7 +932,7 @@ func TestSrvKeyspaceListener(t *testing.T) {
 	cancelFunc()
 
 	// multi updates thereafter
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		want = &topodatapb.SrvKeyspace{}
 		err = ts.UpdateSrvKeyspace(ctx, "test_cell", "test_ks", want)
 		require.NoError(t, err)

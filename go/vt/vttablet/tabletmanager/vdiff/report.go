@@ -17,10 +17,12 @@ limitations under the License.
 package vdiff
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -79,17 +81,37 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 		rd.Query = td.genDebugQueryDiff(sel, row, opts.GetOnlyPks())
 	}
 
-	addVal := func(index int, truncateAt int) {
+	addVal := func(index int, truncateAt int) error {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs.Exprs[index].Format(buf)
 		col := buf.String()
 		// Let's truncate if it's really worth it to avoid losing
 		// value for a few chars.
 		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
-			rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+			if row[index].IsBinary() {
+				rb, err := row[index].ToBytes()
+				if err != nil { // Should never happen
+					return vterrors.Wrapf(err, "failed to convert row value to bytes")
+				}
+				rb = rb[:truncateAt]
+				// Print the column as a HEX string the same way the MySQL client does.
+				rd.Row[col] = "0x" + hex.EncodeToString(rb) + truncatedNotation
+			} else {
+				rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+			}
+			return nil
+		}
+		if row[index].IsBinary() {
+			rb, err := row[index].ToBytes()
+			if err != nil { // Should never happen
+				return vterrors.Wrapf(err, "failed to convert row value to bytes")
+			}
+			// Print the column as a HEX string the same way the MySQL client does.
+			rd.Row[col] = "0x" + hex.EncodeToString(rb)
 		} else {
 			rd.Row[col] = row[index].ToString()
 		}
+		return nil
 	}
 
 	// Include PK columns first and do not truncate them so that
@@ -97,7 +119,9 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	// further investigation.
 	pks := make(map[int]struct{}, len(td.tablePlan.selectPks))
 	for _, pkI := range td.tablePlan.selectPks {
-		addVal(pkI, 0)
+		if err := addVal(pkI, 0); err != nil {
+			return nil, err
+		}
 		pks[pkI] = struct{}{}
 	}
 
@@ -108,7 +132,9 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	truncateAt := int(opts.GetRowDiffColumnTruncateAt())
 	for i := range sel.SelectExprs.Exprs {
 		if _, pk := pks[i]; !pk {
-			addVal(i, truncateAt)
+			if err := addVal(i, truncateAt); err != nil {
+				return nil, err
+			}
 		}
 	}
 

@@ -40,10 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	// configFilePath is where the configs/credentials for backups will be stored.
-	configFilePath string
-)
+// configFilePath is where the configs/credentials for backups will be stored.
+var configFilePath string
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &configFilePath, "ceph-backup-storage-config", "ceph_backup_config.json",
@@ -88,13 +86,10 @@ func (bh *CephBackupHandle) Name() string {
 // AddFile implements BackupHandle.
 func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	reader, writer := io.Pipe()
-	bh.waitGroup.Add(1)
-	go func() {
-		defer bh.waitGroup.Done()
-
+	bh.waitGroup.Go(func() {
 		// ceph bucket name is where the backups will go
 		// backup handle dir field contains keyspace/shard value
 		bucket := alterBucketName(bh.dir)
@@ -109,7 +104,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			// In case the error happened after the writer finished, we need to remember it.
 			bh.RecordError(filename, err)
 		}
-	}()
+	})
 	// Give our caller the write end of the pipe.
 	return writer, nil
 }
@@ -117,7 +112,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 // EndBackup implements BackupHandle.
 func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
 	// Return the saved PutObject() errors, if any.
@@ -127,7 +122,7 @@ func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup implements BackupHandle.
 func (bh *CephBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
@@ -135,7 +130,7 @@ func (bh *CephBackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile implements BackupHandle.
 func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
 	// ceph bucket name
 	bucket := alterBucketName(bh.dir)
@@ -205,16 +200,15 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 	bucket := alterBucketName(dir)
 
 	found, err := c.BucketExists(bucket)
-
 	if err != nil {
-		log.Info("Error from BucketExists: %v, quitting", bucket)
+		log.Info(fmt.Sprintf("Error from BucketExists: %v, quitting", bucket))
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)
 	}
 	if !found {
-		log.Info("Bucket: %v doesn't exist, creating new bucket with the required name", bucket)
+		log.Info(fmt.Sprintf("Bucket: %v doesn't exist, creating new bucket with the required name", bucket))
 		err = c.MakeBucket(bucket, "")
 		if err != nil {
-			log.Info("Error creating Bucket: %v, quitting", bucket)
+			log.Info(fmt.Sprintf("Error creating Bucket: %v, quitting", bucket))
 			return nil, errors.New("Error creating new bucket: " + bucket)
 		}
 	}

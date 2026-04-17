@@ -26,8 +26,10 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-var globalCreateDb func(ctx context.Context, ks *vttestpb.Keyspace) error
-var globalDropDb func(ctx context.Context, ksName string) error
+var (
+	globalCreateDb func(ctx context.Context, ks *vttestpb.Keyspace) error
+	globalDropDb   func(ctx context.Context, ksName string) error
+)
 
 // DBDDL doesn't need to store any state - we use the global variables above instead
 type DBDDL struct {

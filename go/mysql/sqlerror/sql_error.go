@@ -154,10 +154,23 @@ func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
 	}
 }
 
-var errExtract = regexp.MustCompile(`\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
+var (
+	// errExtract matches Vitess-wrapped SQL errors ending with `(errno <num>) (sqlstate <state>)`.
+	errExtract = regexp.MustCompile(`\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
+
+	// nativeErrExtract matches native MySQL server errors using `ERROR <num> (<state>): <message>`.
+	nativeErrExtract = regexp.MustCompile(`ERROR ([0-9]*) \(([0-9a-zA-Z]{5})\):`)
+)
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
-// If it's not the right type, it still tries to get it from a regexp.
+//
+//   - If err already is a *SQLError, it returns err unchanged.
+//   - If err is a Vitess error with a mapped MySQL code, it returns the converted SQLError.
+//   - If err contains a Vitess-wrapped `(errno <num>) (sqlstate <state>)` suffix, it extracts that code and state.
+//   - If err contains a native MySQL `ERROR <num> (<state>): <message>` string, it extracts that code and state.
+//   - Otherwise, it maps the Vitess error code to a MySQL error code when one is defined and returns
+//     a generic SQLError with that code and err.Error() as the message.
+//
 // Notes about the `error` return type:
 // The function really returns *SQLError or `nil`. Seemingly, the function could just return
 // `*SQLError` type. However, it really must return `error`. The reason is the way `golang`
@@ -185,6 +198,11 @@ func NewSQLErrorFromError(err error) error {
 
 	msg := err.Error()
 	match := errExtract.FindStringSubmatch(msg)
+	if len(match) >= 2 {
+		return extractSQLErrorFromMessage(match, msg)
+	}
+
+	match = nativeErrExtract.FindStringSubmatch(msg)
 	if len(match) >= 2 {
 		return extractSQLErrorFromMessage(match, msg)
 	}
@@ -367,14 +385,14 @@ func convertToMysqlError(err error) error {
 	if !ok {
 		return err
 	}
-	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error()) //nolint:govet
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
-	case isGRPCOverflowRE.Match([]byte(msg)):
+	case isGRPCOverflowRE.MatchString(msg):
 		return ERNetPacketTooLarge
 	case strings.Contains(msg, "Transaction throttled"):
 		return EROutOfResources

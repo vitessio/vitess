@@ -82,7 +82,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			Name: shardName,
 		}
 		var mysqlCtlProcessList []*exec.Cmd
-		for i := 0; i < totalTabletsRequired; i++ {
+		for i := range totalTabletsRequired {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := &cluster.Vttablet{
@@ -146,7 +146,6 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
-
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.NoError(t, err)
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()

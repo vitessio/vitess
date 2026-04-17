@@ -213,7 +213,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
 	}
-	ev.NewPrimary = newPrimaryTabletInfo.Tablet.CloneVT()
+	ev.NewPrimary = newPrimaryTabletInfo.CloneVT()
 	return false, nil
 }
 
@@ -227,7 +227,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
-	ev.OldPrimary = currentPrimary.Tablet.CloneVT()
+	ev.OldPrimary = currentPrimary.CloneVT()
 
 	// Before demoting the old primary, we're going to ensure that replication
 	// is working from the old primary to the primary-elect. If replication is
@@ -275,7 +275,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer demoteCancel()
 
-	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet)
+	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet, false)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
@@ -426,7 +426,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 			// tablet type), that's already in read-only.
 			pr.logger.Infof("demoting tablet %v", alias)
 
-			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet)
+			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet, false)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "DemotePrimary(%v) failed on contested primary", alias))
 

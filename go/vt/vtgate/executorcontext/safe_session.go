@@ -18,6 +18,7 @@ package executorcontext
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -64,6 +65,11 @@ type (
 		execReadQuery bool
 
 		logging *ExecuteLogger
+
+		// targetTabletAlias is set when using tablet-specific routing via USE keyspace:shard@tablet_type|tablet-alias.
+		// This causes all queries to route to the specified tablet until cleared.
+		// Note: This is stored in the Go wrapper, not in the protobuf Session.
+		targetTabletAlias *topodatapb.TabletAlias
 
 		*vtgatepb.Session
 	}
@@ -353,7 +359,7 @@ func (session *SafeSession) SetRollbackCommand() {
 	}
 
 	if session.savepointState == savepointSet {
-		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
+		session.rollbackOnPartialExec = "rollback to " + session.savepointName
 	} else {
 		session.rollbackOnPartialExec = TxRollback
 	}
@@ -399,7 +405,7 @@ func (session *SafeSession) SetErrorUntilRollback(enable bool) {
 func (session *SafeSession) IsErrorUntilRollback() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return session.Session.GetErrorUntilRollback()
+	return session.GetErrorUntilRollback()
 }
 
 // GetLogger returns executor logger.
@@ -412,6 +418,28 @@ func (session *SafeSession) InTransaction() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InTransaction
+}
+
+// ShardSessionsForCleanup returns a snapshot of PreSessions, ShardSessions, and PostSessions for Rollback/Release.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
+}
+
+// ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	var lockSessions []*vtgatepb.Session_ShardSession
+	if session.LockSession != nil {
+		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
+	}
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
 }
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
@@ -494,7 +522,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		// Should be unreachable
 		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
-	if !(session.Session.InTransaction || session.Session.InReservedConn) {
+	if !session.Session.InTransaction && !session.Session.InReservedConn {
 		// Should be unreachable
 		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
@@ -598,14 +626,14 @@ func (session *SafeSession) MustRollback() bool {
 func (session *SafeSession) RecordWarning(warning *querypb.QueryWarning) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.Warnings = append(session.Session.Warnings, warning)
+	session.Warnings = append(session.Warnings, warning)
 }
 
 // ClearWarnings removes all the warnings from the session
 func (session *SafeSession) ClearWarnings() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.Warnings = nil
+	session.Warnings = nil
 }
 
 // SetUserDefinedVariable sets the user defined variable in the session.
@@ -924,10 +952,10 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 
 // GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
 func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
-	if session.Session.Options == nil {
-		session.Session.Options = &querypb.ExecuteOptions{}
+	if session.Options == nil {
+		session.Options = &querypb.ExecuteOptions{}
 	}
-	return session.Session.Options
+	return session.Options
 }
 
 func (session *SafeSession) CachePlan() bool {
@@ -938,7 +966,7 @@ func (session *SafeSession) CachePlan() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	return !(session.Options.SkipQueryPlanCache || session.Options.HasCreatedTempTables)
+	return !session.Options.SkipQueryPlanCache && !session.Options.HasCreatedTempTables
 }
 
 func (session *SafeSession) GetSelectLimit() int {
@@ -1142,4 +1170,20 @@ func (l *ExecuteLogger) GetLogs() []engine.ExecuteEntry {
 	result := make([]engine.ExecuteEntry, len(l.entries))
 	copy(result, l.entries)
 	return result
+}
+
+// SetTargetTabletAlias sets the tablet alias for tablet-specific routing.
+// When set, all queries will route to the specified tablet until cleared.
+func (session *SafeSession) SetTargetTabletAlias(alias *topodatapb.TabletAlias) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.targetTabletAlias = alias
+}
+
+// GetTargetTabletAlias returns the current tablet alias for tablet-specific routing,
+// or nil if not set.
+func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.targetTabletAlias
 }

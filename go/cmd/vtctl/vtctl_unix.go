@@ -19,6 +19,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"log/syslog"
 
 	"vitess.io/vitess/go/vt/log"
@@ -26,8 +27,8 @@ import (
 
 func logSyslog(msg string) {
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
-		syslogger.Info(msg) // nolint:errcheck
+		syslogger.Info(msg) //nolint:errcheck
 	} else {
-		log.Warningf("cannot connect to syslog: %v", err)
+		log.Warn(fmt.Sprintf("cannot connect to syslog: %v", err))
 	}
 }

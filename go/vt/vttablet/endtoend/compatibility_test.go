@@ -278,7 +278,6 @@ func TestInts(t *testing.T) {
 		},
 	}
 	utils.MustMatch(t, want, qr)
-
 }
 
 func TestFractionals(t *testing.T) {
@@ -703,7 +702,6 @@ func TestJSONType(t *testing.T) {
 		want2.Rows[0][1] = sqltypes.TestValue(sqltypes.Blob, "{\"foo\": \"bar\"}")
 		utils.MustMatch(t, want2, qr)
 	}
-
 }
 
 func TestDBName(t *testing.T) {

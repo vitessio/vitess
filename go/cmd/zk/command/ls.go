@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -87,7 +88,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !lsArgs.Force || err != zk.ErrNoNode {
-				log.Warningf("ls: cannot access %v: %v", zkPath, err)
+				log.Warn(fmt.Sprintf("ls: cannot access %v: %v", zkPath, err))
 			}
 		}
 
@@ -113,7 +114,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 				_, stat, err := fs.Conn.Exists(cmd.Context(), localPath)
 				if err != nil {
 					if !lsArgs.Force || err != zk.ErrNoNode {
-						log.Warningf("ls: cannot access: %v: %v", localPath, err)
+						log.Warn(fmt.Sprintf("ls: cannot access: %v: %v", localPath, err))
 					}
 				} else {
 					stats[i] = stat
@@ -138,7 +139,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if hasError {
-		return fmt.Errorf("ls: some paths had errors")
+		return errors.New("ls: some paths had errors")
 	}
 	return nil
 }

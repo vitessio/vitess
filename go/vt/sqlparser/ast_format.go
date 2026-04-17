@@ -165,7 +165,6 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 			node.Comments, node.Ignore.ToString(),
 			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	}
-
 }
 
 // Format formats the node.
@@ -890,7 +889,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 
 	if ct.Length != nil && ct.Scale != nil {
 		buf.astPrintf(ct, "(%d,%d)", *ct.Length, *ct.Scale)
-
 	} else if ct.Length != nil {
 		buf.astPrintf(ct, "(%d)", *ct.Length)
 	}
@@ -1200,7 +1198,6 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 		}
 		buf.astPrintf(node, ", %s", accessMode.ToString())
 	}
-
 }
 
 // Format formats the node.
@@ -1402,7 +1399,11 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	buf.astPrintf(node, "%v", node.Name)
+	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
+		buf.WriteString("dual")
+	} else {
+		buf.astPrintf(node, "%v", node.Name)
+	}
 }
 
 // Format formats the node.
@@ -1869,19 +1870,16 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *JSONPrettyExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_pretty(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
 func (node *JSONStorageFreeExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_storage_free(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
 func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_storage_size(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
@@ -1897,23 +1895,43 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
+	hasContent := false
 	if node.Name.NotEmpty() {
-		buf.astPrintf(node, " %v", node.Name)
+		buf.astPrintf(node, "%v", node.Name)
+		hasContent = true
 	}
 	if node.PartitionClause != nil {
-		buf.astPrintf(node, " partition by %n", node.PartitionClause)
+		if hasContent {
+			buf.astPrintf(node, " partition by %n", node.PartitionClause)
+		} else {
+			buf.astPrintf(node, "partition by %n", node.PartitionClause)
+		}
+		hasContent = true
 	}
 	if node.OrderClause != nil {
-		buf.astPrintf(node, "%v", node.OrderClause)
+		if hasContent {
+			buf.astPrintf(node, "%v", node.OrderClause)
+		} else {
+			prefix := "order by "
+			for _, n := range node.OrderClause {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		hasContent = true
 	}
 	if node.FrameClause != nil {
-		buf.astPrintf(node, "%v", node.FrameClause)
+		if hasContent {
+			buf.astPrintf(node, " %v", node.FrameClause)
+		} else {
+			buf.astPrintf(node, "%v", node.FrameClause)
+		}
 	}
 }
 
 // Format formats the node
 func (node *FrameClause) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %s", node.Unit.ToString())
+	buf.astPrintf(node, "%s", node.Unit.ToString())
 	if node.End != nil {
 		buf.astPrintf(node, " between%v and%v", node.Start, node.End)
 	} else {
@@ -2325,12 +2343,20 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%s", node.Command.ToString())
 	if !node.Tbl.IsEmpty() {
-		buf.astPrintf(node, " from %v", node.Tbl)
+		switch node.Command {
+		case FunctionC, ProcedureC:
+			buf.astPrintf(node, " %v", node.Tbl)
+		default:
+			buf.astPrintf(node, " from %v", node.Tbl)
+		}
 	}
 	if node.DbName.NotEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
 }
 
 func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
@@ -2350,8 +2376,113 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowOther) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Command)
+func (node *ShowEngine) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show engine %s %s", node.EngineName, node.Action)
+}
+
+// Format formats the node.
+func (node *ShowGrants) Format(buf *TrackedBuffer) {
+	buf.literal("show grants")
+	if node.User != nil {
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.literal(" for ")
+			node.User.formatTo(buf)
+		}
+		if len(node.UsingRole) > 0 {
+			buf.literal(" using ")
+			for i, role := range node.UsingRole {
+				if i > 0 {
+					buf.literal(", ")
+				}
+				role.formatTo(buf)
+			}
+		}
+	}
+}
+
+// Format formats the node.
+func (node *ShowProfile) Format(buf *TrackedBuffer) {
+	buf.literal("show profile")
+	for i, t := range node.Types {
+		if i == 0 {
+			buf.literal(" ")
+		} else {
+			buf.literal(", ")
+		}
+		buf.literal(t)
+	}
+	if node.ForQuery != nil {
+		buf.astPrintf(node, " for query %v", node.ForQuery)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+}
+
+// Format formats the node.
+func (node *ShowCreateUser) Format(buf *TrackedBuffer) {
+	buf.literal("show create user ")
+	if node.User != nil {
+		node.User.formatTo(buf)
+	} else {
+		buf.literal("current_user")
+	}
+}
+
+// Format formats the node.
+func (node *ShowBinlogEvents) Format(buf *TrackedBuffer) {
+	if node.IsRelaylog {
+		buf.literal("show relaylog events")
+	} else {
+		buf.literal("show binlog events")
+	}
+	if node.LogName != "" {
+		buf.astPrintf(node, " in %s", encodeSQLString(node.LogName))
+	}
+	if node.Position != nil {
+		buf.astPrintf(node, " from %v", node.Position)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationStatus) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show slave status")
+	} else {
+		buf.literal("show replica status")
+	}
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationSourceStatus) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show master status")
+	} else {
+		buf.literal("show binary log status")
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicas) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show slave hosts")
+	} else {
+		buf.literal("show replicas")
+	}
+}
+
+// Format formats the node.
+func (node *ShowBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.literal("show binary logs")
 }
 
 // Format formats the node.
@@ -2572,7 +2703,6 @@ func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AddColumns) Format(buf *TrackedBuffer) {
-
 	if len(node.Columns) == 1 {
 		buf.astPrintf(node, "add column %v", node.Columns[0])
 		if node.First {
@@ -2671,7 +2801,6 @@ func (node *KeyState) Format(buf *TrackedBuffer) {
 	} else {
 		buf.literal("disable keys")
 	}
-
 }
 
 // Format formats the node
@@ -2873,7 +3002,6 @@ func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
 		for i, p := range node.Params {
 			if i != 0 {
 				buf.astPrintf(node, ", ")
-
 			}
 			buf.astPrintf(node, "%v", p)
 		}

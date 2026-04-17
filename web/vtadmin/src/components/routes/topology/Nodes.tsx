@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import React from 'react';
-import { MarkerType, Node, Edge } from 'react-flow-renderer';
+import { MarkerType, Node, Edge } from '@xyflow/react';
 
 export interface TopologyCell {
     name?: string;

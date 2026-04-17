@@ -17,8 +17,10 @@ limitations under the License.
 package servenv
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -52,7 +54,7 @@ const (
 )
 
 func (p profmode) filename() string {
-	return fmt.Sprintf("%s.pprof", string(p))
+	return string(p) + ".pprof"
 }
 
 type profile struct {
@@ -102,7 +104,7 @@ func parseProfileFlag(pf []string) (*profile, error) {
 		switch fields[0] {
 		case "rate":
 			if len(fields) == 1 {
-				return nil, fmt.Errorf("missing value for 'rate'")
+				return nil, errors.New("missing value for 'rate'")
 			}
 			p.rate, err = strconv.Atoi(fields[1])
 			if err != nil {
@@ -111,7 +113,7 @@ func parseProfileFlag(pf []string) (*profile, error) {
 
 		case "path":
 			if len(fields) == 1 {
-				return nil, fmt.Errorf("missing value for 'path'")
+				return nil, errors.New("missing value for 'path'")
 			}
 			p.path = fields[1]
 
@@ -149,7 +151,8 @@ func startCallback(start func()) func() {
 		if atomic.CompareAndSwapUint32(&profileStarted, 0, 1) {
 			start()
 		} else {
-			log.Fatal("profile: Start() already called")
+			log.Error("profile: Start() already called")
+			os.Exit(1)
 		}
 	}
 }
@@ -166,29 +169,31 @@ func (prof *profile) mkprofile() io.WriteCloser {
 	var (
 		path string
 		err  error
-		logf = func(format string, args ...any) {}
+		logf = func(string, ...slog.Attr) {}
 	)
 
 	if prof.path != "" {
 		path = prof.path
-		err = os.MkdirAll(path, 0777)
+		err = os.MkdirAll(path, 0o777)
 	} else {
 		path, err = os.MkdirTemp("", "profile")
 	}
 	if err != nil {
-		log.Fatalf("pprof: could not create initial output directory: %v", err)
+		log.Error(fmt.Sprintf("pprof: could not create initial output directory: %v", err))
+		os.Exit(1)
 	}
 
 	if !prof.quiet {
-		logf = log.Infof
+		logf = log.Info
 	}
 
 	fn := filepath.Join(path, prof.mode.filename())
 	f, err := os.Create(fn)
 	if err != nil {
-		log.Fatalf("pprof: could not create profile %q: %v", fn, err)
+		log.Error(fmt.Sprintf("pprof: could not create profile %q: %v", fn, err))
+		os.Exit(1)
 	}
-	logf("pprof: %s profiling enabled, %s", string(prof.mode), fn)
+	logf(fmt.Sprintf("pprof: %s profiling enabled, %s", string(prof.mode), fn))
 
 	return f
 }
@@ -271,7 +276,8 @@ func (prof *profile) init() (start func(), stop func()) {
 		start = startCallback(func() {
 			pf = prof.mkprofile()
 			if err := trace.Start(pf); err != nil {
-				log.Fatalf("pprof: could not start trace: %v", err)
+				log.Error(fmt.Sprintf("pprof: could not start trace: %v", err))
+				os.Exit(1)
 			}
 		})
 		stop = stopCallback(func() {

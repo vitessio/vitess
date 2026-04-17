@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -205,7 +206,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 		}
 	}
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes)
+	log.Info(fmt.Sprintf("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes))
 
 	var (
 		mycnf      *mysqlctl.Mycnf
@@ -241,7 +242,7 @@ func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tab
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
-		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+		return nil, errors.New("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 
 	// creates and registers the query service

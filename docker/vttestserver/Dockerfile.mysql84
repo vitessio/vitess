@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.25.0-bookworm AS builder
+FROM golang:1.26.2-bookworm@sha256:b6c3f6b2881231dda32428740ea934e556614756b76a6c23129c9d85c3af4630 AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -31,7 +31,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install-testing PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM --platform=linux/amd64 debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d
 
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh

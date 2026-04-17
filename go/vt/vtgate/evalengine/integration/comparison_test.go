@@ -69,7 +69,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 		return sqltypes.NewVarBinary(string(v.Raw()))
 	}
 	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
-		var bitsize = 64
+		bitsize := 64
 		if typ == sqltypes.Float32 {
 			bitsize = 32
 		}
@@ -248,7 +248,7 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 			t.Fatalf("failed to insert timezone info: %v", err)
 		}
 	}
-	_, err = conn.ExecuteFetch(fmt.Sprintf("USE %s", connParams.DbName), -1, false)
+	_, err = conn.ExecuteFetch("USE "+connParams.DbName, -1, false)
 	if err != nil {
 		t.Fatalf("failed to switch back to database: %v", err)
 	}
@@ -256,7 +256,7 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 
 func TestMySQL(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	var conn = mysqlconn(t)
+	conn := mysqlconn(t)
 	defer conn.Close()
 
 	// We require MySQL 8.0 collations for the comparisons in the tests

@@ -101,10 +101,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	switch {
 	case config.ReplicationTracker.HeartbeatOnDemand > 0:
 		configType = HeartbeatConfigTypeOnDemand
-		onDemandDuration = config.ReplicationTracker.HeartbeatOnDemand
-		if onDemandDuration < minimalOnDemandDuration {
-			onDemandDuration = minimalOnDemandDuration
-		}
+		onDemandDuration = max(config.ReplicationTracker.HeartbeatOnDemand, minimalOnDemandDuration)
 	case config.ReplicationTracker.Mode == tabletenv.Heartbeat:
 		configType = HeartbeatConfigTypeAlways
 		onDemandDuration = 0
@@ -340,7 +337,7 @@ func (w *heartbeatWriter) killWrite() error {
 	defer cancel()
 	killConn, err := w.allPrivsPool.Get(ctx)
 	if err != nil {
-		log.Errorf("Kill conn didn't get connection :(")
+		log.Error("Kill conn didn't get connection :(")
 		return err
 	}
 	defer killConn.Recycle()

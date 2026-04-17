@@ -49,7 +49,7 @@ func TestTranslateSimplification(t *testing.T) {
 		return ast{err: in}
 	}
 
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		converted  ast
 		simplified ast
@@ -63,19 +63,23 @@ func TestTranslateSimplification(t *testing.T) {
 			ok(`'foo' COLLATE utf8mb4_general_ci in ('bar' COLLATE latin1_swedish_ci, 'baz')`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'charizard')`),
 			ok("0"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon')`),
 			ok("1"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon', null)`),
 			ok(`1`),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', null)`),
 			ok(`null`),
 		},
@@ -238,6 +242,15 @@ func TestEvaluate(t *testing.T) {
 		expression: "(1,2) in ((1,null), (2,3))",
 		expected:   NULL,
 	}, {
+		expression: "1 IN ::tuple_bind_variable",
+		expected:   True,
+	}, {
+		expression: "3 IN ::tuple_bind_variable",
+		expected:   True,
+	}, {
+		expression: "4 IN ::tuple_bind_variable",
+		expected:   False,
+	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   True,
 	}, {
@@ -319,6 +332,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
+				"tuple_bind_variable": {
+					Type: sqltypes.Tuple,
+					Values: []*querypb.Value{
+						{Type: sqltypes.Int64, Value: []byte("1")},
+						{Type: sqltypes.Int64, Value: []byte("2")},
+						{Type: sqltypes.Int64, Value: []byte("3")},
+					},
+				},
 			}, NewEmptyVCursor(venv, time.Local))
 
 			// When
@@ -403,7 +424,6 @@ func TestTranslationFailures(t *testing.T) {
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
-
 }
 
 func TestCardinalityWithBindVariables(t *testing.T) {

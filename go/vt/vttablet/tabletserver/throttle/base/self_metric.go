@@ -18,6 +18,7 @@ package base
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -42,9 +43,7 @@ type SelfMetric interface {
 	Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric
 }
 
-var (
-	RegisteredSelfMetrics = make(map[MetricName]SelfMetric)
-)
+var RegisteredSelfMetrics = make(map[MetricName]SelfMetric)
 
 func registerSelfMetric(selfMetric SelfMetric) SelfMetric {
 	RegisteredSelfMetrics[selfMetric.Name()] = selfMetric
@@ -73,7 +72,7 @@ func ReadSelfMySQLThrottleMetric(ctx context.Context, conn *connpool.Conn, query
 		return metric
 	}
 	if conn == nil {
-		return metric.WithError(fmt.Errorf("conn is nil"))
+		return metric.WithError(errors.New("conn is nil"))
 	}
 
 	tm, err := conn.Exec(ctx, query, 1, true)

@@ -152,30 +152,32 @@ type (
 	}
 )
 
-var _ IR = (*builtinField)(nil)
-var _ IR = (*builtinElt)(nil)
-var _ IR = (*builtinInsert)(nil)
-var _ IR = (*builtinChangeCase)(nil)
-var _ IR = (*builtinCharLength)(nil)
-var _ IR = (*builtinLength)(nil)
-var _ IR = (*builtinASCII)(nil)
-var _ IR = (*builtinReverse)(nil)
-var _ IR = (*builtinSpace)(nil)
-var _ IR = (*builtinOrd)(nil)
-var _ IR = (*builtinBitLength)(nil)
-var _ IR = (*builtinCollation)(nil)
-var _ IR = (*builtinWeightString)(nil)
-var _ IR = (*builtinLeftRight)(nil)
-var _ IR = (*builtinPad)(nil)
-var _ IR = (*builtinStrcmp)(nil)
-var _ IR = (*builtinTrim)(nil)
-var _ IR = (*builtinSubstring)(nil)
-var _ IR = (*builtinLocate)(nil)
-var _ IR = (*builtinChar)(nil)
-var _ IR = (*builtinRepeat)(nil)
-var _ IR = (*builtinConcat)(nil)
-var _ IR = (*builtinConcatWs)(nil)
-var _ IR = (*builtinReplace)(nil)
+var (
+	_ IR = (*builtinField)(nil)
+	_ IR = (*builtinElt)(nil)
+	_ IR = (*builtinInsert)(nil)
+	_ IR = (*builtinChangeCase)(nil)
+	_ IR = (*builtinCharLength)(nil)
+	_ IR = (*builtinLength)(nil)
+	_ IR = (*builtinASCII)(nil)
+	_ IR = (*builtinReverse)(nil)
+	_ IR = (*builtinSpace)(nil)
+	_ IR = (*builtinOrd)(nil)
+	_ IR = (*builtinBitLength)(nil)
+	_ IR = (*builtinCollation)(nil)
+	_ IR = (*builtinWeightString)(nil)
+	_ IR = (*builtinLeftRight)(nil)
+	_ IR = (*builtinPad)(nil)
+	_ IR = (*builtinStrcmp)(nil)
+	_ IR = (*builtinTrim)(nil)
+	_ IR = (*builtinSubstring)(nil)
+	_ IR = (*builtinLocate)(nil)
+	_ IR = (*builtinChar)(nil)
+	_ IR = (*builtinRepeat)(nil)
+	_ IR = (*builtinConcat)(nil)
+	_ IR = (*builtinConcatWs)(nil)
+	_ IR = (*builtinReplace)(nil)
+)
 
 func fieldSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
 	if sqltypes.IsNull(arg) {
@@ -830,7 +832,7 @@ func charOrd(b []byte, coll collations.ID) int64 {
 	cs := colldata.Lookup(coll).Charset()
 	_, l := cs.DecodeRune(b)
 	var r int64
-	for i := 0; i < l; i++ {
+	for i := range l {
 		r = (r << 8) | int64(b[i])
 	}
 	return r
@@ -890,8 +892,10 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 //   - `<= max_allowed_packet` but the actual packet generated is `> max_allowed_packet` so it fails with an
 //     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
 //   - `> max_allowed_packet`, no error and returns `NULL`.
-const maxRepeatLength = 1073741824
-const repeatTypeChangeLength = 16384
+const (
+	maxRepeatLength        = 1073741824
+	repeatTypeChangeLength = 16384
+)
 
 // repeatType returns the type for the REPEAT result.
 // MySQL 8.1.x and later has changed this to return TEXT instead of VARCHAR.
@@ -2183,7 +2187,7 @@ func replace(str, from, to []byte) []byte {
 	out := make([]byte, len(str)+n*(len(to)-len(from)))
 	end := 0
 	start := 0
-	for i := 0; i < n; i++ {
+	for range n {
 		pos := start + bytes.Index(str[start:], from)
 		end += copy(out[end:], str[start:pos])
 		end += copy(out[end:], to)

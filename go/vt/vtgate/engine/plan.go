@@ -242,7 +242,7 @@ func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
 	case None:
 		return PlanLocal
 	}
-	panic(fmt.Sprintf("cannot determine plan type for the given opcode: %s", rp.Opcode.String()))
+	panic("cannot determine plan type for the given opcode: " + rp.Opcode.String())
 }
 
 func getPlanTypeForUpsert(prim *Upsert) PlanType {

@@ -50,7 +50,7 @@ func TestNumberedGeneral(t *testing.T) {
 	p.Unregister(0, "test")
 	// p is now empty
 
-	if _, err = p.Get(0, "test3"); !(strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)")) {
+	if _, err = p.Get(0, "test3"); !strings.HasPrefix(err.Error(), "ended at") || !strings.HasSuffix(err.Error(), "(test)") {
 		t.Errorf("want prefix 'ended at' and suffix '(test)', got '%v'", err)
 	}
 
@@ -87,7 +87,7 @@ func BenchmarkRegisterUnregister(b *testing.B) {
 	p := NewNumbered()
 	id := int64(1)
 	val := "foobarbazdummyval"
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		p.Register(id, val)
 		p.Unregister(id, "some reason")
 	}

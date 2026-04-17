@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path"
 	"slices"
 	"sort"
@@ -109,6 +110,32 @@ func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 	return strings.ToLower(shard), keyRange, nil
 }
 
+// UpdateDeniedTablesOpts specifies options for UpdateDeniedTables.
+type UpdateDeniedTablesOpts struct {
+	// AllowCreate specifies whether to create a new TabletControl record if one
+	// doesn't exist. If false and no record exists, the update is a no-op.
+	AllowCreate bool
+
+	// AllowReads specifies whether to allow read queries to the denied tables.
+	// This is used for traffic mirroring scenarios.
+	AllowReads bool
+
+	// Cells specifies which cells to update. If nil, updates all cells.
+	Cells []string
+
+	// Remove specifies whether to remove entries. For PRIMARY tablet types,
+	// this removes the specified tables from the deny list. For non-PRIMARY
+	// tablet types, this removes the specified cells from the tablet control
+	// record (the table list is not modified).
+	Remove bool
+
+	// Tables specifies the tables to add or remove from the deny list.
+	Tables []string
+
+	// TabletType specifies which tablet type's control record to update.
+	TabletType topodatapb.TabletType
+}
+
 // ShardInfo is a meta struct that contains metadata to give the data
 // more context and convenience. This is the main way we interact with a shard.
 type ShardInfo struct {
@@ -147,7 +174,7 @@ func (si *ShardInfo) Version() Version {
 
 // HasPrimary returns true if the Shard has an assigned primary.
 func (si *ShardInfo) HasPrimary() bool {
-	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
+	return !topoproto.TabletAliasIsZero(si.PrimaryAlias)
 }
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
@@ -157,7 +184,7 @@ func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
+	si.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -183,7 +210,6 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	shardPath := shardFilePath(keyspace, shard)
 
 	data, version, err := ts.globalCell.Get(ctx, shardPath)
-
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +233,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 		return err
 	}
 
-	data, err := si.Shard.MarshalVT()
+	data, err := si.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -402,62 +428,65 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, opts UpdateDeniedTablesOpts) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
+	if opts.TabletType == topodatapb.TabletType_PRIMARY && len(opts.Cells) > 0 {
 		return errors.New(dlNoCellsForPrimary)
 	}
-	tc := si.GetTabletControl(tabletType)
+	tc := si.GetTabletControl(opts.TabletType)
 	if tc == nil {
 		// Handle the case where the TabletControl object is new.
-		if remove {
+		if opts.Remove {
 			// We tried to remove something that doesn't exist, log a warning.
 			// But we know that our work is done.
-			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			log.Warn(fmt.Sprintf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", opts.TabletType, si.keyspace, si.shardName))
+			return nil
+		}
+
+		if !opts.AllowCreate {
+			// We're not creating and there's nothing to update.
 			return nil
 		}
 
 		// Add constraints to the new record.
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
-			TabletType:   tabletType,
-			Cells:        cells,
-			DeniedTables: tables,
+			TabletType:   opts.TabletType,
+			Cells:        opts.Cells,
+			DeniedTables: opts.Tables,
+			AllowReads:   opts.AllowReads,
 		})
 		return nil
 	}
 
-	if tabletType == topodatapb.TabletType_PRIMARY {
-		if err := si.updatePrimaryTabletControl(tc, remove, tables); err != nil {
+	if opts.TabletType == topodatapb.TabletType_PRIMARY {
+		if err := si.updatePrimaryTabletControl(tc, opts.Remove, opts.Tables, opts.AllowReads); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	// We have an existing record, update the table lists.
-	if remove {
-		si.removeCellsFromTabletControl(tc, tabletType, cells)
+	tc.AllowReads = opts.AllowReads
+	if opts.Remove {
+		si.removeCellsFromTabletControl(tc, opts.TabletType, opts.Cells)
 	} else {
-		if !slices.Equal(tc.DeniedTables, tables) {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, tables)
+		if !slices.Equal(tc.DeniedTables, opts.Tables) {
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, opts.Tables)
 		}
-		tc.Cells = addCells(tc.Cells, cells)
+		tc.Cells = addCells(tc.Cells, opts.Cells)
 	}
 
 	return nil
 }
 
-func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
+func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string, allowReads bool) error {
+	tc.AllowReads = allowReads
+
 	var newTables []string
 	for _, table := range tables {
-		exists := false
-		for _, blt := range tc.DeniedTables {
-			if blt == table {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(tc.DeniedTables, table)
 		if !exists {
 			newTables = append(newTables, table)
 		}
@@ -465,18 +494,12 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if remove {
 		if len(newTables) != 0 {
 			// These tables did not exist in the denied list so we don't need to remove them.
-			log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
+			log.Warn(fmt.Sprintf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ",")))
 		}
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
 			for _, blt := range tc.DeniedTables {
-				mustDelete := false
-				for _, table := range tables {
-					if blt == table {
-						mustDelete = true
-						break
-					}
-				}
+				mustDelete := slices.Contains(tables, blt)
 				if !mustDelete {
 					newDenyList = append(newDenyList, blt)
 				}
@@ -491,7 +514,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if len(newTables) != len(tables) {
 		// Some of the tables already existed in the DeniedTables list so we don't
 		// need to add them.
-		log.Warningf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ","))
+		log.Warn(fmt.Sprintf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ",")))
 		// We do need to merge the lists, however.
 		tables = append(tables, newTables...)
 		tc.DeniedTables = append(tc.DeniedTables, tables...)
@@ -534,12 +557,7 @@ func InCellList(cell string, cells []string) bool {
 	if len(cells) == 0 {
 		return true
 	}
-	for _, c := range cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cells, cell)
 }
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the
@@ -617,7 +635,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	wg.Wait()
 	err = nil
 	if rec.HasErrors() {
-		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error())
+		log.Warn(fmt.Sprintf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error()))
 		err = NewError(PartialResult, shard)
 	}
 

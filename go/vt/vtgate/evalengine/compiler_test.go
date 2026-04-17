@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,7 +63,20 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewWriter(&track.buf)
+	track.tbl = tablewriter.NewTable(&track.buf,
+		tablewriter.WithAlignment(tw.Alignment{
+			tw.AlignLeft,
+			tw.AlignRight,
+			tw.AlignRight,
+			tw.AlignRight,
+		}),
+		tablewriter.WithFooterAlignmentConfig(tw.CellAlignment{
+			Global: tw.AlignRight,
+		}),
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.BorderNone,
+		}),
+	)
 	return track
 }
 
@@ -78,21 +92,13 @@ func (s *Tracker) Add(name string, supported, total int) {
 }
 
 func (s *Tracker) String() string {
-	s.tbl.SetBorder(false)
-	s.tbl.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	s.tbl.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
-	s.tbl.SetFooter([]string{
+	s.tbl.Footer(
 		"",
 		strconv.Itoa(s.supported),
 		strconv.Itoa(s.total),
 		fmt.Sprintf("%.02f%%", 100*float64(s.supported)/float64(s.total)),
-	})
-	s.tbl.Render()
+	)
+	_ = s.tbl.Render() // Ignore render error as this is output formatting
 	return s.buf.String()
 }
 
@@ -182,7 +188,7 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 }
 
 func TestCompilerSingle(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		values     []sqltypes.Value
 		result     string
@@ -848,7 +854,7 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.Evaluate(converted)
 				if err != nil {
 					t.Fatal(err)
@@ -866,7 +872,7 @@ func TestCompilerSingle(t *testing.T) {
 }
 
 func TestBindVarLiteral(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		bindType   func(expr sqlparser.Expr)
 		bindVar    *querypb.BindVariable
@@ -930,7 +936,7 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)
@@ -972,7 +978,7 @@ func (t *testVcursor) SetLastInsertID(id uint64) {
 var _ evalengine.VCursor = (*testVcursor)(nil)
 
 func TestLastInsertID(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		result     uint64
 		missing    bool
@@ -1020,7 +1026,8 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 	expression string
 	result     uint64
 	missing    bool
-}) {
+},
+) {
 	converted, err := evalengine.Translate(expr, cfg)
 	require.NoError(t, err)
 
@@ -1038,7 +1045,7 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 }
 
 func TestCompilerNonConstant(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 	}{
 		{
@@ -1070,7 +1077,7 @@ func TestCompilerNonConstant(t *testing.T) {
 
 			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				expected, err := env.EvaluateAST(converted)
 				if err != nil {
 					t.Fatal(err)
@@ -1082,7 +1089,7 @@ func TestCompilerNonConstant(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)

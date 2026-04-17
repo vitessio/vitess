@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 		clusterInstance.VtTabletExtraArgs = []string{}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-"}, 1, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-"}, 1, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

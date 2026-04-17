@@ -117,7 +117,7 @@ func makeversions(output string) {
 		}
 	}
 
-	var versions []string
+	versions := make([]string, 0, len(versionfiles))
 	for _, versionCsv := range versionfiles {
 		base := filepath.Base(versionCsv)
 		base = strings.TrimPrefix(base, "collations_")
@@ -125,7 +125,7 @@ func makeversions(output string) {
 		versions = append(versions, base)
 	}
 
-	var g = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations")
+	g := codegen.NewGenerator("vitess.io/vitess/go/mysql/collations")
 	g.P("type collver byte")
 	g.P("type collalias struct { mask collver; name string; charset string }")
 	g.P("const (")
@@ -158,7 +158,7 @@ func makeversions(output string) {
 	g.P()
 	g.P("var globalVersionInfo = map[ID]struct{alias []collalias; isdefault collver}{")
 
-	var sorted []*versionInfo
+	sorted := make([]*versionInfo, 0, len(versioninfo))
 	for _, vi := range versioninfo {
 		sorted = append(sorted, vi)
 	}
@@ -166,7 +166,7 @@ func makeversions(output string) {
 		return sorted[i].id < sorted[j].id
 	})
 	for _, vi := range sorted {
-		var reverse []alias
+		reverse := make([]alias, 0, len(vi.alias))
 		for a, m := range vi.alias {
 			reverse = append(reverse, alias{mask: m, name: a})
 		}

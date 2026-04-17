@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc"
@@ -35,6 +36,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // server is the gRPC implementation of the RPC server
@@ -64,6 +66,9 @@ func (s *server) Sleep(ctx context.Context, request *tabletmanagerdatapb.SleepRe
 func (s *server) ExecuteHook(ctx context.Context, request *tabletmanagerdatapb.ExecuteHookRequest) (response *tabletmanagerdatapb.ExecuteHookResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteHook", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+	if request.Name == "" || filepath.Base(request.Name) != request.Name {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "hook name must be a basename, got %q", request.Name)
+	}
 	response = &tabletmanagerdatapb.ExecuteHookResponse{}
 	hr := s.tm.ExecuteHook(ctx, &hook.Hook{
 		Name:       request.Name,
@@ -427,6 +432,13 @@ func (s *server) StartReplication(ctx context.Context, request *tabletmanagerdat
 	return response, s.tm.StartReplication(ctx, request.GetSemiSync())
 }
 
+func (s *server) RestartReplication(ctx context.Context, request *tabletmanagerdatapb.RestartReplicationRequest) (response *tabletmanagerdatapb.RestartReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "RestartReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.RestartReplicationResponse{}
+	return response, s.tm.RestartReplication(ctx, request.GetSemiSync())
+}
+
 func (s *server) StartReplicationUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartReplicationUntilAfterRequest) (response *tabletmanagerdatapb.StartReplicationUntilAfterResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -600,7 +612,7 @@ func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb
 	defer s.tm.HandleRPCPanic(ctx, "DemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
-	status, err := s.tm.DemotePrimary(ctx)
+	status, err := s.tm.DemotePrimary(ctx, request.Force)
 	if err == nil {
 		response.PrimaryStatus = status
 	}

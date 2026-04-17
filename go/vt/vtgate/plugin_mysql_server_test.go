@@ -17,16 +17,18 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
+	"io"
+	"net"
 	"os"
 	"path"
 	"strings"
 	"syscall"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,10 +40,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 )
 
 type testHandler struct {
@@ -97,7 +102,7 @@ func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos ui
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -198,6 +203,20 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	}
 }
 
+func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
+	vh := &vtgateHandler{
+		connections: make(map[uint32]*mysql.Conn),
+	}
+
+	c := &mysql.Conn{}
+	assert.Zero(t, c.StatusFlags, "StatusFlags should be zero before NewConnection")
+
+	vh.NewConnection(c)
+
+	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
+}
+
 var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return trace.NoopSpan{}, context.Background()
 }
@@ -215,7 +234,7 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), fmt.Errorf("")
+		return trace.NoopSpan{}, context.Background(), errors.New("")
 	}
 }
 
@@ -299,35 +318,39 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 }
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
-	// Create the certs.
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		// Create the certs.
+		ctx := utils.LeakCheckContext(t)
 
-	root := t.TempDir()
-	tlstest.CreateCA(root)
-	tlstest.CreateCRL(root, tlstest.CA)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+		root := t.TempDir()
+		tlstest.CreateCA(root)
+		tlstest.CreateCRL(root, tlstest.CA)
+		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
-	serverCACert := ""
-	if serverCA {
-		serverCACert = path.Join(root, "ca-cert.pem")
-	}
+		serverCACert := ""
+		if serverCA {
+			serverCACert = path.Join(root, "ca-cert.pem")
+		}
 
-	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
-	if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-		t.Fatalf("init tls config failure due to: +%v", err)
-	}
+		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+			t.Fatalf("init tls config failure due to: +%v", err)
+		}
 
-	serverConfig := srv.tcpListener.TLSConfig.Load()
-	if serverConfig == nil {
-		t.Fatalf("init tls config shouldn't create nil server config")
-	}
+		serverConfig := srv.tcpListener.TLSConfig.Load()
+		if serverConfig == nil {
+			t.Fatalf("init tls config shouldn't create nil server config")
+		}
 
-	srv.sigChan <- syscall.SIGHUP
-	time.Sleep(100 * time.Millisecond) // wait for signal handler
+		srv.sigChan <- syscall.SIGHUP
 
-	if srv.tcpListener.TLSConfig.Load() == serverConfig {
-		t.Fatalf("init tls config should have been recreated after SIGHUP")
-	}
+		// wait for signal handler
+		synctest.Wait()
+
+		if srv.tcpListener.TLSConfig.Load() == serverConfig {
+			t.Fatalf("init tls config should have been recreated after SIGHUP")
+		}
+	})
 }
 
 // TestKillMethods test the mysql plugin for kill method calls.
@@ -565,6 +588,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -610,6 +641,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -646,6 +685,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),
@@ -682,6 +729,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "3",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(3),
@@ -727,6 +782,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -763,6 +826,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),
@@ -856,6 +927,407 @@ func TestGracefulShutdown(t *testing.T) {
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
 
 	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestComBinlogDumpGTID(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	// Enable binlog dump and authorize all users for this test
+	enableBinlogDump.Set(true)
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+	// Create executor environment with sandbox connections
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	// Create VTGate with the gateway
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	// Get the tablet alias from the sandbox connection
+	tabletAlias := sbc1.Tablet().Alias
+
+	// Create the vtgate handler
+	vh := newVtgateHandler(vtg)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// Create a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.User = "testuser"
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
+	vh.connections[1] = mysqlConn
+
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcUser"))
+		defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		mysqlConn.User = "regularUser"
+		mysqlConn.UserData = &mysql.StaticUserData{Username: "regularUser"}
+		defer func() {
+			mysqlConn.User = "testuser"
+			mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
+		}()
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump operations")
+	})
+
+	t.Run("no target specified", func(t *testing.T) {
+		// Clear any previous target
+		vh.session(mysqlConn).TargetString = ""
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no target specified")
+	})
+
+	t.Run("target from session TargetString", func(t *testing.T) {
+		// Set up empty responses
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		// Set the session target (normally set by USE statement or parsed from username)
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+		mysqlConn.User = "testuser"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("target without tablet alias routes via gateway", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump with error from tablet", func(t *testing.T) {
+		// Set up an error response
+		sbc1.BinlogDumpError = errors.New("test binlog error")
+		defer func() { sbc1.BinlogDumpError = nil }()
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "test binlog error")
+	})
+
+	t.Run("binlog dump with empty response succeeds", func(t *testing.T) {
+		// Reset error and set up empty responses (no events to write)
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump with GTID set and empty response", func(t *testing.T) {
+		// Reset error
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
+		require.NoError(t, err)
+
+		err = vh.ComBinlogDumpGTID(mysqlConn, "", 4, gtidSet, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid tablet alias in target", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|invalid-alias"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		// The error could be about parsing the alias or not finding the tablet
+		assert.True(t, strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "not found"),
+			"Expected error about invalid alias or tablet not found, got: %v", err)
+	})
+
+	t.Run("nonexistent tablet alias", func(t *testing.T) {
+		// Use a valid format but non-existent alias
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|aa-9999999"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("filename is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 3, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("non-default position is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 5, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("default position is allowed", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+}
+
+func TestBinlogDumpACL(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	originalAuthorizedUsers := binlogacl.AuthorizedBinlogUsers.Get()
+	defer binlogacl.AuthorizedBinlogUsers.Set(originalAuthorizedUsers)
+
+	// Create executor environment with sandbox connections
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	// Create VTGate with the gateway
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	// Get the tablet alias from the sandbox connection
+	tabletAlias := sbc1.Tablet().Alias
+
+	// Create the vtgate handler
+	vh := newVtgateHandler(vtg)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// Create a connection with a specific user
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "cdcuser"}
+	mysqlConn.User = "cdcuser"
+	vh.connections[1] = mysqlConn
+
+	// Set up a valid target
+	targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+	vh.session(mysqlConn).TargetString = targetString
+
+	// Set up empty responses for successful cases
+	sbc1.BinlogDumpError = nil
+	sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+	t.Run("binlog dump disabled globally", func(t *testing.T) {
+		enableBinlogDump.Set(false)
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog dump is disabled")
+	})
+
+	t.Run("binlog dump enabled but user not authorized", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		// Don't set any authorized users (empty = no one authorized)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump")
+		assert.Contains(t, err.Error(), "cdcuser")
+	})
+
+	t.Run("binlog dump enabled and user authorized via explicit list", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcuser,otheruser"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump enabled and all users authorized via wildcard", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("ComBinlogDump returns unimplemented error", func(t *testing.T) {
+		err := vh.ComBinlogDump(mysqlConn, "binlog.000001", 4)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "COM_BINLOG_DUMP is not supported")
+	})
+}
+
+func TestBinlogStreamCallback_SpanningPacketClosesOnError(t *testing.T) {
+	// When a MySQL packet spans multiple gRPC responses and the stream
+	// errors mid-packet, streamBinlogDumpResponse must close the connection
+	// without writing an ERR packet. Writing an ERR packet mid-packet would
+	// corrupt the client stream since the client is still expecting the
+	// remaining payload bytes.
+
+	// Create a writable mysql.Conn backed by a pipe, capturing all bytes
+	// written so we can verify no ERR packet was sent.
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response where a MySQL packet spans the response boundary.
+	// The packet header declares a 1000-byte payload, but only 500 bytes
+	// are present in this response.
+	pktPayloadLen := 1000
+	availablePayload := 500
+
+	raw := make([]byte, mysql.PacketHeaderSize+availablePayload)
+	// MySQL packet header: 3-byte little-endian length + 1-byte sequence
+	raw[0] = byte(pktPayloadLen & 0xFF)
+	raw[1] = byte((pktPayloadLen >> 8) & 0xFF)
+	raw[2] = byte((pktPayloadLen >> 16) & 0xFF)
+	raw[3] = 0 // sequence number
+
+	// Simulate: callback processes the spanning response, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err) // streamBinlogDumpResponse returns nil after handling the error
+
+	// Close the write end so the capture goroutine finishes.
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The only bytes written should be the partial MySQL packet:
+	// 4-byte header + 500 bytes payload = 504 bytes.
+	// If an ERR packet was incorrectly written, there would be additional bytes.
+	expectedBytes := mysql.PacketHeaderSize + availablePayload
+	assert.Equal(t, expectedBytes, written.Len(),
+		"only the partial packet should be written; extra bytes indicate a spurious ERR packet")
+}
+
+func TestBinlogStreamCallback_CompletePacketWritesErrOnError(t *testing.T) {
+	// When a complete MySQL packet has been written and the stream errors
+	// at a clean message boundary, streamBinlogDumpResponse should write
+	// an ERR packet so the client knows what happened.
+
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response containing a complete, small MySQL packet.
+	payload := []byte{0x00, 0xAA, 0xBB, 0xCC}
+	raw := make([]byte, mysql.PacketHeaderSize+len(payload))
+	raw[0] = byte(len(payload))
+	raw[1] = 0
+	raw[2] = 0
+	raw[3] = 0 // sequence number
+	copy(raw[mysql.PacketHeaderSize:], payload)
+
+	// Simulate: callback processes the complete packet, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err)
+
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The written bytes should contain the original packet PLUS an ERR packet.
+	originalPacketSize := mysql.PacketHeaderSize + len(payload)
+	assert.Greater(t, written.Len(), originalPacketSize,
+		"an ERR packet should be written after the complete packet")
+
+	// Verify the extra bytes start with a MySQL packet header whose payload
+	// begins with the ERR marker (0xFF).
+	errPacketStart := written.Bytes()[originalPacketSize:]
+	require.GreaterOrEqual(t, len(errPacketStart), mysql.PacketHeaderSize+1,
+		"ERR packet too short")
+	assert.Equal(t, byte(mysql.ErrPacket), errPacketStart[mysql.PacketHeaderSize],
+		"first payload byte of the error response should be the ERR packet marker")
 }
 
 func TestGracefulShutdownWithTransaction(t *testing.T) {

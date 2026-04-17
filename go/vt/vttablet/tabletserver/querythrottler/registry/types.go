@@ -17,9 +17,20 @@ limitations under the License.
 package registry
 
 import (
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
+
+// QueryAttributes contains query-level metadata used by throttling strategies.
+// This centralizes extraction of workload and priority information.
+type QueryAttributes struct {
+	// WorkloadName contains the name of the workload for the query.
+	WorkloadName string
+
+	// Priority contains the priority of the query (0-100, where 0 is highest priority).
+	Priority int
+}
 
 // ThrottleDecision represents the result of evaluating whether a query should be throttled.
 // It separates the decision-making logic from the enforcement action.
@@ -45,9 +56,11 @@ type ThrottleDecision struct {
 }
 
 // StrategyConfig defines the configuration interface that strategy implementations
-// must satisfy. This avoids circular imports by using a generic interface.
+// must satisfy. This matches the proto querythrottlerpb.Config interface.
 type StrategyConfig interface {
-	GetStrategy() ThrottlingStrategy
+	GetEnabled() bool
+	GetDryRun() bool
+	GetStrategy() querythrottlerpb.ThrottlingStrategy
 }
 
 // Deps holds the dependencies required by strategy factories.

@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -83,7 +83,6 @@ func TestMain(m *testing.M) {
 // The stressor is started on its own goroutine while the end-to-end test
 // is executed on the same cluster.
 func TestSimpleStressTest(t *testing.T) {
-
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &vtParams
 	s := stress.New(t, cfg)

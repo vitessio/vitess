@@ -1051,8 +1051,7 @@ func TestGetKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			topos := make([]*topo.Server, len(tt.clusterShards))
 			vtctlds := make([]vtctlservicepb.VtctldServer, len(tt.clusterShards))
 
@@ -1281,8 +1280,7 @@ func TestGetKeyspaces(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			// Note that these test cases were written prior to the existence of
 			// WithTestServers, so they are all written with the assumption that
 			// there are exactly 2 clusters.
@@ -1339,8 +1337,7 @@ func TestGetKeyspaces(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -1532,8 +1529,7 @@ func TestGetSchema(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -2171,8 +2167,7 @@ func TestGetSchemas(t *testing.T) {
 		// there are exactly 2 clusters.
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			topos := []*topo.Server{
 				memorytopo.NewServer(ctx, "c0_cell1"),
@@ -2617,8 +2612,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			tmc := testutil.TabletManagerClient{}
 
@@ -2775,8 +2769,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			tmc := testutil.TabletManagerClient{}
 
@@ -2928,7 +2921,6 @@ func TestGetSrvVSchema(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-
 			name:       "cell doesn't exist",
 			srvVSchema: nil,
 			req: &vtadminpb.GetSrvVSchemaRequest{
@@ -2942,8 +2934,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			tmc := testutil.TabletManagerClient{}
 
@@ -3234,8 +3225,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			tmc := testutil.TabletManagerClient{}
 
@@ -5068,8 +5058,7 @@ func TestVTExplain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			toposerver := memorytopo.NewServer(ctx, "c0_cell1")
 
 			tmc := testutil.TabletManagerClient{
@@ -5248,8 +5237,7 @@ func TestVExplain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			toposerver := memorytopo.NewServer(ctx, "c0_cell1")
 
 			tmc := testutil.TabletManagerClient{

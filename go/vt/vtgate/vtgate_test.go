@@ -35,8 +35,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -51,7 +53,7 @@ var executeOptions = &querypb.ExecuteOptions{
 
 func TestVTGateExecute(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 
 	_, qr, err := vtg.Execute(
 		ctx,
@@ -76,7 +78,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := vtg.timings.Timings.Counts()
+	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
 	require.Contains(t, newCounts, "Execute.TestUnsharded.primary")
@@ -92,7 +94,7 @@ func TestVTGateExecute(t *testing.T) {
 func TestVTGateExecuteError(t *testing.T) {
 	vtg, _, ctx := createVtgateEnv(t)
 
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 
 	_, qr, err := vtg.Execute(
 		ctx,
@@ -123,7 +125,7 @@ func TestVTGateExecuteError(t *testing.T) {
 func TestVTGatePrepare(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 
-	counts := vtg.timings.Timings.Counts()
+	counts := vtg.timings.Counts()
 	_, qr, paramsCount, err := vtg.Prepare(
 		ctx,
 		&vtgatepb.Session{
@@ -142,7 +144,7 @@ func TestVTGatePrepare(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	newCounts := vtg.timings.Timings.Counts()
+	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
 	require.Equal(t, counts["All"]+1, newCounts["All"])
 	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary")
@@ -271,7 +273,8 @@ func TestVTGateStreamExecute(t *testing.T) {
 	want := []*sqltypes.Result{{
 		Fields: sandboxconn.StreamRowResult.Fields,
 	}, {
-		Rows: sandboxconn.StreamRowResult.Rows,
+		Fields: sandboxconn.StreamRowResult.Fields,
+		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
@@ -321,7 +324,6 @@ func TestVTGateBindVarError(t *testing.T) {
 }
 
 func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
-
 	// Execute
 	for _, sbc := range sbcs {
 		before(sbc)
@@ -918,4 +920,112 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			tt.checkFunc(t, ctx, ts, factory)
 		})
 	}
+}
+
+func TestBinlogDumpGTID(t *testing.T) {
+	origEnableBinlogDump := enableBinlogDump.Get()
+	enableBinlogDump.Set(true)
+	t.Cleanup(func() {
+		enableBinlogDump.Set(origEnableBinlogDump)
+	})
+
+	origAuthorizedBinlogUsers := binlogacl.AuthorizedBinlogUsers.Get()
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	t.Cleanup(func() {
+		binlogacl.AuthorizedBinlogUsers.Set(origAuthorizedBinlogUsers)
+	})
+
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	tabletAlias := sbc1.Tablet().Alias
+
+	noopSend := func(*vtgatepb.BinlogDumpResponse) error { return nil }
+
+	t.Run("filename is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogFilename: "binlog.000003",
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogFilename: "binlog.000003",
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 3,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("non-default position is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 1234,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 5,
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("flags exceeding uint16 rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			Flags:          0x10000,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds the 2-byte MySQL protocol field")
+	})
+
+	t.Run("zero-value tablet alias routes via gateway", func(t *testing.T) {
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			TabletAlias:    &topodatapb.TabletAlias{},
+		}, noopSend)
+		require.NoError(t, err)
+	})
+
+	t.Run("valid tablet alias routes via QueryServiceByAlias", func(t *testing.T) {
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.NoError(t, err)
+	})
 }

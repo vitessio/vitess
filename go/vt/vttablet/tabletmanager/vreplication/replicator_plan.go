@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -256,23 +255,74 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	sqlbuffer.Reset()
-	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
-	sqlbuffer.WriteString(" values ")
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	insertPrefix := tp.BulkInsertFront.Query + " values "
+	insertSuffixLen := 0
+	if tp.BulkInsertOnDup != nil {
+		insertSuffixLen = len(tp.BulkInsertOnDup.Query)
+	}
 
-	for i, row := range rows {
-		if i > 0 {
+	flush := func(final bool) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		if final {
+			// Last flush: safe to use StringUnsafe since we won't reuse the buffer.
+			return executor(sqlbuffer.StringUnsafe())
+		}
+		// Mid-batch flush: must copy because we'll reuse the buffer for the next batch.
+		return executor(sqlbuffer.String())
+	}
+
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(insertPrefix)
+
+	var lastResult *sqltypes.Result
+	rowCount := 0
+	for _, row := range rows {
+		beforeLen := sqlbuffer.Len()
+		if rowCount > 0 {
 			sqlbuffer.WriteString(", ")
 		}
 		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
 			return nil, err
 		}
+		rowCount++
+
+		// If the buffer exceeds maxQuerySize and we have more than one
+		// row, flush everything before this row and start a new statement.
+		if maxQuerySize > 0 && int64(sqlbuffer.Len()+insertSuffixLen) > maxQuerySize && rowCount > 1 {
+			// Roll back to before this row was appended.
+			sqlbuffer.Truncate(beforeLen)
+			result, err := flush(false)
+			if err != nil {
+				return nil, err
+			}
+			if lastResult == nil {
+				lastResult = result
+			} else {
+				lastResult.RowsAffected += result.RowsAffected
+			}
+
+			// Start a new INSERT with this row.
+			sqlbuffer.Reset()
+			sqlbuffer.WriteString(insertPrefix)
+			if err := tp.appendFromRow(sqlbuffer, row); err != nil {
+				return nil, err
+			}
+			rowCount = 1
+		}
 	}
-	if tp.BulkInsertOnDup != nil {
-		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+
+	result, err := flush(true)
+	if err != nil {
+		return nil, err
 	}
-	return executor(sqlbuffer.StringUnsafe())
+	if lastResult != nil {
+		lastResult.RowsAffected += result.RowsAffected
+		return lastResult, nil
+	}
+	return result, nil
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
@@ -409,12 +459,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// present. So we have to account for this by unsetting the data bit so
 						// that the column's current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
-						escapedName := sqlescape.EscapeID(field.Name)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(afterVals[i].RawStr(), escapedName),
-						)))
+						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
@@ -510,9 +558,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
 						buf.WriteByte('\'')
-						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(diff, buf.String()),
-						))
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, diff, buf.String()))
 						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
@@ -613,6 +660,9 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	prefix.WriteString(tp.BulkInsertFront.Query)
 	prefix.WriteString(" values ")
 	insertPrefix := prefix.String()
+	if tp.BulkInsertOnDup != nil {
+		maxQuerySize -= int64(len(tp.BulkInsertOnDup.Query))
+	}
 	maxQuerySize -= int64(len(insertPrefix))
 	values := &strings.Builder{}
 
@@ -656,7 +706,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}
@@ -680,6 +730,7 @@ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariab
 	}
 	return sql, nil
 }
+
 func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	query, err := getQuery(pq, bindvars)
 	if err != nil {
@@ -757,13 +808,11 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		case querypb.Type_JSON:
 			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
-			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[offset : offset+length]
-				vv, err := vjson.MarshalSQLValue(buf2)
-				if err != nil {
+			} else {
+				raw := row.Values[offset : offset+length]
+				if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
 					return err
 				}
-				buf.WriteString(vv.RawStr())
 			}
 		default:
 			if length < 0 {

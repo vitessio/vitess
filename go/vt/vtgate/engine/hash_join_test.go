@@ -113,7 +113,6 @@ func TestHashJoinVariations(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-
 		var fields []*querypb.Field
 		var first, last func() Primitive
 		if tc.reverse {

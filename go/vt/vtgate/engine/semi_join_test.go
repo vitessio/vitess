@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -79,12 +80,12 @@ func TestSemiJoinExecute(t *testing.T) {
 	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" true`,
+		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(10)),
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a" false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
+		fmt.Sprintf(`Execute a: %v bv: %v false`, sqltypes.Int64BindVariable(10), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}),
+		fmt.Sprintf(`Execute a: %v bv: %v false`, sqltypes.Int64BindVariable(10), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}),
+		fmt.Sprintf(`Execute a: %v bv: %v false`, sqltypes.Int64BindVariable(10), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("c")}),
 	})
 	utils.MustMatch(t, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -146,10 +147,10 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`StreamExecute bv: type:VARCHAR value:"a" false`,
-		`StreamExecute bv: type:VARCHAR value:"b" false`,
-		`StreamExecute bv: type:VARCHAR value:"c" false`,
-		`StreamExecute bv: type:VARCHAR value:"d" false`,
+		fmt.Sprintf(`StreamExecute bv: %v false`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}),
+		fmt.Sprintf(`StreamExecute bv: %v false`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}),
+		fmt.Sprintf(`StreamExecute bv: %v false`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("c")}),
+		fmt.Sprintf(`StreamExecute bv: %v false`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("d")}),
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

@@ -55,6 +55,14 @@ func TestParseTable(t *testing.T) {
 	}, {
 		input: "k.t.",
 		err:   true,
+	}, {
+		input:    "`k-t`.t",
+		keyspace: "k-t",
+		table:    "t",
+	}, {
+		input:    "`k-t`.`k-t`",
+		keyspace: "k-t",
+		table:    "k-t",
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testcases {

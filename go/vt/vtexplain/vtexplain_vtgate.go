@@ -176,7 +176,7 @@ func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *
 				continue
 			}
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
-			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
+			log.Info(fmt.Sprintf("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name))
 
 			tablet := vte.healthCheck.AddFakeTablet(Cell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
 				return vte.newTablet(ctx, vte.env, opts, t, ts, srvTopoCounts)
@@ -213,7 +213,6 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 			shards = append(shards, ref)
 		}
 		return shards, nil
-
 	}
 
 	numShards := 1

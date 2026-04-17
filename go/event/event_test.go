@@ -32,8 +32,7 @@ type testInterface2 interface {
 	TestFunc2()
 }
 
-type testEvent1 struct {
-}
+type testEvent1 struct{}
 
 type testEvent2 struct {
 	triggered bool
@@ -174,7 +173,6 @@ func TestDispatchPointerToValueInterfaceListener(t *testing.T) {
 	})
 	Dispatch(&testEvent1{})
 	assert.True(t, triggered, "Dispatch by pointer failed to trigger interface listener")
-
 }
 
 func TestDispatchValueToValueInterfaceListener(t *testing.T) {
@@ -195,7 +193,6 @@ func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
 	AddListener(func(testInterface2) { triggered = true })
 	Dispatch(&testEvent2{})
 	assert.True(t, triggered, "interface listener failed to trigger for pointer")
-
 }
 
 func TestDispatchValueToPointerInterfaceListener(t *testing.T) {

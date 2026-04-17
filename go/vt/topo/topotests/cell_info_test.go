@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -36,8 +37,7 @@ import (
 
 func TestCellInfo(t *testing.T) {
 	cell := "cell1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
@@ -86,7 +86,7 @@ func TestCellInfo(t *testing.T) {
 	}
 
 	// Test failing update.
-	updateErr := fmt.Errorf("inside error")
+	updateErr := errors.New("inside error")
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		return updateErr
 	}); err != updateErr {
@@ -137,11 +137,10 @@ func TestCellInfo(t *testing.T) {
 }
 
 func TestExpandCells(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	var cells []string
 	var err error
-	var allCells = "cell1,cell2,cell3"
+	allCells := "cell1,cell2,cell3"
 	type testCase struct {
 		name      string
 		cellsIn   string
@@ -232,8 +231,7 @@ func TestExpandCells(t *testing.T) {
 }
 
 func TestDeleteCellInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "unreachable")
 	defer ts.Close()
 

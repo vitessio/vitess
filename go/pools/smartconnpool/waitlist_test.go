@@ -26,30 +26,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
+func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 	wait := waitlist[*TestConn]{}
 	wait.init()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
+	poolClose := make(chan struct{})
+
 	waiterCount := 2
 	expireCount := atomic.Int32{}
 
-	for i := 0; i < waiterCount; i++ {
+	for range waiterCount {
 		go func() {
-			_, err := wait.waitForConn(ctx, nil)
+			_, err := wait.waitForConn(ctx, nil, poolClose, 0)
 			if err != nil {
 				expireCount.Add(1)
 			}
 		}()
 	}
 
+	close(poolClose)
+
 	// Wait for the context to expire
 	<-ctx.Done()
-
-	// Expire the waiters
-	wait.expire(false)
 
 	// Wait for the notified goroutines to finish
 	timeout := time.After(1 * time.Second)
@@ -65,4 +66,35 @@ func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
 	}
 
 	assert.Equal(t, int32(waiterCount), expireCount.Load())
+}
+
+func TestWaitlistWaiterCap(t *testing.T) {
+	wl := waitlist[*TestConn]{}
+	wl.init()
+
+	poolClose := make(chan struct{})
+
+	const maxWaiters = 3
+
+	errs := make(chan error, maxWaiters)
+	for i := 1; i <= maxWaiters; i++ {
+		go func() {
+			_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+			errs <- err
+		}()
+
+		assert.Eventually(t, func() bool {
+			return wl.waiting() == i
+		}, time.Second, 5*time.Millisecond)
+	}
+
+	_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
+	assert.Equal(t, maxWaiters, wl.waiting())
+
+	close(poolClose)
+
+	for range maxWaiters {
+		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
+	}
 }

@@ -512,7 +512,6 @@ func addMaterializeWorkflow(t *testing.T, env *streamMigratorEnv, id int32, sour
 			env.tenv.sourceKeyspace.KeyspaceName, wfName),
 	}
 	env.addTargetQueries(queries)
-
 }
 
 func addReferenceWorkflow(t *testing.T, env *streamMigratorEnv, id int32, sourceShard string) {

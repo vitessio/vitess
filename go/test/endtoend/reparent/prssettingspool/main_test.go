@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -60,7 +59,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: schemaSQL,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -83,7 +82,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSettingsPoolWithTXAndPRS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -115,7 +114,7 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 }
 
 func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -141,5 +140,4 @@ func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 
 	// no error should occur and it should go to the right tablet.
 	utils.Exec(t, conn, "select id1, id2 from t1")
-
 }

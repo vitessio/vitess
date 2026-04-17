@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -92,7 +92,7 @@ func tokenName(id int) string {
 	case LEX_ERROR:
 		return "LEX_ERROR"
 	}
-	return fmt.Sprintf("%d", id)
+	return strconv.Itoa(id)
 }
 
 func TestString(t *testing.T) {
@@ -248,29 +248,6 @@ func TestVersion(t *testing.T) {
 				id, _ := tok.Scan()
 				require.Equal(t, expectedID, id)
 			}
-		})
-	}
-}
-
-func TestExtractMySQLComment(t *testing.T) {
-	testcases := []struct {
-		comment string
-		version string
-	}{{
-		comment: "/*!50108 SELECT * FROM */",
-		version: "50108",
-	}, {
-		comment: "/*!5018 SELECT * FROM */",
-		version: "",
-	}, {
-		comment: "/*!SELECT * FROM */",
-		version: "",
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, _ := ExtractMysqlComment(tcase.comment)
-			require.Equal(t, tcase.version, output)
 		})
 	}
 }

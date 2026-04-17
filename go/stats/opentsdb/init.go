@@ -18,6 +18,7 @@ package opentsdb
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -39,7 +40,7 @@ func Init(prefix string) {
 		log.Info("Initializing opentsdb backend...")
 		backend, err := InitWithoutServenv(prefix)
 		if err != nil {
-			log.Infof("Failed to initialize singleton opentsdb backend: %v", err)
+			log.Info(fmt.Sprintf("Failed to initialize singleton opentsdb backend: %v", err))
 		} else {
 			singletonBackend = backend
 			log.Info("Initialized opentsdb backend.")
@@ -50,7 +51,6 @@ func Init(prefix string) {
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 	b, err := newBackend(prefix)
-
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 
 func newBackend(prefix string) (*backend, error) {
 	if openTSDBURI == "" {
-		return nil, fmt.Errorf("cannot create opentsdb PushBackend with empty --opentsdb-uri")
+		return nil, errors.New("cannot create opentsdb PushBackend with empty --opentsdb-uri")
 	}
 
 	var w writer

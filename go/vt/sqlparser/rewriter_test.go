@@ -29,7 +29,7 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 	exp := gen.Expression(ExprGeneratorConfig{})
 
 	depth := 0
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Rewrite(exp, func(cursor *Cursor) bool {
 			depth++
 			return true
@@ -150,5 +150,4 @@ func TestChangeValueTypeGivesError(t *testing.T) {
 		}
 		return true
 	}, nil)
-
 }

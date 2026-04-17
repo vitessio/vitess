@@ -30,7 +30,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func main() { // nolint:funlen
+func main() {
 	source := pflag.String("source", "../../proto/vtctlservice", "source package")
 	typeName := pflag.String("type", "VtctldClient", "interface type to implement")
 	implType := pflag.String("impl", "gRPCVtctldClient", "type implementing the interface")
@@ -384,8 +384,7 @@ func extractRecvType(v *types.Var) (name string, localImport string, pkgPath str
 		return "", "", "", fmt.Errorf("expected %s to name an interface type, got %v", v.Name(), named.Underlying())
 	}
 
-	for i := 0; i < iface.NumExplicitMethods(); i++ {
-		m := iface.ExplicitMethod(i)
+	for m := range iface.ExplicitMethods() {
 		if m.Name() != "Recv" {
 			continue
 		}

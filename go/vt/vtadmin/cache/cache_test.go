@@ -18,7 +18,7 @@ package cache_test
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -123,7 +123,7 @@ func TestBackfillQueueSize(t *testing.T) {
 			}, cache.Config{
 				BackfillQueueSize: tt.configuredBackfillQueueSize,
 			})
-			var config = c.Debug()["config"].(cache.Config)
+			config := c.Debug()["config"].(cache.Config)
 			assert.Equal(t, tt.expectedBackfillQueueSize, config.BackfillQueueSize)
 		})
 	}
@@ -194,7 +194,7 @@ func TestBackfillTTL(t *testing.T) {
 
 type intkey int
 
-func (k intkey) Key() string { return fmt.Sprintf("%d", int(k)) }
+func (k intkey) Key() string { return strconv.Itoa(int(k)) }
 
 func TestEnqueueBackfillTimeout(t *testing.T) {
 	t.Parallel()
@@ -208,7 +208,7 @@ func TestEnqueueBackfillTimeout(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var enqueues = []struct {
+	enqueues := []struct {
 		shouldFail bool
 		msg        string
 	}{
@@ -237,7 +237,7 @@ func TestUpsertCacheKey(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var inserts = []struct {
+	inserts := []struct {
 		shouldFail  bool
 		msg         string
 		key         intkey

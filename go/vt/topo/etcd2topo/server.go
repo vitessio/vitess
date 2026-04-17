@@ -153,7 +153,7 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
-		DialOptions: []grpc.DialOption{grpc.WithBlock()}, // nolint:staticcheck
+		DialOptions: []grpc.DialOption{grpc.WithBlock()}, //nolint:staticcheck
 	}
 
 	tlscfg, err := newTLSConfig(certPath, keyPath, caPath)

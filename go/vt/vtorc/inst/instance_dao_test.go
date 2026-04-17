@@ -21,9 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var (
-	spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
-)
+var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
 
 func normalizeQuery(name string) string {
 	name = strings.ReplaceAll(name, "`", "")
@@ -38,9 +36,9 @@ func stripSpaces(s string) string {
 }
 
 func mkTestInstances() []*Instance {
-	i710 := Instance{InstanceAlias: "zone1-i710", Hostname: "i710", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
-	i720 := Instance{InstanceAlias: "zone1-i720", Hostname: "i720", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
-	i730 := Instance{InstanceAlias: "zone1-i730", Hostname: "i730", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
+	i710 := Instance{InstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 710}, Hostname: "i710", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
+	i720 := Instance{InstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 720}, Hostname: "i720", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
+	i730 := Instance{InstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 730}, Hostname: "i730", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
 	instances := []*Instance{&i710, &i720, &i730}
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
@@ -69,7 +67,7 @@ func TestMkInsertSingle(t *testing.T) {
 		VALUES
 				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
-	a1 := `zone1-i710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
+	a1 := `zone1-0000000710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
 	FULL, false, false, , 0, , 0, 0, 0,
 	false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,`
 
@@ -95,9 +93,9 @@ func TestMkInsertThree(t *testing.T) {
 				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a3 := `
-		zone1-i710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false,
-		zone1-i720, i720, 3306, zone1, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
-		zone1-i730, i730, 3306, zone1, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
+		zone1-0000000710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false,
+		zone1-0000000720, i720, 3306, zone1, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
+		zone1-0000000730, i730, 3306, zone1, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
 		`
 
 	sql3, args3, err := mkInsertForInstances(instances[:3], true, true)
@@ -143,7 +141,7 @@ func TestGetKeyspaceShardName(t *testing.T) {
 	err = SaveTablet(tab100)
 	require.NoError(t, err)
 
-	keyspaceRead, shardRead, err := GetKeyspaceShardName(topoproto.TabletAliasString(tab100.Alias))
+	keyspaceRead, shardRead, err := GetKeyspaceShardName(tab100.Alias)
 	require.NoError(t, err)
 	require.Equal(t, ks, keyspaceRead)
 	require.Equal(t, shard, shardRead)
@@ -153,16 +151,16 @@ func TestGetKeyspaceShardName(t *testing.T) {
 func TestReadInstance(t *testing.T) {
 	tests := []struct {
 		name              string
-		tabletAliasToRead string
+		tabletAliasToRead *topodatapb.TabletAlias
 		instanceFound     bool
 	}{
 		{
 			name:              "Read success",
-			tabletAliasToRead: "zone1-0000000100",
+			tabletAliasToRead: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			instanceFound:     true,
 		}, {
 			name:              "Unknown tablet",
-			tabletAliasToRead: "unknown-tablet",
+			tabletAliasToRead: &topodatapb.TabletAlias{Cell: "unknown", Uid: 123456789},
 			instanceFound:     false,
 		},
 	}
@@ -178,7 +176,6 @@ func TestReadInstance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got, found, err := ReadInstance(tt.tabletAliasToRead)
 			require.NoError(t, err)
 			require.Equal(t, tt.instanceFound, found)
@@ -263,9 +260,9 @@ func TestReadProblemInstances(t *testing.T) {
 
 			instances, err := ReadProblemInstances("ks", "0")
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
-				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
 			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
 		})
@@ -347,9 +344,9 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 
 			instances, err := ReadInstancesWithErrantGTIds(tt.keyspace, tt.shard)
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
-				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
 			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
 		})
@@ -370,7 +367,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 	wantInstance := &Instance{
 		Hostname:                     "localhost",
 		Port:                         6711,
-		InstanceAlias:                "zone1-0000000100",
+		InstanceAlias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		TabletType:                   topodatapb.TabletType_REPLICA,
 		Cell:                         "zone1",
 		ServerID:                     1094500338,
@@ -451,7 +448,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 		LastDiscoveryLatency:               0,
 	}
 
-	instance, found, err := ReadInstance(`zone1-0000000100`)
+	instance, found, err := ReadInstance(&topodatapb.TabletAlias{Cell: "zone1", Uid: 100})
 	require.NoError(t, err)
 	require.True(t, found)
 	instance.SecondsSinceLastSeen = sql.NullInt64{}
@@ -517,15 +514,15 @@ func TestReadInstancesByCondition(t *testing.T) {
 			require.NoError(t, err)
 			var tabletAliases []string
 			for _, instance := range instances {
-				tabletAliases = append(tabletAliases, instance.InstanceAlias)
+				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
 			require.EqualValues(t, tt.instancesRequired, tabletAliases)
 		})
 	}
 }
 
-// TestReadOutdatedInstanceKeys is used to test the functionality of ReadOutdatedInstanceKeys and verify its failure modes and successes.
-func TestReadOutdatedInstanceKeys(t *testing.T) {
+// TestReadOutdatedInstances is used to test the functionality of ReadOutdatedInstances and verify its failure modes and successes.
+func TestReadOutdatedInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name              string
@@ -535,7 +532,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 		{
 			name:              "No problems",
 			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
-			instancesRequired: nil,
+			instancesRequired: []string{},
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
@@ -557,12 +554,12 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
-			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
+			instancesRequired: []string{"zone1-0000000100", "zone1-0000000103"},
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
 	oldVal := config.GetInstancePollTime()
@@ -586,7 +583,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tabletAliases, err := ReadOutdatedInstanceKeys()
+			tabletAliases, err := ReadOutdatedInstances()
 
 			errInDataCollection := db.QueryVTOrcRowsMap(`select alias,
 last_checked,
@@ -596,12 +593,16 @@ last_attempted_check <= last_checked as use1,
 last_checked < DATETIME('now', '-1500 second') as is_outdated1,
 last_checked < DATETIME('now', '-3000 second') as is_outdated2
 from database_instance`, func(rowMap sqlutils.RowMap) error {
-				log.Errorf("Row in database_instance - %+v", rowMap)
+				log.Error(fmt.Sprintf("Row in database_instance - %+v", rowMap))
 				return nil
 			})
 			require.NoError(t, errInDataCollection)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
+			tabletAliasStrings := make([]string, 0, len(tabletAliases))
+			for _, tabletAlias := range tabletAliases {
+				tabletAliasStrings = append(tabletAliasStrings, topoproto.TabletAliasString(tabletAlias))
+			}
+			require.EqualValues(t, tt.instancesRequired, tabletAliasStrings)
 		})
 	}
 }
@@ -610,32 +611,32 @@ from database_instance`, func(rowMap sqlutils.RowMap) error {
 func TestUpdateInstanceLastChecked(t *testing.T) {
 	tests := []struct {
 		name             string
-		tabletAlias      string
+		tabletAlias      *topodatapb.TabletAlias
 		partialSuccess   bool
 		stalledDisk      bool
 		conditionToCheck string
 	}{
 		{
 			name:             "Verify updated last checked",
-			tabletAlias:      "zone1-0000000100",
+			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
 			stalledDisk:      false,
 			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false",
 		}, {
 			name:             "Verify partial success",
-			tabletAlias:      "zone1-0000000100",
+			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   true,
 			stalledDisk:      false,
 			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = true and is_disk_stalled = false",
 		}, {
 			name:             "Verify stalled disk",
-			tabletAlias:      "zone1-0000000100",
+			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
 			stalledDisk:      true,
 			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = true",
 		}, {
-			name:           "Verify no error on unknown tablet",
-			tabletAlias:    "unknown tablet",
+			name:           "Verify no error on nil tablet",
+			tabletAlias:    nil,
 			partialSuccess: true,
 			stalledDisk:    true,
 		},
@@ -659,7 +660,7 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 				// Verify the instance we just updated satisfies the condition specified.
 				instances, err := readInstancesByCondition(tt.conditionToCheck, nil, "")
 				require.NoError(t, err)
-				var tabletAliases []string
+				var tabletAliases []*topodatapb.TabletAlias
 				for _, instance := range instances {
 					tabletAliases = append(tabletAliases, instance.InstanceAlias)
 				}
@@ -673,16 +674,16 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 	tests := []struct {
 		name             string
-		tabletAlias      string
+		tabletAlias      *topodatapb.TabletAlias
 		conditionToCheck string
 	}{
 		{
 			name:             "Verify updated last checked",
-			tabletAlias:      "zone1-0000000100",
+			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			conditionToCheck: "last_attempted_check >= DATETIME('now', '-30 second')",
 		}, {
-			name:        "Verify no error on unknown tablet",
-			tabletAlias: "unknown tablet",
+			name:        "Verify no error on nil tablet",
+			tabletAlias: nil,
 		},
 	}
 
@@ -704,7 +705,7 @@ func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 				// Verify the instance we just updated satisfies the condition specified.
 				instances, err := readInstancesByCondition(tt.conditionToCheck, nil, "")
 				require.NoError(t, err)
-				var tabletAliases []string
+				var tabletAliases []*topodatapb.TabletAlias
 				for _, instance := range instances {
 					tabletAliases = append(tabletAliases, instance.InstanceAlias)
 				}
@@ -718,33 +719,36 @@ func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 	tests := []struct {
 		name              string
-		tabletAlias       string
+		tabletAlias       *topodatapb.TabletAlias
 		errExpected       string
 		instanceForgotten bool
-		tabletsExpected   []string
+		tabletsExpected   []*topodatapb.TabletAlias
 	}{
 		{
-			name:              "Unknown tablet",
-			tabletAlias:       "unknown-tablet",
-			errExpected:       "ForgetInstance(): tablet unknown-tablet not found",
-			instanceForgotten: true,
-			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
-		}, {
 			name:              "Empty tabletAlias",
-			tabletAlias:       "",
+			tabletAlias:       nil,
 			errExpected:       "ForgetInstance(): empty tabletAlias",
 			instanceForgotten: false,
-			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
+			tabletsExpected: []*topodatapb.TabletAlias{
+				{Cell: "zone1", Uid: 100},
+				{Cell: "zone1", Uid: 101},
+				{Cell: "zone1", Uid: 112},
+				{Cell: "zone2", Uid: 200},
+			},
 		}, {
 			name:              "Success",
-			tabletAlias:       "zone1-0000000112",
+			tabletAlias:       &topodatapb.TabletAlias{Cell: "zone1", Uid: 112},
 			instanceForgotten: true,
-			tabletsExpected:   []string{"zone1-0000000100", "zone1-0000000101", "zone2-0000000200"},
+			tabletsExpected: []*topodatapb.TabletAlias{
+				{Cell: "zone1", Uid: 100},
+				{Cell: "zone1", Uid: 101},
+				{Cell: "zone2", Uid: 200},
+			},
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	oldCache := forgetAliases
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -772,7 +776,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 
 			instances, err := readInstancesByCondition("1=1", nil, "")
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]*topodatapb.TabletAlias, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, instance.InstanceAlias)
 			}
@@ -804,17 +808,6 @@ func TestSnapshotTopologies(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
-}
-
-// waitForCacheInitialization waits for the cache to be initialized to prevent data race in tests
-// that alter the cache or depend on its behaviour.
-func waitForCacheInitialization() {
-	for {
-		if cacheInitializationCompleted.Load() {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 }
 
 func TestGetDatabaseState(t *testing.T) {
@@ -891,6 +884,29 @@ func TestExpireTableData(t *testing.T) {
 }
 
 func TestDetectErrantGTIDs(t *testing.T) {
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+
+		MysqlHostname: "primary-host",
+		MysqlPort:     6714,
+	}
+
 	tests := []struct {
 		name            string
 		instance        *Instance
@@ -907,7 +923,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
 				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
 			},
-		}, {
+		},
+		{
 			name: "Errant GTIDs on replica",
 			instance: &Instance{
 				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
@@ -940,9 +957,12 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			primaryInstance: &Instance{
 				SourceHost:      "",
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+				Hostname:        primaryTablet.MysqlHostname,
+				Port:            int(primaryTablet.MysqlPort),
 			},
 			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
-		}, {
+		},
+		{
 			name: "Old information for new primary",
 			instance: &Instance{
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",
@@ -956,24 +976,6 @@ func TestDetectErrantGTIDs(t *testing.T) {
 		},
 	}
 
-	keyspaceName := "ks"
-	shardName := "0"
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  100,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-	}
-	primaryTablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  101,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -989,14 +991,14 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.primaryInstance != nil {
-				tt.primaryInstance.InstanceAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+				tt.primaryInstance.InstanceAlias = primaryTablet.Alias
 				err = SaveTablet(primaryTablet)
 				require.NoError(t, err)
 				err = WriteInstance(tt.primaryInstance, true, nil)
 				require.NoError(t, err)
 			}
 
-			tt.instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+			tt.instance.InstanceAlias = tablet.Alias
 			err = detectErrantGTIDs(tt.instance, tablet)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1006,6 +1008,109 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
+}
+
+// TestDetectErrantGTIDsWithWrongPrimarySource ensures that errant GTIDs are
+// detected by comparing against the shard primary when a replica is pointed at
+// a different source.
+func TestDetectErrantGTIDsWithWrongPrimarySource(t *testing.T) {
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	db.ClearVTOrcDatabase()
+
+	keyspaceName := "ks"
+	shardName := "0"
+
+	primaryUUID := "a5ce8e8a-4e56-11ef-9f7d-92339a7d9f6c"
+	wrongPrimaryUUID := "bb1db5f6-4e56-11ef-8bda-3ae65c7f7f5e"
+	replicaUUID := "cc946b58-4e56-11ef-9e6f-3e527c1a9e9d"
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+
+		MysqlHostname: "primary-host",
+		MysqlPort:     6714,
+	}
+
+	replicaTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+
+	err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: primaryTablet.Alias,
+	}, nil))
+	require.NoError(t, err)
+
+	err = SaveTablet(primaryTablet)
+	require.NoError(t, err)
+
+	// Create the real shard primary instance and give it a GTID set that does
+	// not include the replica UUID. This represents the authoritative primary.
+	primaryInstance := &Instance{
+		InstanceAlias:   primaryTablet.Alias,
+		Hostname:        "primary-host",
+		Port:            6714,
+		SourceHost:      "",
+		ExecutedGtidSet: primaryUUID + ":1-10",
+		ServerUUID:      primaryUUID,
+	}
+
+	err = WriteInstance(primaryInstance, true, nil)
+	require.NoError(t, err)
+
+	// Create a wrong primary instance that contains the replica UUID in its
+	// executed GTID set. This masks errant GTIDs if the replica uses it for
+	// comparison
+	wrongPrimaryInstance := &Instance{
+		InstanceAlias:   &topodatapb.TabletAlias{Cell: "zone-1", Uid: 102},
+		Hostname:        "wrong-primary",
+		Port:            6720,
+		SourceHost:      "",
+		ExecutedGtidSet: fmt.Sprintf("%s:1-10,%s:1-5", wrongPrimaryUUID, replicaUUID),
+		ServerUUID:      wrongPrimaryUUID,
+		AncestryUUID:    wrongPrimaryUUID,
+	}
+
+	err = WriteInstance(wrongPrimaryInstance, true, nil)
+	require.NoError(t, err)
+
+	// Create a replica instance that is pointed at the wrong primary. The replica
+	// contains errant GTIDs that should be caught.
+	replicaInstance := &Instance{
+		InstanceAlias:   replicaTablet.Alias,
+		Hostname:        "replica-host",
+		Port:            6711,
+		SourceHost:      wrongPrimaryInstance.Hostname,
+		SourcePort:      wrongPrimaryInstance.Port,
+		SourceUUID:      wrongPrimaryInstance.ServerUUID,
+		ExecutedGtidSet: fmt.Sprintf("%s:1-10,%s:1-5", wrongPrimaryUUID, replicaUUID),
+		ServerUUID:      replicaUUID,
+	}
+
+	err = ReadInstanceClusterAttributes(replicaInstance)
+	require.NoError(t, err)
+	require.Equal(t, wrongPrimaryInstance.ExecutedGtidSet, replicaInstance.primaryExecutedGtidSet)
+	require.Equal(t, wrongPrimaryInstance.AncestryUUID, replicaInstance.AncestryUUID)
+
+	// Run errant GTID detection. We should find some.
+	err = detectErrantGTIDs(replicaInstance, replicaTablet)
+	require.NoError(t, err)
+
+	// The replica's own UUID entries should be reported as errant because the
+	// real shard primary does not include them.
+	require.Equal(t, replicaUUID+":1-5", replicaInstance.GtidErrant)
 }
 
 // TestPrimaryErrantGTIDs tests that we don't run Errant GTID detection on the primary tablet itself!
@@ -1028,7 +1133,7 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	instance := &Instance{
 		SourceHost:      "",
 		ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
-		InstanceAlias:   topoproto.TabletAliasString(tablet.Alias),
+		InstanceAlias:   tablet.Alias,
 	}
 
 	// Save shard record for the primary tablet.

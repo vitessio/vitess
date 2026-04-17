@@ -21,24 +21,8 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// Predefined throttling strategies for the QueryThrottler.
-const (
-	// ThrottlingStrategyTabletThrottler uses Vitess Tablet Throttler to shed load
-	// from incoming queries when the tablet is under pressure.
-	// Reference: https://vitess.io/docs/21.0/reference/features/tablet-throttler/
-	ThrottlingStrategyTabletThrottler ThrottlingStrategy = "TabletThrottler"
-
-	// ThrottlingStrategyUnknown is used when the strategy is not known.
-	ThrottlingStrategyUnknown ThrottlingStrategy = "Unknown"
-)
-
-// ThrottlingStrategy represents the strategy used to apply throttling
-// to incoming queries based on system load or external signals.
-type ThrottlingStrategy string
 
 // ThrottlingStrategyHandler defines the interface for throttling strategies
 // used by the QueryThrottler. Each strategy encapsulates its own logic
@@ -46,8 +30,9 @@ type ThrottlingStrategy string
 type ThrottlingStrategyHandler interface {
 	// Evaluate determines whether a query should be throttled and returns detailed information about the decision.
 	// This method separates the decision-making logic from the enforcement action, enabling features like dry-run mode.
+	// QueryAttributes contains pre-computed workload and priority information to avoid re computation.
 	// It returns a ThrottleDecision struct containing all relevant information about the throttling decision.
-	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) ThrottleDecision
+	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs QueryAttributes) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.
@@ -58,4 +43,7 @@ type ThrottlingStrategyHandler interface {
 	// This method should be called when the strategy is no longer needed.
 	// Implementations should clean up background processes, caches, or other resources.
 	Stop()
+
+	// GetStrategyName returns the name of the strategy.
+	GetStrategyName() string
 }

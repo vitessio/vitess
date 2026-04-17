@@ -19,6 +19,7 @@ package zkfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ func (fs *FS) CopyContext(ctx context.Context, src, dst string) error {
 	dst = zkfilepath.Clean(dst)
 
 	if !IsFile(src) && !IsFile(dst) {
-		return fmt.Errorf("cp: neither src nor dst is a /zk file")
+		return errors.New("cp: neither src nor dst is a /zk file")
 	}
 
 	data, err := fs.ReadContext(ctx, src)
@@ -115,7 +116,7 @@ func (fs *FS) WriteContext(ctx context.Context, path string, data []byte) (err e
 		}
 		return err
 	}
-	return os.WriteFile(path, []byte(data), 0666)
+	return os.WriteFile(path, []byte(data), 0o666)
 }
 
 var (
@@ -141,13 +142,15 @@ func init() {
 func FormatACL(acl zk.ACL) string {
 	s := ""
 
+	var sSb145 strings.Builder
 	for _, perm := range []int32{zk.PermRead, zk.PermWrite, zk.PermDelete, zk.PermCreate, zk.PermAdmin} {
 		if acl.Perms&perm != 0 {
-			s += permCharMap[perm]
+			sSb145.WriteString(permCharMap[perm])
 		} else {
-			s += "-"
+			sSb145.WriteString("-")
 		}
 	}
+	s += sSb145.String()
 	return s
 }
 

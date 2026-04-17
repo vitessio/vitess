@@ -19,12 +19,14 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,6 +44,21 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+var testGTIDCounter atomic.Uint64
+
+func uniqueTestGTID() string {
+	now := uint64(time.Now().UnixNano())
+	seq := testGTIDCounter.Add(1)
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x:%d",
+		uint32(now>>32),
+		uint16(now>>16),
+		uint16(now),
+		uint16(seq>>16),
+		seq&0xffffffffffff,
+		100+seq,
+	)
+}
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
@@ -261,7 +278,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		"insert into t1 values(1, 'aaa')",
 	})
 
-	var getTimestamps = func() (int64, int64, int64) {
+	getTimestamps := func() (int64, int64, int64) {
 		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
@@ -586,11 +603,13 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 	}()
 
 	execStatements(t, []string{
@@ -615,7 +634,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
+	gtid := uniqueTestGTID()
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
 		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
@@ -629,7 +648,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"rollback",
-		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
+		"/update _vt.vreplication set message='"+expectedMsg,
 	)
 
 	execStatements(t, input)
@@ -2042,15 +2061,14 @@ func TestPlayerDDL(t *testing.T) {
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		fmt.Sprintf("/update _vt.vreplication set pos='%s'", pos1),
+		posOrPrevRegex(pos1),
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
 	))
 	pos2b := primaryPosition(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
-	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
+	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -2086,7 +2104,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='error applying event: Duplicate",
-		"/update _vt.vreplication set state='Error', message='terminal error: error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message=left\\('terminal error: error applying event: Duplicate",
 	))
 	cancel()
 
@@ -2271,6 +2289,32 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
+}
+
+func posOrPrevRegex(pos string) string {
+	positions := []string{pos}
+	if prev, ok := decrementPosition(pos); ok {
+		positions = append(positions, prev)
+		if prev2, ok := decrementPosition(prev); ok {
+			positions = append(positions, prev2)
+		}
+	}
+	for i := range positions {
+		positions[i] = regexp.QuoteMeta(positions[i])
+	}
+	return fmt.Sprintf("/update _vt.vreplication set pos='(%s)'", strings.Join(positions, "|"))
+}
+
+func decrementPosition(pos string) (string, bool) {
+	idx := strings.LastIndex(pos, "-")
+	if idx == -1 || idx+1 >= len(pos) {
+		return "", false
+	}
+	val, err := strconv.Atoi(pos[idx+1:])
+	if err != nil || val <= 0 {
+		return "", false
+	}
+	return pos[:idx+1] + strconv.Itoa(val-1), true
 }
 
 func TestPlayerStopAtOther(t *testing.T) {
@@ -2746,7 +2790,7 @@ func TestPlayerTransactions(t *testing.T) {
 func TestPlayerRelayLogMaxSize(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		// First iteration checks max size, second checks max items
 		func() {
 			switch i {
@@ -2988,7 +3032,7 @@ func TestPlayerJSONDocs(t *testing.T) {
 	}
 	var testcases []testcase
 	id := 0
-	var addTestCase = func(name, val string) {
+	addTestCase := func(name, val string) {
 		id++
 		testcases = append(testcases, testcase{
 			name:  name,
@@ -3061,7 +3105,7 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 	}
 	var testcases []testcase
 	id := 0
-	var addTestCase = func(name, val, val2 string) {
+	addTestCase := func(name, val, val2 string) {
 		id++
 		testcases = append(testcases, testcase{
 			name:  name,
@@ -3089,7 +3133,84 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 			expectJSON(t, "vitess_json2", tcase.data, id, env.Mysqld.FetchSuperQuery)
 		})
 	}
+}
 
+// TestPlayerJSONDocsStreamSQL verifies that JSON values round-trip correctly through MySQL when
+// using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerJSONDocsStreamSQL(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table vitess_json(id int auto_increment, val json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, val json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	type testcase struct {
+		name  string
+		input string
+		data  [][]string
+	}
+	var testcases []testcase
+	id := 0
+	addTestCase := func(name, val string) {
+		id++
+		testcases = append(testcases, testcase{
+			name:  name,
+			input: fmt.Sprintf("insert into vitess_json(val) values (%s)", encodeString(val)),
+			data: [][]string{
+				{strconv.Itoa(id), val},
+			},
+		})
+	}
+	addTestCase("singleDoc", jsonSingleDoc)
+	addTestCase("multipleDocs", jsonMultipleDocs)
+	longString := strings.Repeat("aa", math.MaxInt16)
+	largeObject := fmt.Sprintf(singleLargeObjectTemplate, longString)
+	addTestCase("singleLargeObject", largeObject)
+	largeArray := fmt.Sprintf(`[1, 1234567890, "a", true, %s]`, largeObject)
+	addTestCase("singleLargeArray", largeArray)
+	addTestCase("largeArrayDoc", repeatJSON(jsonSingleDoc, 140, largeJSONArrayCollection))
+	addTestCase("largeObjectDoc", repeatJSON(jsonSingleDoc, 140, largeJSONObjectCollection))
+	// Edge cases identified in code review for type-fidelity between CAST and JSON_OBJECT paths.
+	addTestCase("booleans", `{"flag": true, "off": false}`)
+	addTestCase("largeInteger", `{"keywordSourceId": 930701976723823}`)
+	addTestCase("decimal", `{"val": 1.5}`)
+	addTestCase("emptyObject", `{}`)
+	addTestCase("emptyArray", `[]`)
+	addTestCase("jsonNull", `null`)
+	id = 0
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			id++
+			execStatements(t, []string{tcase.input})
+			want := qh.Expect(
+				"begin",
+				"/insert into vitess_json",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			)
+			expectDBClientQueries(t, want)
+			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
+		})
+	}
 }
 
 func TestVReplicationLogs(t *testing.T) {
@@ -3113,7 +3234,6 @@ func TestVReplicationLogs(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 		})
-
 	}
 }
 
@@ -3587,7 +3707,157 @@ func TestPlayerBatchMode(t *testing.T) {
 				{"3", "ccc"},
 				{"4", "ddd"},
 				{"5", "eee"},
-				{"1000000000000", "x"}, {"1000000000001", "x"}, {"1000000000002", "x"}, {"1000000000003", "x"}, {"1000000000004", "x"}, {"1000000000005", "x"}, {"1000000000006", "x"}, {"1000000000007", "x"}, {"1000000000008", "x"}, {"1000000000009", "x"}, {"1000000000010", "x"}, {"1000000000011", "x"}, {"1000000000012", "x"}, {"1000000000013", "x"}, {"1000000000014", "x"}, {"1000000000015", "x"}, {"1000000000016", "x"}, {"1000000000017", "x"}, {"1000000000018", "x"}, {"1000000000019", "x"}, {"1000000000020", "x"}, {"1000000000021", "x"}, {"1000000000022", "x"}, {"1000000000023", "x"}, {"1000000000024", "x"}, {"1000000000025", "x"}, {"1000000000026", "x"}, {"1000000000027", "x"}, {"1000000000028", "x"}, {"1000000000029", "x"}, {"1000000000030", "x"}, {"1000000000031", "x"}, {"1000000000032", "x"}, {"1000000000033", "x"}, {"1000000000034", "x"}, {"1000000000035", "x"}, {"1000000000036", "x"}, {"1000000000037", "x"}, {"1000000000038", "x"}, {"1000000000039", "x"}, {"1000000000040", "x"}, {"1000000000041", "x"}, {"1000000000042", "x"}, {"1000000000043", "x"}, {"1000000000044", "x"}, {"1000000000045", "x"}, {"1000000000046", "x"}, {"1000000000047", "x"}, {"1000000000048", "x"}, {"1000000000049", "x"}, {"1000000000050", "x"}, {"1000000000051", "x"}, {"1000000000052", "x"}, {"1000000000053", "x"}, {"1000000000054", "x"}, {"1000000000055", "x"}, {"1000000000056", "x"}, {"1000000000057", "x"}, {"1000000000058", "x"}, {"1000000000059", "x"}, {"1000000000060", "x"}, {"1000000000061", "x"}, {"1000000000062", "x"}, {"1000000000063", "x"}, {"1000000000064", "x"}, {"1000000000065", "x"}, {"1000000000066", "x"}, {"1000000000067", "x"}, {"1000000000068", "x"}, {"1000000000069", "x"}, {"1000000000070", "x"}, {"1000000000071", "x"}, {"1000000000072", "x"}, {"1000000000073", "x"}, {"1000000000074", "x"}, {"1000000000075", "x"}, {"1000000000076", "x"}, {"1000000000077", "x"}, {"1000000000078", "x"}, {"1000000000079", "x"}, {"1000000000080", "x"}, {"1000000000081", "x"}, {"1000000000082", "x"}, {"1000000000083", "x"}, {"1000000000084", "x"}, {"1000000000085", "x"}, {"1000000000086", "x"}, {"1000000000087", "x"}, {"1000000000088", "x"}, {"1000000000089", "x"}, {"1000000000090", "x"}, {"1000000000091", "x"}, {"1000000000092", "x"}, {"1000000000093", "x"}, {"1000000000094", "x"}, {"1000000000095", "x"}, {"1000000000096", "x"}, {"1000000000097", "x"}, {"1000000000098", "x"}, {"1000000000099", "x"}, {"1000000000100", "x"}, {"1000000000101", "x"}, {"1000000000102", "x"}, {"1000000000103", "x"}, {"1000000000104", "x"}, {"1000000000105", "x"}, {"1000000000106", "x"}, {"1000000000107", "x"}, {"1000000000108", "x"}, {"1000000000109", "x"}, {"1000000000110", "x"}, {"1000000000111", "x"}, {"1000000000112", "x"}, {"1000000000113", "x"}, {"1000000000114", "x"}, {"1000000000115", "x"}, {"1000000000116", "x"}, {"1000000000117", "x"}, {"1000000000118", "x"}, {"1000000000119", "x"}, {"1000000000120", "x"}, {"1000000000121", "x"}, {"1000000000122", "x"}, {"1000000000123", "x"}, {"1000000000124", "x"}, {"1000000000125", "x"}, {"1000000000126", "x"}, {"1000000000127", "x"}, {"1000000000128", "x"}, {"1000000000129", "x"}, {"1000000000130", "x"}, {"1000000000131", "x"}, {"1000000000132", "x"}, {"1000000000133", "x"}, {"1000000000134", "x"}, {"1000000000135", "x"}, {"1000000000136", "x"}, {"1000000000137", "x"}, {"1000000000138", "x"}, {"1000000000139", "x"}, {"1000000000140", "x"}, {"1000000000141", "x"}, {"1000000000142", "x"}, {"1000000000143", "x"}, {"1000000000144", "x"}, {"1000000000145", "x"}, {"1000000000146", "x"}, {"1000000000147", "x"}, {"1000000000148", "x"}, {"1000000000149", "x"}, {"1000000000150", "x"},
+				{"1000000000000", "x"},
+				{"1000000000001", "x"},
+				{"1000000000002", "x"},
+				{"1000000000003", "x"},
+				{"1000000000004", "x"},
+				{"1000000000005", "x"},
+				{"1000000000006", "x"},
+				{"1000000000007", "x"},
+				{"1000000000008", "x"},
+				{"1000000000009", "x"},
+				{"1000000000010", "x"},
+				{"1000000000011", "x"},
+				{"1000000000012", "x"},
+				{"1000000000013", "x"},
+				{"1000000000014", "x"},
+				{"1000000000015", "x"},
+				{"1000000000016", "x"},
+				{"1000000000017", "x"},
+				{"1000000000018", "x"},
+				{"1000000000019", "x"},
+				{"1000000000020", "x"},
+				{"1000000000021", "x"},
+				{"1000000000022", "x"},
+				{"1000000000023", "x"},
+				{"1000000000024", "x"},
+				{"1000000000025", "x"},
+				{"1000000000026", "x"},
+				{"1000000000027", "x"},
+				{"1000000000028", "x"},
+				{"1000000000029", "x"},
+				{"1000000000030", "x"},
+				{"1000000000031", "x"},
+				{"1000000000032", "x"},
+				{"1000000000033", "x"},
+				{"1000000000034", "x"},
+				{"1000000000035", "x"},
+				{"1000000000036", "x"},
+				{"1000000000037", "x"},
+				{"1000000000038", "x"},
+				{"1000000000039", "x"},
+				{"1000000000040", "x"},
+				{"1000000000041", "x"},
+				{"1000000000042", "x"},
+				{"1000000000043", "x"},
+				{"1000000000044", "x"},
+				{"1000000000045", "x"},
+				{"1000000000046", "x"},
+				{"1000000000047", "x"},
+				{"1000000000048", "x"},
+				{"1000000000049", "x"},
+				{"1000000000050", "x"},
+				{"1000000000051", "x"},
+				{"1000000000052", "x"},
+				{"1000000000053", "x"},
+				{"1000000000054", "x"},
+				{"1000000000055", "x"},
+				{"1000000000056", "x"},
+				{"1000000000057", "x"},
+				{"1000000000058", "x"},
+				{"1000000000059", "x"},
+				{"1000000000060", "x"},
+				{"1000000000061", "x"},
+				{"1000000000062", "x"},
+				{"1000000000063", "x"},
+				{"1000000000064", "x"},
+				{"1000000000065", "x"},
+				{"1000000000066", "x"},
+				{"1000000000067", "x"},
+				{"1000000000068", "x"},
+				{"1000000000069", "x"},
+				{"1000000000070", "x"},
+				{"1000000000071", "x"},
+				{"1000000000072", "x"},
+				{"1000000000073", "x"},
+				{"1000000000074", "x"},
+				{"1000000000075", "x"},
+				{"1000000000076", "x"},
+				{"1000000000077", "x"},
+				{"1000000000078", "x"},
+				{"1000000000079", "x"},
+				{"1000000000080", "x"},
+				{"1000000000081", "x"},
+				{"1000000000082", "x"},
+				{"1000000000083", "x"},
+				{"1000000000084", "x"},
+				{"1000000000085", "x"},
+				{"1000000000086", "x"},
+				{"1000000000087", "x"},
+				{"1000000000088", "x"},
+				{"1000000000089", "x"},
+				{"1000000000090", "x"},
+				{"1000000000091", "x"},
+				{"1000000000092", "x"},
+				{"1000000000093", "x"},
+				{"1000000000094", "x"},
+				{"1000000000095", "x"},
+				{"1000000000096", "x"},
+				{"1000000000097", "x"},
+				{"1000000000098", "x"},
+				{"1000000000099", "x"},
+				{"1000000000100", "x"},
+				{"1000000000101", "x"},
+				{"1000000000102", "x"},
+				{"1000000000103", "x"},
+				{"1000000000104", "x"},
+				{"1000000000105", "x"},
+				{"1000000000106", "x"},
+				{"1000000000107", "x"},
+				{"1000000000108", "x"},
+				{"1000000000109", "x"},
+				{"1000000000110", "x"},
+				{"1000000000111", "x"},
+				{"1000000000112", "x"},
+				{"1000000000113", "x"},
+				{"1000000000114", "x"},
+				{"1000000000115", "x"},
+				{"1000000000116", "x"},
+				{"1000000000117", "x"},
+				{"1000000000118", "x"},
+				{"1000000000119", "x"},
+				{"1000000000120", "x"},
+				{"1000000000121", "x"},
+				{"1000000000122", "x"},
+				{"1000000000123", "x"},
+				{"1000000000124", "x"},
+				{"1000000000125", "x"},
+				{"1000000000126", "x"},
+				{"1000000000127", "x"},
+				{"1000000000128", "x"},
+				{"1000000000129", "x"},
+				{"1000000000130", "x"},
+				{"1000000000131", "x"},
+				{"1000000000132", "x"},
+				{"1000000000133", "x"},
+				{"1000000000134", "x"},
+				{"1000000000135", "x"},
+				{"1000000000136", "x"},
+				{"1000000000137", "x"},
+				{"1000000000138", "x"},
+				{"1000000000139", "x"},
+				{"1000000000140", "x"},
+				{"1000000000141", "x"},
+				{"1000000000142", "x"},
+				{"1000000000143", "x"},
+				{"1000000000144", "x"},
+				{"1000000000145", "x"},
+				{"1000000000146", "x"},
+				{"1000000000147", "x"},
+				{"1000000000148", "x"},
+				{"1000000000149", "x"},
+				{"1000000000150", "x"},
 			},
 		},
 		{ // Now we have enough long IDs to cause the bulk delete to also be split along with the trx batch.
@@ -3634,7 +3904,6 @@ func TestPlayerBatchMode(t *testing.T) {
 				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
 			}
 			expectNontxQueries(t, output, recvTimeout)
-			time.Sleep(1 * time.Second)
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
 			}
@@ -3646,15 +3915,35 @@ func TestPlayerBatchMode(t *testing.T) {
 			expectedBulkInserts += tcase.expectedBulkInserts
 			expectedTrxBatchCommits++ // Should only ever be 1 per test case
 			expectedTrxBatchExecs += tcase.expectedNonCommitBatches
-			if tcase.expectedInLastBatch != "" { // We expect the trx to be split
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+
+			// Poll until the batch query and stats counters are updated.
+			// These are set asynchronously on the vplayer goroutine after
+			// the commit completes, so we poll rather than using a fixed sleep.
+			var batchRE *regexp.Regexp
+			if tcase.expectedInLastBatch != "" {
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch)))
 			} else {
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";"))))
 			}
-			require.Equal(t, expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"], "expected %d bulk inserts but got %d", expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"])
-			require.Equal(t, expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"], "expected %d bulk deletes but got %d", expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"])
-			require.Equal(t, expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"], "expected %d trx batch execs but got %d", expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"])
-			require.Equal(t, expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"], "expected %d trx batch commits but got %d", expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"])
+			require.Eventually(t, func() bool {
+				got := getLastMultiExecQuery()
+				if !batchRE.MatchString(got) {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["insert"] != expectedBulkInserts {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["delete"] != expectedBulkDeletes {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["without_commit"] != expectedTrxBatchExecs {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["with_commit"] != expectedTrxBatchCommits {
+					return false
+				}
+				return true
+			}, 10*time.Second, 100*time.Millisecond, "batch query or stats mismatch after timeout; lastMultiExecQuery: %s", getLastMultiExecQuery())
 		})
 	}
 }
@@ -3663,21 +3952,22 @@ func TestPlayerBatchMode(t *testing.T) {
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
@@ -3781,7 +4071,11 @@ func TestPlayerStalls(t *testing.T) {
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
 				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+				logMessage := logger.String()
+				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
+					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
+				}
+				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
@@ -3855,4 +4149,15 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
+}
+
+func drainDBQueries() {
+	for {
+		select {
+		case <-globalDBQueries:
+			continue
+		default:
+			return
+		}
+	}
 }

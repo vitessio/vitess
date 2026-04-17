@@ -286,7 +286,6 @@ func (buf *TrackedBuffer) formatNodes(input any) {
 		// You can call methods or use it as a SQLNode here
 		buf.Myprintf("%v", node)
 	}
-
 }
 
 func getExpressionForParensEval(checkParens bool, value any) Expr {

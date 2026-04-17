@@ -46,9 +46,11 @@ type mysqlFlavor8Legacy struct {
 	mysqlFlavorLegacy
 }
 
-var _ flavor = (*mysqlFlavor57)(nil)
-var _ flavor = (*mysqlFlavor8Legacy)(nil)
-var _ flavor = (*mysqlFlavor8)(nil)
+var (
+	_ flavor = (*mysqlFlavor57)(nil)
+	_ flavor = (*mysqlFlavor8Legacy)(nil)
+	_ flavor = (*mysqlFlavor8)(nil)
+)
 
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
 const TablesWithSize56 = `SELECT table_name,

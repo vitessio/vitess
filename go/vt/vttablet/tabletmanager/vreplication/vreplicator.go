@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -89,7 +90,8 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	SqlMaxAllowedPacket = "select @@session.max_allowed_packet as max_allowed_packet"
+	SqlMaxAllowedPacket  = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -141,13 +143,13 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
-	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
+	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig,
+) *vreplicator {
 	if workflowConfig == nil {
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
 	if workflowConfig.HeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warningf("The supplied value for vreplication-heartbeat-update-interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+		log.Warn(fmt.Sprintf("The supplied value for vreplication-heartbeat-update-interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d", workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval))
 	}
 	vttablet.InitVReplicationConfigDefaults()
 	vr := &vreplicator{
@@ -229,10 +231,10 @@ func (vr *vreplicator) validateBinlogRowImage() error {
 		// used in unit tests only
 		default:
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
-				fmt.Sprintf("noblob binlog_row_image is not supported for %s", binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType]))
+				"noblob binlog_row_image is not supported for "+binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType])
 		}
 	default:
-		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s binlog_row_image is not supported by Vitess VReplication", binlogRowImage))
+		return vterrors.New(vtrpcpb.Code_INTERNAL, binlogRowImage+" binlog_row_image is not supported by Vitess VReplication")
 	}
 	return nil
 }
@@ -291,16 +293,16 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(vr.dbClient); err != nil {
-				log.Warningf("Unable to clear FK check %v", err)
+				log.Warn(fmt.Sprintf("Unable to clear FK check %v", err))
 				return err
 			}
 			if err := vr.clearFKRestrict(vr.dbClient); err != nil {
-				log.Warningf("Unable to clear FK restrict %v", err)
+				log.Warn(fmt.Sprintf("Unable to clear FK restrict %v", err))
 				return err
 			}
 			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
 				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
-					log.Infof("Error atomically copying all tables: %v", err)
+					log.Info(fmt.Sprintf("Error atomically copying all tables: %v", err))
 					vr.stats.ErrorCounts.Add([]string{"CopyAll"}, 1)
 					return err
 				}
@@ -331,11 +333,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			}
 		default:
 			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
-				log.Warningf("Unable to reset FK check %v", err)
+				log.Warn(fmt.Sprintf("Unable to reset FK check %v", err))
 				return err
 			}
 			if err := vr.resetFKRestrictAfterCopy(vr.dbClient); err != nil {
-				log.Warningf("Unable to reset FK restrict %v", err)
+				log.Warn(fmt.Sprintf("Unable to reset FK restrict %v", err))
 				return err
 			}
 			if vr.source.StopAfterCopy {
@@ -365,7 +367,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
-			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
 		},
 	}
@@ -382,7 +383,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			return nil, err
 		}
 		if len(qr.Rows) == 0 {
-			return nil, fmt.Errorf("no data returned from information_schema.columns")
+			return nil, errors.New("no data returned from information_schema.columns")
 		}
 
 		var pks []string
@@ -503,6 +504,23 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 	return nil
 }
 
+func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
+	maxQuerySize := int64(vr.workflowConfig.RelayLogMaxSize)
+	res, err := dbc.DBClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+	} else {
+		if maxQuerySize, err = res.Rows[0][0].ToInt64(); err != nil {
+			log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+			maxQuerySize = int64(vr.workflowConfig.RelayLogMaxSize)
+		}
+	}
+	if maxQuerySize > maxQuerySizeHeadroom {
+		maxQuerySize -= maxQuerySizeHeadroom
+	}
+	return maxQuerySize
+}
+
 func (vr *vreplicator) insertLog(typ, message string) {
 	insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
 }
@@ -515,7 +533,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
@@ -544,7 +562,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 		return err
 	}
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
-		return fmt.Errorf("unable to select @@foreign_key_checks")
+		return errors.New("unable to select @@foreign_key_checks")
 	}
 	vr.originalFKCheckSetting, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
@@ -570,7 +588,7 @@ func (vr *vreplicator) getSettingFKRestrict() error {
 		return err
 	}
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
-		return fmt.Errorf("unable to select @@session.restrict_fk_on_non_standard_key")
+		return errors.New("unable to select @@session.restrict_fk_on_non_standard_key")
 	}
 	vr.originalFKRestrict, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
@@ -610,7 +628,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
 		_, err := dbClient.Execute(query)
 		if err != nil {
-			log.Warningf("Could not reset sql_mode on target using %s: %v", query, err)
+			log.Warn(fmt.Sprintf("Could not reset sql_mode on target using %s: %v", query, err))
 		}
 	}
 	vreplicationSQLMode := SQLMode
@@ -786,8 +804,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		// READ-ONLY mode.
 		dbClient, err := vr.newClientConnection(ctx)
 		if err != nil {
-			log.Errorf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v",
-				tableName, vr.WorkflowName, err)
+			log.Error(fmt.Sprintf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
 		}
 		defer dbClient.Close()
@@ -871,8 +888,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	// mode.
 	dbClient, err := vr.newClientConnection(ctx)
 	if err != nil {
-		log.Errorf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v",
-			tableName, vr.WorkflowName, err)
+		log.Error(fmt.Sprintf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 		return vterrors.Wrap(err, "unable to connect to the database when executing post copy actions")
 	}
 	defer dbClient.Close()
@@ -955,11 +971,9 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		select {
 		// Only cancel an ongoing ALTER if the engine is closing.
 		case <-vr.vre.ctx.Done():
-			log.Infof("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v",
-				tableName, vr.WorkflowName, action)
+			log.Info(fmt.Sprintf("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v", tableName, vr.WorkflowName, action))
 			if err := killAction(action); err != nil {
-				log.Errorf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v",
-					tableName, vr.WorkflowName, err)
+				log.Error(fmt.Sprintf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 			}
 			return
 		case <-done:
@@ -1051,8 +1065,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 
 		switch action.Type {
 		case PostCopyActionSQL:
-			log.Infof("Executing post copy SQL action on the %q table in the %q VReplication workflow: %s",
-				tableName, vr.WorkflowName, action.Task)
+			log.Info(fmt.Sprintf("Executing post copy SQL action on the %q table in the %q VReplication workflow: %s", tableName, vr.WorkflowName, action.Task))
 			// This will return an io.EOF / MySQL CRServerLost (errno 2013)
 			// error if it is killed by the monitoring goroutine.
 			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
@@ -1155,9 +1168,9 @@ func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
-			log.Warningf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err)
+			log.Warn(fmt.Sprintf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err))
 		} else if rowsCopiedExisting != 0 {
-			log.Infof("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting)
+			log.Info(fmt.Sprintf("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting))
 			vr.stats.CopyRowCount.Set(rowsCopiedExisting)
 		}
 	}

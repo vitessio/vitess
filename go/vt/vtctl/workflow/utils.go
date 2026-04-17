@@ -19,9 +19,12 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,7 +82,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas: %+v from source primary %v.", schema, primary)
+	log.Info(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -152,7 +155,7 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			log.Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
+			log.Info(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
 		}
 	}
 	if changed {
@@ -236,7 +239,6 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(colum
 					if err := replace(sqlparser.String(node.Name)); err != nil {
 						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %q in %q", sqlparser.String(node.Name), ddl)
 					}
-
 				}
 			}
 		}
@@ -332,12 +334,7 @@ func shouldInclude(table string, excludes []string) bool {
 	if schema.IsInternalOperationTableName(table) {
 		return false
 	}
-	for _, t := range excludes {
-		if t == table {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(excludes, table)
 }
 
 // getMigrationID produces a reproducible hash based on the input parameters.
@@ -442,7 +439,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {
 	if len(sourceShards) == 0 || len(targetShards) == 0 {
-		return nil, nil, fmt.Errorf("either source or target shards are missing")
+		return nil, nil, errors.New("either source or target shards are missing")
 	}
 
 	getKeyRange := func(shard string) (*topodatapb.KeyRange, error) {
@@ -589,7 +586,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
-				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+				rec.RecordError(errors.New("could not get RoutingRules"))
 			}
 			for fromTable, toTables := range rules {
 				for _, toTable := range toTables {
@@ -606,7 +603,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
@@ -698,8 +694,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
-	targetShards []string) (*TargetInfo, error) {
-
+	targetShards []string,
+) (*TargetInfo, error) {
 	var (
 		frozen          bool
 		optCells        string
@@ -784,7 +780,6 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 
 			workflowType = getVReplicationWorkflowType(row)
 			workflowSubType = getVReplicationWorkflowSubType(row)
-
 		}
 
 		targets[targetShard] = target
@@ -822,17 +817,18 @@ func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
 }
 
 func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
-	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser,
+) (*sqlparser.Expr, error) {
 	if vrOptions.TenantId == "" {
 		return nil, nil
 	}
 	if targetVSchema == nil || targetVSchema.MultiTenantSpec == nil {
-		return nil, fmt.Errorf("target keyspace not defined, or it does not have multi-tenant spec")
+		return nil, errors.New("target keyspace not defined, or it does not have multi-tenant spec")
 	}
 	tenantColumnName := targetVSchema.MultiTenantSpec.TenantIdColumnName
 	tenantColumnType := targetVSchema.MultiTenantSpec.TenantIdColumnType
 	if tenantColumnName == "" {
-		return nil, fmt.Errorf("tenant column name not defined in multi-tenant spec")
+		return nil, errors.New("tenant column name not defined in multi-tenant spec")
 	}
 
 	var tenantId string
@@ -861,7 +857,8 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 }
 
 func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
-	sourceKeyspace, targetKeyspace, reason string) error {
+	sourceKeyspace, targetKeyspace, reason string,
+) error {
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypes {
 		suffix := getTabletTypeSuffix(tabletType)
@@ -879,9 +876,7 @@ func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason str
 	update := func() error {
 		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
 			func(ctx context.Context, rules *map[string]string) error {
-				for fromKeyspace, toKeyspace := range routes {
-					(*rules)[fromKeyspace] = toKeyspace
-				}
+				maps.Copy((*rules), routes)
 				return nil
 			})
 	}
@@ -1031,14 +1026,7 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ksTables, table)
 		if !found {
 			missingTables = append(missingTables, table)
 		}

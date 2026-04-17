@@ -30,7 +30,7 @@ import (
 
 // TestDynamicConfigs tests the dyanamic configurations that VTOrc offers.
 func TestDynamicConfigs(t *testing.T) {
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 1, "")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 
 	// Restart VTOrc without any flag overrides so that all the configurations can be tested.

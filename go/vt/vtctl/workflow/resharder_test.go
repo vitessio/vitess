@@ -247,7 +247,7 @@ func TestReadRefStreams(t *testing.T) {
 	for i, table := range maps.Keys(env.tmc.schema) {
 		rules[i] = &binlogdatapb.Rule{
 			Match:  table,
-			Filter: fmt.Sprintf("select * from %s", table),
+			Filter: "select * from " + table,
 		}
 	}
 
@@ -282,7 +282,6 @@ func TestReadRefStreams(t *testing.T) {
 						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
 						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 							{
-
 								Bls: &binlogdatapb.BinlogSource{
 									Keyspace: sourceKeyspace.KeyspaceName,
 									Shard:    "-",
@@ -308,7 +307,6 @@ func TestReadRefStreams(t *testing.T) {
 						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
 						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 							{
-
 								Bls: &binlogdatapb.BinlogSource{
 									Keyspace: sourceKeyspace.KeyspaceName,
 									Shard:    "-",
@@ -338,7 +336,6 @@ func TestReadRefStreams(t *testing.T) {
 						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
 						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 							{
-
 								Bls: &binlogdatapb.BinlogSource{
 									Keyspace: sourceKeyspace.KeyspaceName,
 									Shard:    "-",

@@ -64,9 +64,11 @@ type (
 	compareNullSafeEQ struct{}
 )
 
-var _ IR = (*ComparisonExpr)(nil)
-var _ IR = (*InExpr)(nil)
-var _ IR = (*LikeExpr)(nil)
+var (
+	_ IR = (*ComparisonExpr)(nil)
+	_ IR = (*InExpr)(nil)
+	_ IR = (*LikeExpr)(nil)
+)
 
 func (*ComparisonExpr) filterExpr() {}
 func (*InExpr) filterExpr()         {}
@@ -580,7 +582,18 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
 	case *BindVariable:
-		return ctype{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+
+		if rhs.Type != sqltypes.Tuple {
+			return ctype{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+		}
+
+		rt, err := rhs.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		c.asm.In_slow(c.env.CollationEnv(), expr.Negate)
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
 	default:
 		panic("unreachable")
 	}

@@ -3,6 +3,7 @@
 script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 source "${script_dir}/../env.sh"
 
+cell=${CELL:-'test'}
 log_dir="${VTDATAROOT}/tmp"
 port=16000
 
@@ -14,7 +15,9 @@ vtorc \
   --config-path="${script_dir}/../vtorc/" \
   --config-name="config.yaml" \
   --config-type="yml" \
+  --cell $cell \
   --port $port \
+  --log-format text \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!

@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -91,7 +92,7 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 
 // QueryResultForRowsAffected aggregates results into row-type results (fields + values)
 func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	qr.Fields = []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -111,7 +112,7 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 
 // QueryResultForTabletResults aggregates given results into a "rows-affected" type result (no row data)
 func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -170,8 +171,8 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 // runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string,
 	callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error),
-	dryRun bool, shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
-
+	dryRun bool, shards []string,
+) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getPrimaries(shards); err != nil {
@@ -264,7 +265,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 				allErrors.RecordError(err)
 			} else {
 				if qr == nil {
-					log.Infof("Callback returned nil result for tablet %s-%s", primary.Alias.Cell, primary.Alias.Uid)
+					log.Info(fmt.Sprintf("Callback returned nil result for tablet %s-%d", primary.Alias.Cell, primary.Alias.Uid))
 					return // no result
 				}
 				mu.Lock()
@@ -343,7 +344,8 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 // that is only the update action. When using the SQL interface this is ignored and
 // you can pass nil.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any,
-	shards []string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	shards []string,
+) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	switch action {
 	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace, shards)
@@ -405,7 +407,7 @@ func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace s
 
 		if status.WorkflowSubType == binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() &&
 			status.RowsCopied > 0 && len(status.CopyState) > 0 {
-			return fmt.Errorf("cannot restart an atomic copy workflow which previously stopped in the Copying phase")
+			return errors.New("cannot restart an atomic copy workflow which previously stopped in the Copying phase")
 		}
 		break // We only need to check one shard
 	}
@@ -413,7 +415,8 @@ func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace s
 }
 
 func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any,
-	shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	shards []string,
+) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
@@ -450,7 +453,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)]))
 			}
 			if !changes {
-				return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
+				return nil, errors.New("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
 			}
 			wr.Logger().Printf("The following workflow fields will be updated:\n%s", dryRunChanges.String())
 			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
@@ -486,7 +489,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	// A WHERE clause with the correct workflow name is automatically added
 	// to the query later on in vexec.addDefaultWheres().
-	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
+	query := "update _vt.vreplication set tags = " + encodeString(tags)
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false, nil)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
@@ -813,7 +816,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string, s
 			} else {
 				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
 					lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
-
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
 				now := time.Now().Unix() /*seconds since epoch*/

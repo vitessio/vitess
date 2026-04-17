@@ -23,6 +23,7 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -309,8 +310,8 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 func TestIsValidIncrementalBakcup(t *testing.T) {
 	incrementalManifest := func(backupPos string, backupFromPos string) *BackupManifest {
 		return &BackupManifest{
-			Position:     replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupPos)),
-			FromPosition: replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", backupFromPos)),
+			Position:     replication.MustParsePosition(replication.Mysql56FlavorID, "16b1039f-22b6-11ed-b765-0a43f95f28a3:"+backupPos),
+			FromPosition: replication.MustParsePosition(replication.Mysql56FlavorID, "16b1039f-22b6-11ed-b765-0a43f95f28a3:"+backupFromPos),
 			Incremental:  true,
 		}
 	}
@@ -385,7 +386,7 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 		},
 	}
 	for i, tc := range tt {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			basePos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.baseGTID)
 			require.NoError(t, err)
 			purgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.purgedGTID)
@@ -398,7 +399,7 @@ func TestIsValidIncrementalBakcup(t *testing.T) {
 
 func TestFindPITRPath(t *testing.T) {
 	generatePosition := func(posRange string) replication.Position {
-		return replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+		return replication.MustParsePosition(replication.Mysql56FlavorID, "16b1039f-22b6-11ed-b765-0a43f95f28a3:"+posRange)
 	}
 	fullManifest := func(backupPos string) *BackupManifest {
 		return &BackupManifest{
@@ -627,7 +628,7 @@ func TestFindPITRPath(t *testing.T) {
 
 func TestFindPITRToTimePath(t *testing.T) {
 	generatePosition := func(posRange string) replication.Position {
-		return replication.MustParsePosition(replication.Mysql56FlavorID, fmt.Sprintf("16b1039f-22b6-11ed-b765-0a43f95f28a3:%s", posRange))
+		return replication.MustParsePosition(replication.Mysql56FlavorID, "16b1039f-22b6-11ed-b765-0a43f95f28a3:"+posRange)
 	}
 	fullManifest := func(backupPos string, timeStr string) *BackupManifest {
 		_, err := ParseRFC3339(timeStr)

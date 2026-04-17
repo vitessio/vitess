@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -63,8 +64,8 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 
 	result, err := ps.TryExecute(context.Background(), &noopVCursor{}, bindVars, false)
 	require.NoError(t, err)
-	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
-	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
+	sfp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v false`, sqltypes.Int64BindVariable(1))})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v sq: %v false`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1))})
 	expectResult(t, result, underlyingResult)
 }
 
@@ -140,7 +141,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("2")}}})})
 
 	// Test the NOT IN case just once even though it's common code.
 	sfp.rewind()
@@ -150,7 +151,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("2")}}})})
 }
 
 func TestPulloutSubqueryInNone(t *testing.T) {
@@ -176,7 +177,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}})})
 }
 
 func TestPulloutSubqueryExists(t *testing.T) {
@@ -202,7 +203,7 @@ func TestPulloutSubqueryExists(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v false`, sqltypes.Int64BindVariable(1))})
 }
 
 func TestPulloutSubqueryExistsNone(t *testing.T) {
@@ -227,7 +228,7 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" false`})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v false`, sqltypes.Int64BindVariable(0))})
 }
 
 func TestPulloutSubqueryError(t *testing.T) {
@@ -277,8 +278,8 @@ func TestPulloutSubqueryStream(t *testing.T) {
 
 	result, err := wrapStreamExecute(ps, &noopVCursor{}, bindVars, true)
 	require.NoError(t, err)
-	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
-	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1" true`})
+	sfp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v false`, sqltypes.Int64BindVariable(1))})
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`StreamExecute aa: %v sq: %v true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1))})
 	expectResult(t, result, underlyingResult)
 }
 
@@ -298,8 +299,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" sq: `,
-		`Execute aa: type:INT64 value:"1" sq:  true`,
+		fmt.Sprintf(`GetFields aa: %v sq: `, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`Execute aa: %v sq:  true`, sqltypes.Int64BindVariable(1)),
 	})
 
 	ufp.rewind()
@@ -308,8 +309,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"}`,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} true`,
+		fmt.Sprintf(`GetFields aa: %v has_values: %v sq: %v`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}}),
+		fmt.Sprintf(`Execute aa: %v has_values: %v sq: %v true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}}),
 	})
 
 	ufp.rewind()
@@ -318,8 +319,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"}`,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} true`,
+		fmt.Sprintf(`GetFields aa: %v has_values: %v sq: %v`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}}),
+		fmt.Sprintf(`Execute aa: %v has_values: %v sq: %v true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}}),
 	})
 
 	ufp.rewind()
@@ -328,7 +329,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0"`,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" true`,
+		fmt.Sprintf(`GetFields aa: %v has_values: %v`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0)),
+		fmt.Sprintf(`Execute aa: %v has_values: %v true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(0)),
 	})
 }

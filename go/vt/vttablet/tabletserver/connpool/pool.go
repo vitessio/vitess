@@ -72,6 +72,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		MaxIdleCount:    int64(cfg.MaxIdleCount),
 		MaxLifetime:     cfg.MaxLifetime,
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
+		MaxWaiters:      uint(cfg.MaxWaiters),
 	}
 
 	if name != "" {
@@ -83,7 +84,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	}
 
 	cp.ConnPool = smartconnpool.NewPool(&config)
-	cp.ConnPool.RegisterStats(env.Exporter(), name)
+	cp.RegisterStats(env.Exporter(), name)
 
 	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
 
@@ -161,7 +162,7 @@ func (cp *Pool) SetIdleTimeout(idleTimeout time.Duration) {
 
 // StatsJSON returns the pool stats as a JSON object.
 func (cp *Pool) StatsJSON() string {
-	if !cp.ConnPool.IsOpen() {
+	if !cp.IsOpen() {
 		return "{}"
 	}
 

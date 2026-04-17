@@ -25,3 +25,9 @@ var MycnfMySQL84 string
 
 //go:embed mycnf/mysql90.cnf
 var MycnfMySQL90 string
+
+//go:embed mycnf/clone.cnf
+var MycnfClone string
+
+//go:embed init_clone.sql
+var InitClone string

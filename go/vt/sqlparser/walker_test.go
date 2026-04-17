@@ -17,15 +17,15 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkWalkLargeExpression(b *testing.B) {
-	for i := 0; i < 10; i++ {
-		b.Run(fmt.Sprintf("%d", i), func(b *testing.B) {
+	for i := range 10 {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			exp := NewGenerator(5).Expression(ExprGeneratorConfig{})
 			count := 0
 			for i := 0; i < b.N; i++ {
@@ -41,7 +41,7 @@ func BenchmarkWalkLargeExpression(b *testing.B) {
 
 func BenchmarkRewriteLargeExpression(b *testing.B) {
 	for i := 1; i < 7; i++ {
-		b.Run(fmt.Sprintf("%d", i), func(b *testing.B) {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			exp := NewGenerator(i).Expression(ExprGeneratorConfig{})
 			count := 0
 			for i := 0; i < b.N; i++ {

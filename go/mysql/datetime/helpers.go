@@ -199,7 +199,7 @@ func getnuml(s string, l int) (int, string, bool) {
 }
 
 func getnumn(s string) (int, string, bool) {
-	if len(s) == 0 || !('0' <= s[0] && s[0] <= '9') {
+	if len(s) == 0 || ('0' > s[0] || s[0] > '9') {
 		return 0, s, false
 	}
 
@@ -277,10 +277,7 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 		ns *= 10
 	}
 
-	l = nbytes - 1
-	if l > 6 {
-		l = 6
-	}
+	l = min(nbytes-1, 6)
 
 	return
 }

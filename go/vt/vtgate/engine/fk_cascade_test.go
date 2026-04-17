@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func TestDeleteCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012\x950\x01b")}}}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
 	})
@@ -82,7 +83,7 @@ func TestDeleteCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012\x950\x01b")}}}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
 	})
@@ -131,7 +132,7 @@ func TestUpdateCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012\x950\x01b")}}}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
 	})
@@ -143,7 +144,7 @@ func TestUpdateCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012\x950\x01b")}}}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
 	})
@@ -203,9 +204,9 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: %v fkc_upd: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012")}}}, &querypb.BindVariable{Type: querypb.Type_INT64, Value: []byte("5")}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x013"} fkc_upd: type:INT64 value:"7"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: %v fkc_upd: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x013")}}}, &querypb.BindVariable{Type: querypb.Type_INT64, Value: []byte("7")}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = colb + 2 where foo = 48 {} true true`,
 	})
@@ -217,9 +218,9 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: %v fkc_upd: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x012")}}}, &querypb.BindVariable{Type: querypb.Type_INT64, Value: []byte("5")}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x013"} fkc_upd: type:INT64 value:"7"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: %v fkc_upd: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x013")}}}, &querypb.BindVariable{Type: querypb.Type_INT64, Value: []byte("7")}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = colb + 2 where foo = 48 {} true true`,
 	})

@@ -62,8 +62,7 @@ func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace str
 func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
@@ -75,7 +74,6 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 }
 
 func TestWatchSrvKeyspace(t *testing.T) {
-
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx, cancel := context.WithCancel(context.Background())
@@ -229,8 +227,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 
@@ -465,15 +462,13 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	if string(got) != string(want) {
 		t.Errorf("GetSrvKeyspace() failure. Got %v, want: %v", string(got), string(want))
 	}
-
 }
 
 func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 
@@ -666,8 +661,7 @@ func TestGetShardServingTypes(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 
@@ -776,8 +770,7 @@ func TestGetShardServingCells(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 
@@ -882,8 +875,7 @@ func TestMasterMigrateServedType(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 
@@ -1168,8 +1160,7 @@ func TestValidateSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	cell2 := "cell2"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell, cell2)
 	defer ts.Close()
 

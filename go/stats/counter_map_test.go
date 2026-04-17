@@ -24,7 +24,6 @@ import (
 )
 
 func TestGetOrNewCounter(t *testing.T) {
-
 	c1 := GetOrNewCounter("size_c", "help message")
 	require.NotNil(t, c1)
 	assert.Equal(t, int64(0), c1.Get())
@@ -41,7 +40,6 @@ func TestGetOrNewCounter(t *testing.T) {
 }
 
 func TestGetOrNewGauge(t *testing.T) {
-
 	c1 := GetOrNewGauge("size_g", "help message")
 	require.NotNil(t, c1)
 	assert.Equal(t, int64(0), c1.Get())
@@ -58,7 +56,6 @@ func TestGetOrNewGauge(t *testing.T) {
 }
 
 func TestGetOrNewGaugeFloat64(t *testing.T) {
-
 	c1 := GetOrNewGaugeFloat64("size_gf64", "help message")
 	require.NotNil(t, c1)
 	assert.Equal(t, float64(0), c1.Get())

@@ -200,7 +200,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		if _, err := conn.ExecuteFetch(sqlEnableFastAnalyzeTable, 1, false); err != nil {
 			return err
 		}
-		log.Infof("@@fast_analyze_table enabled")
+		log.Info("@@fast_analyze_table enabled")
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 
@@ -228,7 +228,7 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 
 func (v *VRepl) analyzeAlter() error {
 	if v.alterTableAnalysis.IsRenameTable {
-		return fmt.Errorf("renaming the table is not supported in ALTER TABLE")
+		return errors.New("renaming the table is not supported in ALTER TABLE")
 	}
 	return nil
 }
@@ -261,7 +261,7 @@ func (v *VRepl) analyzeTableStatus(ctx context.Context, conn *dbconnpool.DBConne
 // non-generated columns between source & target tables, and takes care of column renames.
 func (v *VRepl) generateFilterQuery() error {
 	if v.analysis.SourceSharedColumns.Len() == 0 {
-		return fmt.Errorf("empty column list")
+		return errors.New("empty column list")
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")

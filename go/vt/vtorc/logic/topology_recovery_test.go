@@ -17,24 +17,52 @@ limitations under the License.
 package logic
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"golang.org/x/sys/unix"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
+
+type writerFunc func([]byte) (int, error)
+
+func (wf writerFunc) Write(p []byte) (int, error) {
+	return wf(p)
+}
+
+func seedTestAnalysisRow(row sqlutils.RowMap) error {
+	_ = row
+	return nil
+}
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	tests := []struct {
@@ -108,15 +136,20 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.DetectionAnalysis{Analysis: tt.prevAnalysisCode}, &inst.DetectionAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
 }
 
 func TestElectNewPrimaryPanic(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
 	oldTs := ts
 	defer func() {
 		ts = oldTs
@@ -138,11 +171,10 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := &inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
+	analysisEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: tablet.Alias,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
@@ -151,8 +183,13 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 }
 
 func TestRecoveryRegistration(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
 	oldTs := ts
 	defer func() {
 		ts = oldTs
@@ -188,16 +225,15 @@ func TestRecoveryRegistration(t *testing.T) {
 	require.NoError(t, err)
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
-	primaryAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
+	primaryAnalysisEntry := inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: primary.Alias,
 		Analysis:              inst.ReplicationStopped,
 	}
-	replicaAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
+	replicaAnalysisEntry := inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: replica.Alias,
 		Analysis:              inst.DeadPrimary,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
 	tp, err := AttemptRecoveryRegistration(&replicaAnalysisEntry)
@@ -223,14 +259,14 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
-		analysisEntry                *inst.ReplicationAnalysis
+		analysisEntry                *inst.DetectionAnalysis
 		wantRecoveryFunction         recoveryFunction
-		wantSkipRecovery             bool
+		wantRecoverySkipCode         RecoverySkipCode
 	}{
 		{
 			name:       "DeadPrimary with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -239,17 +275,28 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "DeadPrimary with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
+			name:       "IncapacitatedPrimary",
+			ersEnabled: true,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:               inst.IncapacitatedPrimary,
+				AnalyzedKeyspace:       keyspace,
+				AnalyzedShard:          shard,
+				PrimaryHealthUnhealthy: true,
+				LastCheckValid:         true,
+			},
+			wantRecoveryFunction: recoverIncapacitatedPrimaryFunc,
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -258,17 +305,17 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "StalledDiskPrimary with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -277,17 +324,17 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryTabletDeleted,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -296,17 +343,17 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimaryTabletDeleted with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryTabletDeleted,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryHasPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -315,7 +362,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "ClusterHasNoPrimary",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ClusterHasNoPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -324,7 +371,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "ReplicationStopped",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ReplicationStopped,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -333,7 +380,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimarySemiSyncMustBeSet",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncMustBeSet,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -343,7 +390,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                         "ErrantGTIDDetected",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ErrantGTIDDetected,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -353,57 +400,55 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ErrantGTIDDetected,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipNoRecoveryAction,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.DeadPrimary,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "UnreachablePrimary",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimary,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: restartArbitraryDirectReplicaFunc,
-			wantSkipRecovery:     false,
 		}, {
 			name:       "UnreachablePrimaryWithBrokenReplicas",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimaryWithBrokenReplicas,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: restartAllDirectReplicasFunc,
-			wantSkipRecovery:     false,
 		},
 	}
 
@@ -417,9 +462,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc, skipRecovery := getCheckAndRecoverFunctionCode(tt.analysisEntry)
+			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
-			require.EqualValues(t, tt.wantSkipRecovery, skipRecovery)
+			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
 	}
 }
@@ -434,7 +479,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -454,7 +499,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis did not change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -473,7 +518,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -483,7 +528,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:     1,
 				ReadOnly:           1,
@@ -494,7 +539,6 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// reset vtorc db after every test
 			oldDB := db.Db
 			defer func() {
 				db.Db = oldDB
@@ -505,16 +549,14 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				analysis.SetValuesFromTabletInfo()
 				rowMaps = append(rowMaps, analysis.ConvertToRowMap())
 			}
-
-			// set replication analysis in Vtorc DB.
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
-				AnalyzedInstanceAlias: "zon1-0000000100",
+			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
-			}, func(s string, b bool) {
+			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
 
@@ -526,5 +568,809 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
 
+func TestRecoverShardAnalyses(t *testing.T) {
+	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
+	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
+	// medium priority with no shard-wide action or before/after dependencies,
+	// so they run concurrently.
+	analyses := []*inst.DetectionAnalysis{
+		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}},
+		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}},
+		{Analysis: inst.ReplicaIsWritable, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 3}},
+		{Analysis: inst.PrimaryHasPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 4}},
+	}
+
+	var mu sync.Mutex
+	var order []inst.AnalysisCode
+	recoverFunc := func(entry *inst.DetectionAnalysis) error {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, entry.Analysis)
+		return nil
+	}
+
+	recoverShardAnalyses(analyses, recoverFunc)
+
+	require.Len(t, order, 4)
+	// Ordered recoveries must come first, in their original order.
+	require.Equal(t, inst.DeadPrimary, order[0])
+	require.Equal(t, inst.PrimaryHasPrimary, order[1])
+	// Concurrent recoveries come after, in any order.
+	require.ElementsMatch(t, []inst.AnalysisCode{inst.ReplicationStopped, inst.ReplicaIsWritable}, order[2:])
+}
+
+func TestRecoverIncapacitatedPrimary(t *testing.T) {
+	tests := []struct {
+		name        string
+		analysis    *inst.DetectionAnalysis
+		pingOK      bool
+		wantAttempt bool
+		setupDB     bool
+		rows        int
+		prsFails    bool
+	}{
+		{
+			name: "reachable ping (prs failure)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			pingOK:      true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable ping (ers fallback)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        false,
+			},
+			pingOK:      true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable ping (prs ok)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			pingOK:      true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+		},
+		{
+			name: "unreachable ping",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+			},
+			pingOK:      false,
+			wantAttempt: false,
+			setupDB:     true,
+			rows:        3,
+		},
+	}
+
+	for idx, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prevERS := config.ERSEnabled()
+			config.SetERSEnabled(true)
+			defer config.SetERSEnabled(prevERS)
+
+			logger := log.NewPrefixedLogger("test")
+
+			keyspace := fmt.Sprintf("ks_incap_%d", idx)
+			shard := strconv.Itoa(idx)
+			analysis := *tt.analysis
+			analysis.AnalyzedKeyspace = keyspace
+			analysis.AnalyzedShard = shard
+
+			oldTs := ts
+			oldTmc := tmc
+			defer func() {
+				ts = oldTs
+				tmc = oldTmc
+			}()
+
+			type stderrCapture struct {
+				mu  sync.Mutex
+				buf bytes.Buffer
+			}
+			capture := &stderrCapture{}
+			captureWrite := func(p []byte) (int, error) {
+				capture.mu.Lock()
+				defer capture.mu.Unlock()
+				return capture.buf.Write(p)
+			}
+
+			var restoreStderr func()
+			if tt.prsFails {
+				oldStderr := os.Stderr
+				r, w, err := os.Pipe()
+				require.NoError(t, err)
+				oldFD, err := unix.Dup(int(os.Stderr.Fd()))
+				require.NoError(t, err)
+				require.NoError(t, unix.Dup2(int(w.Fd()), int(os.Stderr.Fd())))
+				os.Stderr = w
+				done := make(chan struct{})
+				go func() {
+					_, _ = io.Copy(writerFunc(captureWrite), r)
+					_ = r.Close()
+					close(done)
+				}()
+				restoreStderr = func() {
+					log.Flush()
+					_ = w.Close()
+					os.Stderr = oldStderr
+					_ = unix.Dup2(oldFD, int(os.Stderr.Fd()))
+					_ = unix.Close(oldFD)
+					<-done
+				}
+			}
+
+			if tt.setupDB {
+				orcDb, fromCache, err := db.OpenVTOrcWithCache()
+				require.NoError(t, err)
+				defer func() {
+					if !fromCache {
+						require.NoError(t, orcDb.Close())
+					}
+				}()
+				_, err = orcDb.Exec("delete from topology_recovery_steps")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from topology_recovery")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from recovery_detection")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from vitess_tablet")
+				require.NoError(t, err)
+
+				primaryTablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt":   15000,
+						"grpc": 16000,
+					},
+				}
+				require.NoError(t, inst.SaveTablet(primaryTablet))
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt":   15001,
+						"grpc": 16001,
+					},
+				}))
+
+				ctx := t.Context()
+				ts = memorytopo.NewServer(ctx, "zon1")
+				err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone})
+				require.NoError(t, err)
+				err = ts.CreateShard(ctx, keyspace, shard)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, primaryTablet)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PortMap: map[string]int32{
+						"vt":   15001,
+						"grpc": 16001,
+					},
+				})
+				require.NoError(t, err)
+
+				tmc = &testutil.TabletManagerClient{}
+				pingErr := error(nil)
+				if !tt.pingOK {
+					pingErr = errors.New("ping failed")
+				}
+				tmc.(*testutil.TabletManagerClient).PingResults = map[string]error{
+					"zon1-0000000100": pingErr,
+				}
+				fullStatusPosition := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).FullStatusResult = &replicationdatapb.FullStatus{
+					PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: fullStatusPosition},
+					ReplicationStatus: &replicationdatapb.Status{
+						Position: fullStatusPosition,
+					},
+				}
+				pos := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).StopReplicationAndGetStatusResults = map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zon1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+					"zon1-0000000101": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).WaitForPositionResults = map[string]map[string]error{
+					"zon1-0000000100": {pos: nil},
+					"zon1-0000000101": {pos: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).PrimaryPositionResults = map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zon1-0000000100": {Position: "pos", Error: nil},
+				}
+				if tt.prsFails {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: nil, Error: errors.New("prs failed")},
+					}
+				} else {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "pos"}, Error: nil},
+					}
+				}
+				tmc.(*testutil.TabletManagerClient).InitPrimaryResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).SetReplicationSourceResults = map[string]error{
+					"zon1-0000000100": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).PopulateReparentJournalResults = map[string]error{
+					"zon1-0000000100": nil,
+					"zon1-0000000101": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).ReadReparentJournalInfoResults = map[string]int32{
+					"zon1-0000000100": 1,
+					"zon1-0000000101": 1,
+				}
+				tmc.(*testutil.TabletManagerClient).PromoteReplicaResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+			}
+
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), &analysis, logger)
+			if restoreStderr != nil {
+				log.Flush()
+				require.Eventually(t, func() bool {
+					err := db.QueryVTOrc("select message from topology_recovery_steps where message like 'ERS - %'", nil, func(_ sqlutils.RowMap) error {
+						return nil
+					})
+					return err == nil
+				}, 2*time.Second, 10*time.Millisecond)
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantAttempt, attempted)
+			if tt.wantAttempt {
+				require.NotNil(t, topologyRecovery)
+			} else {
+				require.Nil(t, topologyRecovery)
+			}
+			if restoreStderr != nil {
+				restoreStderr()
+			}
+		})
+	}
+}
+
+// TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a
+// stale primary tablet to REPLICA, regardless of whether the best-effort demotion RPC to the tablet succeeds.
+func TestReconcileStaleTopoPrimary(t *testing.T) {
+	tests := []struct {
+		name string
+
+		// demotePrimaryErr is whether the DemotePrimary RPC should return an error.
+		demotePrimaryErr error
+
+		// demotePrimaryDelay is the delay the DemotePrimary RPC should take before returning.
+		demotePrimaryDelay time.Duration
+
+		// topoAlreadyReplica seeds the stale tablet in topo as REPLICA with no primary term.
+		topoAlreadyReplica bool
+	}{
+		{
+			name: "tablet reachable, demotion succeeds",
+		},
+		{
+			name:               "tablet unreachable, demotion times out",
+			demotePrimaryDelay: 30 * time.Second,
+		},
+		{
+			name:             "tablet reachable, demotion fails",
+			demotePrimaryErr: errors.New("injected demote error"),
+		},
+		{
+			name:               "topo already replica, no update needed",
+			demotePrimaryErr:   errors.New("injected demote error"),
+			topoAlreadyReplica: true,
+		},
+	}
+
+	orcDB, cached, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !cached {
+		t.Cleanup(func() {
+			require.NoError(t, orcDB.Close())
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				// Clean tables from prior runs.
+				for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+					_, err = orcDB.Exec("delete from " + table)
+					require.NoError(t, err)
+				}
+
+				const (
+					keyspace = "ks"
+					shard    = "0"
+				)
+
+				// The real primary, has the newer PrimaryTermStartTime.
+				primaryTablet := &topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:             "primary",
+					MysqlHostname:        "primary",
+					MysqlPort:            3306,
+					Keyspace:             keyspace,
+					Shard:                shard,
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+					PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+				}
+
+				// The stale primary, has an older PrimaryTermStartTime
+				staleTablet := &topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:             "stale-primary",
+					MysqlHostname:        "stale-primary",
+					MysqlPort:            3306,
+					Keyspace:             keyspace,
+					Shard:                shard,
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{Seconds: 500},
+					PortMap:              map[string]int32{"vt": 15200, "grpc": 15201},
+				}
+
+				// Populate the VTOrc DB with the tablet records.
+				require.NoError(t, inst.SaveTablet(primaryTablet))
+				require.NoError(t, inst.SaveTablet(staleTablet))
+
+				// Store the durability policy so GetDurabilityPolicy succeeds.
+				keyspaceInfo := &topo.KeyspaceInfo{
+					Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+				}
+				keyspaceInfo.SetKeyspaceName(keyspace)
+				require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+				// Wire up memorytopo with the same tablets.
+				ctx := t.Context()
+
+				oldTS := ts
+				oldTMC := tmc
+				defer func() {
+					ts = oldTS
+					tmc = oldTMC
+				}()
+
+				ts = memorytopo.NewServer(ctx, "zone1")
+				require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+				require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+				if tt.topoAlreadyReplica {
+					staleTablet.Type = topodatapb.TabletType_REPLICA
+					staleTablet.PrimaryTermStartTime = nil
+				}
+
+				require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
+				require.NoError(t, ts.CreateTablet(ctx, staleTablet))
+
+				mockController := gomock.NewController(t)
+				t.Cleanup(mockController.Finish)
+
+				mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+				mockTMC.EXPECT().
+					DemotePrimary(gomock.Any(), gomock.Any(), true).
+					DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.PrimaryStatus, error) {
+						if tt.demotePrimaryDelay > 0 {
+							<-ctx.Done()
+							return nil, ctx.Err()
+						}
+
+						if tt.demotePrimaryErr != nil {
+							return nil, tt.demotePrimaryErr
+						}
+
+						return &replicationdatapb.PrimaryStatus{}, nil
+					}).
+					Times(1)
+
+				mockTMC.EXPECT().
+					SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(nil).
+					AnyTimes()
+
+				tmc = mockTMC
+
+				analysisEntry := &inst.DetectionAnalysis{
+					Analysis:              inst.StaleTopoPrimary,
+					AnalyzedInstanceAlias: staleTablet.Alias,
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard,
+				}
+
+				logger := log.NewPrefixedLogger("test-stale-primary")
+				attempted, topologyRecovery, err := reconcileStaleTopoPrimary(ctx, analysisEntry, logger)
+
+				require.True(t, attempted, "recovery must be attempted")
+				require.NoError(t, err, "topo update must succeed")
+				require.NotNil(t, topologyRecovery, "topology recovery record must be returned")
+
+				// Verify that the stale tablet's topo record was changed to REPLICA.
+				updatedTablet, err := ts.GetTablet(ctx, staleTablet.Alias)
+				require.NoError(t, err)
+				require.Equal(t, topodatapb.TabletType_REPLICA, updatedTablet.Type, "stale primary must be updated to REPLICA in topo")
+
+				// Verify that the recovery row has been resolved.
+				activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+				require.NoError(t, err)
+				require.Empty(t, activeRecoveries, "recovery row must be resolved after reconcileStaleTopoPrimary returns")
+			})
+		})
+	}
+}
+
+// TestReconcileStaleTopoPrimaryTopoTimeout verifies that reconcileStaleTopoPrimary
+// returns when the topology type change blocks until the remote operation timeout.
+func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+			_, err = orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
+
+		const (
+			keyspace = "ks"
+			shard    = "0"
+		)
+
+		primaryTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:             "primary",
+			MysqlHostname:        "primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+			PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+		}
+
+		staleTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:             "stale-primary",
+			MysqlHostname:        "stale-primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 500},
+			PortMap:              map[string]int32{"vt": 15200, "grpc": 15201},
+		}
+
+		require.NoError(t, inst.SaveTablet(primaryTablet))
+		require.NoError(t, inst.SaveTablet(staleTablet))
+
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+		}
+		keyspaceInfo.SetKeyspaceName(keyspace)
+		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+		ctx := t.Context()
+
+		seededTS, topoFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+		t.Cleanup(seededTS.Close)
+
+		require.NoError(t, seededTS.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+		require.NoError(t, seededTS.CreateShard(ctx, keyspace, shard))
+		require.NoError(t, seededTS.CreateTablet(ctx, primaryTablet))
+		require.NoError(t, seededTS.CreateTablet(ctx, staleTablet))
+
+		require.NoError(t, seededTS.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.ServerAddress = memorytopo.UnreachableServerAddr
+			return nil
+		}))
+
+		blockedTS, err := topo.NewWithFactory(topoFactory, "", "")
+		require.NoError(t, err)
+		t.Cleanup(blockedTS.Close)
+
+		oldTS := ts
+		oldTMC := tmc
+		oldRemoteOpTimeout := topo.RemoteOperationTimeout
+
+		t.Cleanup(func() {
+			ts = oldTS
+			tmc = oldTMC
+			topo.RemoteOperationTimeout = oldRemoteOpTimeout
+		})
+
+		ts = blockedTS
+		topo.RemoteOperationTimeout = 100 * time.Millisecond
+
+		mockController := gomock.NewController(t)
+		t.Cleanup(mockController.Finish)
+
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		mockTMC.EXPECT().
+			DemotePrimary(gomock.Any(), gomock.Any(), true).
+			Return(&replicationdatapb.PrimaryStatus{}, nil).
+			Times(1)
+
+		mockTMC.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			Times(1)
+
+		tmc = mockTMC
+
+		analysisEntry := &inst.DetectionAnalysis{
+			Analysis:              inst.StaleTopoPrimary,
+			AnalyzedInstanceAlias: staleTablet.Alias,
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard,
+		}
+
+		logger := log.NewPrefixedLogger("test-stale-primary-topo-timeout")
+
+		type reconcileResult struct {
+			attempted        bool
+			topologyRecovery *TopologyRecovery
+			err              error
+		}
+
+		recoveryCtx, cancel := context.WithCancel(ctx)
+		t.Cleanup(func() {
+			cancel()
+			synctest.Wait()
+		})
+
+		resultCh := make(chan reconcileResult, 1)
+		go func() {
+			attempted, topologyRecovery, err := reconcileStaleTopoPrimary(recoveryCtx, analysisEntry, logger)
+			resultCh <- reconcileResult{
+				attempted:        attempted,
+				topologyRecovery: topologyRecovery,
+				err:              err,
+			}
+		}()
+
+		synctest.Wait()
+
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
+		select {
+		case result := <-resultCh:
+			require.True(t, result.attempted, "recovery must be attempted")
+			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
+			require.ErrorContains(t, result.err, "failed to set tablet type to REPLICA in topology")
+			require.ErrorContains(t, result.err, context.DeadlineExceeded.Error(), "reconcileStaleTopoPrimary must timeout and return when the topo type change blocks indefinitely")
+		default:
+			require.FailNowf(t, "reconcileStaleTopoPrimary did not return", "expected timeout after %s when the topo type change hangs indefinitely", topo.RemoteOperationTimeout)
+		}
+
+		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+		require.NoError(t, err)
+		require.Empty(t, activeRecoveries, "recovery row must be resolved after reconcileStaleTopoPrimary returns")
+	})
+}
+
+// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
+func TestRestartDirectReplicasTimeout(t *testing.T) {
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
+
+	inst.InitializeForgetAliasesCache()
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance"} {
+			_, err = orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
+
+		const (
+			keyspace = "ks"
+			shard    = "0"
+		)
+
+		primaryTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:             "primary",
+			MysqlHostname:        "primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+			PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+		}
+
+		replicaTablet := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:      "replica",
+			MysqlHostname: "replica",
+			MysqlPort:     3306,
+			Keyspace:      keyspace,
+			Shard:         shard,
+			Type:          topodatapb.TabletType_REPLICA,
+			PortMap:       map[string]int32{"vt": 15200, "grpc": 15201},
+		}
+
+		require.NoError(t, inst.SaveTablet(primaryTablet))
+		require.NoError(t, inst.SaveTablet(replicaTablet))
+
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+		}
+		keyspaceInfo.SetKeyspaceName(keyspace)
+		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+		require.NoError(t, inst.WriteInstance(&inst.Instance{
+			InstanceAlias:    replicaTablet.Alias,
+			Hostname:         "replica",
+			Port:             3306,
+			SourceHost:       "primary",
+			SourcePort:       3306,
+			ReplicationDepth: 1,
+		}, true, nil))
+
+		ctx := t.Context()
+
+		oldTS := ts
+		oldTMC := tmc
+		t.Cleanup(func() {
+			ts = oldTS
+			tmc = oldTMC
+		})
+
+		ts = memorytopo.NewServer(ctx, "zone1")
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+		require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+		require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
+		require.NoError(t, ts.CreateTablet(ctx, replicaTablet))
+
+		urgentOperations.Flush()
+
+		mockController := gomock.NewController(t)
+		t.Cleanup(mockController.Finish)
+
+		// Simulate a replication RPC that never returns on its own. The call only unblocks
+		// when the passed context is canceled.
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		mockTMC.EXPECT().
+			StopReplication(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
+			Times(1)
+
+		tmc = mockTMC
+
+		analysisEntry := &inst.DetectionAnalysis{
+			Analysis:              inst.UnreachablePrimary,
+			AnalyzedInstanceAlias: primaryTablet.Alias,
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard,
+		}
+
+		logger := log.NewPrefixedLogger("test-restart-replicas-hang")
+
+		type restartDirectReplicasResult struct {
+			attempted        bool
+			topologyRecovery *TopologyRecovery
+			err              error
+		}
+
+		ctx, cancel := context.WithCancel(ctx)
+		t.Cleanup(func() {
+			cancel()
+			synctest.Wait()
+		})
+
+		// Run the recovery in a separate goroutine and collect its result.
+		resultCh := make(chan restartDirectReplicasResult, 1)
+		go func() {
+			attempted, topologyRecovery, err := restartDirectReplicas(ctx, analysisEntry, 0, logger)
+			resultCh <- restartDirectReplicasResult{
+				attempted:        attempted,
+				topologyRecovery: topologyRecovery,
+				err:              err,
+			}
+		}()
+
+		// Let the recovery goroutine reach a blocked state before advancing fake time (in this case,
+		// hanging on the StopReplication RPC).
+		synctest.Wait()
+
+		// Move fake time just beyond the expected RPC timeout boundary.
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
+		// The recovery should now have returned with context.DeadlineExceeded.
+		select {
+		case result := <-resultCh:
+			require.True(t, result.attempted, "recovery must be attempted")
+			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
+			require.ErrorIs(t, result.err, context.DeadlineExceeded, "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
+		default:
+			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when a replication RPC hangs indefinitely", topo.RemoteOperationTimeout)
+		}
+
+		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+		require.NoError(t, err)
+		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
+	})
 }

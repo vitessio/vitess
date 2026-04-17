@@ -19,6 +19,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -66,14 +67,14 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 
 	receivedCallerID := callerid.EffectiveCallerIDFromContext(ctx)
 	if receivedCallerID == nil {
-		return true, fmt.Errorf("no callerid received in the query")
+		return true, errors.New("no callerid received in the query")
 	}
 
 	if !proto.Equal(receivedCallerID, expectedCallerID) {
 		return true, fmt.Errorf("callerid mismatch, got %v expected %v", receivedCallerID, expectedCallerID)
 	}
 
-	return true, fmt.Errorf("SUCCESS: callerid matches")
+	return true, errors.New("SUCCESS: callerid matches")
 }
 
 func (c *callerIDClient) Execute(

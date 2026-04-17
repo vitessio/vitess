@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
@@ -52,7 +53,8 @@ func (c *terminalClient) Execute(
 	prepared bool,
 ) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if sql == "quit://" {
-		log.Fatal("Received quit:// query. Going down.")
+		log.Error("Received quit:// query. Going down.")
+		os.Exit(1)
 	}
 	return session, nil, errTerminal
 }
@@ -60,7 +62,8 @@ func (c *terminalClient) Execute(
 func (c *terminalClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sqlList) == 1 {
 		if sqlList[0] == "quit://" {
-			log.Fatal("Received quit:// query. Going down.")
+			log.Error("Received quit:// query. Going down.")
+			os.Exit(1)
 		}
 	}
 	return session, nil, errTerminal
@@ -90,9 +93,13 @@ func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.Tabl
 	return errTerminal
 }
 
+func (c *terminalClient) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	return errTerminal
+}
+
 func (c *terminalClient) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		*err = fmt.Errorf("uncaught panic: %v", x)
 	}
 }

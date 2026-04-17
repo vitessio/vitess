@@ -21,7 +21,9 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -72,7 +74,6 @@ var (
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-
 	utils.SetFlagDurationVar(fs, &keepaliveTime, "grpc-keepalive-time", keepaliveTime, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
 	utils.SetFlagDurationVar(fs, &keepaliveTimeout, "grpc-keepalive-timeout", keepaliveTimeout, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	utils.SetFlagIntVar(fs, &initialConnWindowSize, "grpc-initial-conn-window-size", initialConnWindowSize, "gRPC initial connection window size")
@@ -153,14 +154,15 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 	for _, grpcDialOptionInitializer := range grpcDialOptions {
 		newopts, err = grpcDialOptionInitializer(newopts)
 		if err != nil {
-			log.Fatalf("There was an error initializing client grpc.DialOption: %v", err)
+			log.Error(fmt.Sprintf("There was an error initializing client grpc.DialOption: %v", err))
+			os.Exit(1)
 		}
 	}
 	grpcDialOptionsMu.Unlock()
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.DialContext(ctx, target, newopts...) // nolint:staticcheck
+	return grpc.DialContext(ctx, target, newopts...) //nolint:staticcheck
 }
 
 func interceptors() []grpc.DialOption {

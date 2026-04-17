@@ -47,9 +47,10 @@ package config
 
 // MySQLConfigurationSettings has the general configuration for all MySQL clusters
 type MySQLConfigurationSettings struct {
-	CacheMillis         int      // optional, if defined then probe result will be cached, and future probes may use cached value
-	Port                int      // Specify if different than 3306; applies to all clusters
-	IgnoreDialTCPErrors bool     // Skip hosts where a metric cannot be retrieved due to TCP dial errors
-	IgnoreHostsCount    int      // Number of hosts that can be skipped/ignored even on error or on exceeding thresholds
-	IgnoreHosts         []string // If non empty, substrings to indicate hosts to be ignored/skipped
+	CacheMillis           int      // optional, if defined then probe result will be cached, and future probes may use cached value
+	Port                  int      // Specify if different than 3306; applies to all clusters
+	IgnoreTabletRPCErrors bool     // Skip hosts where a metric cannot be retrieved due to tablet RPC errors
+	IgnoreDialTCPErrors   bool     // TODO: deprecate/replace with IgnoreTabletRPCErrors.
+	IgnoreHostsCount      int      // Number of hosts that can be skipped/ignored even on error or on exceeding thresholds
+	IgnoreHosts           []string // If non empty, substrings to indicate hosts to be ignored/skipped
 }

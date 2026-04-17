@@ -275,7 +275,6 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 	}, options.Packages...)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}

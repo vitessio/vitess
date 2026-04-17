@@ -58,7 +58,7 @@ func TestFKWorkflow(t *testing.T) {
 	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
-	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, defaultSourceKsOpts)
 
 	verifyClusterHealth(t, vc)
 	insertInitialFKData(t)
@@ -82,7 +82,7 @@ func TestFKWorkflow(t *testing.T) {
 
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, defaultSourceKsOpts)
 
 	testFKCancel(t, vc)
 
@@ -159,7 +159,7 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	mt.SwitchReadsAndWrites()
 
-	log.Infof("Switch traffic done")
+	log.Info("Switch traffic done")
 
 	if withLoad {
 		ctx, cancel = context.WithCancel(context.Background())
@@ -183,7 +183,6 @@ func TestFKWorkflow(t *testing.T) {
 		// Check for the secondary key
 		confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab}, targetKeyspace, "parent")
 	}
-
 }
 
 func insertInitialFKData(t *testing.T) {
@@ -193,26 +192,31 @@ func insertInitialFKData(t *testing.T) {
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
-		log.Infof("Inserting initial FK data")
+		log.Info("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
-		log.Infof("Done inserting initial FK data")
+		log.Info("Done inserting initial FK data")
 
 		type tableCounts struct {
 			name  string
 			count int
 		}
 		for _, table := range []tableCounts{
-			{"parent", 2}, {"child", 3},
-			{"t1", 2}, {"t2", 3},
-			{"t11", 1}, {"t12", 1},
+			{"parent", 2},
+			{"child", 3},
+			{"t1", 2},
+			{"t2", 3},
+			{"t11", 1},
+			{"t12", 1},
 		} {
 			waitForRowCount(t, vtgateConn, db, table.name, table.count)
 		}
 	})
 }
 
-var currentParentId int64
-var currentChildId int64
+var (
+	currentParentId int64
+	currentChildId  int64
+)
 
 func init() {
 	currentParentId = 100
@@ -239,7 +243,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 	var err error
 	for i := 0; ; i++ {
 		if i%1000 == 0 {
-			log.Infof("Load simulation iteration %d", i)
+			log.Info(fmt.Sprintf("Load simulation iteration %d", i))
 		}
 		select {
 		case <-ls.ctx.Done():

@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -142,7 +143,7 @@ func RowsEquals(want, got []Row) error {
 		}
 	}
 
-	var matched = make([]bool, len(want))
+	matched := make([]bool, len(want))
 	for _, aa := range want {
 		var ok bool
 		for i, bb := range got {
@@ -165,7 +166,7 @@ func RowsEquals(want, got []Row) error {
 	}
 	for _, m := range matched {
 		if !m {
-			return fmt.Errorf("not all elements matched")
+			return errors.New("not all elements matched")
 		}
 	}
 	return nil

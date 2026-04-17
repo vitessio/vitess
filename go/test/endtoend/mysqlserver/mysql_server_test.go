@@ -18,7 +18,6 @@ R442
 package mysqlserver
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -28,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/icrowley/fake"
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,7 +40,7 @@ import (
 
 // TestMultiStmt checks that multiStatements=True and multiStatements=False work properly.
 func TestMultiStatement(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// connect database with multiStatements=True
 	db := connectDB(t, vtParams, "multiStatements=True", "timeout=90s", "collation=utf8mb4_unicode_ci")
@@ -68,14 +67,14 @@ func TestMultiStatement(t *testing.T) {
 
 // TestLargeComment add large comment in insert stmt and validate the insert process.
 func TestLargeComment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
 	// insert data with large comment
-	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(1, 'large blob', 123, 'LLL') /* "+fake.CharactersN(4*1024*1024)+" */", 1, false)
+	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(1, 'large blob', 123, 'LLL') /* "+gofakeit.LetterN(4*1024*1024)+" */", 1, false)
 	require.Nilf(t, err, "insertion error: %v", err)
 
 	qr, err := conn.ExecuteFetch("select * from vt_insert_test where id = 1", 1, false)
@@ -86,8 +85,7 @@ func TestLargeComment(t *testing.T) {
 
 // TestInsertLargerThenGrpcLimit insert blob larger then grpc limit and verify the error.
 func TestInsertLargerThenGrpcLimit(t *testing.T) {
-
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -98,14 +96,14 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 	require.Nilf(t, err, "int parsing error: %v", err)
 
 	// insert data with large blob
-	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+fake.CharactersN(limit+1)+"')", 1, false)
+	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+gofakeit.LetterN(uint(limit+1))+"')", 1, false)
 	require.NotNil(t, err, "error expected on insert")
 	assert.Contains(t, err.Error(), "trying to send message larger than max")
 }
 
 // TestTimeout executes sleep(5) with query_timeout of 1 second, and verifies the error.
 func TestTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -120,7 +118,7 @@ func TestTimeout(t *testing.T) {
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
 func TestInvalidField(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
@@ -135,7 +133,7 @@ func TestInvalidField(t *testing.T) {
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.
 func TestWarnings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -176,7 +174,7 @@ func TestWarnings(t *testing.T) {
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user
 // is not able to read from the table.
 func TestSelectWithUnauthorizedUser(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpVtParam := vtParams
 	tmpVtParam.Uname = "testuser2"
@@ -194,7 +192,6 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine
 func TestPartitionedTable(t *testing.T) {
-
 	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// Partitioned table already created, check if vttablet knows about it

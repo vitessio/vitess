@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,6 +42,44 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+func TestMaxQuerySize(t *testing.T) {
+	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {
+		stats := binlogplayer.NewStats()
+		return &vreplicator{
+			dbClient: newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+			stats:    stats,
+			workflowConfig: &vttablet.VReplicationConfig{
+				RelayLogMaxSize: relayLogMaxSize,
+			},
+		}
+	}
+
+	t.Run("uses session max allowed packet", func(t *testing.T) {
+		dbClient := binlogplayer.NewMockDBClient(t)
+		dbClient.ExpectRequest(
+			SqlMaxAllowedPacket,
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+				"1024",
+			),
+			nil,
+		)
+
+		vr := makeVR(dbClient, 4096)
+		assert.Equal(t, int64(960), vr.maxQuerySize(vr.dbClient))
+		assert.Nil(t, vr.dbClient.queries)
+	})
+
+	t.Run("falls back to relay log max size", func(t *testing.T) {
+		dbClient := binlogplayer.NewMockDBClient(t)
+		dbClient.ExpectRequest(SqlMaxAllowedPacket, nil, assert.AnError)
+
+		vr := makeVR(dbClient, 4096)
+		assert.Equal(t, int64(4032), vr.maxQuerySize(vr.dbClient))
+		assert.Nil(t, vr.dbClient.queries)
+	})
+}
 
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 	tt := []struct {
@@ -593,8 +632,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		t.Skipf("Skipping test as it's not supported with %s", flavor)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 	filter := &binlogdatapb.Filter{
@@ -662,12 +700,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 	// The ALTER should block on the table lock.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := vr.execPostCopyActions(ctx, tableName)
-		assert.True(t, strings.EqualFold(err.Error(), fmt.Sprintf("EOF (errno 2013) (sqlstate HY000) during query: %s", alter)))
-	}()
+		assert.True(t, strings.EqualFold(err.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter))
+	})
 
 	// Confirm that the expected ALTER query is being attempted.
 	query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
@@ -819,8 +855,7 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 }
 
 func TestThrottlerAppNames(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)

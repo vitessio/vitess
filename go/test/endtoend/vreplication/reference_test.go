@@ -155,7 +155,6 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	execRefQuery(t, "delete from uks.mfg where id = 7")
 	execRefQuery(t, "delete from sks.mfg2 where id = 8")
 	waitForRowCount(t, vtgateConn, uks, "mfg", 4)
-
 }
 
 func execRefQuery(t *testing.T, query string) {

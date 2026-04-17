@@ -18,7 +18,8 @@ package stats
 
 import (
 	"encoding/json"
-	"fmt"
+	"maps"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -136,9 +137,7 @@ func (t *Timings) Histograms() (h map[string]*Histogram) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	h = make(map[string]*Histogram, len(t.histograms))
-	for k, v := range t.histograms {
-		h[k] = v
-	}
+	maps.Copy(h, t.histograms)
 	return
 }
 
@@ -188,7 +187,7 @@ var bucketLabels []string
 func init() {
 	bucketLabels = make([]string, len(bucketCutoffs)+1)
 	for i, v := range bucketCutoffs {
-		bucketLabels[i] = fmt.Sprintf("%d", v)
+		bucketLabels[i] = strconv.FormatInt(v, 10)
 	}
 	bucketLabels[len(bucketLabels)-1] = "inf"
 }

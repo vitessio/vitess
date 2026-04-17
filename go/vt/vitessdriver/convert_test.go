@@ -17,11 +17,13 @@ limitations under the License.
 package vitessdriver
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestToNative(t *testing.T) {
@@ -53,7 +55,8 @@ func TestToNative(t *testing.T) {
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Int24, "1"),
 			out:     int64(1),
-		}, {
+		},
+		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Int32, "1"),
 			out:     int64(1),
@@ -77,7 +80,8 @@ func TestToNative(t *testing.T) {
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Uint24, "1"),
 			out:     uint64(1),
-		}, {
+		},
+		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Uint32, "1"),
 			out:     uint64(1),
@@ -100,7 +104,7 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Timestamp, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
 		},
 		{
 			convert: &converter{},
@@ -110,22 +114,22 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
-			out:     time.Date(2012, 02, 24, 0, 0, 0, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
 		},
 		{
 			convert: convertTimeLocal,
 			in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.Local),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.Local),
 		},
 		{
 			convert: convertTimeLocal,
 			in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
-			out:     time.Date(2012, 02, 24, 0, 0, 0, 0, time.Local),
+			out:     time.Date(2012, 0o2, 24, 0, 0, 0, 0, time.Local),
 		},
 		{
 			convert: &converter{},
@@ -191,11 +195,53 @@ func TestToNative(t *testing.T) {
 
 	for _, tcase := range testcases {
 		v, err := tcase.convert.ToNative(tcase.in)
-		if err != nil {
-			t.Error(err)
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("%v.ToNativeEx = %#v, want %#v", tcase.in, v, tcase.out)
-		}
+		require.NoError(t, err)
+		require.Equal(t, tcase.out, v)
+	}
+}
+
+func TestBuildBindVariable(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   any
+		out  *querypb.BindVariable
+	}{
+		{
+			name: "json bytes become varchar",
+			in:   []byte("[]"),
+			out:  sqltypes.StringBindVariable("[]"),
+		},
+		{
+			name: "binary bytes become varchar",
+			in:   []byte{0x00, 0xff},
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_VARCHAR,
+				Value: []byte{0x00, 0xff},
+			},
+		},
+		{
+			name: "nil bytes become null",
+			in:   []byte(nil),
+			out:  sqltypes.NullBindVariable,
+		},
+		{
+			name: "empty bytes become empty varchar",
+			in:   []byte{},
+			out:  sqltypes.StringBindVariable(""),
+		},
+		{
+			name: "time becomes datetime",
+			in:   time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
+			out:  sqltypes.ValueBindVariable(sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43")),
+		},
+	}
+
+	convert := &converter{location: time.UTC}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			bv, err := convert.BuildBindVariable(tcase.in)
+			require.NoError(t, err)
+			require.Equal(t, tcase.out, bv)
+		})
 	}
 }

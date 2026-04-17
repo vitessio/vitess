@@ -110,7 +110,6 @@ func TestUniqueLookupDuplicateIgnore(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) NULL]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select col, hex(keyspace_id) from col_vdx_tbl order by col", `[[INT64(30) VARCHAR("4EB190C9A2FA169C")]]`)
-
 }
 
 func TestMultiEqual(t *testing.T) {
@@ -208,7 +207,6 @@ func TestDeleteWithLimit(t *testing.T) {
 
 	qr = mcmp.Exec(`delete from order_tbl limit 5`)
 	require.EqualValues(t, 0, qr.RowsAffected)
-
 }
 
 // TestUpdateWithLimit executed update queries with limit
@@ -264,7 +262,6 @@ func TestUpdateWithLimit(t *testing.T) {
 
 	qr = mcmp.Exec(`update order_tbl set oid = 44 where region_id > 100 limit 2`)
 	require.EqualValues(t, 0, qr.RowsAffected)
-
 }
 
 // TestMultiTableUpdate executed multi-table update queries
@@ -512,7 +509,7 @@ func TestUpdateWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}
@@ -547,7 +544,7 @@ func TestDeleteWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}

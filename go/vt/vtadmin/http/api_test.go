@@ -72,7 +72,6 @@ func TestDeprecateQueryParam(t *testing.T) {
 	}
 
 	for _, tcase := range cases {
-		tcase := tcase
 		t.Run("", func(t *testing.T) {
 			query := url.Values(tcase.in)
 

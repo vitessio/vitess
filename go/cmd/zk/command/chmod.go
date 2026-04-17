@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -38,14 +39,14 @@ zk chmod n+mode /zk/path`,
 func commandChmod(cmd *cobra.Command, args []string) error {
 	mode := cmd.Flags().Arg(0)
 	if mode[0] != 'n' {
-		return fmt.Errorf("chmod: invalid mode")
+		return errors.New("chmod: invalid mode")
 	}
 
 	addPerms := false
 	if mode[1] == '+' {
 		addPerms = true
 	} else if mode[1] != '-' {
-		return fmt.Errorf("chmod: invalid mode")
+		return errors.New("chmod: invalid mode")
 	}
 
 	permMask := zkfs.ParsePermMode(mode[2:])
@@ -65,7 +66,7 @@ func commandChmod(cmd *cobra.Command, args []string) error {
 		aclv, _, err := fs.Conn.GetACL(cmd.Context(), zkPath)
 		if err != nil {
 			hasError = true
-			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warn(fmt.Sprintf("chmod: cannot set access %v: %v", zkPath, err))
 			continue
 		}
 		if addPerms {
@@ -76,12 +77,12 @@ func commandChmod(cmd *cobra.Command, args []string) error {
 		err = fs.Conn.SetACL(cmd.Context(), zkPath, aclv, -1)
 		if err != nil {
 			hasError = true
-			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warn(fmt.Sprintf("chmod: cannot set access %v: %v", zkPath, err))
 			continue
 		}
 	}
 	if hasError {
-		return fmt.Errorf("chmod: some paths had errors")
+		return errors.New("chmod: some paths had errors")
 	}
 	return nil
 }

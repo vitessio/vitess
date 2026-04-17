@@ -42,8 +42,6 @@ limitations under the License.
 package base
 
 import (
-	"fmt"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -77,5 +75,5 @@ func NewProbe() *Probe {
 
 // String returns a human readable string of this struct
 func (p *Probe) String() string {
-	return fmt.Sprintf("probe alias=%s", p.Alias)
+	return "probe alias=" + p.Alias
 }

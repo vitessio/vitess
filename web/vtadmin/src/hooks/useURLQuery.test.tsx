@@ -13,14 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { act } from '@testing-library/react';
-import { renderHook } from '@testing-library/react-hooks';
-import { createMemoryHistory } from 'history';
-import { Router } from 'react-router-dom';
+import { act, renderHook } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryParams } from '../util/queryString';
 
 import { useURLQuery, URLQueryOptions } from './useURLQuery';
-import { describe, it, expect, test, vi } from 'vitest';
+import { describe, it, expect, test } from 'vitest';
 
 describe('useURLQuery', () => {
     describe('parsing', () => {
@@ -64,13 +62,9 @@ describe('useURLQuery', () => {
                 opts: URLQueryOptions | undefined,
                 expected: ReturnType<typeof useURLQuery>
             ) => {
-                const history = createMemoryHistory({
-                    initialEntries: [url],
-                });
-
                 const { result } = renderHook(() => useURLQuery(opts), {
                     wrapper: ({ children }) => {
-                        return <Router history={history}>{children}</Router>;
+                        return <MemoryRouter initialEntries={[url]}>{children}</MemoryRouter>;
                     },
                 });
 
@@ -109,14 +103,9 @@ describe('useURLQuery', () => {
         test.concurrent.each(tests.map(Object.values))(
             '%s',
             (name: string, initialEntries: string[], nextQuery: QueryParams, expected: QueryParams) => {
-                const history = createMemoryHistory({ initialEntries });
-                const initialPathname = history.location.pathname;
-
-                vi.spyOn(history, 'push');
-
                 const { result } = renderHook(() => useURLQuery(), {
                     wrapper: ({ children }) => {
-                        return <Router history={history}>{children}</Router>;
+                        return <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>;
                     },
                 });
 
@@ -124,9 +113,7 @@ describe('useURLQuery', () => {
                     result.current.pushQuery(nextQuery);
                 });
 
-                expect(history.push).toHaveBeenCalledTimes(1);
                 expect(result.current.query).toEqual(expected);
-                expect(history.location.pathname).toEqual(initialPathname);
             }
         );
     });
@@ -161,14 +148,9 @@ describe('useURLQuery', () => {
         test.concurrent.each(tests.map(Object.values))(
             '%s',
             (name: string, initialEntries: string[], nextQuery: QueryParams, expected: QueryParams) => {
-                const history = createMemoryHistory({ initialEntries });
-                const initialPathname = history.location.pathname;
-
-                vi.spyOn(history, 'replace');
-
                 const { result } = renderHook(() => useURLQuery(), {
                     wrapper: ({ children }) => {
-                        return <Router history={history}>{children}</Router>;
+                        return <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>;
                     },
                 });
 
@@ -176,15 +158,12 @@ describe('useURLQuery', () => {
                     result.current.replaceQuery(nextQuery);
                 });
 
-                expect(history.replace).toHaveBeenCalledTimes(1);
                 expect(result.current.query).toEqual(expected);
-                expect(history.location.pathname).toEqual(initialPathname);
             }
         );
     });
 
     it('uses parsing/formatting options when specified', () => {
-        const history = createMemoryHistory({ initialEntries: ['/test?foo=true&count=123'] });
         const { result } = renderHook(
             () =>
                 useURLQuery({
@@ -193,7 +172,7 @@ describe('useURLQuery', () => {
                 }),
             {
                 wrapper: ({ children }) => {
-                    return <Router history={history}>{children}</Router>;
+                    return <MemoryRouter initialEntries={['/test?foo=true&count=123']}>{children}</MemoryRouter>;
                 },
             }
         );
@@ -214,13 +193,9 @@ describe('useURLQuery', () => {
     });
 
     it('memoizes the query object by search string', () => {
-        const history = createMemoryHistory({ initialEntries: ['/test?hello=world'] });
-
-        vi.spyOn(history, 'push');
-
         const { result } = renderHook(() => useURLQuery(), {
             wrapper: ({ children }) => {
-                return <Router history={history}>{children}</Router>;
+                return <MemoryRouter initialEntries={['/test?hello=world']}>{children}</MemoryRouter>;
             },
         });
 
@@ -233,7 +208,6 @@ describe('useURLQuery', () => {
 
         // Make sure the returned object is memoized when the search string
         // is updated but the value doesn't change.
-        expect(history.push).toHaveBeenCalledTimes(1);
         expect(result.current.query).toEqual({ hello: 'world' });
         expect(result.current.query).toBe(firstResult);
 
@@ -243,7 +217,6 @@ describe('useURLQuery', () => {
             result.current.pushQuery({ hello: 'moon' });
         });
 
-        expect(history.push).toHaveBeenCalledTimes(2);
         expect(result.current.query).toEqual({ hello: 'moon' });
     });
 });

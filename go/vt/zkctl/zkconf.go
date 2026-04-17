@@ -1,5 +1,4 @@
 //go:build !codeanalysis
-// +build !codeanalysis
 
 /*
 Copyright 2019 The Vitess Authors.
@@ -24,6 +23,7 @@ limitations under the License.
 package zkctl
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -37,7 +37,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint32 // nolint:revive
+	ServerId     uint32
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -45,7 +45,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint32 // nolint:revive
+	ServerId   uint32
 	ClientPort int
 	Servers    []zkServerAddr
 	Extra      []string
@@ -93,7 +93,7 @@ func (cnf *ZkConfig) MyidFile() string {
 }
 
 func (cnf *ZkConfig) WriteMyid() error {
-	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0o664)
+	return os.WriteFile(cnf.MyidFile(), []byte(strconv.FormatUint(uint64(cnf.ServerId), 10)), 0o664)
 }
 
 /*
@@ -101,7 +101,7 @@ Search for first existing file in cnfFiles and subsitute in the right values.
 */
 func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
 	var myTemplateSource strings.Builder
-	for _, line := range strings.Split(header, "\n") {
+	for line := range strings.SplitSeq(header, "\n") {
 		fmt.Fprintf(&myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
 
@@ -117,7 +117,7 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 
 	myTemplateSource.WriteString("\n") // in case `data` did not end with a newline
 	for _, extra := range cnf.Extra {
-		myTemplateSource.WriteString(fmt.Sprintf("%s\n", extra))
+		myTemplateSource.WriteString(extra + "\n")
 	}
 
 	myTemplate, err := template.New("foo").Parse(myTemplateSource.String())
@@ -144,7 +144,7 @@ server_id's must be 1-255, global id's are 1001-1255 mod 1000.
 */
 func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 	zkConfig := NewZkConfig()
-	for _, zki := range strings.Split(cmdLine, ",") {
+	for zki := range strings.SplitSeq(cmdLine, ",") {
 		zkiParts := strings.SplitN(zki, "@", 2)
 		if len(zkiParts) != 2 {
 			panic("bad command line format for zk config")
@@ -178,12 +178,12 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 			// 	panic(fmt.Errorf("expected fully qualified hostname: %v", zkServer.Hostname))
 			// }
 		default:
-			panic(fmt.Errorf("bad command line format for zk config"))
+			panic(errors.New("bad command line format for zk config"))
 		}
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
-	log.Infof("Fully qualified machine hostname was detected as: %v", hostname)
+	log.Info(fmt.Sprintf("Fully qualified machine hostname was detected as: %v", hostname))
 	for _, zkServer := range zkConfig.Servers {
 		if (myID > 0 && myID == zkServer.ServerId) || (myID == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId

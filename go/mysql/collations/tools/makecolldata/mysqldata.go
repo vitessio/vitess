@@ -166,7 +166,7 @@ func (g *TableGenerator) writeReorders(meta *CollationMetadata) string {
 	if len(meta.Reorder) > 0 {
 		tableReorder, dedup = g.dedupTable("reorder", meta.Name, meta.Reorder)
 		if !dedup {
-			var reorder []uca.Reorder
+			reorder := make([]uca.Reorder, 0, len(meta.Reorder))
 			for _, r := range meta.Reorder {
 				reorder = append(reorder, uca.Reorder{FromMin: r[0], FromMax: r[1], ToMin: r[2], ToMax: r[3]})
 			}
@@ -354,8 +354,8 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 }
 
 func makemysqldata(output string, supportedOutput string, metadata AllMetadata) {
-	var unsupportedByCharset = make(map[string][]string)
-	var g = Generator{
+	unsupportedByCharset := make(map[string][]string)
+	g := Generator{
 		Generator: codegen.NewGenerator(PkgCollationsData),
 		Tables: TableGenerator{
 			Generator:         codegen.NewGenerator(PkgCollationsData),
@@ -366,7 +366,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 		},
 	}
 
-	var h = Generator{
+	h := Generator{
 		Generator: codegen.NewGenerator("vitess.io/vitess/go/mysql/collations"),
 	}
 

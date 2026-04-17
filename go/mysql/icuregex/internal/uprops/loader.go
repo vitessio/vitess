@@ -22,18 +22,20 @@ limitations under the License.
 package uprops
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 )
 
-var pnamesOnce sync.Once
-var pnames struct {
-	valueMaps []uint32
-	byteTrie  []uint8
-}
+var (
+	pnamesOnce sync.Once
+	pnames     struct {
+		valueMaps []uint32
+		byteTrie  []uint8
+	}
+)
 
 func valueMaps() []uint32 {
 	loadPNames()
@@ -68,7 +70,7 @@ func readData(bytes *udata.Bytes) error {
 
 	count := bytes.Int32() / 4
 	if count < 8 {
-		return fmt.Errorf("indexes[0] too small in ucase.icu")
+		return errors.New("indexes[0] too small in ucase.icu")
 	}
 
 	indexes := make([]int32, count)

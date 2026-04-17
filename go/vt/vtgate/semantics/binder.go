@@ -72,9 +72,26 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		return b.bindTableNames(cursor, node)
 	case *sqlparser.UpdateExpr:
 		return b.bindUpdateExpr(node)
+	case *sqlparser.OverClause:
+		return b.bindOverClause(node)
 	default:
 		return nil
 	}
+}
+
+func (b *binder) bindOverClause(node *sqlparser.OverClause) error {
+	if node.WindowName.NotEmpty() {
+		// If the window name is present, we need to resolve it
+		// and bind the window definition to the over clause
+		windowDef := b.scoper.currentScope().findWindow(node.WindowName.Lowered())
+		if windowDef == nil {
+			return vterrors.VT03025(node.WindowName.String())
+		}
+	}
+	// Case 2: Anonymous/Inline Window (e.g., OVER (PARTITION BY ...))
+	// The definition is already inside the node itself.
+
+	return nil
 }
 
 func (b *binder) bindUpdateExpr(ue *sqlparser.UpdateExpr) error {

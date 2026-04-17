@@ -107,7 +107,7 @@ func (f *file) parse() {
 			if sel, ok := n.Fun.(*ast.SelectorExpr); ok {
 				if pkg, ok := sel.X.(*ast.Ident); ok {
 					if pkg.Name == "dbg" && (sel.Sel.Name == "P" || sel.Sel.Name == "V") {
-						var p = params{
+						p := params{
 							pos: f.fset.Position(n.Pos()),
 							fn:  curfn,
 						}
@@ -190,5 +190,4 @@ func dump(vals []any, writer io.Writer) {
 	}
 
 	_, _ = buf.WriteTo(writer)
-
 }

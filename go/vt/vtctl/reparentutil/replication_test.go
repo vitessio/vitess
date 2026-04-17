@@ -25,16 +25,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -93,7 +92,8 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			expected:          []string{"r1", "r2", "p1"},
 			expectedGTIDBased: true,
 			shouldErr:         false,
-		}, {
+		},
+		{
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
@@ -225,7 +225,7 @@ type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	stopReplicationAndGetStatusDelays map[string]time.Duration
 }
 
-func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	if tablet.Alias == nil {
 		return nil, assert.AnError
 	}
@@ -277,6 +277,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		durability               string
 		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
 		tabletMap                map[string]*topo.TabletInfo
+		primaryAlias             *topodatapb.TabletAlias
 		stopReplicasTimeout      time.Duration
 		ignoredTablets           sets.Set[string]
 		tabletToWaitFor          *topodatapb.TabletAlias
@@ -357,7 +358,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			}},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:       "success with wait for all tablets",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -427,8 +429,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			waitForAllTablets: true,
 			shouldErr:         false,
-		}, {
-			name:       "timing check with wait for all tablets",
+		},
+		{
+			name:       "primary timeout with wait for all tablets",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
@@ -476,13 +479,17 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				}, "zone1-0000000102": {
 					Tablet: &topodatapb.Tablet{
-						Type: topodatapb.TabletType_REPLICA,
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  102,
 						},
 					},
 				},
+			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
 			},
 			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
@@ -812,6 +819,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
 			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
@@ -887,6 +898,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
 			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
@@ -952,6 +967,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
 			ignoredTablets:           sets.New[string](),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
@@ -959,7 +978,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                true, // we get multiple errors, so we fail
 		},
 		{
-			name:       "stopReplicasTimeout exceeded",
+			name:       "primary timeout exceeds stopReplicasTimeout",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
@@ -986,7 +1005,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
-						Type: topodatapb.TabletType_REPLICA,
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -1002,6 +1021,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 						},
 					},
 				},
+			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
 			},
 			stopReplicasTimeout: time.Millisecond * 5,
 			ignoredTablets:      sets.New[string](),
@@ -1023,7 +1046,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name:       "one tablet fails to StopReplication",
+			name:       "replica failure to StopReplication returns an error",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
@@ -1077,7 +1100,59 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					Uid:  101,
 				},
 			}},
-			shouldErr: false,
+			shouldErr: true,
+		},
+		{
+			// A single replica fails StopReplication, but primaryAlias points to a
+			// *different* tablet (the actual primary). The error doesn't match the
+			// primary alias, so we fall through to haveRevoked, which fails because
+			// the primary itself was not reached.
+			name:       "single replica failure with primaryAlias set does not suppress error",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": { // replica fails
+						Err: assert.AnError,
+					},
+					"zone1-0000000101": { // primary succeeds
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			// primaryAlias points to zone1-0000000101 (the primary), but the error
+			// came from zone1-0000000100 (a replica) — alias mismatch should not suppress.
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			ignoredTablets: sets.New[string](),
+			shouldErr:      true,
 		},
 		{
 			name:       "multiple tablets fail StopReplication",
@@ -1223,7 +1298,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
-		}, {
+		},
+		{
 			name:       "Handle nil replication status After. No segfaulting when determining backup status, and fall back to Before status",
 			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -1300,7 +1376,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			durability, err := policy.GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 			startTime := time.Now()
-			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, tt.waitForAllTablets, logger)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.primaryAlias, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, tt.waitForAllTablets, logger)
 			totalTimeSpent := time.Since(startTime)
 			if tt.timeSpent != 0 {
 				assert.Greater(t, totalTimeSpent, tt.timeSpent)
@@ -1408,6 +1484,97 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 }
 
+func TestReplicaIOThreadWasRunning(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
+	}{
+		{
+			name: "io thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateRunning),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting without an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting with an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "dial tcp 127.0.0.1:3306: connect: connection refused",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "only sql thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateRunning),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "no replication threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := replicaIOThreadWasRunning(tt.in)
+			if tt.shouldErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 // waitForRelayLogsToApplyTestTMClient implements just the WaitForPosition
 // method of the tmclient.TabletManagerClient interface for
 // TestWaitForRelayLogsToApply, with the necessary trackers to facilitate
@@ -1501,4 +1668,73 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestRelayLogPositions_AtLeast(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	gtidSet4, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
+
+	rlp := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}
+
+	// rlp is equal
+	assert.True(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+
+	// rlp is less advanced
+	assert.False(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}))
+
+	// rlp is more advanced
+	assert.True(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet4},
+	}))
+}
+
+func TestRelayLogPositions_Equal(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+
+	rlp := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}
+
+	// rlp is not equal
+	assert.False(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is partially equal
+	assert.False(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is equal
+	assert.True(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+}
+
+func TestRelayLogPositions_IsZero(t *testing.T) {
+	gtidSet, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	rlp := &RelayLogPositions{}
+	assert.True(t, rlp.IsZero())
+
+	rlp.Combined = replication.Position{GTIDSet: gtidSet}
+	rlp.Executed = replication.Position{GTIDSet: gtidSet}
+	assert.False(t, rlp.IsZero())
 }

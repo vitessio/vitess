@@ -120,7 +120,7 @@ func TestGroupBy(t *testing.T) {
 	// run queries in both workloads
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 		// test ordering and group by int column
 		mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
 		mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
@@ -222,7 +222,6 @@ func TestAggrOnJoin(t *testing.T) {
 		mcmp.AssertMatches(`select a1.val1, avg(a1.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7 group by a1.val1`,
 			`[[VARCHAR("a") DECIMAL(1.0000)] [VARCHAR("b") DECIMAL(1.0000)] [VARCHAR("c") DECIMAL(3.0000)]]`)
 	})
-
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
@@ -399,7 +398,7 @@ func TestEmptyTableAggr(t *testing.T) {
 
 	for _, workload := range []string{"oltp", "olap"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
@@ -415,7 +414,7 @@ func TestEmptyTableAggr(t *testing.T) {
 
 	for _, workload := range []string{"oltp", "olap"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
@@ -426,7 +425,6 @@ func TestEmptyTableAggr(t *testing.T) {
 			})
 		})
 	}
-
 }
 
 func TestOrderByCount(t *testing.T) {
@@ -515,7 +513,6 @@ func TestScalarAggregate(t *testing.T) {
 			clusterInstance.RestartVtgate())
 		//  update vtgate params
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
-
 	}()
 
 	mcmp, closer := start(t)
@@ -634,15 +631,19 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
 	for _, row := range vtRes.Rows {
 		var grpKey string
+		var grpKeySb634 strings.Builder
 		for _, col := range grpCols {
-			grpKey += row[col].String()
+			grpKeySb634.WriteString(row[col].String())
 		}
+		grpKey += grpKeySb634.String()
 		var foundKey bool
 		for _, mRow := range mRes.Rows {
 			var mKey string
+			var mKeySb640 strings.Builder
 			for _, col := range grpCols {
-				mKey += mRow[col].String()
+				mKeySb640.WriteString(mRow[col].String())
 			}
+			mKey += mKeySb640.String()
 			if grpKey != mKey {
 				continue
 			}

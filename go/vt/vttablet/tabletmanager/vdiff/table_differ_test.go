@@ -129,3 +129,35 @@ func TestUpdateTableProgress(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	table := &tabletmanagerdatapb.TableDefinition{
+		Name:              "dropped_table",
+		Columns:           []string{"c1", "c2"},
+		PrimaryKeyColumns: []string{"c1"},
+		Fields:            sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
+	}
+
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: table,
+		tablePlan: &tablePlan{
+			table: table,
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	require.Nil(t, td.tablePlan.sourcePkCols)
+}

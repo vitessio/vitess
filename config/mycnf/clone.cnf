@@ -1,0 +1,3 @@
+# Clone plugin for MySQL backup and replica provisioning.
+# Included when --mysql-clone-enabled=true (requires MySQL 8.0.17+).
+plugin-load-add = mysql_clone.so

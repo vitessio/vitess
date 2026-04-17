@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"golang.org/x/exp/maps"
@@ -41,11 +42,11 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 
 	var keyspaces []string
 	if len(shardsToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
+		getCtx, getCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer getCancel()
 		var err error
 		// Get all the keyspaces
-		keyspaces, err = ts.GetKeyspaces(ctx)
+		keyspaces, err = ts.GetKeyspaces(getCtx)
 		if err != nil {
 			return err
 		}
@@ -57,7 +58,7 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 
-	eg, _ := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(refreshCtx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -67,11 +68,10 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 		}
 
 		eg.Go(func() error {
-			return refreshKeyspaceHelper(refreshCtx, keyspace)
+			return refreshKeyspaceHelper(egCtx, keyspace)
 		})
-
 		eg.Go(func() error {
-			return refreshAllShards(refreshCtx, keyspace)
+			return refreshAllShards(egCtx, keyspace)
 		})
 	}
 	return eg.Wait()
@@ -124,12 +124,12 @@ func refreshShard(keyspaceName, shardName string) error {
 func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	err = inst.SaveKeyspace(keyspaceInfo)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }
@@ -144,7 +144,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		Concurrency: 8,
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -155,7 +155,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			continue
 		}
 		if err = inst.SaveShard(shardInfo); err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 		savedShards[shardInfo.ShardName()] = true
@@ -164,7 +164,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	// delete shards that were not saved, indicating they are stale.
 	shards, err := inst.ReadShardNames(keyspaceName)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	for _, shard := range shards {
@@ -172,9 +172,9 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			continue
 		}
 		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
-		log.Infof("Forgetting shard: %s", shardName)
+		log.Info("Forgetting shard: " + shardName)
 		if err = inst.DeleteShard(keyspaceName, shard); err != nil {
-			log.Errorf("Failed to delete shard %s: %+v", shardName, err)
+			log.Error(fmt.Sprintf("Failed to delete shard %s: %+v", shardName, err))
 			return err
 		}
 	}
@@ -186,12 +186,12 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardName string) error {
 	shardInfo, err := ts.GetShard(ctx, keyspaceName, shardName)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	err = inst.SaveShard(shardInfo)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }

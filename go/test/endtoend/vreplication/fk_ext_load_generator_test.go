@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -210,8 +211,8 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 			default:
 			}
 			if lg.runCtx != nil && lg.runCtx.Err() != nil {
-				log.Infof("Load generator run context done, query never completed: %q", query)
-				errCh <- fmt.Errorf("load generator stopped")
+				log.Info(fmt.Sprintf("Load generator run context done, query never completed: %q", query))
+				errCh <- errors.New("load generator stopped")
 				return
 			}
 			if retry {
@@ -245,7 +246,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 	case qr := <-qrCh:
 		return qr, nil
 	case err := <-errCh:
-		log.Infof("query %q failed with error %v", query, err)
+		log.Info(fmt.Sprintf("query %q failed with error %v", query, err))
 		return nil, err
 	}
 }
@@ -253,8 +254,8 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 func (lg *SimpleLoadGenerator) Load() error {
 	lg.state = LoadGeneratorStateLoading
 	defer func() { lg.state = LoadGeneratorStateStopped }()
-	log.Infof("Inserting initial FK data")
-	var queries = []string{
+	log.Info("Inserting initial FK data")
+	queries := []string{
 		"insert into parent values(1, 'parent1'), (2, 'parent2');",
 		"insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');",
 	}
@@ -262,20 +263,20 @@ func (lg *SimpleLoadGenerator) Load() error {
 		_, err := lg.exec(query)
 		require.NoError(lg.vc.t, err)
 	}
-	log.Infof("Done inserting initial FK data")
+	log.Info("Done inserting initial FK data")
 	return nil
 }
 
 func (lg *SimpleLoadGenerator) Start() error {
 	if lg.state == LoadGeneratorStateRunning {
-		log.Infof("Load generator already running")
+		log.Info("Load generator already running")
 		return nil
 	}
 	lg.state = LoadGeneratorStateRunning
 	go func() {
 		defer func() {
 			lg.state = LoadGeneratorStateStopped
-			log.Infof("Load generator stopped")
+			log.Info("Load generator stopped")
 		}()
 		lg.runCtx, lg.runCtxCancel = context.WithCancel(lg.ctx)
 		defer func() {
@@ -284,19 +285,19 @@ func (lg *SimpleLoadGenerator) Start() error {
 		}()
 		t := lg.vc.t
 		var err error
-		log.Infof("Load generator starting")
+		log.Info("Load generator starting")
 		for i := 0; ; i++ {
 			if i%1000 == 0 {
 				// Log occasionally to show that the test is still running.
-				log.Infof("Load simulation iteration %d", i)
+				log.Info(fmt.Sprintf("Load simulation iteration %d", i))
 			}
 			select {
 			case <-lg.ctx.Done():
-				log.Infof("Load generator context done")
+				log.Info("Load generator context done")
 				lg.ch <- true
 				return
 			case <-lg.runCtx.Done():
-				log.Infof("Load generator run context done")
+				log.Info("Load generator run context done")
 				lg.ch <- true
 				return
 			default:
@@ -319,23 +320,23 @@ func (lg *SimpleLoadGenerator) Start() error {
 
 func (lg *SimpleLoadGenerator) Stop() error {
 	if lg.state == LoadGeneratorStateStopped {
-		log.Infof("Load generator already stopped")
+		log.Info("Load generator already stopped")
 		return nil
 	}
 	if lg.runCtx != nil && lg.runCtxCancel != nil {
-		log.Infof("Canceling load generator")
+		log.Info("Canceling load generator")
 		lg.runCtxCancel()
 	}
 	// Wait for ch to be closed or we hit a timeout.
 	timeout := vdiffTimeout
 	select {
 	case <-lg.ch:
-		log.Infof("Load generator stopped")
+		log.Info("Load generator stopped")
 		lg.state = LoadGeneratorStateStopped
 		return nil
 	case <-time.After(timeout):
-		log.Infof("Timed out waiting for load generator to stop")
-		return fmt.Errorf("timed out waiting for load generator to stop")
+		log.Info("Timed out waiting for load generator to stop")
+		return errors.New("timed out waiting for load generator to stop")
 	}
 }
 
@@ -446,12 +447,12 @@ func (lg *SimpleLoadGenerator) delete() {
 // `go/test/endtoend/utils/utils.go`.
 // We will to refactor and then reuse the same functionality from vtgate tests, in the near future.
 
-func convertToMap(input interface{}) map[string]interface{} {
-	output := input.(map[string]interface{})
+func convertToMap(input any) map[string]any {
+	output := input.(map[string]any)
 	return output
 }
 
-func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
+func getTableT2Map(res *any, ks, tbl string) map[string]any {
 	step1 := convertToMap(*res)["keyspaces"]
 	step2 := convertToMap(step1)[ks]
 	step3 := convertToMap(step2)["tables"]
@@ -484,17 +485,17 @@ func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, 
 			if !exists {
 				break
 			}
-			colList, isSlice := colMap.([]interface{})
+			colList, isSlice := colMap.([]any)
 			if !isSlice {
 				break
 			}
 			for _, c := range colList {
-				colDef, isMap := c.(map[string]interface{})
+				colDef, isMap := c.(map[string]any)
 				if !isMap {
 					break
 				}
 				if colName, exists := colDef["name"]; exists && colName == col {
-					log.Infof("Found column '%s' in table '%s' for keyspace '%s'", col, tbl, ks)
+					log.Info(fmt.Sprintf("Found column '%s' in table '%s' for keyspace '%s'", col, tbl, ks))
 					return nil
 				}
 			}

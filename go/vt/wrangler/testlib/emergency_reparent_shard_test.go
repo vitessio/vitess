@@ -18,7 +18,7 @@ package testlib
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -49,8 +49,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -183,8 +182,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// run EmergencyReparentShard
 	waitReplicaTimeout := time.Second * 2
-	err = vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
-		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err = vp.Run([]string{
+		"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
+		topoproto.TabletAliasString(newPrimary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
@@ -245,7 +246,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer newPrimary.StopActionLoop(t)
 
 	// old primary, will be scrapped
-	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = fmt.Errorf("old primary stopped working")
+	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = errors.New("old primary stopped working")
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
 

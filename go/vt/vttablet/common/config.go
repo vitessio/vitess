@@ -245,7 +245,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamBinlogRotationThreshold = value
 			}
 		default:
-			errors = append(errors, fmt.Sprintf("unknown vreplication config flag: %s", k))
+			errors = append(errors, "unknown vreplication config flag: "+k)
 		}
 	}
 	if len(errors) > 0 {

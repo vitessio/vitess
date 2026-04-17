@@ -23,14 +23,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// SubQueryBuilder extracts subqueries from SQL expressions and builds SubQuery operators.
+// ARCHITECTURE: This struct is used in two ways: (1) as a container when created empty with &SubQueryBuilder{} - the
+// ID fields remain zero and unused, only Inner accumulates results; (2) as a processor when created with explicit ID
+// fields - used internally to analyze a single subquery's predicates.
+// When processing multiple subqueries, the outer container SQB delegates to nested processor SQBs (one per subquery).
 type SubQueryBuilder struct {
+	// Inner accumulates all extracted SubQuery operators.
 	Inner []*SubQuery
 
-	totalID,
-	subqID,
+	// totalID contains all tables from both the subquery being processed and its outer context (equals subqID ∪ outerID).
+	// Used to identify predicates that span inner/outer boundaries. Only set when this SQB is a processor (not a container).
+	totalID semantics.TableSet
+
+	// subqID contains tables inside the subquery being processed.
+	// Only set when this SQB is a processor (not a container).
+	subqID semantics.TableSet
+
+	// outerID contains tables available from the outer query context that the subquery can reference.
+	// Only set when this SQB is a processor (not a container).
 	outerID semantics.TableSet
 }
 
+// getRootOperator wraps the given operator with a SubQueryContainer if any subqueries were extracted.
+// If decorator is provided, it's applied to each subquery's operator before wrapping. Returns the original operator if no subqueries were found.
 func (sqb *SubQueryBuilder) getRootOperator(op Operator, decorator func(operator Operator) Operator) Operator {
 	if len(sqb.Inner) == 0 {
 		return op
@@ -48,6 +64,8 @@ func (sqb *SubQueryBuilder) getRootOperator(op Operator, decorator func(operator
 	}
 }
 
+// handleSubquery extracts a subquery from the given expression and creates a SubQuery operator for it.
+// The outerID parameter specifies which tables are visible to the subquery from its outer context. Returns nil if expr contains no subquery.
 func (sqb *SubQueryBuilder) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
@@ -57,13 +75,15 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	if subq == nil {
 		return nil
 	}
-	argName := ctx.GetReservedArgumentFor(subq)
+	argName := ctx.ReservedVars.ReserveSubQuery()
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
 	return sqInner
 }
 
+// getSubQuery searches for a subquery within the given expression and returns it along with its parent and path.
+// The parent is the immediate parent expression (e.g., ComparisonExpr for IN subqueries), or the subquery itself if at the top level.
 func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr, path sqlparser.ASTPath) {
 	flipped := false
 	_ = sqlparser.RewriteWithPath(expr, func(cursor *sqlparser.Cursor) bool {
@@ -90,6 +110,8 @@ func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, p
 	return
 }
 
+// createSubqueryOp creates a SubQuery operator by dispatching to the appropriate creation function based on the parent expression type.
+// The parent determines the pullout opcode (EXISTS, IN, NOT IN, etc.). Returns a fully constructed SubQuery operator.
 func createSubqueryOp(
 	ctx *plancontext.PlanningContext,
 	parent, original sqlparser.Expr,
@@ -114,8 +136,8 @@ func createSubqueryOp(
 	return createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, opcode.PulloutValue, false)
 }
 
-// inspectStatement goes through all the predicates contained in the AST
-// and extracts subqueries into operators
+// inspectStatement recursively processes a SELECT or UNION statement to find and extract subqueries.
+// Returns predicates that connect inner/outer queries and join columns for correlation. Only called on processor SQBs (with initialized ID fields), not container SQBs.
 func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 	stmt sqlparser.TableStatement,
 ) ([]sqlparser.Expr, []applyJoinColumn) {
@@ -130,9 +152,8 @@ func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 	panic("unknown type")
 }
 
-// inspectSelect goes through all the predicates contained in the SELECT query
-// and extracts subqueries into operators, and rewrites the original query to use
-// arguments instead of subqueries.
+// inspectSelect extracts subqueries from WHERE, HAVING, and ON clauses of a SELECT statement.
+// Rewrites the AST to replace subqueries with argument placeholders. Returns predicates and join columns for merging inner/outer queries.
 func (sqb *SubQueryBuilder) inspectSelect(
 	ctx *plancontext.PlanningContext,
 	sel *sqlparser.Select,
@@ -153,6 +174,8 @@ func (sqb *SubQueryBuilder) inspectSelect(
 		append(append(whereJoinCols, havingJoinCols...), onJoinCols...)
 }
 
+// createSubquery builds a SubQuery operator for a pulled-out subquery expression.
+// Creates a nested processor SQB (with initialized ID fields) to analyze predicates within the subquery's SELECT statement. Returns a complete SubQuery operator with join predicates and correlation information.
 func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -171,7 +194,9 @@ func createSubquery(
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
-	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
+
+	subqDependencies := ctx.SemTable.RecursiveDeps(subq)
+	correlated := subqDependencies.KeepOnly(outerID).NotEmpty()
 
 	opInner := translateQueryToOp(ctx, subq.Select)
 
@@ -190,6 +215,8 @@ func createSubquery(
 	}
 }
 
+// createSubqueryFromPath builds a SubQuery operator using an AST path to locate the subquery node.
+// Uses the path to extract the correct subquery node after AST cloning. Otherwise identical to createSubquery.
 func createSubqueryFromPath(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -209,7 +236,9 @@ func createSubqueryFromPath(
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
-	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
+
+	subqDependencies := ctx.SemTable.RecursiveDeps(subq)
+	correlated := subqDependencies.KeepOnly(outerID).NotEmpty()
 
 	opInner := translateQueryToOp(ctx, subq.Select)
 
@@ -228,6 +257,8 @@ func createSubqueryFromPath(
 	}
 }
 
+// inspectWhere processes a WHERE or HAVING clause to extract subqueries and identify join predicates.
+// Uses this SQB's ID fields (subqID, outerID, totalID) to classify predicates that connect inner/outer queries. Returns the rewritten WHERE clause, extracted predicates, and join columns.
 func (sqb *SubQueryBuilder) inspectWhere(
 	ctx *plancontext.PlanningContext,
 	in *sqlparser.Where,
@@ -258,6 +289,8 @@ func (sqb *SubQueryBuilder) inspectWhere(
 	return in, jpc.predicates, jpc.joinColumns
 }
 
+// inspectOnExpr processes JOIN ON conditions to extract subqueries and identify join predicates.
+// Rewrites the FROM clause with subqueries replaced by arguments. Returns the rewritten FROM clause, extracted predicates, and join columns.
 func (sqb *SubQueryBuilder) inspectOnExpr(
 	ctx *plancontext.PlanningContext,
 	from []sqlparser.TableExpr,
@@ -295,6 +328,8 @@ func (sqb *SubQueryBuilder) inspectOnExpr(
 	return
 }
 
+// createComparisonSubQuery handles subqueries within comparison expressions (IN, NOT IN).
+// Extracts the comparison's outer side to create an OuterPredicate for potential merge optimization. Returns a SubQuery with the appropriate pullout opcode.
 func createComparisonSubQuery(
 	ctx *plancontext.PlanningContext,
 	parent *sqlparser.ComparisonExpr,
@@ -332,6 +367,14 @@ func createComparisonSubQuery(
 	return subquery
 }
 
+// pullOutValueSubqueries extracts all subqueries from an expression and replaces them with arguments.
+// Used for expressions in SELECT lists, ORDER BY, and UPDATE SET clauses where subqueries must be pulled out.
+// Returns the rewritten expression and extracted SubQuery operators.
+//
+// Each subquery occurrence gets its own operator and bind var name, even if
+// the same subquery text appears multiple times. MySQL evaluates each
+// occurrence independently (observable with volatile functions like UUID(),
+// RAND(), or locking reads), so coalescing would change semantics.
 func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
@@ -339,29 +382,52 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.Clone(expr)
-	sqe := extractSubQueries(ctx, expr, isDML)
-	if sqe == nil {
+	var allSubqs []*SubQuery
+
+	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, filterType opcode.PulloutOpcode) {
+		argName := ctx.ReservedVars.ReserveSubQuery()
+		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
+		allSubqs = append(allSubqs, sqInner)
+		sqb.Inner = append(sqb.Inner, sqInner)
+		sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
+	}
+
+	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Subquery:
+			t := getOpCodeFromParent(cursor.Parent())
+			if t == nil {
+				return true
+			}
+			replaceWithArg(cursor, node, *t)
+		case *sqlparser.ExistsExpr:
+			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
+		}
+		return true
+	}).(sqlparser.Expr)
+
+	if len(allSubqs) == 0 {
 		return nil, nil
 	}
-	var newSubqs []*SubQuery
+	return expr, allSubqs
+}
 
-	for idx, subq := range sqe.subq {
-		sqInner := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
-		newSubqs = append(newSubqs, sqInner)
+// replaceSubqueryNode replaces the current cursor node with the appropriate
+// argument placeholder for the given bind var name and opcode.
+func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
+	if isDML {
+		if filterType.NeedsListArg() {
+			cursor.Replace(sqlparser.NewListArg(argName))
+		} else {
+			cursor.Replace(sqlparser.NewArgument(argName))
+		}
+	} else {
+		cursor.Replace(sqlparser.NewColName(argName))
 	}
-
-	sqb.Inner = append(sqb.Inner, newSubqs...)
-
-	return sqe.new, newSubqs
 }
 
-type subqueryExtraction struct {
-	new         sqlparser.Expr
-	subq        []*sqlparser.Subquery
-	pullOutCode []opcode.PulloutOpcode
-	cols        []string
-}
-
+// getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
+// Returns nil for EXISTS (handled separately) or the appropriate opcode for IN/NOT IN/value contexts.
 func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 	code := opcode.PulloutValue
 	switch parent := parent.(type) {
@@ -376,43 +442,4 @@ func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
 		}
 	}
 	return &code
-}
-
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
-	sqe := &subqueryExtraction{}
-	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
-		sqName := ctx.GetReservedArgumentFor(sq)
-		sqe.cols = append(sqe.cols, sqName)
-		if isDML {
-			if t.NeedsListArg() {
-				cursor.Replace(sqlparser.NewListArg(sqName))
-			} else {
-				cursor.Replace(sqlparser.NewArgument(sqName))
-			}
-		} else {
-			cursor.Replace(sqlparser.NewColName(sqName))
-		}
-		sqe.subq = append(sqe.subq, sq)
-	}
-
-	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.Subquery:
-			t := getOpCodeFromParent(cursor.Parent())
-			if t == nil {
-				return true
-			}
-			replaceWithArg(cursor, node, *t)
-			sqe.pullOutCode = append(sqe.pullOutCode, *t)
-		case *sqlparser.ExistsExpr:
-			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
-		}
-		return true
-	}).(sqlparser.Expr)
-	if len(sqe.subq) == 0 {
-		return nil
-	}
-	sqe.new = expr
-	return sqe
 }

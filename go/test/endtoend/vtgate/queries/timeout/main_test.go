@@ -66,11 +66,12 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-transaction-timeout", "3s",
 			"--queryserver-config-query-pool-timeout", "2s")
 		// Start Unsharded keyspace
+		cell := clusterInstance.Cell
 		ukeyspace := &cluster.Keyspace{
 			Name:      uks,
 			SchemaSQL: uschemaSQL,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -81,7 +82,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, cell)
 		if err != nil {
 			return 1
 		}

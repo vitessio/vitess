@@ -21,6 +21,7 @@ package fakerpcvtgateconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -73,7 +74,8 @@ func (conn *FakeVTGateConn) AddQuery(
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	session *vtgatepb.Session,
-	expectedResult *sqltypes.Result) {
+	expectedResult *sqltypes.Result,
+) {
 	conn.execMap[sql] = &queryResponse{
 		execQuery: &queryExecute{
 			SQL:           sql,
@@ -200,9 +202,14 @@ func (conn *FakeVTGateConn) CloseSession(ctx context.Context, session *vtgatepb.
 
 // VStream streams binlog events.
 func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (vtgateconn.VStreamReader, error) {
+	return nil, errors.New("NYI")
+}
 
-	return nil, fmt.Errorf("NYI")
+// BinlogDumpGTID streams raw binlog events.
+func (conn *FakeVTGateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
+	return nil, errors.New("NYI")
 }
 
 // Close please see vtgateconn.Impl.Close
@@ -213,7 +220,8 @@ func newSession(
 	inTransaction bool,
 	keyspace string,
 	shards []string,
-	tabletType topodatapb.TabletType) *vtgatepb.Session {
+	tabletType topodatapb.TabletType,
+) *vtgatepb.Session {
 	shardSessions := make([]*vtgatepb.Session_ShardSession, len(shards))
 	for _, shard := range shards {
 		shardSessions = append(shardSessions, &vtgatepb.Session_ShardSession{

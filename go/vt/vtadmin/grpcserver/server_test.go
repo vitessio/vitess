@@ -64,7 +64,7 @@ func TestServer(t *testing.T) {
 	}
 	close(readyCh)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) // nolint:staticcheck
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) //nolint:staticcheck
 	assert.NoError(t, err)
 
 	defer conn.Close()

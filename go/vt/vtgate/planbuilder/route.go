@@ -29,12 +29,13 @@ import (
 func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
 	// prepare the queries we will pass down
 	eroute.Query = sqlparser.String(sel)
+	eroute.QueryStatement = sel
 	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
 	node := buffer.WriteNode(sel)
 	eroute.FieldQuery = node.ParsedQuery().Query
 
 	// if we have a planable vindex lookup, let's extract it into its own primitive
-	planableVindex, ok := eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)
+	planableVindex, ok := eroute.Vindex.(vindexes.LookupPlanable)
 	if !ok {
 		return eroute, nil
 	}
@@ -61,9 +62,9 @@ func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sql
 		Lookup:    lookupPrimitive.primitive,
 	}
 
-	eroute.RoutingParameters.Opcode = engine.ByDestination
-	eroute.RoutingParameters.Values = nil
-	eroute.RoutingParameters.Vindex = nil
+	eroute.Opcode = engine.ByDestination
+	eroute.Values = nil
+	eroute.Vindex = nil
 
 	return vdxLookup, nil
 }

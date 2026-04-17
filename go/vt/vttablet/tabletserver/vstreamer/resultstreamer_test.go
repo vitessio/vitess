@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestStreamResults(t *testing.T) {
 			if first {
 				first = false
 				if rows.Gtid == "" {
-					ch <- fmt.Errorf("stream gtid is empty")
+					ch <- errors.New("stream gtid is empty")
 				}
 				return nil
 			}

@@ -17,6 +17,8 @@ limitations under the License.
 package vstreamer
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -30,7 +32,7 @@ func GetVReplicationConfig(options *binlogdatapb.VStreamOptions) (*vttablet.VRep
 	}
 	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
 	if err != nil {
-		log.Errorf("Error parsing VReplicationConfig: %v", err)
+		log.Error(fmt.Sprintf("Error parsing VReplicationConfig: %v", err))
 		return nil, vterrors.Wrapf(err, "failed to parse VReplicationConfig")
 	}
 	return config, nil

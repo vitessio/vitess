@@ -192,7 +192,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
 	// we cannot safely perform this rewrite.
 	if _, isDual := rb.Routing.(*DualRouting); isDual &&
-		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates
 		debugNoRewrite("apply join merge blocked: dual routing with non-inner join and multi-shard target")
@@ -292,6 +292,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		!hasHaving &&
 		!needsOrdering &&
 		!qp.NeedsAggregation() &&
+		!qp.HasWindow &&
 		!isDistinctAST(in.selectStatement()) &&
 		in.selectStatement().GetLimit() == nil
 
@@ -308,6 +309,8 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		debugNoRewrite("horizon push blocked: query has ORDER BY")
 	} else if qp.NeedsAggregation() {
 		debugNoRewrite("horizon push blocked: query needs aggregation")
+	} else if qp.HasWindow {
+		debugNoRewrite("horizon push blocked: query has window functions")
 	} else if isDistinctAST(in.selectStatement()) {
 		debugNoRewrite("horizon push blocked: query has DISTINCT")
 	} else if in.selectStatement().GetLimit() != nil {
@@ -355,7 +358,6 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		in.AST = combinedLimit
 		in.Source = src.Source
 		return in, Rewrote("merged two limits")
-
 	}
 	return setUpperLimit(in)
 }
@@ -470,10 +472,7 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 		// Calculate the remaining limit after the offset.
 		off2int, _ := strconv.Atoi(off2.Val)
 		l1int, _ := strconv.Atoi(lim1str.Val)
-		lim := l1int - off2int
-		if lim < 0 {
-			lim = 0
-		}
+		lim := max(l1int-off2int, 0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 
 	default:
@@ -504,11 +503,9 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 
 		v1, _ := strconv.Atoi(v1str.Val)
 		v2, _ := strconv.Atoi(v2str.Val)
-		lim := min(v2, v1-off2int)
-		if lim < 0 {
+		lim := max(min(v2, v1-off2int),
 			// If the combined limit is negative, set it to zero.
-			lim = 0
-		}
+			0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 	}
 }
@@ -584,6 +581,9 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
+
+	orderToPush := findOrderingInSourceChain(in.Source)
+
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
@@ -597,7 +597,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 			}
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
-			op.Source = newLimit(op.Source, ast, false)
+			src := op.Source
+			if len(orderToPush) > 0 {
+				src = newOrdering(src, orderToPush)
+			}
+			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		}
@@ -607,6 +611,30 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	TopDown(in.Source, TableID, visitor, shouldVisit)
 
 	return in, result
+}
+
+// findOrderingInSourceChain walks down unary operators for an Ordering above a
+// Window, so it can be pushed into the route with the limit. Window queries need
+// this because DISTINCT stays (not converted to GROUP BY), leaving Ordering unpushed.
+// Resolved upfront to avoid leaking across branches during the TopDown walk.
+func findOrderingInSourceChain(op Operator) []OrderBy {
+	var order []OrderBy
+	for {
+		switch src := op.(type) {
+		case *Ordering:
+			// Clone the slice to avoid aliasing with src.Order, which may be rewritten later.
+			order = append([]OrderBy(nil), src.Order...)
+		case *Window:
+			return order
+		case *Route:
+			return nil
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			return nil
+		}
+		op = inputs[0]
+	}
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {
@@ -902,6 +930,17 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 	case *Ordering:
 		in.Source = src.Source
 		return in, Rewrote("remove ordering under distinct")
+	case *Window:
+		if isDistinct(src.Source) {
+			debugNoRewrite("distinct push blocked: window source already has distinct")
+			return in, NoRewrite
+		}
+		src.Source = newDistinct(src.Source, nil, false)
+		if in.Required {
+			in.PushedPerformance = true
+			return in, Rewrote("push distinct under window - kept original")
+		}
+		return src, Rewrote("push distinct under window")
 	}
 
 	debugNoRewrite("distinct push blocked: unsupported source operator type %T", in.Source)

@@ -18,7 +18,6 @@ package framework
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -44,7 +43,7 @@ type TableColumn struct {
 func DebugSchema() map[string]Table {
 	out := make(map[string]Table)
 	var list []Table
-	response, err := http.Get(fmt.Sprintf("%s/debug/schema", ServerAddress))
+	response, err := http.Get(ServerAddress + "/debug/schema")
 	if err != nil {
 		return out
 	}

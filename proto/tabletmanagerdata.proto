@@ -405,6 +405,13 @@ message StartReplicationRequest {
 message StartReplicationResponse {
 }
 
+message RestartReplicationRequest {
+  bool semiSync = 1;
+}
+
+message RestartReplicationResponse {
+}
+
 message StartReplicationUntilAfterRequest {
   string position = 1;
   int64 wait_timeout = 2;
@@ -478,6 +485,7 @@ message InitReplicaResponse {
 }
 
 message DemotePrimaryRequest {
+  bool force = 1;
 }
 
 message DemotePrimaryResponse {
@@ -561,6 +569,16 @@ message PromoteReplicaResponse {
 // Backup / Restore related messages
 
 message BackupRequest {
+  message InitSQL {
+    // The queries to run on the mysqld instance prior to backing it up.
+    repeated string queries = 1;
+    // The tablet types to run the queries on.
+    repeated topodata.TabletType tablet_types = 2;
+    // At what point to time out the init SQL query work.
+    vttime.Duration timeout = 3;
+    // Should the backup fail if the SQL init work fails?
+    bool fail_on_error = 4;
+  }
   int32 concurrency = 1;
   bool allow_primary = 2;
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
@@ -574,6 +592,7 @@ message BackupRequest {
   // MysqlShutdownTimeout is the timeout in seconds to wait for MySQL to shutdown
   // before taking the backup. If not set, the default value is used.
   vttime.Duration mysql_shutdown_timeout = 6;
+  InitSQL init_sql = 7;
 }
 
 message BackupResponse {

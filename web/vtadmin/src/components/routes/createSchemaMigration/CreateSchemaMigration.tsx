@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useEffect, useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import style from './CreateSchemaMigration.module.scss';
 import { useApplySchema, useClusters, useKeyspaces } from '../../../hooks/api';
@@ -65,7 +65,7 @@ const CALLER_ID_HELP_TEXT =
 export const CreateSchemaMigration = () => {
     useDocumentTitle('Create Schema Migration Request');
 
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
@@ -94,7 +94,7 @@ export const CreateSchemaMigration = () => {
             onSuccess: () => {
                 success(`Successfully created schema migration request.`, { autoClose: 1600 });
 
-                history.push({
+                navigate({
                     pathname: `/migrations`,
                     search: `?keyspace=${formData.keyspace}&cluster=${formData.clusterID}`,
                 });
@@ -117,7 +117,7 @@ export const CreateSchemaMigration = () => {
 
     const isValid = !!selectedCluster && !!formData.keyspace && !!formData.sql && !!formData.ddlStrategy;
 
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -249,12 +249,12 @@ export const CreateSchemaMigration = () => {
 
                     <div className="my-8">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating...' : 'Create Schema Migration Request'}
+                            {mutation.isPending ? 'Creating...' : 'Create Schema Migration Request'}
                         </button>
                     </div>
                 </form>
 
-                {mutation.isError && !mutation.isLoading && (
+                {mutation.isError && !mutation.isPending && (
                     <ErrorDialog
                         errorDescription={mutation.error.message}
                         errorTitle="Error Creating Schema Migration Request"

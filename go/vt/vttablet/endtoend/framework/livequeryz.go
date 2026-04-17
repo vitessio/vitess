@@ -39,7 +39,7 @@ type LiveQuery struct {
 // as a []LiveQuery. The function returns an empty list on error.
 func LiveQueryz() []LiveQuery {
 	var out []LiveQuery
-	response, err := http.Get(fmt.Sprintf("%s/livequeryz?format=json", ServerAddress))
+	response, err := http.Get(ServerAddress + "/livequeryz?format=json")
 	if err != nil {
 		return out
 	}

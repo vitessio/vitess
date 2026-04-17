@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -56,9 +57,11 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vtgate.sandbox_test", "sandbox")
 }
 
-var sandboxMu sync.Mutex
-var ksToSandbox map[string]*sandbox
-var sandboxMirrorRules string
+var (
+	sandboxMu          sync.Mutex
+	ksToSandbox        map[string]*sandbox
+	sandboxMirrorRules string
+)
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
@@ -161,7 +164,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		return nil, err
 	}
 	shards := make([]*topodatapb.ShardReference, 0, len(shardKrArray))
-	for i := 0; i < len(shardKrArray); i++ {
+	for i := range shardKrArray {
 		shard := &topodatapb.ShardReference{
 			Name:     key.KeyRangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],
@@ -250,7 +253,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, st
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand == nil {
-		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+		return nil, errors.New("topo error GetSrvKeyspace")
 	}
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -260,7 +263,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	sand.SrvKeyspaceCounter++
 	if sand.SrvKeyspaceMustFail > 0 {
 		sand.SrvKeyspaceMustFail--
-		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+		return nil, errors.New("topo error GetSrvKeyspace")
 	}
 	switch keyspace {
 	case KsTestUnsharded:
@@ -297,6 +300,11 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 		return
 	}
 
+	// Context may already be canceled during test cleanup - exit gracefully.
+	if ctx.Err() != nil {
+		return
+	}
+
 	// Update the backing topo server with the current sandbox vschemas.
 	for ks := range ksToSandbox {
 		ksvs := &topo.KeyspaceVSchemaInfo{
@@ -304,12 +312,23 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 			Keyspace: srvVSchema.Keyspaces[ks],
 		}
 		if err := sct.topoServer.SaveVSchema(ctx, ksvs); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			panic(fmt.Sprintf("sandboxTopo SaveVSchema returned an error: %v", err))
 		}
 	}
-	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
+	if err := sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		panic(fmt.Sprintf("sandboxTopo UpdateSrvVSchema returned an error: %v", err))
+	}
 	current, updateChan, err := sct.topoServer.WatchSrvVSchema(ctx, cell)
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
 		panic(fmt.Sprintf("sandboxTopo WatchSrvVSchema returned an error: %v", err))
 	}
 	if !callback(current.Value, nil) {
@@ -339,7 +358,6 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 				if !callback(update.Value, update.Err) {
 					panic("sandboxTopo callback returned false")
 				}
-
 			}
 		}
 	}()

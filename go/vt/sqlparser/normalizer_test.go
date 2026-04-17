@@ -587,7 +587,7 @@ type myTestCase struct {
 	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                 bool
 	udv                                                                                     int
 	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment                      bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment, transactionTimeout  bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -603,6 +603,10 @@ func TestRewrites(in *testing.T) {
 		in:           "SELECT @@query_timeout",
 		expected:     "SELECT :__vtquery_timeout as `@@query_timeout`",
 		queryTimeout: true,
+	}, {
+		in:                 "SELECT @@transaction_timeout",
+		expected:           "SELECT :__vttransaction_timeout as `@@transaction_timeout`",
+		transactionTimeout: true,
 	}, {
 		in:             "SELECT @@version_comment",
 		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
@@ -862,6 +866,7 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
+		transactionTimeout:          true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -883,6 +888,7 @@ func TestRewrites(in *testing.T) {
 		sessTrackGTID:               true,
 		socket:                      true,
 		queryTimeout:                true,
+		transactionTimeout:          true,
 	}}
 	parser := NewTestParser()
 	for _, tc := range tests {
@@ -924,6 +930,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
 			assert.Equal(tc.queryTimeout, result.NeedsSysVar(sysvars.QueryTimeout.Name), "should need :__vtquery_timeout")
+			assert.Equal(tc.transactionTimeout, result.NeedsSysVar(sysvars.TransactionTimeout.Name), "should need :__vttransaction_timeout")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.migrationContext, result.NeedsSysVar(sysvars.MigrationContext.Name), "should need migrationContext")
 			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
@@ -940,16 +947,16 @@ func TestRewrites(in *testing.T) {
 
 type fakeViews struct{}
 
-func (*fakeViews) FindView(name TableName) TableStatement {
+func (*fakeViews) FindView(name TableName) (TableStatement, *TableName) {
 	if name.Name.String() != "user_details" {
-		return nil
+		return nil, nil
 	}
 	parser := NewTestParser()
 	statement, err := parser.Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return statement.(TableStatement)
+	return statement.(TableStatement), nil
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {
@@ -1165,7 +1172,7 @@ func BenchmarkNormalize(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
 		require.NoError(b, err)
 	}
@@ -1213,10 +1220,9 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 		queries = queries[:10000]
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, sql := range queries {
 			stmt, reservedVars, err := parser.Parse2(sql)
 			if err != nil {
@@ -1295,7 +1301,7 @@ func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 	generateInsert := func(rows int) string {
 		var query strings.Builder
 		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
-		for i := 0; i < rows; i++ {
+		for i := range rows {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
 				rand.Int(), rand.Int(), rand.Int(),
 				"first-"+randString(rand.IntN(10)),
@@ -1316,7 +1322,7 @@ func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 
 	var queries []string
 
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		queries = append(queries, generateInsert(4))
 	}
 
@@ -1502,7 +1508,7 @@ WHERE no_w_id = %d AND no_d_id = %d`,
 	var queries []string
 
 	for _, tmpl := range templates {
-		for i := 0; i < 128; i++ {
+		for range 128 {
 			queries = append(queries, re.ReplaceAllStringFunc(tmpl, repl))
 		}
 	}

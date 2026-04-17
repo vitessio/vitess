@@ -525,6 +525,28 @@ func (asm *assembler) PushBVar_u(key string) {
 	}, "PUSH UINT64(:%q)", key)
 }
 
+func push_tuple(env *ExpressionEnv, values []*querypb.Value) int {
+	env.vm.stack[env.vm.sp], env.vm.err = newEvalTuple(values, env.collationEnv.DefaultConnectionCharset())
+	if env.vm.err != nil {
+		return 0
+	}
+	env.vm.sp++
+	return 1
+}
+
+func (asm *assembler) PushBVar_tuple(key string) {
+	asm.adjustStack(1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		var bvar *querypb.BindVariable
+		bvar, env.vm.err = env.lookupBindVar(key)
+		if env.vm.err != nil {
+			return 0
+		}
+		return push_tuple(env, bvar.Values)
+	}, "PUSH TUPLE(:%q)", key)
+}
+
 func (asm *assembler) PushLiteral(lit eval) error {
 	asm.adjustStack(1)
 

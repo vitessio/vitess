@@ -19,7 +19,7 @@ limitations under the License.
 package syslogger
 
 import (
-	"fmt"
+	"errors"
 	"log/syslog"
 	"strings"
 	"testing"
@@ -73,7 +73,6 @@ func TestSyslog(t *testing.T) {
 	ev := new(TestEvent)
 	event.Dispatch(ev)
 	assert.True(t, ev.triggered)
-
 }
 
 // TestBadWriter verifies we are still triggering (to normal logs) if
@@ -120,12 +119,11 @@ func TestBadWriter(t *testing.T) {
 	event.Dispatch(ev)
 	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
 	assert.True(t, ev.triggered)
-
 }
 
 // TestWriteError checks that we don't panic on a write error.
 func TestWriteError(t *testing.T) {
-	writer = &fakeWriter{err: fmt.Errorf("forced error")}
+	writer = &fakeWriter{err: errors.New("forced error")}
 
 	event.Dispatch(&TestEvent{priority: syslog.LOG_EMERG})
 }
@@ -136,7 +134,6 @@ func TestInvalidSeverity(t *testing.T) {
 
 	event.Dispatch(&TestEvent{priority: syslog.Priority(123), message: "log me"})
 	assert.NotEqual(t, "log me", fw.message)
-
 }
 
 func testSeverity(sev syslog.Priority, t *testing.T) {
@@ -146,7 +143,6 @@ func testSeverity(sev syslog.Priority, t *testing.T) {
 	event.Dispatch(&TestEvent{priority: sev, message: "log me"})
 	assert.Equal(t, sev, fw.priority)
 	assert.Equal(t, "log me", fw.message)
-
 }
 
 func TestEmerg(t *testing.T) {

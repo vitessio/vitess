@@ -17,8 +17,7 @@ limitations under the License.
 package srvtopo
 
 import (
-	"context"
-	"fmt"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,8 +43,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Watcher outage test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -90,7 +88,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 	require.NotNil(t, vschema)
 
 	// Simulate topo outage
-	factory.SetError(fmt.Errorf("simulated topo error"))
+	factory.SetError(errors.New("simulated topo error"))
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
@@ -145,8 +143,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Cache expiry test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -169,7 +166,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond)
 
 	// Set a non-topo error (like 500 HTTP error)
-	nonTopoErr := fmt.Errorf("HTTP 500 internal server error")
+	nonTopoErr := errors.New("HTTP 500 internal server error")
 	factory.SetError(nonTopoErr)
 
 	// Get VSchema after TTL expiry with non-topo error
@@ -191,8 +188,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 
 // TestWatcherShouldOnlyNotifyOnActualChanges tests that watchers are called when VSchema content changes.
 func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Change detection test", "type")
 	rs := NewResilientServer(ctx, ts, counts)

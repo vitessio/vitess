@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/textutil"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -79,7 +79,7 @@ var (
 				changes = true
 			}
 			if !changes {
-				return fmt.Errorf("no configuration options specified to update")
+				return errors.New("no configuration options specified to update")
 			}
 			return nil
 		},
@@ -118,8 +118,9 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 	// We've already validated any provided value, if one WAS provided.
 	// Now we need to do the mapping from the string representation to
 	// the enum value.
+	//nolint:staticcheck // false positive as `val` IS used within the block
 	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
-		req.TabletRequest.OnDdl = ptr.Of(binlogdatapb.OnDDLAction(val))
+		req.TabletRequest.OnDdl = new(binlogdatapb.OnDDLAction(val))
 	}
 
 	resp, err := common.GetClient().WorkflowUpdate(common.GetCommandCtx(), req)

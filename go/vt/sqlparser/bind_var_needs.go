@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "slices"
+
 // BindVarNeeds represents the bind vars that need to be provided as the result of expression rewriting.
 type BindVarNeeds struct {
 	NeedFunctionResult,
@@ -59,10 +61,5 @@ func (bvn *BindVarNeeds) NumberOfRewrites() int {
 }
 
 func contains(strings []string, name string) bool {
-	for _, s := range strings {
-		if name == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings, name)
 }

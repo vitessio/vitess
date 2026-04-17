@@ -102,6 +102,7 @@ var (
 		regexp.MustCompile(`Illegal argument to a regular expression`),
 		regexp.MustCompile(`Incorrect arguments to regexp_substr`),
 		regexp.MustCompile(`Incorrect arguments to regexp_replace`),
+		regexp.MustCompile(`Invalid JSON path expression\. The error is around character position (\d+)\.`),
 	}
 )
 
@@ -153,7 +154,6 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		expr, err = evalengine.Translate(astExpr, cfg)
 		return
 	}()
-
 	if err != nil {
 		return evalengine.EvalResult{}, err
 	}
@@ -169,8 +169,10 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 	}()
 }
 
-const syntaxErr = `You have an error in your SQL syntax; (errno 1064) (sqlstate 42000) during query: SQL`
-const localSyntaxErr = `You have an error in your SQL syntax;`
+const (
+	syntaxErr      = `You have an error in your SQL syntax; (errno 1064) (sqlstate 42000) during query: SQL`
+	localSyntaxErr = `You have an error in your SQL syntax;`
+)
 
 type GoldenTest struct {
 	Query string
@@ -182,7 +184,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	if fuzzMaxFailures <= 0 {
 		t.Skipf("skipping fuzz test generation")
 	}
-	var gen = gencase{
+	gen := gencase{
 		ratioTuple:   8,
 		ratioSubexpr: 8,
 		tupleLen:     4,
@@ -194,7 +196,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 		},
 	}
 
-	var conn = mysqlconn(t)
+	conn := mysqlconn(t)
 	defer conn.Close()
 
 	venv := vtenv.NewTestEnv()
@@ -231,7 +233,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	}
 
 	var failures []*mismatch
-	var start = time.Now()
+	start := time.Now()
 	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 		stmt, err := sqlparser.NewTestParser().Parse(query)

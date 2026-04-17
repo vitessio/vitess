@@ -17,7 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,7 +62,7 @@ func TestQueryResponsesEqual(t *testing.T) {
 			r1: []QueryResponse{
 				{
 					QueryResult: &Result{},
-					QueryError:  fmt.Errorf("some error"),
+					QueryError:  errors.New("some error"),
 				},
 			},
 			r2: []QueryResponse{

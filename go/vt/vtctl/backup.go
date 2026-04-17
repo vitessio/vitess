@@ -18,6 +18,7 @@ package vtctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -80,7 +81,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the Backup command requires the <tablet alias> argument")
+		return errors.New("the Backup command requires the <tablet alias> argument")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -124,7 +125,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action BackupShard requires <keyspace/shard>")
+		return errors.New("action BackupShard requires <keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -148,7 +149,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ListBackups requires <keyspace/shard>")
+		return errors.New("action ListBackups requires <keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -177,7 +178,7 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action RemoveBackup requires <keyspace/shard> <backup name>")
+		return errors.New("action RemoveBackup requires <keyspace/shard> <backup name>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -219,7 +220,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the RestoreFromBackup command requires the <tablet alias> argument")
+		return errors.New("the RestoreFromBackup command requires the <tablet alias> argument")
 	}
 
 	// Zero date will cause us to use the latest, which is the default

@@ -44,3 +44,15 @@ func TestVtcomboArguments(t *testing.T) {
 		assert.ElementsMatch(t, expectedServiceList, serviceMapList, "--service-map list does not contain expected vtcombo services")
 	})
 }
+
+func TestVtcomboRandomPort(t *testing.T) {
+	require.Empty(t, usedRandomPorts)
+	port := randomPort()
+	// 10000-30000 is the range the rand call in randomPorts() can return
+	require.GreaterOrEqual(t, port, 10000)
+	require.LessOrEqual(t, port, 30000)
+	require.Len(t, usedRandomPorts, 6)
+	require.Contains(t, usedRandomPorts, port)
+	require.NotEqual(t, port, randomPort())
+	require.Len(t, usedRandomPorts, 12)
+}

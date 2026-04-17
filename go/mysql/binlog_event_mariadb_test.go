@@ -111,7 +111,6 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 	got, err := input.Format()
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
-
 }
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {

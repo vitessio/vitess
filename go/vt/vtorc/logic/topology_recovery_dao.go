@@ -23,13 +23,14 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
-func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
+func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
 		INTO recovery_detection (
 			alias,
@@ -44,18 +45,18 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 			?,
 			DATETIME('now')
 		)`,
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	id, err := sqlResult.LastInsertId()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	analysisEntry.RecoveryId = id
@@ -83,11 +84,11 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 			?
 		)`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
-		analysisEntry.AnalyzedInstanceAlias,
+		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		analysisEntry.RecoveryId,
 	)
 	if err != nil {
@@ -109,16 +110,16 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 }
 
 // AttemptRecoveryRegistration tries to add a recovery entry; if this fails that means recovery is already in place.
-func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*TopologyRecovery, error) {
+func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*TopologyRecovery, error) {
 	// Check if there is an active recovery in progress for the cluster of the given instance.
 	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return nil, err
 	}
 	if len(recoveries) > 0 {
 		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, recoveries[0].AnalysisEntry.Analysis)
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		return nil, errors.New(errMsg)
 	}
 
@@ -126,7 +127,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*Topo
 
 	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return nil, err
 	}
 	return topologyRecovery, nil
@@ -145,12 +146,12 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 			recovery_id = ?
 		`,
 		topologyRecovery.IsSuccessful,
-		topologyRecovery.SuccessorAlias,
+		topoproto.TabletAliasString(topologyRecovery.SuccessorAlias),
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.ID,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }
@@ -174,25 +175,34 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 			topology_recovery
 		%s
 		ORDER BY recovery_id DESC
-		%s
-		`,
+		%s`,
 		whereCondition,
 		limit,
 	)
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
+		topologyRecovery := *NewTopologyRecovery(inst.DetectionAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
 
-		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
+		var err error
+		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
+		if err != nil {
+			return err
+		}
+
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.AnalyzedKeyspace = m.GetString("keyspace")
 		topologyRecovery.AnalysisEntry.AnalyzedShard = m.GetString("shard")
 
-		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
+		if successorAlias := m.GetString("successor_alias"); successorAlias != "" {
+			topologyRecovery.SuccessorAlias, err = topoproto.ParseTabletAlias(successorAlias)
+			if err != nil {
+				return err
+			}
+		}
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
 
@@ -201,9 +211,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		res = append(res, &topologyRecovery)
 		return nil
 	})
-
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return res, err
 }
@@ -221,9 +230,9 @@ func ReadActiveClusterRecoveries(keyspace string, shard string) ([]*TopologyReco
 func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
-	var args []any
+	args := make([]any, 0, 2)
 	if len(whereConditions) > 0 {
-		whereClause = fmt.Sprintf("WHERE %s", strings.Join(whereConditions, " AND "))
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
 	}
 	limit := `LIMIT ? OFFSET ?`
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
@@ -249,12 +258,12 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 		topologyRecoveryStep.Message,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	topologyRecoveryStep.ID, err = sqlResult.LastInsertId()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return err
 }

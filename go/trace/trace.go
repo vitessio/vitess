@@ -36,33 +36,24 @@ import (
 // Span represents a unit of work within a trace. After creating a Span with
 // NewSpan(), call one of the Start methods to mark the beginning of the work
 // represented by this Span. Call Finish() when that work is done to record the
-// Span. A Span may be reused by calling Start again.
+// Span.
 type Span interface {
 	Finish()
 	// Annotate records a key/value pair associated with a Span. It should be
-	// called between Start and Finish.
+	// called before Finish.
 	Annotate(key string, value any)
 }
 
 // NewSpan creates a new Span with the currently installed tracing plugin.
 // If no tracing plugin is installed, it returns a fake Span that does nothing.
-func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
-	parent, _ := currentTracer.FromContext(inCtx)
-	span := currentTracer.New(parent, label)
-	outCtx := currentTracer.NewContext(inCtx, span)
-
-	return span, outCtx
+func NewSpan(ctx context.Context, label string) (Span, context.Context) {
+	return currentTracer.New(ctx, label)
 }
 
 // NewFromString creates a new Span with the currently installed tracing plugin, extracting the span context from
 // the provided string.
 func NewFromString(inCtx context.Context, parent, label string) (Span, context.Context, error) {
-	span, err := currentTracer.NewFromString(parent, label)
-	if err != nil {
-		return nil, nil, err
-	}
-	outCtx := currentTracer.NewContext(inCtx, span)
-	return span, outCtx, nil
+	return currentTracer.NewFromString(inCtx, parent, label)
 }
 
 // AnnotateSQL annotates information about a sql query in the span. This is done in a way
@@ -104,10 +95,10 @@ func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u
 // tracingService is an interface for creating spans or extracting them from Contexts.
 type tracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
-	New(parent Span, label string) Span
+	New(ctx context.Context, label string) (Span, context.Context)
 
 	// NewFromString creates a new span and uses the provided string to reconstitute the parent span
-	NewFromString(parent, label string) (Span, error)
+	NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error)
 
 	// FromContext extracts a span from a context, making it possible to annotate the span with additional information
 	FromContext(ctx context.Context) (Span, bool)
@@ -151,6 +142,15 @@ var (
 			FlagName: "tracing-enable-logging",
 		},
 	)
+	samplingRate = viperutil.Configure(
+		configKey("sampling-rate"),
+		viperutil.Options[float64]{
+			Default:  0.1,
+			EnvVars:  []string{"JAEGER_SAMPLER_PARAM"},
+			Aliases:  []string{"trace.jaeger.sampling_rate"},
+			FlagName: "tracing-sampling-rate",
+		},
+	)
 
 	pluginFlags []func(fs *pflag.FlagSet)
 )
@@ -158,8 +158,9 @@ var (
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.String("tracer", tracingServer.Default(), "tracing service to use")
 	fs.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
+	fs.Float64("tracing-sampling-rate", samplingRate.Default(), "sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0")
 
-	viperutil.BindFlags(fs, tracingServer, enableLogging)
+	viperutil.BindFlags(fs, tracingServer, enableLogging, samplingRate)
 
 	for _, fn := range pluginFlags {
 		fn(fs)
@@ -176,13 +177,13 @@ func StartTracing(serviceName string) io.Closer {
 
 	tracer, closer, err := factory(serviceName)
 	if err != nil {
-		log.Error(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend))
+		log.Error(fmt.Sprint(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend)))
 		return &nilCloser{}
 	}
 
 	currentTracer = tracer
 	if tracingBackend != "noop" {
-		log.Infof("successfully started tracing with [%s]", tracingBackend)
+		log.Info(fmt.Sprintf("successfully started tracing with [%s]", tracingBackend))
 	}
 
 	return closer
@@ -194,11 +195,10 @@ func fail(serviceName string) io.Closer {
 		options = append(options, k)
 	}
 	altStr := strings.Join(options, ", ")
-	log.Errorf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr)
+	log.Error(fmt.Sprintf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr))
 	return &nilCloser{}
 }
 
-type nilCloser struct {
-}
+type nilCloser struct{}
 
 func (c *nilCloser) Close() error { return nil }

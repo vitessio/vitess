@@ -17,7 +17,6 @@ limitations under the License.
 package datetime
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -75,5 +74,5 @@ func ParseTimeZone(tz string) (*time.Location, error) {
 	if neg {
 		offset = -offset
 	}
-	return time.FixedZone(fmt.Sprintf("UTC%s", tz), offset), nil
+	return time.FixedZone("UTC"+tz, offset), nil
 }

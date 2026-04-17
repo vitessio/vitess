@@ -40,7 +40,6 @@ func TestStringList(t *testing.T) {
 
 		assert.Equal(t, out, strings.Join(p, "."))
 		assert.Equal(t, in, p.String())
-
 	}
 }
 

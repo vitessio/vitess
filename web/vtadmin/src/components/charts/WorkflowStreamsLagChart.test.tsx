@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { UseQueryResult } from 'react-query';
+import { UseQueryResult } from '@tanstack/react-query';
 import { TabletDebugVarsResponse } from '../../api/http';
 import { vtadmin as pb } from '../../proto/vtadmin';
 import { getWorkflowTimeseries } from './WorkflowStreamsLagChart';

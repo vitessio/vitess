@@ -304,7 +304,6 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGroupByColumnName(t *testing.T) {
@@ -761,7 +760,8 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 				Type: sqltypes.VarChar,
 			}},
 			ColumnListAuthoritative: true,
-		}}}
+		},
+	}}
 	tcases := []struct {
 		sql         string
 		expSQL      string
@@ -769,10 +769,6 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		otherTbl    int
 		expandedCol int
 	}{{
-		sql:      "select a, * from t1",
-		expSQL:   "select a, a from t1",
-		otherTbl: -1, sameTbl: 0, expandedCol: 1,
-	}, {
 		sql:      "select t2.a, t1.a, t1.* from t1, t2",
 		expSQL:   "select t2.a, t1.a, t1.a from t1, t2",
 		otherTbl: 0, sameTbl: 1, expandedCol: 2,

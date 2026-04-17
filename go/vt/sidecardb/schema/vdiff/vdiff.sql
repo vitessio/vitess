@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS vdiff
     `completed_at`       timestamp    NULL     DEFAULT NULL,
     `last_error`         varbinary(1024)      DEFAULT NULL,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uuid_idx` (`vdiff_uuid`),
+    UNIQUE KEY `uuid_idx` (`vdiff_uuid`, `db_name`),
     KEY `state` (`state`),
     KEY `ks_wf_idx` (`keyspace`(64), `workflow`(64))
 ) ENGINE = InnoDB CHARSET = utf8mb4

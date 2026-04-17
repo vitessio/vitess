@@ -18,13 +18,12 @@ package base
 
 import (
 	"context"
-	"fmt"
+	"errors"
 )
 
 var _ SelfMetric = registerSelfMetric(&DefaultSelfMetric{})
 
-type DefaultSelfMetric struct {
-}
+type DefaultSelfMetric struct{}
 
 func (m *DefaultSelfMetric) Name() MetricName {
 	return DefaultMetricName
@@ -44,6 +43,6 @@ func (m *DefaultSelfMetric) RequiresConn() bool {
 
 func (m *DefaultSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
 	return &ThrottleMetric{
-		Err: fmt.Errorf("unexpected direct call to DefaultSelfMetric.Read"),
+		Err: errors.New("unexpected direct call to DefaultSelfMetric.Read"),
 	}
 }

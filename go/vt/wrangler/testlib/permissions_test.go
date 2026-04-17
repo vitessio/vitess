@@ -243,7 +243,8 @@ func TestPermissions(t *testing.T) {
 				{
 					Name: "is_role",
 					Type: sqltypes.Char,
-				}},
+				},
+			},
 			RowsAffected: 0x6,
 			InsertID:     0x0,
 			Rows: [][]sqltypes.Value{
@@ -291,7 +292,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host2"),
 					sqltypes.NewVarBinary("test_user2"),
@@ -336,7 +338,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host3"),
 					sqltypes.NewVarBinary("test_user3"),
@@ -381,7 +384,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host4"),
 					sqltypes.NewVarBinary("test_user4"),
@@ -594,5 +598,4 @@ func TestPermissions(t *testing.T) {
 	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
 		t.Fatalf("ValidatePermissionsKeyspace has unexpected err: %v", err)
 	}
-
 }

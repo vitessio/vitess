@@ -94,3 +94,48 @@ func TestColumnCollations(t *testing.T) {
 		})
 	}
 }
+
+func TestWindowFunctionTypes(t *testing.T) {
+	tests := []struct {
+		query, typ string
+	}{
+		// Pure window functions
+		{query: "select rank() over () from t1", typ: "INT64"},
+		{query: "select row_number() over () from t1", typ: "INT64"},
+		{query: "select dense_rank() over () from t1", typ: "INT64"},
+		{query: "select ntile(1) over () from t1", typ: "INT64"},
+		{query: "select percent_rank() over () from t1", typ: "FLOAT64"},
+		{query: "select cume_dist() over () from t1", typ: "FLOAT64"},
+
+		// Window functions that depend on input type
+		{query: "select first_value(id) over () from t1", typ: "INT64"}, // id is INT64 in fakeSchemaInfo
+		{query: "select last_value(id) over () from t1", typ: "INT64"},
+		{query: "select nth_value(id, 1) over () from t1", typ: "INT64"},
+		{query: "select lead(id, 1) over () from t1", typ: "INT64"},
+		{query: "select lag(id, 1) over () from t1", typ: "INT64"},
+
+		// Aggregates used as window functions
+		{query: "select sum(id) over () from t1", typ: "DECIMAL"}, // SUM(INT) -> DECIMAL
+		{query: "select count(*) over () from t1", typ: "INT64"},
+		{query: "select min(id) over () from t1", typ: "INT64"},
+		{query: "select max(id) over () from t1", typ: "INT64"},
+		{query: "select avg(id) over () from t1", typ: "DECIMAL"}, // AVG(INT) -> DECIMAL
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			parse, _, err := sqlparser.NewTestParser().Parse2(test.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			expr := extract(sel, 0)
+
+			typ, found := st.TypeForExpr(expr)
+			require.True(t, found, "expression was not typed")
+			require.Equal(t, test.typ, typ.Type().String())
+		})
+	}
+}

@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		return m.Run(), nil
 	}()
 	if err != nil {
-		log.Errorf("top level error: %v\n", err)
+		log.Error(fmt.Sprintf("top level error: %v\n", err))
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
@@ -132,7 +132,7 @@ func TestStandalone(t *testing.T) {
 
 	assertVSchemaExists(t, grpcAddress)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -165,7 +165,7 @@ func TestStandalone(t *testing.T) {
 func assertVSchemaExists(t *testing.T, grpcAddress string) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "--compact", "GetVSchema", "routed")
 
-	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
 	require.NoError(t, err, fmt.Sprintf("Output:\n%v", string(output)))
@@ -240,15 +240,15 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 func assertTabletsPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "GetTablets", "--cell", "test")
 
-	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
 	require.NoError(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash, numRouted := 0, 0, 0, 0, 0, 0
-	lines := strings.Split(string(output), "\n")
+	lines := strings.SplitSeq(string(output), "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		if !strings.HasPrefix(line, "test-") {
 			continue
 		}
@@ -279,7 +279,6 @@ func assertTabletsPresent(t *testing.T) {
 		default:
 			t.Logf("invalid shard %s", parts[2])
 		}
-
 	}
 
 	assert.Equal(t, 2, numPrimary)

@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -112,7 +113,6 @@ func TestStreamMigrateMainflow(t *testing.T) {
 				sourceRows[i]...),
 				nil)
 		}
-
 	}
 	stopStreams()
 
@@ -1003,7 +1003,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 			dbclient.addQuery("select distinct vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped'): fail this
-			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", nil, fmt.Errorf("intentionally failed"))
+			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", nil, errors.New("intentionally failed"))
 		}
 	}
 	stopStreamsFail()

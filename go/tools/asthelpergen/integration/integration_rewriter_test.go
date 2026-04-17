@@ -276,7 +276,6 @@ func TestRewriteVisitRefContainerReplace(t *testing.T) {
 }
 
 func TestRewriteVisitValueContainerReplace(t *testing.T) {
-
 	ast := ValueContainer{
 		ASTType:               ValueContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},
@@ -294,7 +293,6 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		}
 		return true
 	}, nil)
-
 }
 
 func TestRewriteVisitValueContainerReplace2(t *testing.T) {
@@ -397,6 +395,7 @@ type Pre struct {
 func (r Pre) String() string {
 	return fmt.Sprintf("Pre(%s)", r.el.String())
 }
+
 func (r Post) String() string {
 	return fmt.Sprintf("Post(%s)", r.el.String())
 }
@@ -413,10 +412,12 @@ func (tv *rewriteTestVisitor) pre(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
 	return true
 }
+
 func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Post{el: cursor.Node()})
 	return true
 }
+
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	t.Helper()
 	assertStepsEqual(t, tv.walk, expected)
@@ -458,5 +459,4 @@ func assertStepsEqual(t *testing.T, walk, expected []step) {
 	if expectedSize > walkSize {
 		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
 	}
-
 }

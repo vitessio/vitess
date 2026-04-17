@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	slices0 "slices"
 
 	"golang.org/x/exp/slices"
 
@@ -43,16 +44,17 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 
 	switch node := query.(type) {
 	case *sqlparser.Select:
+		// Window functions cannot be merged into the outer scope because they operate on a result set
+		// and require specific partitioning and ordering semantics that would be lost in a merge
+		if ctx.ContainsWindowFunc(node) {
+			return false
+		}
+
 		if node.GroupBy != nil && len(node.GroupBy.Exprs) > 0 {
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.
 			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-			for _, gb := range node.GroupBy.Exprs {
-				if validVindex(gb) {
-					return true
-				}
-			}
-			return false
+			return slices0.ContainsFunc(node.GroupBy.Exprs, validVindex)
 		}
 
 		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
@@ -114,10 +116,9 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 }
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
-	for idx, order := range o.Order {
-		for _, sq := range ctx.MergedSubqueries {
-			arg := ctx.GetReservedArgumentFor(sq)
-			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
+	for idx := range o.Order {
+		for arg, sq := range ctx.MergedSubqueries {
+			expr := sqlparser.Rewrite(o.Order[idx].SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
 				switch expr := cursor.Node().(type) {
 				case *sqlparser.ColName:
 					if expr.Name.String() == arg {
@@ -156,32 +157,31 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 		// this is because we might have subqueries inside subqueries, and we need to merge them all
 		merged = false
 		for _, sq := range se {
-			for _, sq2 := range ctx.MergedSubqueries {
-				if sq.originalSubquery == sq2 {
-					expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-						switch expr := cursor.Node().(type) {
-						case *sqlparser.ColName:
-							if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
-								return true
-							}
-						case *sqlparser.Argument:
-							if expr.Name != sq.ArgName {
-								return true
-							}
-						default:
-							return true
-						}
-						rewritten = true
-						if sq.FilterType == opcode.PulloutExists {
-							cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
-						} else {
-							cursor.Replace(sq.originalSubquery)
-						}
-						merged = true
-						return false
-					}).(sqlparser.Expr)
-				}
+			if _, ok := ctx.MergedSubqueries[sq.ArgName]; !ok {
+				continue
 			}
+			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+						return true
+					}
+				case *sqlparser.Argument:
+					if expr.Name != sq.ArgName {
+						return true
+					}
+				default:
+					return true
+				}
+				rewritten = true
+				if sq.FilterType == opcode.PulloutExists {
+					cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+				} else {
+					cursor.Replace(sq.originalSubquery)
+				}
+				merged = true
+				return false
+			}).(sqlparser.Expr)
 		}
 	}
 	return expr, rewritten
@@ -338,7 +338,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner.originalSubquery)
+	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -554,18 +554,13 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
 	}
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
+	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
 	return op, Rewrote("merged subquery with outer")
 }
 
 // This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
 func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
-	for _, sqArg := range updOp.SubQueriesArgOnChangedVindex {
-		if sqArg == subQuery.ArgName {
-			return true
-		}
-	}
-	return false
+	return slices0.Contains(updOp.SubQueriesArgOnChangedVindex, subQuery.ArgName)
 }
 
 func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult) {

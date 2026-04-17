@@ -19,6 +19,7 @@ package random
 import (
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"slices"
 
 	"vitess.io/vitess/go/slice"
@@ -68,10 +69,12 @@ type (
 	}
 )
 
-var _ sqlparser.ExprGenerator = (*tableT)(nil)
-var _ sqlparser.ExprGenerator = (*column)(nil)
-var _ sqlparser.QueryGenerator = (*selectGenerator)(nil)
-var _ sqlparser.QueryGenerator = (*queryGenerator)(nil)
+var (
+	_ sqlparser.ExprGenerator  = (*tableT)(nil)
+	_ sqlparser.ExprGenerator  = (*column)(nil)
+	_ sqlparser.QueryGenerator = (*selectGenerator)(nil)
+	_ sqlparser.QueryGenerator = (*queryGenerator)(nil)
+)
 
 func newQueryGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGenerator {
 	return &queryGenerator{
@@ -81,7 +84,8 @@ func newQueryGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAg
 
 func newSelectGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *selectGenerator {
 	if maxTables <= 0 {
-		log.Fatalf("maxTables must be at least 1, currently %d\n", maxTables)
+		log.Error(fmt.Sprintf("maxTables must be at least 1, currently %d\n", maxTables))
+		os.Exit(1)
 	}
 
 	return &selectGenerator{
@@ -357,7 +361,7 @@ func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 	sg.sel.From = append(sg.sel.From, newAliasedTable(tables[0], "tbl0"))
 
 	numTables := rand.IntN(sg.maxTables)
-	for i := 0; i < numTables; i++ {
+	for i := range numTables {
 		tables = append(tables, randomEl(sg.schemaTables))
 		alias := fmt.Sprintf("tbl%d", i+1)
 		sg.sel.From = append(sg.sel.From, newAliasedTable(tables[i+1], alias))
@@ -384,7 +388,8 @@ func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 func (sg *selectGenerator) createJoin(tables []tableT) {
 	n := len(sg.sel.From)
 	if len(tables) != n+1 {
-		log.Fatalf("sel has %d tables and tables has %d tables", len(sg.sel.From), n)
+		log.Error(fmt.Sprintf("sel has %d tables and tables has %d tables", len(sg.sel.From), n))
+		os.Exit(1)
 	}
 
 	joinPredicate := sqlparser.AndExpressions(sg.createJoinPredicates(tables)...)
@@ -397,7 +402,8 @@ func (sg *selectGenerator) createJoin(tables []tableT) {
 // tables should have at least two elements
 func (sg *selectGenerator) createJoinPredicates(tables []tableT) []sqlparser.Expr {
 	if len(tables) < 2 {
-		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
+		log.Error(fmt.Sprintf("tables has %d elements, needs at least 2", len(tables)))
+		os.Exit(1)
 	}
 
 	exprGenerators := []sqlparser.ExprGenerator{&tables[len(tables)-2], &tables[len(tables)-1]}
@@ -416,7 +422,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 		return
 	}
 	numGBs := rand.IntN(sg.maxGBs + 1)
-	for i := 0; i < numGBs; i++ {
+	for range numGBs {
 		tblIdx := rand.IntN(len(tables))
 		col := randomEl(tables[tblIdx].cols)
 		// TODO: grouping by a date column sometimes errors
@@ -438,7 +444,8 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 // aliasGroupingColumns randomly aliases the grouping columns in the SelectExprs
 func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 	if len(grouping) != len(sg.sel.SelectExprs.Exprs) {
-		log.Fatalf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs.Exprs))
+		log.Error(fmt.Sprintf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs.Exprs)))
+		os.Exit(1)
 	}
 
 	for i := range grouping {
@@ -529,12 +536,13 @@ func (sg *selectGenerator) createHavingPredicates(grouping []column) {
 // returns between minExprs and maxExprs random expressions using generators
 func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates []sqlparser.Expr) {
 	if minExprs > maxExprs {
-		log.Fatalf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs)
+		log.Error(fmt.Sprintf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs))
+		os.Exit(1)
 	} else if maxExprs <= 0 {
 		return
 	}
 	numPredicates := rand.IntN(maxExprs-minExprs+1) + minExprs
-	for i := 0; i < numPredicates; i++ {
+	for range numPredicates {
 		predicates = append(predicates, sg.getRandomExpr(generators...))
 	}
 

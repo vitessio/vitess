@@ -43,8 +43,10 @@ func (j *JoinPredicate) Clone(inner sqlparser.SQLNode) sqlparser.SQLNode {
 	}
 }
 
-var _ sqlparser.Expr = (*JoinPredicate)(nil)
-var _ sqlparser.Visitable = (*JoinPredicate)(nil)
+var (
+	_ sqlparser.Expr      = (*JoinPredicate)(nil)
+	_ sqlparser.Visitable = (*JoinPredicate)(nil)
+)
 
 func (j *JoinPredicate) VisitThis() sqlparser.SQLNode {
 	return j.Current()

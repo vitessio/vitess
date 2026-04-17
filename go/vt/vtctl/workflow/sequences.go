@@ -223,9 +223,6 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 	sequencesByShard := map[string][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
 	for _, seq := range sequences {
 		maxValue := maxValues[seq.backingTableName]
-		if maxValue == 0 {
-			continue
-		}
 		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
 		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",

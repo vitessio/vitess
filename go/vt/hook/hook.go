@@ -23,11 +23,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/fileutil"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -98,11 +99,6 @@ func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
 
 // findHook tries to locate the hook, and returns the exec.Cmd for it.
 func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
-	// Check the hook path.
-	if strings.Contains(hook.Name, "/") {
-		return nil, HOOK_INVALID_NAME, fmt.Errorf("hook cannot contain '/'")
-	}
-
 	// Find our root.
 	root, err := vtenv.VtRoot()
 	if err != nil {
@@ -110,7 +106,10 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// See if the hook exists.
-	vthook := path.Join(root, "vthook", hook.Name)
+	vthook, err := fileutil.SafePathJoin(filepath.Join(root, "vthook"), hook.Name)
+	if err != nil {
+		return nil, HOOK_INVALID_NAME, fmt.Errorf("invalid hook name %q: %v", hook.Name, err)
+	}
 	_, err = os.Stat(vthook)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -121,7 +120,7 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// Configure the command.
-	log.Infof("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " "))
+	log.Info(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
 	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -158,7 +157,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	result.Stderr = stderr.String()
 
 	defer func() {
-		log.Infof("hook: result is %v", result.String())
+		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
 	}()
 
 	if err == nil {
@@ -203,9 +202,9 @@ func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
-		log.Infof("%v hook doesn't exist", hook.Name)
+		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
 	case HOOK_VTROOT_ERROR:
-		log.Infof("VTROOT not set, so %v hook doesn't exist", hook.Name)
+		log.Info(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
 	case HOOK_SUCCESS:
 		// nothing to do here
 	default:

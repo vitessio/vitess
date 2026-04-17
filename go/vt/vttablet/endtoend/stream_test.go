@@ -52,7 +52,7 @@ func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent
 	}
 	defer client.Rollback()
 
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(rowContent, 2048/len(rowContent)))
 		_, err := client.Execute(query, nil)
 		if err != nil {
@@ -73,9 +73,7 @@ func BenchmarkStreamQuery(b *testing.B) {
 	}
 	defer client.Execute("delete from vitess_stress", nil)
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
 			return nil
 		})
@@ -109,15 +107,12 @@ func TestStreamConsolidation(t *testing.T) {
 		framework.Server.SetStreamConsolidationBlocking(false)
 	}()
 
-	var start = make(chan struct{})
+	start := make(chan struct{})
 	var finish sync.WaitGroup
 
 	// Spawn N workers at the same time to stress test the stream consolidator
-	for i := 0; i < Workers; i++ {
-		finish.Add(1)
-		go func() {
-			defer finish.Done()
-
+	for range Workers {
+		finish.Go(func() {
 			// block all the workers so they all perform their queries at the same time
 			<-start
 
@@ -130,7 +125,7 @@ func TestStreamConsolidation(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, 2200, rowCount)
-		}()
+		})
 	}
 
 	// wait until all the goroutines have spawned and are blocked before we unblock them at once
@@ -178,7 +173,8 @@ func TestStreamBigData(t *testing.T) {
 		"10",
 		"10",
 		"10",
-		"10"}
+		"10",
+	}
 	if !reflect.DeepEqual(row10, want) {
 		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
 	}
@@ -226,7 +222,8 @@ func TestStreamBigDataInTx(t *testing.T) {
 		"10",
 		"10",
 		"10",
-		"10"}
+		"10",
+	}
 	if !reflect.DeepEqual(row10, want) {
 		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
 	}
@@ -273,7 +270,7 @@ func populateBigData(client *framework.QueryClient) error {
 		return err
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		stri := strconv.Itoa(i)
 		query := "insert into vitess_big values " +
 			"(" + stri + ", " +

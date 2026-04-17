@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -177,7 +178,7 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 // The test fails if the query produces an error.
 func ExecTrace(t testing.TB, conn *mysql.Conn, query string) engine.PrimitiveDescription {
 	t.Helper()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("vexplain trace %s", query), 10000, false)
+	qr, err := conn.ExecuteFetch("vexplain trace "+query, 10000, false)
 	require.NoError(t, err, "for query: "+query)
 
 	// Extract the trace result and format it with indentation for pretty printing
@@ -242,7 +243,6 @@ func BinaryIsAtLeastAtVersion(majorVersion int, binary string) bool {
 		return false
 	}
 	return version >= majorVersion
-
 }
 
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.
@@ -265,12 +265,11 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
-
 	}
 }
 
 // WaitForAuthoritative waits for a table to become authoritative
-func WaitForAuthoritative(t TestingT, ks, tbl string, readVSchema func() (*interface{}, error)) error {
+func WaitForAuthoritative(t TestingT, ks, tbl string, readVSchema func() (*any, error)) error {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
@@ -298,7 +297,7 @@ func WaitForAuthoritative(t TestingT, ks, tbl string, readVSchema func() (*inter
 // WaitForKsError waits for the ks error field to be populated and returns it.
 func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
 	var errString string
-	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]any) bool {
 		ksErr, fieldPresent := keyspace["error"]
 		if !fieldPresent {
 			return false
@@ -315,7 +314,7 @@ func WaitForVschemaCondition(
 	t *testing.T,
 	vtgateProcess cluster.VtgateProcess,
 	ks string,
-	conditionMet func(t *testing.T, keyspace map[string]interface{}) bool,
+	conditionMet func(t *testing.T, keyspace map[string]any) bool,
 	message string,
 ) {
 	timeout := time.After(60 * time.Second)
@@ -338,7 +337,7 @@ func WaitForVschemaCondition(
 
 // WaitForTableDeletions waits for a table to be deleted
 func WaitForTableDeletions(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
-	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]any) bool {
 		tablesMap := keyspace["tables"]
 		_, isPresent := convertToMap(tablesMap)[tbl]
 		return !isPresent
@@ -371,13 +370,13 @@ func WaitForColumn(t TestingT, vtgateProcess cluster.VtgateProcess, ks, tbl, col
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			colList, isSlice := colMap.([]interface{})
+			colList, isSlice := colMap.([]any)
 			if !isSlice {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			for _, c := range colList {
-				colDef, isMap := c.(map[string]interface{})
+				colDef, isMap := c.(map[string]any)
 				if !isMap {
 					break
 				}
@@ -390,7 +389,7 @@ func WaitForColumn(t TestingT, vtgateProcess cluster.VtgateProcess, ks, tbl, col
 	}
 }
 
-func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
+func getTableT2Map(res *any, ks, tbl string) map[string]any {
 	step1 := convertToMap(*res)["keyspaces"]
 	step2 := convertToMap(step1)[ks]
 	step3 := convertToMap(step2)["tables"]
@@ -398,10 +397,10 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 	return convertToMap(tblMap)
 }
 
-func convertToMap(input interface{}) map[string]interface{} {
-	output, ok := input.(map[string]interface{})
+func convertToMap(input any) map[string]any {
+	output, ok := input.(map[string]any)
 	if !ok {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 	return output
 }
@@ -411,7 +410,7 @@ func GetInitDBSQL(initDBSQL string, updatedPasswords string, oldAlterTableMode s
 	// super_read_only therefore doing the split below.
 	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
 	if len(splitString) != 2 {
-		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
+		return "", errors.New("missing `# {{custom_sql}}` in init_db.sql file")
 	}
 	var builder strings.Builder
 	builder.WriteString(splitString[0])
@@ -447,7 +446,7 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
-	var timeoutDuration = time.Duration(5 * len(sqls))
+	timeoutDuration := time.Duration(5 * len(sqls))
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)

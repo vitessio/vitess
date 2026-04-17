@@ -19,6 +19,8 @@ package binlogplayer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -382,9 +384,16 @@ func applyEvents(blp *BinlogPlayer) func() error {
 }
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" key_range:{end:"\\x80"}', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		KeyRange: &topodatapb.KeyRange{
+			End: []byte{0x80},
+		},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -401,9 +410,14 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b"', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		Tables:   []string{"a", "b"},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -486,6 +500,46 @@ func TestEncodeString(t *testing.T) {
 		t.Run(tcase.in, func(t *testing.T) {
 			out := encodeString(tcase.in)
 			assert.Equal(t, tcase.out, out)
+		})
+	}
+}
+
+func TestMessageTruncate(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectTruncate bool
+	}{
+		{
+			name:           "short message unchanged",
+			input:          "short message",
+			expectTruncate: false,
+		},
+		{
+			name:           "exactly 950 bytes unchanged",
+			input:          strings.Repeat("a", 950),
+			expectTruncate: false,
+		},
+		{
+			name:           "951 bytes truncated",
+			input:          strings.Repeat("b", 951),
+			expectTruncate: true,
+		},
+		{
+			name:           "very long message truncated",
+			input:          strings.Repeat("c", 2000),
+			expectTruncate: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MessageTruncate(tc.input)
+			if tc.expectTruncate {
+				assert.LessOrEqual(t, len(result), 950, "truncated message should be at most 950 bytes")
+				assert.Contains(t, result, TruncationIndicator, "truncated message should contain truncation indicator")
+			} else {
+				assert.Equal(t, tc.input, result, "message should be unchanged")
+			}
 		})
 	}
 }

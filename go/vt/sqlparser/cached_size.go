@@ -42,6 +42,7 @@ func (cached *AddColumns) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+
 func (cached *AddConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -54,6 +55,7 @@ func (cached *AddConstraintDefinition) CachedSize(alloc bool) int64 {
 	size += cached.ConstraintDefinition.CachedSize(true)
 	return size
 }
+
 func (cached *AddIndexDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -66,6 +68,7 @@ func (cached *AddIndexDefinition) CachedSize(alloc bool) int64 {
 	size += cached.IndexDefinition.CachedSize(true)
 	return size
 }
+
 func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -82,6 +85,7 @@ func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	size += cached.As.CachedSize(false)
 	return size
 }
+
 func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -119,6 +123,7 @@ func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *AlterCharset) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -133,6 +138,7 @@ func (cached *AlterCharset) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Collate)))
 	return size
 }
+
 func (cached *AlterCheck) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -145,6 +151,7 @@ func (cached *AlterCheck) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -160,9 +167,12 @@ func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 		size += cc.CachedSize(true)
 	}
 	// field Invisible *bool
-	size += hack.RuntimeAllocSize(int64(1))
+	if cached.Invisible != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	return size
 }
+
 func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -184,6 +194,7 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *AlterIndex) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -196,6 +207,7 @@ func (cached *AlterIndex) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -216,6 +228,7 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Shards)))
 	return size
 }
+
 func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -243,6 +256,7 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *AlterView) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -276,6 +290,7 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -299,6 +314,7 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncSpec.CachedSize(true)
 	return size
 }
+
 func (cached *Analyze) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -311,6 +327,7 @@ func (cached *Analyze) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	return size
 }
+
 func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -329,6 +346,7 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *AnyValue) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -343,6 +361,7 @@ func (cached *AnyValue) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Argument) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -355,6 +374,7 @@ func (cached *Argument) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+
 func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -367,6 +387,7 @@ func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *AssignmentExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -385,6 +406,7 @@ func (cached *AssignmentExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *AutoIncSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -399,6 +421,7 @@ func (cached *AutoIncSpec) CachedSize(alloc bool) int64 {
 	size += cached.Sequence.CachedSize(false)
 	return size
 }
+
 func (cached *Avg) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -415,6 +438,7 @@ func (cached *Avg) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *Begin) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -429,6 +453,7 @@ func (cached *Begin) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *BeginEndStatement) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -441,6 +466,7 @@ func (cached *BeginEndStatement) CachedSize(alloc bool) int64 {
 	size += cached.Statements.CachedSize(true)
 	return size
 }
+
 func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -463,6 +489,7 @@ func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *BinaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -481,6 +508,7 @@ func (cached *BinaryExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *BindVarNeeds) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -512,6 +540,7 @@ func (cached *BindVarNeeds) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *BitAnd) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -528,6 +557,7 @@ func (cached *BitAnd) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *BitOr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -544,6 +574,7 @@ func (cached *BitOr) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *BitXor) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -560,6 +591,7 @@ func (cached *BitXor) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *CallProc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -581,6 +613,7 @@ func (cached *CallProc) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CaseExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -606,6 +639,7 @@ func (cached *CaseExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CastExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -622,6 +656,7 @@ func (cached *CastExpr) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(true)
 	return size
 }
+
 func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -638,6 +673,7 @@ func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+
 func (cached *CharExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -659,6 +695,7 @@ func (cached *CharExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
 	return size
 }
+
 func (cached *CheckConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -673,6 +710,7 @@ func (cached *CheckConstraintDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ColName) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -687,6 +725,7 @@ func (cached *ColName) CachedSize(alloc bool) int64 {
 	size += cached.Qualifier.CachedSize(false)
 	return size
 }
+
 func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -703,6 +742,7 @@ func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Collation)))
 	return size
 }
+
 func (cached *ColumnCharset) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -715,6 +755,7 @@ func (cached *ColumnCharset) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+
 func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -729,6 +770,7 @@ func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(true)
 	return size
 }
+
 func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -742,9 +784,13 @@ func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	// field Options *vitess.io/vitess/go/vt/sqlparser.ColumnTypeOptions
 	size += cached.Options.CachedSize(true)
 	// field Length *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Length != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Scale *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Scale != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
 	size += cached.Charset.CachedSize(false)
 	// field EnumValues []string
@@ -756,6 +802,7 @@ func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -765,7 +812,9 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 		size += int64(160)
 	}
 	// field Null *bool
-	size += hack.RuntimeAllocSize(int64(1))
+	if cached.Null != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Default.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -785,7 +834,9 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	// field Reference *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
 	size += cached.Reference.CachedSize(true)
 	// field Invisible *bool
-	size += hack.RuntimeAllocSize(int64(1))
+	if cached.Invisible != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	// field EngineAttribute *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.EngineAttribute.CachedSize(true)
 	// field SecondaryEngineAttribute *vitess.io/vitess/go/vt/sqlparser.Literal
@@ -794,6 +845,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	size += cached.SRID.CachedSize(true)
 	return size
 }
+
 func (cached *Columns) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -828,6 +880,7 @@ func (cached *CommentDirectives) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CommentOnly) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -845,6 +898,7 @@ func (cached *CommentOnly) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Comments) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -859,6 +913,7 @@ func (cached *Comments) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -882,6 +937,7 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -904,6 +960,7 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CompoundStatements) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -923,6 +980,7 @@ func (cached *CompoundStatements) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -939,6 +997,7 @@ func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -955,6 +1014,7 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(true)
 	return size
 }
+
 func (cached *ConvertType) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -966,13 +1026,18 @@ func (cached *ConvertType) CachedSize(alloc bool) int64 {
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Length *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Length != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Scale *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Scale != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
 	size += cached.Charset.CachedSize(false)
 	return size
 }
+
 func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -989,6 +1054,7 @@ func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	return size
 }
+
 func (cached *Count) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1010,6 +1076,7 @@ func (cached *Count) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *CountStar) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1022,6 +1089,7 @@ func (cached *CountStar) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1043,6 +1111,7 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1070,6 +1139,7 @@ func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1092,6 +1162,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *CreateView) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1125,6 +1196,7 @@ func (cached *CreateView) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1137,6 +1209,7 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1149,6 +1222,7 @@ func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
+
 func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1163,6 +1237,7 @@ func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *DeclareCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1179,6 +1254,7 @@ func (cached *DeclareCondition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *DeclareHandler) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1202,6 +1278,7 @@ func (cached *DeclareHandler) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *DeclareVar) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1221,6 +1298,7 @@ func (cached *DeclareVar) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(true)
 	return size
 }
+
 func (cached *Default) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1233,6 +1311,7 @@ func (cached *Default) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.ColName)))
 	return size
 }
+
 func (cached *Definer) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1247,6 +1326,7 @@ func (cached *Definer) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Address)))
 	return size
 }
+
 func (cached *Delete) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1295,6 +1375,7 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+
 func (cached *DerivedTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1309,6 +1390,7 @@ func (cached *DerivedTable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *DropColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1321,6 +1403,7 @@ func (cached *DropColumn) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(true)
 	return size
 }
+
 func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1335,6 +1418,7 @@ func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 	size += cached.DBName.CachedSize(false)
 	return size
 }
+
 func (cached *DropKey) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1347,6 +1431,7 @@ func (cached *DropKey) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *DropProcedure) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1361,6 +1446,7 @@ func (cached *DropProcedure) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *DropTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1380,6 +1466,7 @@ func (cached *DropTable) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *DropView) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1399,6 +1486,7 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *ElseIfBlock) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1415,6 +1503,7 @@ func (cached *ElseIfBlock) CachedSize(alloc bool) int64 {
 	size += cached.ThenStatements.CachedSize(true)
 	return size
 }
+
 func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1436,6 +1525,7 @@ func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ExistsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1448,6 +1538,7 @@ func (cached *ExistsExpr) CachedSize(alloc bool) int64 {
 	size += cached.Subquery.CachedSize(true)
 	return size
 }
+
 func (cached *ExplainStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1464,6 +1555,7 @@ func (cached *ExplainStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1478,6 +1570,7 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Wild)))
 	return size
 }
+
 func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1492,6 +1585,7 @@ func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1510,6 +1604,7 @@ func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *FirstOrLastValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1530,6 +1625,7 @@ func (cached *FirstOrLastValueExpr) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *Flush) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1554,6 +1650,7 @@ func (cached *Flush) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1575,6 +1672,7 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 	size += cached.ReferenceDefinition.CachedSize(true)
 	return size
 }
+
 func (cached *FrameClause) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1589,6 +1687,7 @@ func (cached *FrameClause) CachedSize(alloc bool) int64 {
 	size += cached.End.CachedSize(true)
 	return size
 }
+
 func (cached *FramePoint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1603,6 +1702,7 @@ func (cached *FramePoint) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1626,6 +1726,7 @@ func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1652,6 +1753,7 @@ func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeoHashFromLatLongExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1674,6 +1776,7 @@ func (cached *GeoHashFromLatLongExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeoHashFromPointExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1692,6 +1795,7 @@ func (cached *GeoHashFromPointExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeoJSONFromGeomExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1714,6 +1818,7 @@ func (cached *GeoJSONFromGeomExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1732,6 +1837,7 @@ func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1750,6 +1856,7 @@ func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomFromGeoHashExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1768,6 +1875,7 @@ func (cached *GeomFromGeoHashExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomFromGeoJSONExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1790,6 +1898,7 @@ func (cached *GeomFromGeoJSONExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomFromTextExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1812,6 +1921,7 @@ func (cached *GeomFromTextExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomFromWKBExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1834,6 +1944,7 @@ func (cached *GeomFromWKBExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GeomPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1848,6 +1959,7 @@ func (cached *GeomPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GroupBy) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1867,6 +1979,7 @@ func (cached *GroupBy) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1897,6 +2010,7 @@ func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+
 func (cached *HandlerConditionErrorCode) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1907,6 +2021,7 @@ func (cached *HandlerConditionErrorCode) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *HandlerConditionNamed) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1919,6 +2034,7 @@ func (cached *HandlerConditionNamed) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *HandlerConditionSQLState) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1931,6 +2047,7 @@ func (cached *HandlerConditionSQLState) CachedSize(alloc bool) int64 {
 	size += cached.SQLStateValue.CachedSize(true)
 	return size
 }
+
 func (cached *IdentifierCI) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1945,6 +2062,7 @@ func (cached *IdentifierCI) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.lowered)))
 	return size
 }
+
 func (cached *IdentifierCS) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1957,6 +2075,7 @@ func (cached *IdentifierCS) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.v)))
 	return size
 }
+
 func (cached *IfStatement) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1982,6 +2101,7 @@ func (cached *IfStatement) CachedSize(alloc bool) int64 {
 	size += cached.ElseStatements.CachedSize(true)
 	return size
 }
+
 func (cached *IndexColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1993,13 +2113,16 @@ func (cached *IndexColumn) CachedSize(alloc bool) int64 {
 	// field Column vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Column.CachedSize(false)
 	// field Length *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Length != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field Expression vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expression.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
 }
+
 func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2026,6 +2149,7 @@ func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IndexHint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2043,6 +2167,7 @@ func (cached *IndexHint) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IndexHints) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2057,6 +2182,7 @@ func (cached *IndexHints) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IndexInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2071,6 +2197,7 @@ func (cached *IndexInfo) CachedSize(alloc bool) int64 {
 	size += cached.ConstraintName.CachedSize(false)
 	return size
 }
+
 func (cached *IndexOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2087,6 +2214,7 @@ func (cached *IndexOption) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.String)))
 	return size
 }
+
 func (cached *Insert) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2128,6 +2256,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *InsertExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2154,6 +2283,7 @@ func (cached *InsertExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IntervalDateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2172,6 +2302,7 @@ func (cached *IntervalDateExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IntervalFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2195,6 +2326,7 @@ func (cached *IntervalFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2211,6 +2343,7 @@ func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2225,6 +2358,7 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONArrayAgg) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2241,6 +2375,7 @@ func (cached *JSONArrayAgg) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *JSONArrayExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2260,6 +2395,7 @@ func (cached *JSONArrayExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONAttributesExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2278,6 +2414,7 @@ func (cached *JSONAttributesExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONContainsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2305,6 +2442,7 @@ func (cached *JSONContainsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONContainsPathExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2332,6 +2470,7 @@ func (cached *JSONContainsPathExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONExtractExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2355,6 +2494,7 @@ func (cached *JSONExtractExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONKeysExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2373,6 +2513,7 @@ func (cached *JSONKeysExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONObjectAgg) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2393,6 +2534,7 @@ func (cached *JSONObjectAgg) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *JSONObjectExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2410,6 +2552,7 @@ func (cached *JSONObjectExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONObjectParam) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2428,6 +2571,7 @@ func (cached *JSONObjectParam) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONOverlapsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2446,6 +2590,7 @@ func (cached *JSONOverlapsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2460,6 +2605,7 @@ func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONQuoteExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2474,6 +2620,7 @@ func (cached *JSONQuoteExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONRemoveExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2497,6 +2644,7 @@ func (cached *JSONRemoveExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONSchemaValidFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2515,6 +2663,7 @@ func (cached *JSONSchemaValidFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONSchemaValidationReportFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2533,6 +2682,7 @@ func (cached *JSONSchemaValidationReportFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONSearchExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2568,6 +2718,7 @@ func (cached *JSONSearchExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2582,6 +2733,7 @@ func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONStorageSizeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2596,6 +2748,7 @@ func (cached *JSONStorageSizeExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2623,6 +2776,7 @@ func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONUnquoteExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2637,6 +2791,7 @@ func (cached *JSONUnquoteExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2661,6 +2816,7 @@ func (cached *JSONValueExpr) CachedSize(alloc bool) int64 {
 	size += cached.ErrorOnResponse.CachedSize(true)
 	return size
 }
+
 func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2684,6 +2840,7 @@ func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JSONValueModifierExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2705,6 +2862,7 @@ func (cached *JSONValueModifierExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2726,6 +2884,7 @@ func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2746,6 +2905,7 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	size += cached.Condition.CachedSize(true)
 	return size
 }
+
 func (cached *JtColumnDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2762,6 +2922,7 @@ func (cached *JtColumnDefinition) CachedSize(alloc bool) int64 {
 	size += cached.JtNestedPath.CachedSize(true)
 	return size
 }
+
 func (cached *JtNestedPathColDef) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2783,6 +2944,7 @@ func (cached *JtNestedPathColDef) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JtOnResponse) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2797,6 +2959,7 @@ func (cached *JtOnResponse) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *JtOrdinalColDef) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2809,6 +2972,7 @@ func (cached *JtOrdinalColDef) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2831,6 +2995,7 @@ func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
 	size += cached.ErrorOnResponse.CachedSize(true)
 	return size
 }
+
 func (cached *KeyState) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2841,6 +3006,7 @@ func (cached *KeyState) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Kill) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2851,6 +3017,7 @@ func (cached *Kill) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2879,6 +3046,7 @@ func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Limit) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2897,6 +3065,7 @@ func (cached *Limit) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LineStringExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2916,6 +3085,7 @@ func (cached *LineStringExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LinestrPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2934,6 +3104,7 @@ func (cached *LinestrPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ListArg) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2945,6 +3116,7 @@ func (cached *ListArg) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(*cached)))
 	return size
 }
+
 func (cached *Literal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2957,6 +3129,7 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Val)))
 	return size
 }
+
 func (cached *LocateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2979,6 +3152,7 @@ func (cached *LocateExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LockOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2989,6 +3163,7 @@ func (cached *LockOption) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LockTables) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3006,6 +3181,7 @@ func (cached *LockTables) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *LockingFunc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3024,6 +3200,7 @@ func (cached *LockingFunc) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3045,6 +3222,7 @@ func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Max) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3061,6 +3239,7 @@ func (cached *Max) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *MemberOfExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3079,6 +3258,7 @@ func (cached *MemberOfExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Min) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3095,6 +3275,7 @@ func (cached *Min) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3109,6 +3290,7 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+
 func (cached *MultiLinestringExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3128,6 +3310,7 @@ func (cached *MultiLinestringExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *MultiPointExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3147,6 +3330,7 @@ func (cached *MultiPointExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *MultiPolygonExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3166,6 +3350,7 @@ func (cached *MultiPolygonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3194,6 +3379,7 @@ func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NamedWindow) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3211,6 +3397,7 @@ func (cached *NamedWindow) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NamedWindows) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3225,6 +3412,7 @@ func (cached *NamedWindows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Nextval) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3239,6 +3427,7 @@ func (cached *Nextval) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3253,6 +3442,7 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *NtileExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3269,6 +3459,7 @@ func (cached *NtileExpr) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *Offset) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3283,6 +3474,7 @@ func (cached *Offset) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OnDup) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3297,6 +3489,7 @@ func (cached *OnDup) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OptLike) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3309,6 +3502,7 @@ func (cached *OptLike) CachedSize(alloc bool) int64 {
 	size += cached.LikeTable.CachedSize(false)
 	return size
 }
+
 func (cached *OrExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3327,6 +3521,7 @@ func (cached *OrExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Order) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3341,6 +3536,7 @@ func (cached *Order) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OrderBy) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3355,6 +3551,7 @@ func (cached *OrderBy) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3372,6 +3569,7 @@ func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *OverClause) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3386,6 +3584,7 @@ func (cached *OverClause) CachedSize(alloc bool) int64 {
 	size += cached.WindowSpec.CachedSize(true)
 	return size
 }
+
 func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3405,6 +3604,7 @@ func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3424,6 +3624,7 @@ func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 	size += cached._directives.CachedSize(true)
 	return size
 }
+
 func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3440,6 +3641,7 @@ func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Parser) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3452,6 +3654,7 @@ func (cached *Parser) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.version)))
 	return size
 }
+
 func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3466,6 +3669,7 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	size += cached.Options.CachedSize(true)
 	return size
 }
+
 func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3485,9 +3689,13 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	// field IndexDirectory *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.IndexDirectory.CachedSize(true)
 	// field MaxRows *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.MaxRows != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field MinRows *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.MinRows != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
 	// field SubPartitionDefinitions vitess.io/vitess/go/vt/sqlparser.SubPartitionDefinitions
@@ -3499,6 +3707,7 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PartitionEngine) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3511,6 +3720,7 @@ func (cached *PartitionEngine) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+
 func (cached *PartitionOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3541,6 +3751,7 @@ func (cached *PartitionOption) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3569,6 +3780,7 @@ func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3588,6 +3800,7 @@ func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Partitions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3602,6 +3815,7 @@ func (cached *Partitions) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PerformanceSchemaFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3616,6 +3830,7 @@ func (cached *PerformanceSchemaFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PointExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3634,6 +3849,7 @@ func (cached *PointExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PointPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3652,6 +3868,7 @@ func (cached *PointPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PolygonExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3671,6 +3888,7 @@ func (cached *PolygonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PolygonPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3689,6 +3907,7 @@ func (cached *PolygonPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3707,6 +3926,7 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *ProcParameter) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3721,6 +3941,7 @@ func (cached *ProcParameter) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(true)
 	return size
 }
+
 func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3735,6 +3956,7 @@ func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Before)))
 	return size
 }
+
 func (cached *QueryHints) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3746,13 +3968,18 @@ func (cached *QueryHints) CachedSize(alloc bool) int64 {
 	// field Workload string
 	size += hack.RuntimeAllocSize(int64(len(cached.Workload)))
 	// field ForeignKeyChecks *bool
-	size += hack.RuntimeAllocSize(int64(1))
+	if cached.ForeignKeyChecks != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	// field Priority string
 	size += hack.RuntimeAllocSize(int64(len(cached.Priority)))
 	// field Timeout *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.Timeout != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	return size
 }
+
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3772,6 +3999,7 @@ func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegexpInstrExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3806,6 +4034,7 @@ func (cached *RegexpInstrExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegexpLikeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3828,6 +4057,7 @@ func (cached *RegexpLikeExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegexpReplaceExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3862,6 +4092,7 @@ func (cached *RegexpReplaceExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RegexpSubstrExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3892,6 +4123,7 @@ func (cached *RegexpSubstrExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Release) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3904,6 +4136,7 @@ func (cached *Release) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *RenameColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3918,6 +4151,7 @@ func (cached *RenameColumn) CachedSize(alloc bool) int64 {
 	size += cached.NewName.CachedSize(true)
 	return size
 }
+
 func (cached *RenameIndex) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3932,6 +4166,7 @@ func (cached *RenameIndex) CachedSize(alloc bool) int64 {
 	size += cached.NewName.CachedSize(false)
 	return size
 }
+
 func (cached *RenameTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3949,6 +4184,7 @@ func (cached *RenameTable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *RenameTableName) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3961,6 +4197,7 @@ func (cached *RenameTableName) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	return size
 }
+
 func (cached *RenameTablePair) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3975,6 +4212,7 @@ func (cached *RenameTablePair) CachedSize(alloc bool) int64 {
 	size += cached.ToTable.CachedSize(false)
 	return size
 }
+
 func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3989,6 +4227,7 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *RowAlias) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4008,6 +4247,7 @@ func (cached *RowAlias) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SRollback) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4020,6 +4260,7 @@ func (cached *SRollback) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *Savepoint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4032,6 +4273,7 @@ func (cached *Savepoint) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *Select) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4041,7 +4283,9 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 		size += int64(160)
 	}
 	// field Cache *bool
-	size += hack.RuntimeAllocSize(int64(1))
+	if cached.Cache != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	// field With *vitess.io/vitess/go/vt/sqlparser.With
 	size += cached.With.CachedSize(true)
 	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
@@ -4083,6 +4327,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += cached.Into.CachedSize(true)
 	return size
 }
+
 func (cached *SelectExprs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4102,6 +4347,7 @@ func (cached *SelectExprs) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SelectInto) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4131,6 +4377,7 @@ func (cached *SelectInto) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Overwrite)))
 	return size
 }
+
 func (cached *Set) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4150,6 +4397,7 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SetExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4166,6 +4414,7 @@ func (cached *SetExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SetExprs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4180,6 +4429,7 @@ func (cached *SetExprs) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Show) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4194,13 +4444,14 @@ func (cached *Show) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Tbl vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Tbl.CachedSize(false)
@@ -4208,8 +4459,32 @@ func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	size += cached.DbName.CachedSize(false)
 	// field Filter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
 	size += cached.Filter.CachedSize(true)
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
 	return size
 }
+
+func (cached *ShowBinlogEvents) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field LogName string
+	size += hack.RuntimeAllocSize(int64(len(cached.LogName)))
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
+	return size
+}
+
 func (cached *ShowCreate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4222,6 +4497,35 @@ func (cached *ShowCreate) CachedSize(alloc bool) int64 {
 	size += cached.Op.CachedSize(false)
 	return size
 }
+
+func (cached *ShowCreateUser) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field User *vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	size += cached.User.CachedSize(true)
+	return size
+}
+
+func (cached *ShowEngine) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field EngineName string
+	size += hack.RuntimeAllocSize(int64(len(cached.EngineName)))
+	// field Action string
+	size += hack.RuntimeAllocSize(int64(len(cached.Action)))
+	return size
+}
+
 func (cached *ShowFilter) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4238,6 +4542,27 @@ func (cached *ShowFilter) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+func (cached *ShowGrants) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field User *vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	size += cached.User.CachedSize(true)
+	// field UsingRole []vitess.io/vitess/go/vt/sqlparser.UserOrRole
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.UsingRole)) * int64(16))
+		for _, elem := range cached.UsingRole {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
+
 func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4252,18 +4577,64 @@ func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
-func (cached *ShowOther) CachedSize(alloc bool) int64 {
+
+func (cached *ShowProfile) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
 	}
-	// field Command string
-	size += hack.RuntimeAllocSize(int64(len(cached.Command)))
+	// field Types []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Types)) * int64(16))
+		for _, elem := range cached.Types {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field ForQuery *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.ForQuery.CachedSize(true)
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
 	return size
 }
+
+func (cached *ShowReplicas) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
+func (cached *ShowReplicationSourceStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
+func (cached *ShowReplicationStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
+	return size
+}
+
 func (cached *ShowThrottledApps) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4281,6 +4652,7 @@ func (cached *ShowThrottledApps) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ShowThrottlerStatus) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4298,6 +4670,7 @@ func (cached *ShowThrottlerStatus) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4312,6 +4685,7 @@ func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
 	return size
 }
+
 func (cached *Signal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4333,6 +4707,7 @@ func (cached *Signal) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SignalSet) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4347,6 +4722,7 @@ func (cached *SignalSet) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SingleStatement) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4361,6 +4737,7 @@ func (cached *SingleStatement) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *StarExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4373,6 +4750,7 @@ func (cached *StarExpr) CachedSize(alloc bool) int64 {
 	size += cached.TableName.CachedSize(false)
 	return size
 }
+
 func (cached *Std) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4389,6 +4767,7 @@ func (cached *Std) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *StdDev) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4405,6 +4784,7 @@ func (cached *StdDev) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *StdPop) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4421,6 +4801,7 @@ func (cached *StdPop) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *StdSamp) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4437,6 +4818,7 @@ func (cached *StdSamp) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *Stream) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4455,6 +4837,7 @@ func (cached *Stream) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	return size
 }
+
 func (cached *SubPartition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4476,6 +4859,7 @@ func (cached *SubPartition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SubPartitionDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4490,6 +4874,7 @@ func (cached *SubPartitionDefinition) CachedSize(alloc bool) int64 {
 	size += cached.Options.CachedSize(true)
 	return size
 }
+
 func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4507,13 +4892,18 @@ func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	// field IndexDirectory *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.IndexDirectory.CachedSize(true)
 	// field MaxRows *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.MaxRows != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field MinRows *int
-	size += hack.RuntimeAllocSize(int64(8))
+	if cached.MinRows != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
 	return size
 }
+
 func (cached *SubPartitionDefinitions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4528,6 +4918,7 @@ func (cached *SubPartitionDefinitions) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Subquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4542,6 +4933,7 @@ func (cached *Subquery) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *SubstrExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4564,6 +4956,7 @@ func (cached *SubstrExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Sum) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4580,6 +4973,7 @@ func (cached *Sum) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *TableAndLockType) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4594,6 +4988,7 @@ func (cached *TableAndLockType) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableAndLockTypes) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4608,6 +5003,7 @@ func (cached *TableAndLockTypes) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableExprs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4624,6 +5020,7 @@ func (cached *TableExprs) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableName) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4638,6 +5035,7 @@ func (cached *TableName) CachedSize(alloc bool) int64 {
 	size += cached.Qualifier.CachedSize(false)
 	return size
 }
+
 func (cached *TableNames) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4652,6 +5050,7 @@ func (cached *TableNames) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4675,6 +5074,7 @@ func (cached *TableOption) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableOptions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4689,6 +5089,7 @@ func (cached *TableOptions) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TableSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4729,6 +5130,7 @@ func (cached *TableSpec) CachedSize(alloc bool) int64 {
 	size += cached.PartitionOption.CachedSize(true)
 	return size
 }
+
 func (cached *TablespaceOperation) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4739,6 +5141,7 @@ func (cached *TablespaceOperation) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TimestampDiffExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4757,6 +5160,7 @@ func (cached *TimestampDiffExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TrimFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4775,6 +5179,7 @@ func (cached *TrimFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *TruncateTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4787,6 +5192,7 @@ func (cached *TruncateTable) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	return size
 }
+
 func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4801,6 +5207,7 @@ func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Union) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4832,6 +5239,7 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	size += cached.Into.CachedSize(true)
 	return size
 }
+
 func (cached *Update) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4873,6 +5281,7 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+
 func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4889,6 +5298,7 @@ func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UpdateExprs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4903,6 +5313,7 @@ func (cached *UpdateExprs) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4925,6 +5336,7 @@ func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Use) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4937,6 +5349,28 @@ func (cached *Use) CachedSize(alloc bool) int64 {
 	size += cached.DBName.CachedSize(false)
 	return size
 }
+
+func (cached *UserOrRole) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Name *string
+	if cached.Name != nil {
+		size += hack.RuntimeAllocSize(int64(16))
+		size += hack.RuntimeAllocSize(int64(len(*cached.Name)))
+	}
+	// field Host *string
+	if cached.Host != nil {
+		size += hack.RuntimeAllocSize(int64(16))
+		size += hack.RuntimeAllocSize(int64(len(*cached.Host)))
+	}
+	return size
+}
+
 func (cached *VExplainStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4953,6 +5387,7 @@ func (cached *VExplainStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+
 func (cached *VStream) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4975,6 +5410,7 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+
 func (cached *ValTuple) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4991,6 +5427,7 @@ func (cached *ValTuple) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Validation) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5001,6 +5438,7 @@ func (cached *Validation) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Values) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5022,6 +5460,7 @@ func (cached *Values) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ValuesFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5034,6 +5473,7 @@ func (cached *ValuesFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(true)
 	return size
 }
+
 func (cached *ValuesStatement) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5073,6 +5513,7 @@ func (cached *ValuesStatement) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+
 func (cached *VarPop) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5089,6 +5530,7 @@ func (cached *VarPop) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *VarSamp) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5105,6 +5547,7 @@ func (cached *VarSamp) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *Variable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5117,6 +5560,7 @@ func (cached *Variable) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+
 func (cached *Variance) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5133,6 +5577,7 @@ func (cached *Variance) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+
 func (cached *VindexParam) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5147,6 +5592,7 @@ func (cached *VindexParam) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Val)))
 	return size
 }
+
 func (cached *VindexSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5168,6 +5614,7 @@ func (cached *VindexSpec) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *WeightStringFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5184,6 +5631,7 @@ func (cached *WeightStringFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.As.CachedSize(true)
 	return size
 }
+
 func (cached *When) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5202,6 +5650,7 @@ func (cached *When) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Where) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5216,6 +5665,7 @@ func (cached *Where) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *WindowDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5230,6 +5680,7 @@ func (cached *WindowDefinition) CachedSize(alloc bool) int64 {
 	size += cached.WindowSpec.CachedSize(true)
 	return size
 }
+
 func (cached *WindowDefinitions) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5244,6 +5695,7 @@ func (cached *WindowDefinitions) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *WindowSpecification) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5274,6 +5726,7 @@ func (cached *WindowSpecification) CachedSize(alloc bool) int64 {
 	size += cached.FrameClause.CachedSize(true)
 	return size
 }
+
 func (cached *With) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5291,6 +5744,7 @@ func (cached *With) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *XorExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

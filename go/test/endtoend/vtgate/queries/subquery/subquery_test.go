@@ -75,7 +75,6 @@ func TestNotINQueries(t *testing.T) {
 	// all rows matching
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1) ORDER BY id2`, `[]`)
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1) ORDER BY id2`, `[[INT64(1)]]`)
-
 }
 
 func TestSubqueriesExists(t *testing.T) {

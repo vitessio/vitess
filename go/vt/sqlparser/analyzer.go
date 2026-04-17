@@ -351,15 +351,15 @@ func (p *Parser) TableFromStatement(sql string) (TableName, error) {
 		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
 	}
 	if len(sel.From) != 1 {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return TableName{}, errors.New("table expression is complex")
 	}
 	aliased, ok := sel.From[0].(*AliasedTableExpr)
 	if !ok {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return TableName{}, errors.New("table expression is complex")
 	}
 	tableName, ok := aliased.Expr.(TableName)
 	if !ok {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return TableName{}, errors.New("table expression is complex")
 	}
 	return tableName, nil
 }

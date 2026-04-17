@@ -17,6 +17,7 @@ limitations under the License.
 package textutil
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -57,7 +58,7 @@ func SplitDelimitedList(s string) (list []string) {
 
 // EscapeJoin acts like strings.Join, except it first escapes elements via net/url
 func EscapeJoin(elems []string, sep string) string {
-	escapedElems := []string{}
+	escapedElems := make([]string, 0, len(elems))
 	for i := range elems {
 		escapedElems = append(escapedElems, url.QueryEscape(elems[i]))
 	}
@@ -150,7 +151,7 @@ func TruncateText(text string, limit int, location TruncationLocation, indicator
 		return text, nil
 	}
 	if len(indicator)+2 >= limit {
-		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
+		return "", errors.New("the truncation indicator is too long for the provided text")
 	}
 	switch location {
 	case TruncationLocationMiddle:

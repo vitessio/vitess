@@ -63,7 +63,6 @@ func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name
 	go func() {
 		defer close(pe.resultch)
 		pe.err = vcursor.StreamExecutePrimitive(ctx, pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
-
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():

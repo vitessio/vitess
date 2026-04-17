@@ -16,7 +16,6 @@ limitations under the License.
 
 //go:generate go run ../sizegen.go --in . --gen vitess.io/vitess/go/tools/sizegen/integration.*
 
-// nolint
 package integration
 
 type A struct {
@@ -75,4 +74,10 @@ type Map3 struct {
 type String1 struct {
 	field1 string
 	field2 uint64
+}
+
+type PtrToBasic struct {
+	field1 *bool
+	field2 *int
+	field3 *string
 }

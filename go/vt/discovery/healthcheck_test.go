@@ -19,6 +19,7 @@ package discovery
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -267,7 +268,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:              false,
 		Stats:                &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 		PrimaryTermStartTime: 0,
-		LastError:            fmt.Errorf("vttablet error: some error"),
+		LastError:            errors.New("vttablet error: some error"),
 	}
 	input <- shr
 	result = <-resultChan
@@ -326,14 +327,14 @@ func TestHealthCheckStreamError(t *testing.T) {
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// Stream error
-	fc.errCh <- fmt.Errorf("some stream error")
+	fc.errCh <- errors.New("some stream error")
 	want = &TabletHealth{
 		Tablet:               tablet,
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:              false,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 0,
-		LastError:            fmt.Errorf("some stream error"),
+		LastError:            errors.New("some stream error"),
 	}
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
@@ -390,14 +391,14 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// Stream error
-	fc.errCh <- fmt.Errorf("some stream error")
+	fc.errCh <- errors.New("some stream error")
 	want = &TabletHealth{
 		Tablet:               tablet,
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:              false,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 10,
-		LastError:            fmt.Errorf("some stream error"),
+		LastError:            errors.New("some stream error"),
 	}
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
@@ -482,7 +483,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	mustMatch(t, health, a, "unexpected result")
 
 	// Stream error from tablet 1
-	fc1.errCh <- fmt.Errorf("some stream error")
+	fc1.errCh <- errors.New("some stream error")
 	<-resultChan
 	// tablet 2 should still be the primary
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
@@ -719,7 +720,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// // check it's there
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,
@@ -731,7 +731,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	assert.Nil(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,
@@ -1272,7 +1271,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	hc.AddTablet(tablet1)
 
 	numTriggers := 10
-	for i := 0; i < numTriggers; i++ {
+	for range numTriggers {
 		// Since the previous target was a primary, and there are no other
 		// primary tablets for the given keyspace shard, we will see the healtcheck
 		// send on the loadTablets trigger. We just want to verify the information
@@ -1282,7 +1281,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 
 	ch := hc.GetLoadTabletsTrigger()
 	require.Len(t, ch, numTriggers)
-	for i := 0; i < numTriggers; i++ {
+	for range numTriggers {
 		// Read from the channel and verify we indeed have the right values.
 		kss := <-ch
 		require.EqualValues(t, ks, kss.Keyspace)
@@ -1594,7 +1593,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	// Run multiple updates really quickly
 	// one after the other.
 	totalUpdates := 10
-	for i := 0; i < totalUpdates; i++ {
+	for range totalUpdates {
 		hc.broadcast(&TabletHealth{})
 	}
 	// Unsubscribe from the healthcheck
@@ -1631,7 +1630,7 @@ func TestHealthCheckBufferFull(t *testing.T) {
 		printStackCalled.Store(true)
 	}
 	hcUpdateCount := 2050
-	for i := 0; i < hcUpdateCount; i++ {
+	for range hcUpdateCount {
 		hc.broadcast(&TabletHealth{Tablet: topo.NewTablet(0, "cell", "host")})
 	}
 
@@ -1731,7 +1730,7 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 	name := strings.Join(statsKey, ".")
 	got, ok := hcErrorCounters.Counts()[name]
 	if !ok {
-		return fmt.Errorf("hcErrorCounters not correctly initialized")
+		return errors.New("hcErrorCounters not correctly initialized")
 	}
 	if got != want {
 		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)

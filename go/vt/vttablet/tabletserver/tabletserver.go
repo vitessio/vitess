@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -32,9 +33,9 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -65,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -118,8 +121,8 @@ type TabletServer struct {
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
 	vstreamer    *vstreamer.Engine
+	binlogDumper *BinlogDumpEngine
 	tracker      *schema.Tracker
-	watcher      *BinlogWatcher
 	qe           *QueryEngine
 	txThrottler  txthrottler.TxThrottler
 	te           *TxEngine
@@ -190,11 +193,11 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
 	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
-	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
+	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
+	tsv.binlogDumper = NewBinlogDumpEngine()
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
-	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
@@ -211,8 +214,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		se:                tsv.se,
 		rt:                tsv.rt,
 		vstreamer:         tsv.vstreamer,
+		binlogDumper:      tsv.binlogDumper,
 		tracker:           tsv.tracker,
-		watcher:           tsv.watcher,
 		qe:                tsv.qe,
 		txThrottler:       tsv.txThrottler,
 		te:                tsv.te,
@@ -273,7 +276,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithTxAndOptions(txID int64, options *q
 	}
 
 	// fetch the transaction timeout.
-	txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	txTimeout := getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLTP)
 
 	// Use the smaller of the two values (0 means infinity).
 	return smallerTimeout(timeout, txTimeout)
@@ -295,7 +298,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 //     for all new queries (see Execute() function and call to GetPlan())
 //  2. affecting already existing rules: a Rule has a context.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
-	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
+	queryRuleSource := "onlineddl/" + tableName
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
@@ -327,6 +330,8 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.qThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
+	tsv.queryThrottler.InitDBConfig(target.Keyspace)
+
 	return nil
 }
 
@@ -361,7 +366,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -408,9 +413,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+				log.Error(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
 			} else {
-				log.Infof("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+				log.Info(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
 			}
 		}
 	}()
@@ -463,6 +468,7 @@ func (tsv *TabletServer) IsHealthy() error {
 	if topoproto.IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
+			nil,
 			nil,
 			"/* health */ select 1 from dual",
 			nil,
@@ -535,7 +541,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	return tsv.begin(ctx, target, nil, 0, nil, options)
 }
 
@@ -635,10 +641,8 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.Errorf(
-			"The value of the %s query directive could not be converted to integer, using the "+
-				"default value. Error was: %s",
-			sqlparser.DirectivePriority, priority, err)
+		log.Error(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
+			"default value %d. Error was: %s", sqlparser.DirectivePriority, priority, err))
 
 		return priority
 	}
@@ -903,7 +907,7 @@ func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *que
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
@@ -973,7 +977,12 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+			if options.GetNoResult() {
+				result.Fields = nil
+				result.Rows = nil
+			} else {
+				result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+			}
 
 			// Change database name in mysql output to the keyspace name
 			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
@@ -1009,7 +1018,7 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
@@ -1024,7 +1033,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		allowOnShutdown = true
 		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
 		// so we can directly fetch the OLAP TX timeout.
-		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
 	}
 
 	return tsv.execRequest(
@@ -1077,8 +1086,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-
+func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1095,13 +1103,14 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		return state, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options)
+	result, err := tsv.Execute(ctx, session, target, sql, bindVariables, state.TransactionID, reservedID, options)
 	return state, result, err
 }
 
 // BeginStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) BeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	postBeginQueries []string,
 	sql string,
@@ -1115,7 +1124,7 @@ func (tsv *TabletServer) BeginStreamExecute(
 		return state, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
+	err = tsv.StreamExecute(ctx, session, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
 	return state, err
 }
 
@@ -1272,7 +1281,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, err
 	}
 
-	state, err := tsv.Begin(ctx, target, nil)
+	state, err := tsv.Begin(ctx, nil, target, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1283,7 +1292,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, state.TransactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, target, query, bv, state.TransactionID, 0, nil)
+	qr, err := tsv.Execute(ctx, nil, target, query, bv, state.TransactionID, 0, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1335,8 +1344,264 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 	return tsv.vstreamer.StreamResults(ctx, query, send)
 }
 
+// BinlogDumpGTID streams raw binlog packets from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+// It reads MySQL packets directly and forwards them to the client without parsing.
+// Each packet is streamed individually, including zero-length packets that terminate
+// multi-packet sequences. This provides true streaming with bounded memory usage.
+func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+
+	// Register with the engine for graceful shutdown tracking
+	ctx, idx, err := tsv.binlogDumper.Register(ctx)
+	if err != nil {
+		return err
+	}
+	defer tsv.binlogDumper.Unregister(idx)
+
+	// Create a binlog connection to MySQL
+	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to create binlog connection")
+	}
+	defer conn.Close()
+
+	// Close the underlying socket when the context is cancelled (shutdown or
+	// client disconnect) to unblock any pending read. We capture the mysql.Conn
+	// reference here because BinlogConnection.Close() nils it out, and we must
+	// only call mysql.Conn.Close() (which is idempotent via CompareAndSwap) —
+	// not BinlogConnection.Close() — to avoid a double serverIDPool.Put() panic
+	// if the AfterFunc races with the deferred conn.Close() above.
+	mysqlConn := conn.Conn
+	stop := context.AfterFunc(ctx, func() { mysqlConn.Close() })
+	defer stop()
+
+	// Parse the GTID set from the request. An empty string parses to an empty
+	// set, which tells MySQL "I have no transactions — send everything."
+	gtidSet, err := replication.ParseMysql56GTIDSet(request.GtidSet)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse GTID set: %s", request.GtidSet)
+	}
+	startPos := replication.Position{GTIDSet: gtidSet}
+
+	// Send the binlog dump command to MySQL using GTID
+	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition, startPos, uint16(request.Flags)); err != nil {
+		return vterrors.Wrapf(err, "failed to send binlog dump command")
+	}
+
+	return tsv.streamBinlogPackets(ctx, conn, send)
+}
+
+// packetReader is satisfied by *binlog.BinlogConnection (via embedded *mysql.Conn).
+// Extracted as an interface for testability.
+type packetReader interface {
+	ReadHeaderInto([]byte) (int, error)
+	ReadDataInto([]byte) error
+	Buffered() int
+}
+
+// streamBinlogPackets streams binlog packets from the connection to the client.
+// This is shared by both BinlogDump and BinlogDumpGTID.
+//
+// On context cancellation (graceful shutdown or client disconnect), it returns
+// the context error. The caller is responsible for closing the connection.
+func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetReader, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	buf := make([]byte, 256*1024) // 256KB fixed buffer for chunked binlog packet streaming
+	bufOffset := 0
+
+	resp := &binlogdatapb.BinlogDumpResponse{}
+
+	flush := func() error {
+		if bufOffset == 0 {
+			return nil
+		}
+		resp.Raw = buf[:bufOffset]
+		err := send(resp)
+		bufOffset = 0
+		return err
+	}
+
+	type headerResult struct {
+		packetLength int
+		err          error
+	}
+	headerReadChan := make(chan headerResult, 1)
+	header := make([]byte, mysql.PacketHeaderSize)
+	timer := time.NewTimer(0) // Reset (Go 1.23+) drains the channel, so the initial fire is harmless.
+	defer timer.Stop()
+
+	// readHeader reads a 4-byte MySQL packet header into buf at the current
+	// offset. Returns the payload length. Flushes first if the header wouldn't
+	// fit.
+	readHeader := func() (int, error) {
+		if bufOffset+mysql.PacketHeaderSize > len(buf) {
+			if err := flush(); err != nil {
+				return 0, err
+			}
+		}
+
+		var result headerResult
+
+		if bufOffset == 0 || reader.Buffered() >= mysql.PacketHeaderSize {
+			// Fast path: either nothing to flush, or the next header is already
+			// buffered and won't block. Read synchronously, directly into buf.
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, cause
+			}
+			packetLength, err := reader.ReadHeaderInto(buf[bufOffset : bufOffset+mysql.PacketHeaderSize])
+			result = headerResult{packetLength: packetLength, err: err}
+		} else {
+			// Slow path: We have complete but unflushed packets in the buffer.
+			// If we can immediately read the next header, we want to keep buffering
+			// to maximize batch sizes. But if the next header isn't buffered yet, we
+			// want to flush what we have to the client to free up buffer space and
+			// then wait for the header read to complete.
+			timer.Reset(1 * time.Millisecond)
+
+			// This goroutine is safe to "abandon" on context cancellation:
+			// the caller (BinlogDump/BinlogDumpGTID) closes the underlying
+			// MySQL connection when the context is done, which unblocks
+			// ReadHeaderInto. And since readHeader returning an error causes
+			// streamBinlogPackets to exit, no subsequent call to readHeader
+			// can race with a still-running goroutine.
+			go func() {
+				packetLength, err := reader.ReadHeaderInto(header)
+				headerReadChan <- headerResult{packetLength: packetLength, err: err}
+			}()
+
+			select {
+			case <-ctx.Done():
+				return 0, context.Cause(ctx)
+			case <-timer.C:
+				// If we hit the timer, it means we're likely blocked on ReadHeaderInto.
+				// Flush the data we have in the buffer (if we have anything),
+				// and then wait for the header read to complete.
+				if err := flush(); err != nil {
+					return 0, err
+				}
+
+				select {
+				case <-ctx.Done():
+					return 0, context.Cause(ctx)
+				case result = <-headerReadChan:
+				}
+
+			case result = <-headerReadChan:
+			}
+
+			// Copy header into buf (only needed for slow path where we used a
+			// separate buffer for the goroutine).
+			if result.err == nil {
+				copy(buf[bufOffset:], header)
+			}
+		}
+
+		if result.err != nil {
+			if cause := context.Cause(ctx); cause == result.err {
+				return 0, result.err
+			}
+			return 0, vterrors.Wrapf(result.err, "failed to read binlog packet header")
+		}
+
+		return result.packetLength, nil
+	}
+
+	// readPayload reads a full packet payload into buf, returning the first
+	// byte for packet type detection. Fills the remaining buffer space before
+	// flushing, so partially-filled buffers are packed tightly.
+	readPayload := func(packetLength int) (byte, error) {
+		if packetLength == 0 {
+			return 0, nil
+		}
+
+		var firstByte byte
+		remaining := packetLength
+		for remaining > 0 {
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+			chunkSize := min(remaining, len(buf)-bufOffset)
+			if err := reader.ReadDataInto(buf[bufOffset : bufOffset+chunkSize]); err != nil {
+				return 0, vterrors.Wrapf(err, "failed to read binlog packet body")
+			}
+			if remaining == packetLength {
+				firstByte = buf[bufOffset]
+			}
+			remaining -= chunkSize
+			bufOffset += chunkSize
+
+			if bufOffset == len(buf) {
+				if err := flush(); err != nil {
+					return 0, err
+				}
+			}
+		}
+
+		return firstByte, nil
+	}
+
+	for {
+		packetLength, err := readHeader()
+		if err != nil {
+			return err
+		}
+		bufOffset += mysql.PacketHeaderSize
+
+		// First packet of a message can't be zero length
+		if packetLength == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet header")
+		}
+
+		firstFragment := true
+		isTerminal := false
+
+		// Is this a fragmented message? If yes, this will be potentially followed by multiple max-packet-size packets.
+		for packetLength == mysql.MaxPacketSize {
+			if firstFragment {
+				firstByte, err := readPayload(packetLength)
+				if err != nil {
+					return err
+				}
+				isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+				firstFragment = false
+			} else {
+				if _, err := readPayload(packetLength); err != nil {
+					return err
+				}
+			}
+
+			packetLength, err = readHeader()
+			if err != nil {
+				return err
+			}
+			bufOffset += mysql.PacketHeaderSize
+		}
+
+		// Read the payload of the final (or only) packet.
+		if firstFragment {
+			firstByte, err := readPayload(packetLength)
+			if err != nil {
+				return err
+			}
+			isTerminal = firstByte == mysql.EOFPacket || firstByte == mysql.ErrPacket
+		} else {
+			if _, err := readPayload(packetLength); err != nil {
+				return err
+			}
+		}
+
+		if isTerminal {
+			// If this is a terminal message (EOF or ERR), flush it immediately and stop streaming.
+			return flush()
+		}
+	}
+}
+
 // ReserveBeginExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1397,7 +1662,6 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 			return nil
 		},
 	)
-
 	if err != nil {
 		return state, nil, err
 	}
@@ -1412,6 +1676,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 // ReserveBeginStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) ReserveBeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	settings []string,
 	postBeginQueries []string,
@@ -1430,8 +1695,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 }
 
 // ReserveExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
-
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
 	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1466,7 +1730,6 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 			return nil
 		},
 	)
-
 	if err != nil {
 		return state, nil, err
 	}
@@ -1478,6 +1741,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 // ReserveStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) ReserveStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	settings []string,
 	sql string,
@@ -1660,17 +1924,17 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := log.Errorf
+	logMethod := log.Error
 	// Suppress or demote some errors in logs.
 	switch errCode {
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
 		logMethod = nil
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = logPoolFull.Errorf
+		logMethod = func(msg string, _ ...slog.Attr) { logPoolFull.Errorf("%s", msg) }
 	case vtrpcpb.Code_ABORTED:
-		logMethod = log.Warningf
+		logMethod = log.Warn
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = log.Infof
+		logMethod = log.Info
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
@@ -1814,7 +2078,7 @@ func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(okMessage)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(okMessage)
 }

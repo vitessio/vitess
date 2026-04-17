@@ -48,15 +48,15 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 		var resp vtctldatapb.GetWorkflowsResponse
 		err = json2.UnmarshalPB([]byte(output), &resp)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(resp.Workflows), 1, "responce should have at least one workflow")
+		require.GreaterOrEqual(t, len(resp.Workflows), 1, "response should have at least one workflow")
 		lagSeconds := resp.Workflows[0].MaxVReplicationTransactionLag
 
 		require.NoError(t, err, output)
 		if lagSeconds <= acceptableLagSeconds {
-			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 			break
 		} else {
-			log.Infof("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 		}
 		time.Sleep(waitDuration)
 		duration -= waitDuration
@@ -69,7 +69,7 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 
 func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, reads, writes buffer.QueryEngine) {
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false)
+	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell)
 	require.NoError(t, err)
 	workflowName := "buf2buf"
 

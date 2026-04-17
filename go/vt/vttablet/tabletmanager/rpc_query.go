@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
@@ -63,7 +64,6 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 				allowZeroInDate = true
 			}
 		}
-
 	}
 	return queries, parseable, countCreate, allowZeroInDate, nil
 }
@@ -165,7 +165,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err == nil && reloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Errorf("failed to reload the schema %v", reloadErr)
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return results, err
@@ -243,7 +243,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Errorf("failed to reload the schema %v", reloadErr)
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return sqltypes.ResultToProto3(result), err
@@ -271,6 +271,9 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 
 // MysqlHostMetrics gets system metrics from mysqlctl[d]
 func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	if tm.Cnf == nil {
+		return &tabletmanagerdatapb.MysqlHostMetricsResponse{}, nil
+	}
 	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
 	if err != nil {
 		return nil, err
@@ -294,6 +297,6 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	if err != nil {
 		return nil, err
 	}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, uq, nil, 0, 0, nil)
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, nil, target, uq, nil, 0, 0, nil)
 	return sqltypes.ResultToProto3(result), err
 }

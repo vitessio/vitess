@@ -22,6 +22,8 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +64,7 @@ func defaultCollation() collations.TypedCollation {
 		Repertoire:   collations.RepertoireASCII,
 	}
 }
+
 func (tc testCase) run(t *testing.T) {
 	if tc.bv == nil {
 		tc.bv = map[string]*querypb.BindVariable{}
@@ -1295,23 +1298,23 @@ func TestNullsafeCompareCollate(t *testing.T) {
 }
 
 func BenchmarkNullSafeComparison(b *testing.B) {
-	var collnames = []string{
+	collnames := []string{
 		"utf8mb4_0900_ai_ci",
 		"utf8mb4_0900_as_cs",
 		"utf8mb4_general_ci",
 		"utf8mb4_0900_bin",
 	}
 
-	var lengths = []int{1, 16}
+	lengths := []int{1, 16}
 
 	for _, collation := range collnames {
 		for _, length := range lengths {
 			b.Run(fmt.Sprintf("Strings/%s/%d", collation, length), func(b *testing.B) {
-				var collid = getCollationID(collation)
-				var long = func(in string) string {
+				collid := getCollationID(collation)
+				long := func(in string) string {
 					return strings.Repeat(in, length)
 				}
-				var inputs = []sqltypes.Value{
+				inputs := []sqltypes.Value{
 					TestValue(sqltypes.VarChar, long("abCd")),
 					TestValue(sqltypes.VarChar, long("aBcd")),
 					TestValue(sqltypes.VarChar, long("ǍḄÇ")),
@@ -1334,7 +1337,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 	}
 
 	b.Run("Numeric", func(b *testing.B) {
-		var inputs = []sqltypes.Value{
+		inputs := []sqltypes.Value{
 			TestValue(sqltypes.Int64, "123456789"),
 			TestValue(sqltypes.Uint64, "123456789"),
 			TestValue(sqltypes.Int64, "-123456789"),
@@ -1363,7 +1366,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 }
 
 func TestCompareSorter(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		Count  int
 		Limit  int
 		Random sqltypes.RandomGenerator
@@ -1425,5 +1428,213 @@ func TestCompareSorter(t *testing.T) {
 			}
 		})
 	}
+}
 
+// mergeSorted runs a full k-way merge of the given streams and returns the
+// merged values as a flat int64 slice for easy comparison.
+func mergeSorted(t *testing.T, streams [][]sqltypes.Row) []int64 {
+	t.Helper()
+	cmp := Comparison{{Col: 0, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+
+	m := &Merger{Compare: cmp}
+	cursors := make([]int, len(streams))
+	for i, s := range streams {
+		if len(s) > 0 {
+			m.Push(s[0], i)
+			cursors[i] = 1
+		}
+	}
+	m.Init()
+
+	var result []int64
+	for m.Len() > 0 {
+		_, src := m.Peek()
+		row, _ := m.Peek()
+		v, err := row[0].ToInt64()
+		require.NoError(t, err)
+		result = append(result, v)
+
+		if cursors[src] < len(streams[src]) {
+			m.ReplaceMin(streams[src][cursors[src]], src)
+			cursors[src]++
+		} else {
+			m.Pop()
+		}
+	}
+	return result
+}
+
+func TestMerger(t *testing.T) {
+	row := func(v int64) sqltypes.Row {
+		return sqltypes.Row{sqltypes.NewInt64(v)}
+	}
+
+	t.Run("single stream", func(t *testing.T) {
+		streams := [][]sqltypes.Row{{row(1), row(2), row(3)}}
+		assert.Equal(t, []int64{1, 2, 3}, mergeSorted(t, streams))
+	})
+
+	t.Run("three streams", func(t *testing.T) {
+		streams := [][]sqltypes.Row{
+			{row(1), row(4), row(7)},
+			{row(2), row(5), row(8)},
+			{row(3), row(6), row(9)},
+		}
+		assert.Equal(t, []int64{1, 2, 3, 4, 5, 6, 7, 8, 9}, mergeSorted(t, streams))
+	})
+
+	t.Run("five streams", func(t *testing.T) {
+		streams := [][]sqltypes.Row{
+			{row(1), row(10)},
+			{row(2), row(20)},
+			{row(3), row(30)},
+			{row(4), row(40)},
+			{row(5), row(50)},
+		}
+		assert.Equal(t, []int64{1, 2, 3, 4, 5, 10, 20, 30, 40, 50}, mergeSorted(t, streams))
+	})
+
+	t.Run("unequal lengths", func(t *testing.T) {
+		streams := [][]sqltypes.Row{
+			{row(1), row(2), row(3), row(4), row(5)},
+			{row(6)},
+			{row(0), row(7), row(8)},
+		}
+		assert.Equal(t, []int64{0, 1, 2, 3, 4, 5, 6, 7, 8}, mergeSorted(t, streams))
+	})
+
+	t.Run("duplicates across streams", func(t *testing.T) {
+		streams := [][]sqltypes.Row{
+			{row(1), row(3), row(5)},
+			{row(1), row(3), row(5)},
+			{row(2), row(3), row(4)},
+		}
+		assert.Equal(t, []int64{1, 1, 2, 3, 3, 3, 4, 5, 5}, mergeSorted(t, streams))
+	})
+
+	t.Run("empty streams mixed in", func(t *testing.T) {
+		streams := [][]sqltypes.Row{
+			{},
+			{row(1), row(3)},
+			{},
+			{row(2), row(4)},
+			{},
+		}
+		assert.Equal(t, []int64{1, 2, 3, 4}, mergeSorted(t, streams))
+	})
+
+	t.Run("all empty", func(t *testing.T) {
+		streams := [][]sqltypes.Row{{}, {}, {}}
+		assert.Empty(t, mergeSorted(t, streams))
+	})
+}
+
+// generateSortedStreams creates k sorted streams of int64 rows, each with n rows.
+func generateSortedStreams(k, n int) [][]sqltypes.Row {
+	streams := make([][]sqltypes.Row, k)
+	for i := range k {
+		values := make([]int, n)
+		for j := range n {
+			values[j] = rand.IntN(n * k)
+		}
+		sort.Ints(values)
+		rows := make([]sqltypes.Row, n)
+		for j, v := range values {
+			rows[j] = sqltypes.Row{sqltypes.NewInt64(int64(v))}
+		}
+		streams[i] = rows
+	}
+	return streams
+}
+
+// heapMerger is the old heap-based implementation, kept here for benchmarking comparison.
+type heapMerger struct {
+	cmp  Comparison
+	rows []mergeRow
+	less func(a, b mergeRow) bool
+}
+
+func (h *heapMerger) Push(row sqltypes.Row, source int) {
+	h.rows = append(h.rows, mergeRow{row, source})
+}
+
+func (h *heapMerger) Init() {
+	h.less = func(a, b mergeRow) bool {
+		return h.cmp.Less(a.row, b.row)
+	}
+	heapify(h.rows, h.less)
+}
+
+func (h *heapMerger) Pop() (sqltypes.Row, int) {
+	x := h.rows[0]
+	h.rows[0] = h.rows[len(h.rows)-1]
+	h.rows = h.rows[:len(h.rows)-1]
+	down(h.rows, 0, h.less)
+	return x.row, x.source
+}
+
+func (h *heapMerger) Len() int {
+	return len(h.rows)
+}
+
+func BenchmarkMerger(b *testing.B) {
+	cmp := Comparison{{Col: 0, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+
+	for _, k := range []int{4, 8, 16, 64} {
+		b.Run("loser/"+strconv.Itoa(k), func(b *testing.B) {
+			const rowsPerStream = 1000
+			streams := generateSortedStreams(k, rowsPerStream)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for b.Loop() {
+				m := &Merger{Compare: cmp}
+				cursors := make([]int, k)
+				for i := range k {
+					m.Push(streams[i][0], i)
+					cursors[i] = 1
+				}
+				m.Init()
+
+				for m.Len() > 0 {
+					_, src := m.Peek()
+					if cursors[src] < len(streams[src]) {
+						m.ReplaceMin(streams[src][cursors[src]], src)
+						cursors[src]++
+					} else {
+						m.Pop()
+					}
+				}
+			}
+		})
+
+		b.Run("heap/"+strconv.Itoa(k), func(b *testing.B) {
+			const rowsPerStream = 1000
+			streams := generateSortedStreams(k, rowsPerStream)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for b.Loop() {
+				h := &heapMerger{cmp: cmp}
+				cursors := make([]int, k)
+				for i := range k {
+					h.Push(streams[i][0], i)
+					cursors[i] = 1
+				}
+				h.Init()
+
+				for h.Len() > 0 {
+					row, src := h.Pop()
+					_ = row
+					if cursors[src] < len(streams[src]) {
+						h.Push(streams[src][cursors[src]], src)
+						up(h.rows, len(h.rows)-1, h.less)
+						cursors[src]++
+					}
+				}
+			}
+		})
+	}
 }

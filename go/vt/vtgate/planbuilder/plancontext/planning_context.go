@@ -45,8 +45,9 @@ type PlanningContext struct {
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
-	// Projected subqueries that have been merged
-	MergedSubqueries []*sqlparser.Subquery
+	// MergedSubqueries tracks subqueries that have been merged into routes,
+	// keyed by their arg name.
+	MergedSubqueries map[string]*sqlparser.Subquery
 
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
@@ -105,6 +106,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		VSchema:           vschema,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
+		MergedSubqueries:  map[string]*sqlparser.Subquery{},
 		Statement:         stmt,
 		PredTracker:       predicates.NewTracker(),
 	}, nil
@@ -123,8 +125,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
 		bvName = ctx.ReservedVars.ReserveColName(expr)
-	case *sqlparser.Subquery:
-		bvName = ctx.ReservedVars.ReserveSubQuery()
 	default:
 		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
 	}
@@ -277,12 +277,15 @@ func (ctx *PlanningContext) IsAggr(e sqlparser.SQLNode) bool {
 
 func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
+		switch node := node.(type) {
 		case *sqlparser.Offset:
 			// offsets here indicate that a possible aggregation has already been handled by an input,
 			// so we don't need to worry about aggregation in the original
 			return false, nil
 		case sqlparser.AggrFunc:
+			if wf, ok := node.(sqlparser.WindowFunc); ok && wf.GetOverClause() != nil {
+				return true, nil
+			}
 			hasAggr = true
 			return false, io.EOF
 		case *sqlparser.Subquery:
@@ -294,6 +297,26 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 			}
 		}
 
+		return true, nil
+	}, e)
+	return
+}
+
+func (ctx *PlanningContext) ContainsWindowFunc(e sqlparser.SQLNode) (hasWindow bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.Offset:
+			// offsets here indicate that a possible window function has already been handled by an input,
+			// so we don't need to worry about it in the original
+			return false, nil
+		case sqlparser.WindowFunc:
+			if node.GetOverClause() != nil {
+				hasWindow = true
+				return false, io.EOF
+			}
+		case *sqlparser.Subquery:
+			return false, nil
+		}
 		return true, nil
 	}, e)
 	return

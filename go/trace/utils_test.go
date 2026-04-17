@@ -17,25 +17,30 @@ limitations under the License.
 package trace
 
 import (
-	"fmt"
+	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 func TestLogErrorsWhenClosing(t *testing.T) {
+	original := log.Error
+	t.Cleanup(func() { log.Error = original })
+
+	var logMessage string
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logMessage = msg
+	}
 	logFunc := LogErrorsWhenClosing(&fakeCloser{})
-
-	got := captureOutput(t, func() {
-		logFunc()
-	}, false)
-
-	require.Contains(t, string(got), "test error")
+	logFunc()
+	require.Contains(t, logMessage, "test error")
 }
 
-type fakeCloser struct {
-}
+type fakeCloser struct{}
 
 func (fc *fakeCloser) Close() error {
-	return fmt.Errorf("test error")
+	return errors.New("test error")
 }

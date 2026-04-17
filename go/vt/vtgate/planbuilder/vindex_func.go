@@ -17,7 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -41,10 +41,8 @@ func SupplyProjection(eVindexFunc *engine.VindexFunc, expr *sqlparser.AliasedExp
 	}
 
 	if reuse {
-		for _, col := range eVindexFunc.Cols {
-			if col == enum {
-				return nil
-			}
+		if slices.Contains(eVindexFunc.Cols, enum) {
+			return nil
 		}
 	}
 
@@ -65,7 +63,7 @@ type UnsupportedSupplyWeightString struct {
 
 // Error function implements the error interface
 func (err UnsupportedSupplyWeightString) Error() string {
-	return fmt.Sprintf("cannot do collation on %s", err.Type)
+	return "cannot do collation on " + err.Type
 }
 
 func vindexColumnToIndex(column *sqlparser.ColName) int {

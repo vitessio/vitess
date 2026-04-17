@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -66,7 +67,8 @@ func newLookupVindex(ws *Server) *lookupVindex {
 
 // prepareCreate performs the preparatory steps for creating a LookupVindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
+	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error,
+) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
 		sourceVSchemaTable *vschemapb.Table
@@ -125,7 +127,7 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 			// vindexes, so this case should be possible only when we are
 			// backfilling a single vindex. So, this approach can be used.
 			if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-				return nil, nil, nil, nil, fmt.Errorf("one or two tables must be specified")
+				return nil, nil, nil, nil, errors.New("one or two tables must be specified")
 			}
 			vInfo.sourceTable, vInfo.sourceTableName, err = getSourceTable(specs.Tables, vInfo.targetTableName, vInfo.fromCols)
 			if err != nil {
@@ -349,7 +351,7 @@ func (lv *lookupVindex) validateAndGetVindexInfo(vindexName string, vindex *vsch
 
 	// Validate input table.
 	if len(tables) < 1 {
-		return nil, fmt.Errorf("at least one table must be specified")
+		return nil, errors.New("at least one table must be specified")
 	}
 
 	return &vindexInfo{
@@ -591,7 +593,8 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 // getTargetVindex returns the targetVindex. We choose a primary vindex type
 // for the lookup table based on the source definition if one was not explicitly specified.
 func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition, sourceVindexColumn string, targetTable *vschemapb.Table) (
-	targetVindex *vschemapb.Vindex, err error) {
+	targetVindex *vschemapb.Vindex, err error,
+) {
 	var targetVindexType string
 	for _, field := range sourceTableDefinition.Fields {
 		if sourceVindexColumn == field.Name {
@@ -623,10 +626,10 @@ func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition,
 func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) error {
 	writeOnly, ok := vindex.Params["write_only"]
 	if ok && writeOnly == "true" {
-		return fmt.Errorf("vindex is in write-only mode")
+		return errors.New("vindex is in write-only mode")
 	}
 	if vindex.Owner == "" {
-		return fmt.Errorf("vindex has no owner")
+		return errors.New("vindex has no owner")
 	}
 	return nil
 }

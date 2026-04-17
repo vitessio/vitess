@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/opentracing/opentracing-go"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,4 +37,43 @@ func TestNewDataDogTracerHostAndPortNotSet(t *testing.T) {
 	require.ErrorContains(t, err, expectedErr)
 	require.Nil(t, tracingSvc)
 	require.Nil(t, closer)
+}
+
+func TestDataDogTraceDebugModeFlag(t *testing.T) {
+	// Test that the debug mode flag is properly registered
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+	// Get the plugin flag function from init()
+	require.Greater(t, len(pluginFlags), 0)
+
+	// Apply all plugin flags to ensure we get the datadog ones
+	for _, pluginFlag := range pluginFlags {
+		pluginFlag(fs)
+	}
+
+	// Verify the debug mode flag exists
+	debugFlag := fs.Lookup("datadog-trace-debug-mode")
+	require.NotNil(t, debugFlag)
+	require.Equal(t, "false", debugFlag.DefValue)
+
+	// Also verify other datadog flags exist
+	hostFlag := fs.Lookup("datadog-agent-host")
+	require.NotNil(t, hostFlag)
+
+	portFlag := fs.Lookup("datadog-agent-port")
+	require.NotNil(t, portFlag)
+}
+
+func TestDataDogTraceDebugModeConfiguration(t *testing.T) {
+	// Save original value to restore later
+	originalValue := dataDogTraceDebugMode.Get()
+	defer dataDogTraceDebugMode.Set(originalValue)
+
+	// Test setting to true
+	dataDogTraceDebugMode.Set(true)
+	require.True(t, dataDogTraceDebugMode.Get())
+
+	// Test setting to false
+	dataDogTraceDebugMode.Set(false)
+	require.False(t, dataDogTraceDebugMode.Get())
 }

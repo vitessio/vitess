@@ -74,8 +74,10 @@ const (
 	Right
 )
 
-var _ Operator = (*HashJoin)(nil)
-var _ JoinOp = (*HashJoin)(nil)
+var (
+	_ Operator = (*HashJoin)(nil)
+	_ JoinOp   = (*HashJoin)(nil)
+)
 
 func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{
@@ -377,7 +379,7 @@ func (r *replacer) post(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		_, ok := node.(sqlparser.Expr)
 		if !ok {
-			panic(fmt.Sprintf("can't replace this node with an expression: %s", sqlparser.String(node)))
+			panic("can't replace this node with an expression: " + sqlparser.String(node))
 		}
 		cursor.Replace(r.replaceExpr)
 		r.replaceExpr = nil

@@ -17,10 +17,9 @@ limitations under the License.
 package schemamanager
 
 import (
-	"fmt"
-	"testing"
-
 	"context"
+	"errors"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,14 +43,14 @@ func TestPlainController(t *testing.T) {
 	err = controller.OnReadSuccess(ctx)
 	require.NoError(t, err)
 
-	errReadFail := fmt.Errorf("read fail")
+	errReadFail := errors.New("read fail")
 	err = controller.OnReadFail(ctx, errReadFail)
 	require.ErrorIs(t, err, errReadFail)
 
 	err = controller.OnValidationSuccess(ctx)
 	require.NoError(t, err)
 
-	errValidationFail := fmt.Errorf("validation fail")
+	errValidationFail := errors.New("validation fail")
 	err = controller.OnValidationFail(ctx, errValidationFail)
 	require.ErrorIs(t, err, errValidationFail)
 

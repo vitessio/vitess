@@ -55,8 +55,10 @@ type Normalizer struct {
 	smallFCD             []uint8  // [0x100] one bit per 32 BMP code points, set if any FCD!=0
 }
 
-var nfc *Normalizer
-var nfkc *Normalizer
+var (
+	nfc  *Normalizer
+	nfkc *Normalizer
+)
 
 var normalizerOnce sync.Once
 
@@ -74,22 +76,28 @@ func loadNormalizer() {
 	})
 }
 
-const ixNormTrieOffset = 0
-const ixExtraDataOffset = 1
-const ixSmallFcdOffset = 2
-const ixReserved3Offset = 3
-const ixTotalSize = 7
+const (
+	ixNormTrieOffset  = 0
+	ixExtraDataOffset = 1
+	ixSmallFcdOffset  = 2
+	ixReserved3Offset = 3
+	ixTotalSize       = 7
+)
 
-const ixMinDecompNoCp = 8
-const ixMinCompNoMaybeCp = 9
+const (
+	ixMinDecompNoCp    = 8
+	ixMinCompNoMaybeCp = 9
+)
 
 /** Mappings & compositions in [minYesNo..minYesNoMappingsOnly[. */
 const ixMinYesNo = 10
 
 /** Mappings are comp-normalized. */
-const ixMinNoNo = 11
-const ixLimitNoNo = 12
-const ixMinMaybeYes = 13
+const (
+	ixMinNoNo     = 11
+	ixLimitNoNo   = 12
+	ixMinMaybeYes = 13
+)
 
 /** Mappings only in [minYesNoMappingsOnly..minNoNo[. */
 const ixMinYesNoMappingsOnly = 14
@@ -103,8 +111,10 @@ const ixMinNoNoCompNoMaybeCc = 16
 /** Mappings to the empty string. */
 const ixMinNoNoEmpty = 17
 
-const ixMinLcccCp = 18
-const ixCount = 20
+const (
+	ixMinLcccCp = 18
+	ixCount     = 20
+)
 
 func (n *Normalizer) load(data []byte) error {
 	bytes := udata.NewBytes(data)
@@ -470,7 +480,6 @@ func (n *Normalizer) getCC(norm16 uint16) uint8 {
 		return 0
 	}
 	return n.getCCFromNoNo(norm16)
-
 }
 
 func (n *Normalizer) getCCFromNoNo(norm16 uint16) uint8 {

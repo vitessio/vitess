@@ -51,7 +51,7 @@ func ValidateForReshard(sourceShards, targetShards []*topo.ShardInfo) error {
 
 func combineKeyRanges(shards []*topo.ShardInfo) (*topodatapb.KeyRange, error) {
 	if len(shards) == 0 {
-		return nil, fmt.Errorf("there are no shards to combine")
+		return nil, errors.New("there are no shards to combine")
 	}
 	result := shards[0].KeyRange
 	krmap := make(map[string]*topodatapb.KeyRange)

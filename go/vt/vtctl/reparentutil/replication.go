@@ -18,6 +18,8 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -40,15 +42,57 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
+// RelayLogPositions contains the positions of the relay log.
+type RelayLogPositions struct {
+	// Combined represents the entire range of the relay
+	// log with the retrieved + executed GTID sets
+	// combined.
+	Combined replication.Position
+
+	// Executed represents the executed GTID set of the
+	// relay log/SQL thread.
+	Executed replication.Position
+}
+
+// AtLeast returns true if the RelayLogPositions object contains at least the positions provided
+// as pos. If the combined positions are equal, prioritize the position where more events have
+// been executed/applied, as this avoids picking tablets with SQL delay (intended or not) that
+// can delay/timeout the reparent. Otherwise, pick the larger of the two combined positions as
+// it contains more changes, irrespective of how many changes are executed/applied.
+func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
+	if pos == nil {
+		return false
+	}
+
+	if rlp.Combined.Equal(pos.Combined) {
+		return rlp.Executed.AtLeast(pos.Executed)
+	}
+	return rlp.Combined.AtLeast(pos.Combined)
+}
+
+// Equal returns true if the RelayLogPositions object is equal to
+// the positions provided as pos.
+func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
+	if pos == nil {
+		return false
+	}
+	return rlp.Combined.Equal(pos.Combined) && rlp.Executed.Equal(pos.Executed)
+}
+
+// IsZero returns true if the RelayLogPositions is zero.
+func (rlp *RelayLogPositions) IsZero() bool {
+	return rlp.Combined.IsZero()
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
 func FindPositionsOfAllCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]replication.Position, bool, error) {
+) (map[string]*RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]replication.Position)
+	positionMap := make(map[string]*RelayLogPositions)
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
@@ -90,11 +134,14 @@ func FindPositionsOfAllCandidates(
 	// Store the final positions in the map.
 	for alias, status := range replicationStatusMap {
 		if !isGTIDBased {
-			positionMap[alias] = status.Position
+			positionMap[alias] = &RelayLogPositions{Combined: status.Position}
 
 			continue
 		}
-		positionMap[alias] = status.RelayLogPosition
+		positionMap[alias] = &RelayLogPositions{
+			Combined: status.RelayLogPosition,
+			Executed: status.Position,
+		}
 	}
 
 	for alias, primaryStatus := range primaryStatusMap {
@@ -103,7 +150,7 @@ func FindPositionsOfAllCandidates(
 			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
-		positionMap[alias] = executedPosition
+		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
 	return positionMap, isGTIDBased, nil
@@ -141,7 +188,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -160,6 +207,64 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
+// replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
+// stopped and should restart during cleanup.
+func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
+	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
+
+	for alias, stopStatus := range rs.statusMap {
+		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		if err != nil || !ioThreadWasRunning {
+			continue
+		}
+
+		tabletInfo := tabletMap[alias]
+		if tabletInfo == nil || tabletInfo.Tablet == nil {
+			continue
+		}
+
+		replicas = append(replicas, tabletInfo.Tablet)
+	}
+
+	return replicas
+}
+
+// replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
+// that ERS stopped a healthy IO thread that should restart during cleanup.
+func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
+
+	return replStatus.IOHealthy(), nil
+}
+
+// tabletAliasError wraps an error with the tablet alias that produced it.
+type tabletAliasError struct {
+	alias *topodatapb.TabletAlias
+	err   error
+}
+
+// Error returns the wrapped error.
+func (e *tabletAliasError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+// GetAlias returns the tablet alias that produced the error.
+func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
+	return e.alias
+}
+
+// Unwrap returns the underlying error.
+func (e *tabletAliasError) Unwrap() error {
+	return e.err
+}
+
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
@@ -169,6 +274,7 @@ func stopReplicationAndBuildStatusMaps(
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryAlias *topodatapb.TabletAlias,
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
@@ -181,7 +287,7 @@ func stopReplicationAndBuildStatusMaps(
 	var (
 		m          sync.Mutex
 		errChan    = make(chan concurrency.Error)
-		allTablets []*topodatapb.Tablet
+		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
@@ -197,7 +303,12 @@ func stopReplicationAndBuildStatusMaps(
 		var concurrencyErr concurrency.Error
 		var err error
 		defer func() {
-			concurrencyErr.Err = err
+			if err != nil {
+				concurrencyErr.Err = &tabletAliasError{
+					alias: tabletInfo.GetAlias(),
+					err:   err,
+				}
+			}
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
 		}()
@@ -210,7 +321,7 @@ func stopReplicationAndBuildStatusMaps(
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 				var primaryStatus *replicationdatapb.PrimaryStatus
 
-				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
+				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
 					msg := "replica %v thinks it's primary but we failed to demote it: %v"
 					err = vterrors.Wrapf(err, msg, alias, err)
@@ -288,15 +399,33 @@ func stopReplicationAndBuildStatusMaps(
 		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
 		NumErrorsToWaitFor: numErrorsToWaitFor,
 	}
-
 	errRecorder := errgroup.Wait(groupCancel, errChan)
-	if len(errRecorder.Errors) <= 1 {
+
+	// Exit early if we encountered no errors.
+	if len(errRecorder.Errors) == 0 {
 		return res, nil
 	}
+
+	// If there are recorded errors, confirm there is a single error from the PRIMARY.
+	// We intentionally do not check for specific error types here because the nature
+	// of ERS means we expect any number of possible errors from the PRIMARY we are
+	// abandoning (e.g. connection refused, context deadline, MySQL down, etc.) and
+	// we don't need to handle them differently — the goal is simply to confirm the
+	// error came from the PRIMARY tablet, not to diagnose why it failed.
+	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
+		var tabletErr *tabletAliasError
+		if errors.As(errRecorder.Errors[0], &tabletErr) {
+			// Failure to reach the PRIMARY tablet is expected, return early.
+			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
+				return res, nil
+			}
+		}
+	}
+
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
 
 	return res, nil

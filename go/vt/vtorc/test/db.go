@@ -17,7 +17,7 @@ limitations under the License.
 package test
 
 import (
-	"fmt"
+	"errors"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -36,6 +36,11 @@ func NewTestDB(rowMaps [][]sqlutils.RowMap) *DB {
 	}
 }
 
+// InjectRows appends rows to be returned by the next QueryVTOrc calls.
+func (t *DB) InjectRows(rowMaps [][]sqlutils.RowMap) {
+	t.rowMaps = append(t.rowMaps, rowMaps...)
+}
+
 func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	log.Info("test")
 	rowMaps, err := t.getRowMapsForQuery()
@@ -51,9 +56,14 @@ func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMa
 	return nil
 }
 
+// IsTestDB marks this DB as a test double.
+func (t *DB) IsTestDB() bool {
+	return true
+}
+
 func (t *DB) getRowMapsForQuery() ([]sqlutils.RowMap, error) {
 	if len(t.rowMaps) == 0 {
-		return nil, fmt.Errorf("no rows left to return. We received more queries than expected")
+		return nil, errors.New("no rows left to return. We received more queries than expected")
 	}
 	result := t.rowMaps[0]
 	t.rowMaps = t.rowMaps[1:]

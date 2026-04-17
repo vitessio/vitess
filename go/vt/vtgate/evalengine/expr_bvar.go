@@ -38,8 +38,10 @@ type (
 	}
 )
 
-var _ IR = (*BindVariable)(nil)
-var _ Expr = (*BindVariable)(nil)
+var (
+	_ IR   = (*BindVariable)(nil)
+	_ Expr = (*BindVariable)(nil)
+)
 
 func (env *ExpressionEnv) lookupBindVar(key string) (*querypb.BindVariable, error) {
 	val, ok := env.BindVars[key]
@@ -170,6 +172,8 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		c.asm.PushBVar_time(bvar.Key)
 	case tt == sqltypes.Vector:
 		c.asm.PushBVar_vector(bvar.Key)
+	case tt == sqltypes.Tuple:
+		c.asm.PushBVar_tuple(bvar.Key)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}

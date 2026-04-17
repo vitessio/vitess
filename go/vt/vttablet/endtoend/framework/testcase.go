@@ -183,7 +183,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		if name == "" {
 			return errors.New(strings.Join(errs, "\n"))
 		}
-		return errors.New(fmt.Sprintf("%s failed:\n", name) + strings.Join(errs, "\n"))
+		return errors.New(name + " failed:\n" + strings.Join(errs, "\n"))
 	}
 	return nil
 }

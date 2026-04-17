@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -81,6 +81,13 @@ func TestVttabletDownServingChange(t *testing.T) {
 
 	utils.Exec(t, conn, "set default_week_format = 1")
 	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+
+	// Disable VTOrc emergency reparents to prevent VTOrc from racing with the manual ERS below.
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspaceName)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspaceName)
+	})
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,

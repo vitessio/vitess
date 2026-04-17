@@ -16,13 +16,11 @@ limitations under the License.
 
 package memorytopo
 
-import (
-	"fmt"
-)
+import "strconv"
 
 // NodeVersion is the local topo.Version implementation
 type NodeVersion uint64
 
 func (v NodeVersion) String() string {
-	return fmt.Sprintf("%v", uint64(v))
+	return strconv.FormatUint(uint64(v), 10)
 }

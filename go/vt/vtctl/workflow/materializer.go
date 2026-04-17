@@ -19,7 +19,9 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -95,7 +97,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	switch {
 	case mz.isPartial && mz.ms.AtomicCopy:
 		return binlogdatapb.VReplicationWorkflowSubType_None,
-			fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+			errors.New("both atomic copy and partial mode cannot be specified for the same workflow")
 	case mz.isPartial:
 		return binlogdatapb.VReplicationWorkflowSubType_Partial, nil
 	case mz.ms.AtomicCopy:
@@ -344,7 +346,7 @@ func (mz *materializer) deploySchema() error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
+				log.Error("Error getting DDLs of source tables: " + err.Error())
 				return err
 			}
 
@@ -359,7 +361,6 @@ func (mz *materializer) deploySchema() error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-
 					}
 				}
 
@@ -446,10 +447,10 @@ func (mz *materializer) deploySchema() error {
 				env := schemadiff.NewEnv(mz.env, mz.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
-					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
 				}
 			}
 			sql := strings.Join(applyDDLs, ";\n")
@@ -506,11 +507,8 @@ func (mz *materializer) buildMaterializer() error {
 		isPartial = true
 		var sourceShards2 []*topo.ShardInfo
 		for _, shard := range sourceShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					sourceShards2 = append(sourceShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				sourceShards2 = append(sourceShards2, shard)
 			}
 		}
 		sourceShards = sourceShards2
@@ -538,11 +536,8 @@ func (mz *materializer) buildMaterializer() error {
 	if len(specifiedTargetShards) > 0 {
 		var targetShards2 []*topo.ShardInfo
 		for _, shard := range targetShards {
-			for _, shard2 := range specifiedTargetShards {
-				if shard.ShardName() == shard2 {
-					targetShards2 = append(targetShards2, shard)
-					break
-				}
+			if slices.Contains(specifiedTargetShards, shard.ShardName()) {
+				targetShards2 = append(targetShards2, shard)
 			}
 		}
 		targetShards = targetShards2

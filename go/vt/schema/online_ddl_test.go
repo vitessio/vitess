@@ -18,7 +18,7 @@ package schema
 
 import (
 	"encoding/hex"
-	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,7 +34,7 @@ func TestCreateUUID(t *testing.T) {
 }
 
 func TestIsOnlineDDLUUID(t *testing.T) {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		uuid, err := CreateOnlineDDLUUID()
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(uuid))
@@ -55,7 +55,7 @@ func TestGetGCUUID(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	uuids := map[string]bool{}
 	count := 20
-	for i := 0; i < count; i++ {
+	for range count {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
@@ -64,6 +64,7 @@ func TestGetGCUUID(t *testing.T) {
 	}
 	assert.Equal(t, count, len(uuids))
 }
+
 func TestGetActionStr(t *testing.T) {
 	tt := []struct {
 		statement string
@@ -364,7 +365,7 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			for _, allowForeignKeys := range []bool{false, true} {
-				testName := fmt.Sprintf("%t", allowForeignKeys)
+				testName := strconv.FormatBool(allowForeignKeys)
 				t.Run(testName, func(t *testing.T) {
 					stmt, err := parser.Parse(query)
 					require.NoError(t, err)

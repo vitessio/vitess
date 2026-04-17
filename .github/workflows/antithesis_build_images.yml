@@ -1,0 +1,62 @@
+name: Build and Push Antithesis Images
+
+permissions: read-all
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: us-central1-docker.pkg.dev
+  REPOSITORY: molten-verve-216720/vitess-repository
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Log into Antithesis registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.ANTITHESIS_GAR_KEY }}
+
+      - name: Build and push config image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: ./test/antithesis/compose
+          file: ./test/antithesis/compose/Dockerfile.config
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:${{ github.sha }}
+
+      - name: Build and push client image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: ./test/antithesis/compose/antithesis-client
+          file: ./test/antithesis/compose/antithesis-client/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:${{ github.sha }}
+
+      - name: Build and push mysql image
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: ./test/antithesis/compose/source_db/mysql
+          file: ./test/antithesis/compose/source_db/mysql/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-mysql:${{ github.sha }}

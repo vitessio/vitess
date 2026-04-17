@@ -198,7 +198,6 @@ func BenchmarkSum256_10M(b *testing.B) { benchmarkSum256(10*1024*1024, b) }
 func BenchmarkSum256_25M(b *testing.B) { benchmarkSum256(25*1024*1024, b) }
 
 func benchmarkParallel(b *testing.B, size int) {
-
 	c := runtime.GOMAXPROCS(0)
 
 	var key [32]byte

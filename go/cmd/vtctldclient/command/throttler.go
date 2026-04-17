@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -75,10 +76,10 @@ var (
 
 func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
-		return fmt.Errorf("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
+		return errors.New("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
 	}
 	if cmd.Flags().Changed("app-name") && updateThrottlerConfigOptions.AppName == "" {
-		return fmt.Errorf("--app-name must not be empty")
+		return errors.New("--app-name must not be empty")
 	}
 
 	return nil

@@ -51,7 +51,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
-	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
+	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatalf("cannot create tempfile: %v", err)
 	}
@@ -128,6 +128,11 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 }
 
 func TestConsulTopo(t *testing.T) {
+	originalWatchPollDuration := watchPollDuration
+	defer func() {
+		watchPollDuration = originalWatchPollDuration
+	}()
+
 	// One test is going to wait that full period, so make it shorter.
 	watchPollDuration = 100 * time.Millisecond
 
@@ -136,11 +141,11 @@ func TestConsulTopo(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -148,8 +153,8 @@ func TestConsulTopo(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
+
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -175,6 +180,16 @@ func TestConsulTopo(t *testing.T) {
 
 func TestConsulTopoWithChecks(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
+	originalWatchPollDuration := watchPollDuration
+	originalConsulLockSessionChecks := consulLockSessionChecks
+	originalConsulLockSessionTTL := consulLockSessionTTL
+
+	defer func() {
+		watchPollDuration = originalWatchPollDuration
+		consulLockSessionTTL = originalConsulLockSessionTTL
+		consulLockSessionChecks = originalConsulLockSessionChecks
+	}()
+
 	watchPollDuration = 100 * time.Millisecond
 	consulLockSessionChecks = "serfHealth"
 	consulLockSessionTTL = "15s"
@@ -184,11 +199,11 @@ func TestConsulTopoWithChecks(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -196,8 +211,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -230,11 +244,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
@@ -242,21 +256,24 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
 
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
+	defer func() {
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
+	}()
+
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -293,18 +310,22 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}()
 
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
+
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
+	defer func() {
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
+	}()
 
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	// check valid, empty json causes error
 	{
 		jsonConfig := "{}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -318,7 +339,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check bad token causes error
 	{
 		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -346,10 +367,10 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 func TestConsulWatcherStormPrevention(t *testing.T) {
 	// Save original values and restore them after the test
 	originalWatchPollDuration := watchPollDuration
-	originalAuthFile := consulAuthClientStaticFile
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
 	defer func() {
 		watchPollDuration = originalWatchPollDuration
-		consulAuthClientStaticFile = originalAuthFile
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
 	}()
 
 	// Configure test settings - using direct assignment since flag parsing in tests is complex
@@ -360,15 +381,16 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
 
-	ctx := context.Background()
+	ctx := t.Context()
+
 	testRoot := "storm-test"
 
 	// Create the topo server

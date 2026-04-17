@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,6 @@ import (
 )
 
 func TestJoinValuesExecute(t *testing.T) {
-
 	/*
 		select col1, col2, col3, col4, col5, col6 from left join right on left.col1 = right.col4
 		LHS: select col1, col2, col3 from left
@@ -81,10 +81,10 @@ func TestJoinValuesExecute(t *testing.T) {
 	r, err := vjn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" true`,
+		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(10)),
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" v: [[INT64(0) INT64(1)][INT64(1) INT64(2)][INT64(2) INT64(3)][INT64(3) INT64(4)]] true`,
+		fmt.Sprintf(`Execute a: %v v: [[INT64(0) INT64(1)][INT64(1) INT64(2)][INT64(2) INT64(3)][INT64(3) INT64(4)]] true`, sqltypes.Int64BindVariable(10)),
 	})
 
 	result := sqltypes.MakeTestResult(

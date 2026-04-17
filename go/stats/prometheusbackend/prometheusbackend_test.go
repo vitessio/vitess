@@ -37,7 +37,7 @@ func TestPrometheusCounter(t *testing.T) {
 	c := stats.NewCounter(name, "blah")
 	c.Add(1)
 	checkHandlerForMetrics(t, name, 1)
-	//TODO: ban this? And for other counter types too?
+	// TODO: ban this? And for other counter types too?
 	// c.Add(-1)
 	c.Reset()
 	checkHandlerForMetrics(t, name, 0)
@@ -262,7 +262,7 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 	response := testMetricsHandler(t)
 
 	kvPairs := make([]string, 0)
-	for i := 0; i < len(labels); i++ {
+	for i := range labels {
 		kvPairs = append(kvPairs, fmt.Sprintf("%s=\"%s\"", labels[i], labelValues[i]))
 	}
 
@@ -396,6 +396,27 @@ func TestPrometheusLabels(t *testing.T) {
 	for _, line := range expect {
 		if !strings.Contains(response.Body.String(), line) {
 			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
+		}
+	}
+}
+
+// TestGoRuntimeMetrics verifies that the custom GoCollector configuration
+// exposes extended runtime/metrics series beyond the default set, and that
+// the go_info_ext gauge is present with lowercase label names.
+func TestGoRuntimeMetrics(t *testing.T) {
+	response := testMetricsHandler(t)
+	body := response.Body.String()
+
+	for _, series := range []string{
+		// go_info_ext with lowercase labels.
+		`go_info_ext{compiler=`,
+		// Memory metric only present with MetricsMemory.
+		`go_memory_classes_total_bytes`,
+		// Scheduler metric only present with MetricsScheduler.
+		`go_sched_goroutines_goroutines`,
+	} {
+		if !strings.Contains(body, series) {
+			t.Errorf("expected metrics output to contain %q", series)
 		}
 	}
 }

@@ -595,7 +595,6 @@ func TestBindVariableToValue(t *testing.T) {
 	v, err = BindVariableToValue(BitNumBindVariable([]byte("0b101")))
 	require.NoError(t, err)
 	assert.Equal(t, MakeTrusted(querypb.Type_BITNUM, []byte("0b101")), v)
-
 }
 
 func TestBindVariablesEqual(t *testing.T) {

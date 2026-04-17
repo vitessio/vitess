@@ -353,6 +353,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		t.Errorf("l.Execute:\n got %v, want\n%v", result, wantResult)
 	}
 }
+
 func TestLimitStreamExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
@@ -513,7 +514,6 @@ func TestLimitStreamExecuteAsync(t *testing.T) {
 		}
 		require.Len(t, results.Rows, expRows)
 	}
-
 }
 
 func TestOffsetStreamExecute(t *testing.T) {

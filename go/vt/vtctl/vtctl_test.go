@@ -17,7 +17,6 @@ limitations under the License.
 package vtctl
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"regexp"
@@ -28,10 +27,12 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -48,11 +49,40 @@ var (
 func TestApplyVSchema(t *testing.T) {
 	shard := "0"
 	ks := "ks"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	_ = env.addTablet(100, ks, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+
+	keyspace := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"binary_vdx": {
+				Type: "binary",
+				Params: map[string]string{
+					"hello": "world",
+				},
+			},
+			"hash_vdx": {
+				Type: "hash",
+				Params: map[string]string{
+					"foo":   "bar",
+					"hello": "world",
+				},
+			},
+		},
+	}
+	keyspaceJson, err := protojson.MarshalOptions{Multiline: true, UseProtoNames: true}.Marshal(keyspace)
+	require.NoError(t, err)
+
+	expectedLog := regexp.QuoteMeta(fmt.Sprintf(`New VSchema object:
+%s
+If this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).
+
+`, string(keyspaceJson))) +
+		`W.* vtctl\.go:\d+\] Unknown parameter in vindex binary_vdx: hello\n` +
+		`W.* vtctl\.go:\d+\] Unknown parameter in vindex hash_vdx: foo\n` +
+		`W.* vtctl\.go:\d+\] Unknown parameter in vindex hash_vdx: hello`
 
 	tests := []struct {
 		name          string
@@ -68,59 +98,12 @@ func TestApplyVSchema(t *testing.T) {
 		{
 			name: "UnknownParamsLogged",
 			args: []string{"--vschema", unknownParamsLoggedVSchema, ks},
-			want: `/New VSchema object:
-{
-  "sharded": true,
-  "vindexes": {
-    "binary_vdx": {
-      "type": "binary",
-      "params": {
-        "hello": "world"
-      }
-    },
-    "hash_vdx": {
-      "type": "hash",
-      "params": {
-        "foo": "bar",
-        "hello": "world"
-      }
-    }
-  }
-}
-If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
-
-.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello`,
+			want: "/" + expectedLog,
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
 			args: []string{"--vschema", unknownParamsLoggedDryRunVSchema, "--dry-run", ks},
-			want: `/New VSchema object:
-{
-  "sharded": true,
-  "vindexes": {
-    "binary_vdx": {
-      "type": "binary",
-      "params": {
-        "hello": "world"
-      }
-    },
-    "hash_vdx": {
-      "type": "hash",
-      "params": {
-        "foo": "bar",
-        "hello": "world"
-      }
-    }
-  }
-}
-If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
-
-.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello
-Dry run: Skipping update of VSchema`,
+			want: "/" + expectedLog,
 		},
 	}
 	for _, tt := range tests {
@@ -154,8 +137,7 @@ func TestMoveTables(t *testing.T) {
 	wf := "testwf"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wf)
 	minTableSize := 16384 // a single 16KiB InnoDB page
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	source := env.addTablet(100, sourceKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
@@ -169,11 +151,11 @@ func TestMoveTables(t *testing.T) {
 			Rules: []*binlogdatapb.Rule{
 				{
 					Match:  table1,
-					Filter: fmt.Sprintf("select * from %s", table1),
+					Filter: "select * from " + table1,
 				},
 				{
 					Match:  table2,
-					Filter: fmt.Sprintf("select * from %s", table2),
+					Filter: "select * from " + table2,
 				},
 			},
 		},

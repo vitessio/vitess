@@ -28,7 +28,6 @@ func testWildcard(t *testing.T, pattern string, expected bool) {
 }
 
 func TestHasWildcard(t *testing.T) {
-
 	testWildcard(t, "aaaa*bbbb", true)
 	testWildcard(t, "aaaa\\*bbbb", false)
 

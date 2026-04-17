@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -70,7 +69,7 @@ func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindV
 		return nil, err
 	}
 	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
-	onlineDDL, err := schema.NewOnlineDDL(v.Keyspace.Name, "", v.Query, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "", vcursor.Environment().Parser())
+	onlineDDL, err := schema.NewOnlineDDL(v.Keyspace.Name, "", v.Query, ddlStrategySetting, "vtgate:"+vcursor.Session().GetSessionUUID(), "", vcursor.Environment().Parser())
 	if err != nil {
 		return result, err
 	}

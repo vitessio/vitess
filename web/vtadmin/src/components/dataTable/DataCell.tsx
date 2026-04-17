@@ -16,8 +16,10 @@
 import * as React from 'react';
 import cx from 'classnames';
 
-interface Props
-    extends React.DetailedHTMLProps<React.TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement> {}
+interface Props extends React.DetailedHTMLProps<
+    React.TdHTMLAttributes<HTMLTableDataCellElement>,
+    HTMLTableDataCellElement
+> {}
 
 export const DataCell: React.FunctionComponent<Props> = ({ children, className, ...tdProps }) => {
     return (

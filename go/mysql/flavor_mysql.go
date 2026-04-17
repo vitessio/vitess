@@ -62,8 +62,10 @@ type mysqlFlavor9 struct {
 	mysqlFlavor
 }
 
-var _ flavor = (*mysqlFlavor8)(nil)
-var _ flavor = (*mysqlFlavor82)(nil)
+var (
+	_ flavor = (*mysqlFlavor8)(nil)
+	_ flavor = (*mysqlFlavor82)(nil)
+)
 
 // primaryGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
@@ -218,7 +220,12 @@ func (mysqlFlavor) resetReplicationParametersCommands(c *Conn) []string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
+func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint32) error {
+	return c.WriteComBinlogDump(serverID, binlogFilename, uint64(binlogPos), 0)
+}
+
+// sendBinlogDumpGTIDCommand is part of the Flavor interface.
+func (mysqlFlavor) sendBinlogDumpGTIDCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint64, startPos replication.Position, flags uint16) error {
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
@@ -229,14 +236,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilenam
 	if gtidSet != nil {
 		sidBlock = gtidSet.SIDBlock()
 	}
-	var flags2 uint16
-	if binlogFilename != "" {
-		flags2 |= BinlogThroughPosition
-	}
-	if len(sidBlock) > 0 {
-		flags2 |= BinlogThroughGTID
-	}
-	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, flags2, sidBlock)
+	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, binlogPos, flags, sidBlock)
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
@@ -492,10 +492,12 @@ const InnoDBTableSizes = `
 		GROUP BY it.name
 `
 
-const ShowPartitons = `select table_name, partition_name from information_schema.partitions where table_schema = database() and partition_name is not null`
-const ShowTableRowCountClusteredIndex = `select table_name, n_rows, clustered_index_size * @@innodb_page_size from mysql.innodb_table_stats where database_name = database()`
-const ShowIndexSizes = `select table_name, index_name, stat_value * @@innodb_page_size from mysql.innodb_index_stats where database_name = database() and stat_name = 'size'`
-const ShowIndexCardinalities = `select table_name, index_name, max(cardinality) from information_schema.statistics s where table_schema = database() group by s.table_name, s.index_name`
+const (
+	ShowPartitons                   = `select table_name, partition_name from information_schema.partitions where table_schema = database() and partition_name is not null`
+	ShowTableRowCountClusteredIndex = `select table_name, n_rows, clustered_index_size * @@innodb_page_size from mysql.innodb_table_stats where database_name = database()`
+	ShowIndexSizes                  = `select table_name, index_name, stat_value * @@innodb_page_size from mysql.innodb_index_stats where database_name = database() and stat_name = 'size'`
+	ShowIndexCardinalities          = `select table_name, index_name, max(cardinality) from information_schema.statistics s where table_schema = database() group by s.table_name, s.index_name`
+)
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {

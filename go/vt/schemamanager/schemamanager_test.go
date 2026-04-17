@@ -232,7 +232,6 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 			"test_controller",
 			func(params map[string]string) (Controller, error) {
 				return newFakeController([]string{sql}, false, false, false), nil
-
 			})
 	}()
 }
@@ -261,7 +260,8 @@ func (client *fakeTabletManagerClient) AddSchemaChange(sql string, schemaResult 
 }
 
 func (client *fakeTabletManagerClient) AddSchemaDefinition(
-	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition) {
+	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition,
+) {
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
@@ -288,14 +288,14 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 
 func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
+		return nil, errors.New("ExecuteFetchAsDba occur an unknown error")
 	}
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, req)
 }
 
 func (client *fakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		return nil, fmt.Errorf("ExecuteMultiFetchAsDba occur an unknown error")
+		return nil, errors.New("ExecuteMultiFetchAsDba occur an unknown error")
 	}
 	return client.TabletManagerClient.ExecuteMultiFetchAsDba(ctx, tablet, usePool, req)
 }
@@ -328,7 +328,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 		require.NoError(t, err)
 
 		_, err = ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
-			si.Shard.PrimaryAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		require.NoError(t, err)
@@ -352,7 +352,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 	require.NoError(t, err)
 
 	_, err = ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.Shard.PrimaryAlias = tablet.Alias
+		si.PrimaryAlias = tablet.Alias
 		return nil
 	})
 	require.NoError(t, err)
@@ -373,7 +373,8 @@ type fakeController struct {
 }
 
 func newFakeController(
-	sqls []string, openFail bool, readFail bool, closeFail bool) *fakeController {
+	sqls []string, openFail bool, readFail bool, closeFail bool,
+) *fakeController {
 	return &fakeController{
 		sqls:      sqls,
 		keyspace:  "test_keyspace",

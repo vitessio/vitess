@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
+	querythrottler "vitess.io/vitess/go/vt/proto/querythrottler"
 	vtorcdata "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -83,6 +84,8 @@ func (m *Tablet) CloneVT() *Tablet {
 	r.MysqlPort = m.MysqlPort
 	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.DefaultConnCollation = m.DefaultConnCollation
+	r.TabletStartTime = m.TabletStartTime.CloneVT()
+	r.TabletShutdownTime = m.TabletShutdownTime.CloneVT()
 	if rhs := m.PortMap; rhs != nil {
 		tmpContainer := make(map[string]int32, len(rhs))
 		for k, v := range rhs {
@@ -140,6 +143,7 @@ func (m *Shard_TabletControl) CloneVT() *Shard_TabletControl {
 	r := new(Shard_TabletControl)
 	r.TabletType = m.TabletType
 	r.Frozen = m.Frozen
+	r.AllowReads = m.AllowReads
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -208,6 +212,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
 	r.SidecarDbName = m.SidecarDbName
 	r.VtorcState = m.VtorcState.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -433,6 +438,7 @@ func (m *SrvKeyspace) CloneVT() *SrvKeyspace {
 	}
 	r := new(SrvKeyspace)
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if rhs := m.Partitions; rhs != nil {
 		tmpContainer := make([]*SrvKeyspace_KeyspacePartition, len(rhs))
 		for k, v := range rhs {
@@ -671,6 +677,30 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TabletShutdownTime != nil {
+		size, err := m.TabletShutdownTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x92
+	}
+	if m.TabletStartTime != nil {
+		size, err := m.TabletStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x8a
+	}
 	if m.DefaultConnCollation != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DefaultConnCollation))
 		i--
@@ -893,6 +923,16 @@ func (m *Shard_TabletControl) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.AllowReads {
+		i--
+		if m.AllowReads {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.Frozen {
 		i--
 		if m.Frozen {
@@ -1065,6 +1105,16 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x62
 	}
 	if m.VtorcState != nil {
 		size, err := m.VtorcState.MarshalToSizedBufferVT(dAtA[:i])
@@ -1699,6 +1749,16 @@ func (m *SrvKeyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x3a
+	}
 	if m.ThrottlerConfig != nil {
 		size, err := m.ThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -2053,6 +2113,14 @@ func (m *Tablet) SizeVT() (n int) {
 	if m.DefaultConnCollation != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.DefaultConnCollation))
 	}
+	if m.TabletStartTime != nil {
+		l = m.TabletStartTime.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.TabletShutdownTime != nil {
+		l = m.TabletShutdownTime.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2110,6 +2178,9 @@ func (m *Shard_TabletControl) SizeVT() (n int) {
 		}
 	}
 	if m.Frozen {
+		n += 2
+	}
+	if m.AllowReads {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -2188,6 +2259,10 @@ func (m *Keyspace) SizeVT() (n int) {
 	}
 	if m.VtorcState != nil {
 		l = m.VtorcState.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2416,6 +2491,10 @@ func (m *SrvKeyspace) SizeVT() (n int) {
 	}
 	if m.ThrottlerConfig != nil {
 		l = m.ThrottlerConfig.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -3323,6 +3402,78 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 17:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletStartTime", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletStartTime == nil {
+				m.TabletStartTime = &vttime.Time{}
+			}
+			if err := m.TabletStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 18:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletShutdownTime", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletShutdownTime == nil {
+				m.TabletShutdownTime = &vttime.Time{}
+			}
+			if err := m.TabletShutdownTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -3679,6 +3830,26 @@ func (m *Shard_TabletControl) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Frozen = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowReads", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowReads = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -4233,6 +4404,42 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				m.VtorcState = &vtorcdata.Keyspace{}
 			}
 			if err := m.VtorcState.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
+			}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -5759,6 +5966,42 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 				m.ThrottlerConfig = &ThrottlerConfig{}
 			}
 			if err := m.ThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
+			}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
