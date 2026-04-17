@@ -291,11 +291,11 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 // Determine if we need to emulate foreign key checks on the vtgate side.
 //
 // We need to do this if:
-// * Any of the foreign keys (parent or child) are cross shard.
-// * Any of the foreign keys (parent or child) are cross keyspace.
-// * Any of the child foreign keys have an action (ON DELETE for DELETE/REPLACE,
-//   ON UPDATE for UPDATE) that is not treated as RESTRICT (see
-//   sqlparser.ReferenceAction.IsRestrict).
+//   - Any of the foreign keys (parent or child) are cross shard.
+//   - Any of the foreign keys (parent or child) are cross keyspace.
+//   - Any of the child foreign keys have an action (ON DELETE for DELETE/REPLACE,
+//     ON UPDATE for UPDATE) that is not treated as RESTRICT (see
+//     sqlparser.ReferenceAction.IsRestrict).
 //
 // getAction selects which child foreign key action to inspect and should match
 // the one passed to RemoveNonRequiredForeignKeys for the same statement.
