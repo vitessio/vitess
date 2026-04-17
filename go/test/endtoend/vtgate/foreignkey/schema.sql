@@ -321,22 +321,6 @@ create table fk_t20
     foreign key (col2) references fk_t20(col) on delete restrict on update restrict
 ) Engine = InnoDB;
 
-/*
-    Self referenced foreign key from col2 to col in fk_t21 with cascading delete.
-    InnoDB does not activate non-RESTRICT ON UPDATE actions on self-referential
-    tables, so we only vary the ON DELETE action here.
-*/
-
-create table fk_t21
-(
-    id bigint,
-    col varchar(10),
-    col2 varchar(10),
-    primary key (id),
-    unique index(col),
-    foreign key (col2) references fk_t21(col) on delete cascade on update restrict
-) Engine = InnoDB;
-
 
 /*
  *              fk_multicol_t1

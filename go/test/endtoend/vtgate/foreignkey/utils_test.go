@@ -47,11 +47,6 @@ func isMultiColFkTable(tableName string) bool {
 	return strings.Contains(tableName, "multicol")
 }
 
-// isSelfRefFkTable tells if the table has a self-referential foreign key.
-func isSelfRefFkTable(tableName string) bool {
-	return tableName == "fk_t20" || tableName == "fk_t21"
-}
-
 func (fz *fuzzer) generateExpression(length int, cols ...string) string {
 	expr := fz.getColOrInt(cols...)
 	if length == 1 {

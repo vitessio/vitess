@@ -223,14 +223,6 @@
         }
       ]
     },
-    "fk_t21": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    },
     "fk_multicol_t1": {
       "column_vindexes": [
         {
