@@ -236,15 +236,16 @@ func TestMoveTablesComplete(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name                           string
-		sourceKeyspace, targetKeyspace *testKeyspace
-		preFunc                        func(t *testing.T, env *testEnv)
-		req                            *vtctldatapb.MoveTablesCompleteRequest
-		expectedSourceQueries          []*queryResult
-		expectedTargetQueries          []*queryResult
-		want                           *vtctldatapb.MoveTablesCompleteResponse
-		wantErr                        string
-		postFunc                       func(t *testing.T, env *testEnv)
+		name                            string
+		sourceKeyspace, targetKeyspace  *testKeyspace
+		preFunc                         func(t *testing.T, env *testEnv)
+		req                             *vtctldatapb.MoveTablesCompleteRequest
+		expectedSourceQueries           []*queryResult
+		expectedTargetQueries           []*queryResult
+		readVReplicationWorkflowRequest *readVReplicationWorkflowRequestResponse
+		want                            *vtctldatapb.MoveTablesCompleteResponse
+		wantErr                         string
+		postFunc                        func(t *testing.T, env *testEnv)
 	}{
 		{
 			name: "basic",
@@ -411,6 +412,121 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 		},
 		{
+			// Mirrors the "migrate reverse workflow..." case in TestWorkflowDelete but for
+			// the MoveTablesComplete (non-cancel) finalize path. With cancel=false the
+			// TypeMigrate branch never drops data, but we still want to confirm that the
+			// resolved keep-data default plumbs the warning through on the response.
+			name: "migrate reverse workflow defaults keep-data and returns warning",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName + "_reverse",
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName+"_reverse"),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName + "_reverse",
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName + "_reverse",
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Migrate,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{Match: table1Name},
+										{Match: table2Name},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName+"_reverse", targetKeyspaceName),
+				Warnings: []string{
+					fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflowName+"_reverse"),
+				},
+			},
+			// The TypeMigrate complete path does not clean up the routing rules seeded
+			// by the test runner, so override the default post checks with a no-op.
+			postFunc: func(t *testing.T, env *testEnv) {},
+		},
+		{
+			// Verify that callers can still force the destructive path on a reverse
+			// workflow by passing keep_data=false explicitly, and that the warning is
+			// suppressed in that case so the response matches the legacy shape.
+			name: "migrate reverse workflow with explicit keep-data=false returns no warning",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName + "_reverse",
+				KeepData:       ptr.Of(false),
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName+"_reverse"),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName + "_reverse",
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName + "_reverse",
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Migrate,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{Match: table1Name},
+										{Match: table2Name},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName+"_reverse", targetKeyspaceName),
+			},
+			postFunc: func(t *testing.T, env *testEnv) {},
+		},
+		{
 			name: "named lock held",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
@@ -455,6 +571,13 @@ func TestMoveTablesComplete(t *testing.T) {
 				require.NotNil(t, env.tablets[tc.targetKeyspace.KeyspaceName])
 				for _, eq := range tc.expectedTargetQueries {
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
+				}
+			}
+			if tc.readVReplicationWorkflowRequest != nil {
+				targetTablets := env.tablets[tc.targetKeyspace.KeyspaceName]
+				require.NotNil(t, targetTablets)
+				for _, tablet := range targetTablets {
+					env.tmc.expectReadVReplicationWorkflowRequest(tablet.Alias.Uid, tc.readVReplicationWorkflowRequest)
 				}
 			}
 			if tc.preFunc != nil {
@@ -1152,6 +1275,151 @@ func TestWorkflowDelete(t *testing.T) {
 					workflowName+"_reverse", targetKeyspaceName),
 				Warnings: []string{
 					fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflowName+"_reverse"),
+				},
+			},
+		},
+		{
+			// Pins the pre-existing behavior for a non-reverse TypeMigrate delete when
+			// keep_data is omitted: we must still take the destructive path (no
+			// warning, target tables removed) so the resolver does not accidentally
+			// flip the default for regular workflows.
+			name: "migrate non-reverse workflow with keep-data nil drops data without warning",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName,
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Migrate,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{Match: table1Name},
+										{Match: table2Name},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			// Exercises the multi-tenant branch (server.go:~1667) which also gates on
+			// !keepData. On a _reverse workflow the resolver must set keepData=true,
+			// which must skip the deleteTenantData path. Any unexpected DELETE
+			// issued to the target tablets would fail the query mock.
+			name: "multi-tenant reverse workflow defaults keep-data and skips tenant data deletion",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName + "_reverse",
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName+"_reverse")),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName + "_reverse",
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName + "_reverse",
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Options:      `{"tenant_id": "1"}`,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match:  "t1",
+											Filter: "select * from t1 where tenant_id = 1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
+					},
+				})
+				require.NoError(t, err)
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName+"_reverse", targetKeyspaceName),
+				Warnings: []string{
+					fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflowName+"_reverse"),
+				},
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+						Deleted: true,
+					},
 				},
 			},
 		},
