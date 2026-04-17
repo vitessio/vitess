@@ -11,7 +11,7 @@ import {
     useWorkflowSwitchTraffic,
 } from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
-import { success } from '../../Snackbar';
+import { success, warn } from '../../Snackbar';
 import { topodata, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import { getReverseWorkflow } from '../../../util/workflows';
 import { Label } from '../../inputs/Label';
@@ -69,6 +69,11 @@ const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
 
 const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
     keepRoutingRules: false,
+};
+
+const showWorkflowMutationNotifications = (summary: string, warnings?: string[] | null) => {
+    success(summary, { autoClose: 1600 });
+    warnings?.forEach((warning) => warn(warning, { autoClose: 5000 }));
 };
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
@@ -151,7 +156,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         },
         {
             onSuccess: (data) => {
-                success(data.summary, { autoClose: 1600 });
+                showWorkflowMutationNotifications(data.summary, data.warnings);
             },
         }
     );
@@ -171,7 +176,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         },
         {
             onSuccess: (data) => {
-                success(data.summary, { autoClose: 1600 });
+                showWorkflowMutationNotifications(data.summary, data.warnings);
             },
         }
     );

@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vtadmin } from '../../../proto/vtadmin';
 
 import * as httpAPI from '../../../api/http';
+import * as Snackbar from '../../Snackbar';
 
 describe('WorkflowActions', () => {
     const queryClient = new QueryClient({
@@ -225,6 +226,32 @@ describe('WorkflowActions', () => {
         });
     });
 
+    it('shows complete workflow warnings returned by the backend', async () => {
+        vi.spyOn(Snackbar, 'success');
+        vi.spyOn(Snackbar, 'warn');
+        vi.spyOn(httpAPI, 'completeMoveTables').mockResolvedValue({
+            summary: 'Completed workflow test_workflow',
+            warnings: ['Reverse workflows keep data by default unless keep_data=false is set.'],
+        } as any);
+
+        render(
+            <QueryClientProvider client={queryClient}>
+                <WorkflowActions {...switchedWorkflowProps} />
+            </QueryClientProvider>
+        );
+        fireEvent.click(screen.getByTestId('dropdown-btn'));
+        fireEvent.click(screen.getByText('Complete'));
+        fireEvent.click(screen.getByTestId('confirm-btn'));
+
+        await waitFor(() => {
+            expect(Snackbar.success).toHaveBeenCalledWith('Completed workflow test_workflow', { autoClose: 1600 });
+        });
+        expect(Snackbar.warn).toHaveBeenCalledWith(
+            'Reverse workflows keep data by default unless keep_data=false is set.',
+            { autoClose: 5000 }
+        );
+    });
+
     it('test Cancel Workflow dialog and API', async () => {
         render(
             <QueryClientProvider client={queryClient}>
@@ -288,6 +315,32 @@ describe('WorkflowActions', () => {
                 keep_routing_rules: true,
             },
         });
+    });
+
+    it('shows cancel workflow warnings returned by the backend', async () => {
+        vi.spyOn(Snackbar, 'success');
+        vi.spyOn(Snackbar, 'warn');
+        vi.spyOn(httpAPI, 'workflowDelete').mockResolvedValue({
+            summary: 'Cancelled workflow test_workflow',
+            warnings: ['Reverse workflows keep data by default unless keep_data=false is set.'],
+        } as any);
+
+        render(
+            <QueryClientProvider client={queryClient}>
+                <WorkflowActions {...runningWorkflowProps} />
+            </QueryClientProvider>
+        );
+        fireEvent.click(screen.getByTestId('dropdown-btn'));
+        fireEvent.click(screen.getByText('Cancel Workflow'));
+        fireEvent.click(screen.getByTestId('confirm-btn'));
+
+        await waitFor(() => {
+            expect(Snackbar.success).toHaveBeenCalledWith('Cancelled workflow test_workflow', { autoClose: 1600 });
+        });
+        expect(Snackbar.warn).toHaveBeenCalledWith(
+            'Reverse workflows keep data by default unless keep_data=false is set.',
+            { autoClose: 5000 }
+        );
     });
 
     it('test Switch Traffic dialog with default options', async () => {

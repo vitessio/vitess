@@ -9,7 +9,7 @@
     - **[Breaking Changes](#breaking-changes)**
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
-        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protectionó
+        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
 
 ## <a id="major-changes"/>Major Changes</a>
 
