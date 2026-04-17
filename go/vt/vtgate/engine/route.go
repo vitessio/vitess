@@ -57,7 +57,7 @@ var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
 
 var replicaWarmingReadsDropped = stats.NewCountersWithMultiLabels(
 	"ReplicaWarmingReadsDropped",
-	"Number of warming reads dropped due to concurrency limits",
+	"Number of warming reads dropped due to concurrency limits or invalid priority",
 	[]string{"Keyspace"})
 
 var replicaWarmingReadsErrors = stats.NewCountersWithMultiLabels(
