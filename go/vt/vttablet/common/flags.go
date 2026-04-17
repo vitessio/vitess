@@ -52,6 +52,7 @@ var (
 
 	vreplicationStoreCompressedGTID   = false
 	vreplicationParallelInsertWorkers = 1
+	vreplicationMaxRowJSONBytes       = int64(0)
 
 	// VStreamerBinlogRotationThreshold is the threshold, above which we rotate binlogs, before taking a GTID snapshot
 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
@@ -103,4 +104,5 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 
 	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
+	fs.Int64Var(&vreplicationMaxRowJSONBytes, "vreplication-max-row-json-bytes", vreplicationMaxRowJSONBytes, "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
 }

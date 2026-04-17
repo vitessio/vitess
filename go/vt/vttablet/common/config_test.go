@@ -161,3 +161,27 @@ func TestNewVReplicationConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxRowJSONBytesOverride(t *testing.T) {
+	InitVReplicationConfigDefaults()
+	for _, key := range []string{"max-row-json-bytes", "max_row_json_bytes"} {
+		t.Run(key, func(t *testing.T) {
+			cfg, err := NewVReplicationConfig(map[string]string{key: "1048576"})
+			require.NoError(t, err)
+			require.EqualValues(t, int64(1048576), cfg.MaxRowJSONBytes)
+			m := cfg.Map()
+			require.Equal(t, "1048576", m["max-row-json-bytes"])
+			require.Equal(t, "1048576", m["max_row_json_bytes"])
+		})
+	}
+	t.Run("zero preserves default", func(t *testing.T) {
+		cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "0"})
+		require.NoError(t, err)
+		require.EqualValues(t, int64(0), cfg.MaxRowJSONBytes)
+	})
+	t.Run("invalid value returns error", func(t *testing.T) {
+		_, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "notanumber"})
+		require.Error(t, err)
+		require.ErrorContains(t, err, "invalid value for max-row-json-bytes")
+	})
+}
