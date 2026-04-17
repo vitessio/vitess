@@ -602,7 +602,7 @@ func (f *loggingVCursor) GetWarmingReadsPercent() int {
 }
 
 func (f *loggingVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
-	return nil
+	return semaphore.NewWeighted(0)
 }
 
 func (f *loggingVCursor) GetQueryPriority() (int, error) {

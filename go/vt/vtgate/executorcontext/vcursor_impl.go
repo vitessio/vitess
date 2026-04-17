@@ -1674,7 +1674,7 @@ func (vc *VCursorImpl) GetQueryPriority() (int, error) {
 		if err != nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
 		}
-		return priority, nil
+		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
 	}
 	return 0, nil
 }

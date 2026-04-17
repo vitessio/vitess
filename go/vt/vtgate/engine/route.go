@@ -42,8 +42,12 @@ import (
 var _ Primitive = (*Route)(nil)
 
 // WarmingReadsBaseWeight is the base semaphore weight for a warming read.
-// The actual weight is WarmingReadsBaseWeight + priority, where priority is 0-100.
-// The semaphore capacity is concurrency * WarmingReadsBaseWeight.
+// The actual weight is WarmingReadsBaseWeight + priority, where priority 0
+// (highest priority) gets the lowest weight and is least likely to be shed.
+// The semaphore capacity is concurrency * WarmingReadsBaseWeight, so at most
+// `concurrency` priority-0 queries can run simultaneously. Lower-priority
+// queries (higher priority value) consume more weight and may be shed even
+// when the semaphore is not fully occupied.
 const WarmingReadsBaseWeight = 100
 
 var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
@@ -549,7 +553,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	weight := int64(WarmingReadsBaseWeight + priority)
 
 	sem := vcursor.GetWarmingReadsSemaphore()
-	if !sem.TryAcquire(weight) {
+	if sem == nil || !sem.TryAcquire(weight) {
 		log.Warn("Failed to execute warming replica read as pool is full")
 		replicaWarmingReadsDropped.Add([]string{route.Keyspace.Name}, 1)
 		return
@@ -562,6 +566,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		defer cancel()
 		rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to find route for warming replica read: %v", err))
 			replicaWarmingReadsErrors.Add([]string{route.Keyspace.Name, vterrors.Code(err).String()}, 1)
 			return
 		}

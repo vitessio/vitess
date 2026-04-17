@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -40,7 +41,13 @@ type warmingReadsVCursor struct {
 	warmingReadsSemaphore   *semaphore.Weighted
 	warmingReadsTimeout     time.Duration
 	queryPriority           int
+	queryPriorityErr        error
 	warmingReadsExecuteFunc func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	// cloneShardErr and cloneMultiShardErrs are injected only into the
+	// warming-read clone, not the primary cursor, so the primary query
+	// succeeds while the warming read encounters the error.
+	cloneShardErr       error
+	cloneMultiShardErrs []error
 }
 
 func (vc *warmingReadsVCursor) GetWarmingReadsPercent() int {
@@ -52,13 +59,15 @@ func (vc *warmingReadsVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
 }
 
 func (vc *warmingReadsVCursor) GetQueryPriority() (int, error) {
-	return vc.queryPriority, nil
+	return vc.queryPriority, vc.queryPriorityErr
 }
 
 func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	clonedLogging := &loggingVCursor{
 		shards:                  vc.shards,
 		results:                 vc.results,
+		shardErr:                vc.cloneShardErr,
+		multiShardErrs:          vc.cloneMultiShardErrs,
 		onResolveDestinationsFn: vc.onResolveDestinationsFn,
 	}
 	clone := &warmingReadsVCursor{
@@ -390,4 +399,128 @@ func TestWarmingReadsContextTimeout(t *testing.T) {
 	}, time.Second, 10*time.Millisecond, "warming read should have been executed and timed out")
 
 	require.ErrorIs(t, *capturedCtxErr.Load(), context.DeadlineExceeded, "warming read context should have timed out")
+}
+
+func TestWarmingReadsDroppedOnPriorityError(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	var warmingReadExecuted atomic.Bool
+	vc := &warmingReadsVCursor{
+		loggingVCursor: &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+		},
+		warmingReadsPercent:   100,
+		warmingReadsSemaphore: semaphore.NewWeighted(100),
+		warmingReadsTimeout:   5 * time.Second,
+		queryPriorityErr:      errors.New("invalid priority"),
+	}
+	vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+		warmingReadExecuted.Store(true)
+	}
+
+	droppedBefore := replicaWarmingReadsDropped.Counts()["ks"]
+
+	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	require.Never(t, func() bool {
+		return warmingReadExecuted.Load()
+	}, 100*time.Millisecond, 5*time.Millisecond, "warming read should not execute when GetQueryPriority returns an error")
+
+	require.Equal(t, droppedBefore+1, replicaWarmingReadsDropped.Counts()["ks"],
+		"ReplicaWarmingReadsDropped should be incremented on priority error")
+}
+
+func TestWarmingReadsErrorsOnFindRouteFailure(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	vc := &warmingReadsVCursor{
+		loggingVCursor: &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+		},
+		warmingReadsPercent:   100,
+		warmingReadsSemaphore: semaphore.NewWeighted(100),
+		warmingReadsTimeout:   5 * time.Second,
+		cloneShardErr:         errors.New("resolve destinations failed"),
+	}
+
+	errorsBefore := replicaWarmingReadsErrors.Counts()["ks.UNKNOWN"]
+
+	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return replicaWarmingReadsErrors.Counts()["ks.UNKNOWN"] == errorsBefore+1
+	}, time.Second, 10*time.Millisecond, "ReplicaWarmingReadsErrors should be incremented on findRoute failure")
+}
+
+func TestWarmingReadsErrorsOnExecuteMultiShardFailure(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
+	route := NewRoute(
+		EqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"SELECT * FROM users WHERE id = 1",
+		"dummy_select_field",
+	)
+	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
+	route.QueryStatement = parser
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{
+		evalengine.NewLiteralInt(1),
+	}
+
+	vc := &warmingReadsVCursor{
+		loggingVCursor: &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+		},
+		warmingReadsPercent:   100,
+		warmingReadsSemaphore: semaphore.NewWeighted(100),
+		warmingReadsTimeout:   5 * time.Second,
+		cloneMultiShardErrs:   []error{errors.New("shard execution failed")},
+	}
+
+	errorsBefore := replicaWarmingReadsErrors.Counts()["ks.UNKNOWN"]
+
+	_, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return replicaWarmingReadsErrors.Counts()["ks.UNKNOWN"] == errorsBefore+1
+	}, time.Second, 10*time.Millisecond, "ReplicaWarmingReadsErrors should be incremented on ExecuteMultiShard failure")
 }
