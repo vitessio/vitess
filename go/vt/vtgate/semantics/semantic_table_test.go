@@ -1213,6 +1213,55 @@ func TestRequiresForeignKeyEmulation(t *testing.T) {
 	}
 }
 
+// TestRequiresForeignKeyEmulationAmbiguousDeps verifies that the function does
+// not panic when an update column resolves to zero or multiple tables via its
+// recursive dependencies. In those cases we cannot pin the column to a single
+// table, so vtgate must conservatively require foreign key emulation.
+func TestRequiresForeignKeyEmulationAmbiguousDeps(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks"}
+	t1 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t1"), Keyspace: ks}
+	t2 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t2"), Keyspace: ks}
+	t3 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t3"), Keyspace: ks}
+
+	colName := sqlparser.NewColName("col")
+	updateExprs := sqlparser.UpdateExprs{
+		&sqlparser.UpdateExpr{Name: colName, Expr: sqlparser.NewIntLiteral("1")},
+	}
+
+	tests := []struct {
+		name string
+		deps TableSet
+	}{
+		{
+			name: "multi-table dependencies",
+			deps: MergeTableSets(SingleTableSet(0), SingleTableSet(1)),
+		},
+		{
+			name: "empty dependencies",
+			deps: EmptyTableSet(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &SemTable{
+				Tables: []TableInfo{
+					&RealTable{Table: t1},
+					&RealTable{Table: t2},
+					&RealTable{Table: t3},
+				},
+				Recursive: ExprDependencies{colName: tt.deps},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(0): {vindexes.ChildFKInfo{Table: t2}},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			}
+			require.NotPanics(t, func() {
+				require.True(t, st.RequiresForeignKeyEmulation(updateExprs))
+			})
+		})
+	}
+}
+
 func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 	keyspaceName := "ks"
 	t3Table := &vindexes.BaseTable{

@@ -301,6 +301,13 @@ func (st *SemTable) RequiresForeignKeyEmulation(updExprs sqlparser.UpdateExprs) 
 
 	for _, updateExpr := range updExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
+		if deps.NumberOfTables() != 1 {
+			// The column is ambiguous or unresolved (for example, it comes from
+			// a derived table whose projection spans multiple base tables).
+			// Conservatively require emulation so vtgate re-validates all
+			// involved foreign keys rather than pushing to MySQL.
+			return true
+		}
 		updatedTable := st.Tables[deps.TableOffset()].GetVindexTable()
 
 		parentFks := st.parentForeignKeysInvolved[deps]
