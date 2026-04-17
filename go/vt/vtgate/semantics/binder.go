@@ -508,7 +508,7 @@ func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlp
 			continue
 		}
 		if _, available := b.availableAliases[ae]; !available {
-			return nil, nil
+			continue
 		}
 		if match == nil {
 			match = ae

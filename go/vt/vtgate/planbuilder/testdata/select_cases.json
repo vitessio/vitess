@@ -5730,6 +5730,33 @@
     }
   },
   {
+    "comment": "Subquery between duplicate literal aliases resolves to first (earlier) match",
+    "query": "SELECT 1 AS foobar, (SELECT foobar), 2 AS foobar FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS foobar, (SELECT foobar), 2 AS foobar FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1), 2 as foobar from authoritative where 1 != 1",
+        "Query": "select 1 as foobar, (select foobar from dual), 2 as foobar from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.authoritative"
+      ]
+    }
+  },
+  {
     "comment": "Forward reference to alias in subquery should fail",
     "query": "SELECT (SELECT foobar FROM authoritative), user_id AS foobar FROM authoritative WHERE user_id = 1",
     "skip_e2e": true,
