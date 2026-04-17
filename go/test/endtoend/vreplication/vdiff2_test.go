@@ -201,10 +201,13 @@ func TestVDiff2(t *testing.T) {
 	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
 
 	// The VDiffs should all be cleaned up so the VDiffRowsCompared value, which
-	// is produced from controller info, should be empty.
-	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
-	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
-	require.Equal(t, "{}", vdrc, "expected VDiffRowsCompared stat to be empty but got %s", vdrc)
+	// is produced from controller info, should be empty. Controller cleanup on
+	// workflow completion can briefly lag the stats sampler, so poll.
+	require.Eventually(t, func() bool {
+		vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
+		require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+		return vdrc == "{}"
+	}, 30*time.Second, 500*time.Millisecond, "expected VDiffRowsCompared stat on %s-%d tablet to eventually be empty", statsTablet.Cell, statsTablet.TabletUID)
 }
 
 func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
@@ -254,9 +257,10 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		seconds := int64(dur.Seconds())
 		chunkSize := int64(100000)
 		// Take the test host/runner vCPU count into account when generating rows.
-		perVCpuCount := int64(100000)
-		// Cap it at 1M rows per second so that we will create betweeen 100,000 and 1,000,000
-		// rows for each second in the diff duration, depending on the test host vCPU count.
+		// Raise the per-vCPU estimate so that low-vCPU but fast cloud runners (e.g.
+		// Depot 4-vCPU) still hit the 1M/sec cap and generate enough rows to force
+		// a table diff restart within --max-diff-duration.
+		perVCpuCount := int64(250000)
 		perSecondCount := int64(math.Min(float64(perVCpuCount*int64(runtime.NumCPU())), 1000000))
 		totalRowsToCreate := seconds * perSecondCount
 		log.Info(fmt.Sprintf("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate))
