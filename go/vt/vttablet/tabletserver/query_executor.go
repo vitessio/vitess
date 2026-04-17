@@ -761,7 +761,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			}
 		} else {
 			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
-			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+			if waiterCap == 0 || qre.tsv.qe.consolidator.TotalWaiterCount() <= waiterCap {
 				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 				startTime := time.Now()
 				q.Wait()

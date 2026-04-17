@@ -30,6 +30,7 @@ type Consolidator interface {
 	Create(string) (PendingResult, bool)
 	Items() []ConsolidatorCacheItem
 	Record(query string)
+	TotalWaiterCount() int64
 }
 
 // PendingResult is a wrapper for result of a query.
@@ -41,7 +42,7 @@ type PendingResult interface {
 	Result() *sqltypes.Result
 	Wait()
 	HasWaiters() bool
-	AddWaiterCounter(int64) *int64
+	AddWaiterCounter(int64)
 }
 
 type consolidator struct {
@@ -64,12 +65,12 @@ type pendingResult struct {
 	// executing is used to block additional requests.
 	// The original request holds a write lock while additional ones are blocked
 	// on acquiring a read lock (see Wait() below.)
-	executing            sync.RWMutex
-	consolidator         *consolidator
-	query                string
-	result               *sqltypes.Result
-	err                  error
-	perResultWaiterCount atomic.Int64
+	executing    sync.RWMutex
+	consolidator *consolidator
+	query        string
+	result       *sqltypes.Result
+	err          error
+	waiterCount  atomic.Int64
 }
 
 // Create adds a query to currently executing queries and acquires a
@@ -80,7 +81,6 @@ func (co *consolidator) Create(query string) (PendingResult, bool) {
 	defer co.mu.Unlock()
 	var r *pendingResult
 	if r, ok := co.queries[query]; ok {
-		r.perResultWaiterCount.Add(1)
 		r.AddWaiterCounter(1)
 		return r, false
 	}
@@ -121,7 +121,7 @@ func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 }
 
 func (rs *pendingResult) HasWaiters() bool {
-	return rs.perResultWaiterCount.Load() > 0
+	return rs.waiterCount.Load() > 0
 }
 
 // Wait waits for the original query to complete execution. Wait should
@@ -131,9 +131,11 @@ func (rs *pendingResult) Wait() {
 	rs.executing.RLock()
 }
 
-func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
+func (rs *pendingResult) AddWaiterCounter(c int64) {
+	// Non-atomic pair is benign: ConsolidatorQueryWaiterCap is a soft limit and
+	// the per-waiter count is only checked before Broadcast().
+	rs.waiterCount.Add(c)
 	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)
-	return rs.consolidator.totalWaiterCount
 }
 
 // ConsolidatorCache is a thread-safe object used for counting how often recent
@@ -143,6 +145,10 @@ func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
 type ConsolidatorCache struct {
 	*cache.LRUCache[*ccount]
 	totalWaiterCount *int64
+}
+
+func (cc *ConsolidatorCache) TotalWaiterCount() int64 {
+	return atomic.LoadInt64(cc.totalWaiterCount)
 }
 
 // NewConsolidatorCache creates a new cache with the given capacity.

@@ -30,7 +30,8 @@ type FakeConsolidator struct {
 	// CreateReturnCreated pre-configures the return value of Create calls.
 	CreateReturn *FakeConsolidatorCreateReturn
 	// RecordCalls can be usd to inspect Record calls.
-	RecordCalls []string
+	RecordCalls      []string
+	totalWaiterCount int64
 }
 
 // FakeConsolidatorCreateReturn wraps the two return values of a call to
@@ -53,10 +54,10 @@ type FakePendingResult struct {
 	WaitCalls int
 	// AddWaiterCounterCalls can be used to inspect AddWaiterCounter calls.
 	AddWaiterCounterCalls []int64
-	WaiterCount int64
-	PerResultWaiterCount int64
-	err                  error
-	result               *sqltypes.Result
+	WaiterCount           int64
+	Consolidator          *FakeConsolidator
+	err                   error
+	result                *sqltypes.Result
 }
 
 var (
@@ -85,6 +86,14 @@ func (fc *FakeConsolidator) Record(sql string) {
 // Items is currently a no-op.
 func (fc *FakeConsolidator) Items() []ConsolidatorCacheItem {
 	return nil
+}
+
+func (fc *FakeConsolidator) TotalWaiterCount() int64 {
+	return fc.totalWaiterCount
+}
+
+func (fc *FakeConsolidator) SetTotalWaiterCount(count int64) {
+	fc.totalWaiterCount = count
 }
 
 // Broadcast records the Broadcast call for later verification.
@@ -118,12 +127,12 @@ func (fr *FakePendingResult) Wait() {
 }
 
 func (fr *FakePendingResult) HasWaiters() bool {
-	return fr.PerResultWaiterCount > 0
+	return fr.WaiterCount > 0
 }
 
 // AddWaiterCounter records the call and simulates waiter count changes.
-func (fr *FakePendingResult) AddWaiterCounter(delta int64) *int64 {
+func (fr *FakePendingResult) AddWaiterCounter(delta int64) {
 	fr.AddWaiterCounterCalls = append(fr.AddWaiterCounterCalls, delta)
 	fr.WaiterCount += delta
-	return &fr.WaiterCount
+	fr.Consolidator.totalWaiterCount += delta
 }

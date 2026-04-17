@@ -49,8 +49,8 @@ func TestAddWaiterCount(t *testing.T) {
 	wgAdd.Wait()
 	wgSub.Wait()
 
-	if *pr.AddWaiterCounter(0) != 0 {
-		t.Fatalf("Expect 0 totalWaiterCount but got: %v", *pr.AddWaiterCounter(0))
+	if con.TotalWaiterCount() != 0 {
+		t.Fatalf("Expect 0 totalWaiterCount but got: %d", con.TotalWaiterCount())
 	}
 }
 
