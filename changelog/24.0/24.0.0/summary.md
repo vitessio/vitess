@@ -16,6 +16,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
+        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -148,6 +149,22 @@ VReplication workflows now automatically retry with different tablets when encou
 When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
 
 This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
+
+#### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
+
+When calling `cancel` or `complete` on an auto-generated `_reverse` workflow without explicitly providing `--keep-data=false`, the system now defaults to keeping data and returns a warning. This prevents accidental deletion of production tables on the original source side, where the `_reverse` workflow's target is actually your production keyspace.
+
+**Behavior change:**
+
+| Workflow type | `--keep-data` flag | Effective `keep_data` | Warning emitted |
+|--------------|-------------------|----------------------|-----------------|
+| Normal       | omitted           | `false`              | No              |
+| `_reverse`   | omitted           | `true`               | **Yes** |
+| `_reverse`   | `--keep-data=false` | `false`            | No              |
+
+The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
+
+See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
