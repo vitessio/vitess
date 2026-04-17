@@ -617,6 +617,11 @@ func ReverseWorkflowName(workflow string) string {
 	return workflow + reverseSuffix
 }
 
+// resolveWorkflowKeepData preserves request field presence so we can tell the
+// difference between "keep_data was omitted" and "keep_data was explicitly set
+// to false". That matters for reverse workflows: omitting keep_data should take
+// the safer path and keep the data by default, while an explicit false must
+// still be honored so callers can force cleanup.
 func resolveWorkflowKeepData(workflow string, keepData *bool) (bool, []string) {
 	if keepData != nil {
 		return *keepData, nil
