@@ -137,7 +137,7 @@ func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
@@ -168,7 +168,7 @@ func (fz *fuzzer) generateSingleUpdateDMLQuery() string {
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	updWithLimit := rand.IntN(2)
 	limitCount := rand.IntN(3)
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
 		col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
 		if updWithLimit == 0 {
@@ -409,7 +409,7 @@ func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return []string{
@@ -445,7 +445,7 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return []string{
@@ -493,7 +493,7 @@ func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query str
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
@@ -512,7 +512,7 @@ func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
-	if tableName == "fk_t20" {
+	if isSelfRefFkTable(tableName) {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertIntValueToString(colValue), convertIntValueToString(col2Value), idValue}
