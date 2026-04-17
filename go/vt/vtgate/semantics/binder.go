@@ -499,7 +499,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 
 func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlparser.AliasedExpr, error) {
 	var match *sqlparser.AliasedExpr
-	for _, selExpr := range sel.SelectExprs.Exprs {
+	for _, selExpr := range sel.GetColumns() {
 		ae, ok := selExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue
