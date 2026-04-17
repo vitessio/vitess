@@ -1628,7 +1628,13 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	if state.WorkflowType == TypeMigrate {
 		_, err := s.finalizeMigrateWorkflow(ctx, ts, "", true, keepData, req.GetKeepRoutingRules(), false)
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		return &vtctldatapb.WorkflowDeleteResponse{
+			Summary:  fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace", req.Workflow, req.Keyspace),
+			Warnings: warnings,
+		}, nil
 	}
 
 	deleteReq := &tabletmanagerdatapb.DeleteVReplicationWorkflowRequest{

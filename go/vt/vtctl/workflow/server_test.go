@@ -1103,6 +1103,59 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 		{
+			name: "migrate reverse workflow defaults keep-data and returns warning",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName + "_reverse",
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName+"_reverse"),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName + "_reverse",
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName + "_reverse",
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Migrate,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{Match: table1Name},
+										{Match: table2Name},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName+"_reverse", targetKeyspaceName),
+				Warnings: []string{
+					fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflowName+"_reverse"),
+				},
+			},
+		},
+		{
 			name: "named lock held",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,

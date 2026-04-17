@@ -178,7 +178,6 @@ describe('WorkflowActions', () => {
             request: {
                 workflow: 'test_workflow',
                 target_keyspace: 'test_keyspace',
-                keep_data: false,
                 keep_routing_rules: false,
                 rename_tables: false,
             },
@@ -249,7 +248,6 @@ describe('WorkflowActions', () => {
             request: {
                 workflow: 'test_workflow',
                 keyspace: 'test_keyspace',
-                keep_data: false,
                 keep_routing_rules: false,
             },
         });
