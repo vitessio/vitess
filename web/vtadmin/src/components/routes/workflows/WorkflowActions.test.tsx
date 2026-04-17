@@ -231,7 +231,7 @@ describe('WorkflowActions', () => {
         vi.spyOn(Snackbar, 'warn');
         vi.spyOn(httpAPI, 'completeMoveTables').mockResolvedValue({
             summary: 'Completed workflow test_workflow',
-            warnings: ['Reverse workflows keep data by default unless keep_data=false is set.'],
+            warnings: ['Backend warning for complete workflow.'],
         } as any);
 
         render(
@@ -246,10 +246,7 @@ describe('WorkflowActions', () => {
         await waitFor(() => {
             expect(Snackbar.success).toHaveBeenCalledWith('Completed workflow test_workflow', { autoClose: 1600 });
         });
-        expect(Snackbar.warn).toHaveBeenCalledWith(
-            'Reverse workflows keep data by default unless keep_data=false is set.',
-            { autoClose: 5000 }
-        );
+        expect(Snackbar.warn).toHaveBeenCalledWith('Backend warning for complete workflow.', { autoClose: 5000 });
     });
 
     it('test Cancel Workflow dialog and API', async () => {
@@ -322,7 +319,7 @@ describe('WorkflowActions', () => {
         vi.spyOn(Snackbar, 'warn');
         vi.spyOn(httpAPI, 'workflowDelete').mockResolvedValue({
             summary: 'Cancelled workflow test_workflow',
-            warnings: ['Reverse workflows keep data by default unless keep_data=false is set.'],
+            warnings: ['Backend warning for cancel workflow.'],
         } as any);
 
         render(
@@ -337,10 +334,7 @@ describe('WorkflowActions', () => {
         await waitFor(() => {
             expect(Snackbar.success).toHaveBeenCalledWith('Cancelled workflow test_workflow', { autoClose: 1600 });
         });
-        expect(Snackbar.warn).toHaveBeenCalledWith(
-            'Reverse workflows keep data by default unless keep_data=false is set.',
-            { autoClose: 5000 }
-        );
+        expect(Snackbar.warn).toHaveBeenCalledWith('Backend warning for cancel workflow.', { autoClose: 5000 });
     });
 
     it('test Switch Traffic dialog with default options', async () => {
