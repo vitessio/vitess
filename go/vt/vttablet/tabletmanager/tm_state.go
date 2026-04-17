@@ -88,8 +88,8 @@ type tmState struct {
 	// and has its own mutex.
 	displayState displayState
 
-	// deferredWg tracks in-flight deferred updateLocked goroutines
-	// for test observability.
+	// deferredWg tracks in-flight deferred updateLocked goroutines.
+	// Close() waits on this to ensure clean shutdown.
 	deferredWg sync.WaitGroup
 
 	// allowReadsFromDeniedTables allows readonly operations to execute against
