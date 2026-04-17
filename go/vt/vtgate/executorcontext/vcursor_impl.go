@@ -1449,6 +1449,9 @@ func (vc *VCursorImpl) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
 	if vc.config.PreventCrossKeyspaceReads {
 		return false, nil
 	}
+	if keyspace == "" {
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AllowCrossKeyspaceReads called with empty keyspace")
+	}
 	ks := vc.vschema.Keyspaces[keyspace]
 	if ks == nil {
 		return false, vterrors.VT14004(keyspace)

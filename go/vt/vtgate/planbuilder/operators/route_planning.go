@@ -354,11 +354,17 @@ func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, o
 		return
 	}
 
+	checked := make(map[[2]string]struct{})
 	for _, lhsKs := range lhsKeyspaces {
 		for _, rhsKs := range rhsKeyspaces {
 			if lhsKs == rhsKs {
 				continue
 			}
+			pair := [2]string{lhsKs.Name, rhsKs.Name}
+			if _, ok := checked[pair]; ok {
+				continue
+			}
+			checked[pair] = struct{}{}
 			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
 		}
 	}
@@ -408,7 +414,8 @@ func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *v
 
 // operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
 // walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
-// Uses slice-based dedup instead of a map since the number of distinct keyspaces is very small.
+// Uses slice-based dedup with pointer equality (Vitess shares keyspace objects by pointer within
+// a planning context) instead of a map since the number of distinct keyspaces is very small.
 func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
 	var result []*vindexes.Keyspace
 	collectOperatorKeyspaces(op, &result)

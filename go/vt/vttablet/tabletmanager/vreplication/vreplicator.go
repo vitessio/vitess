@@ -518,7 +518,7 @@ func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
 	if maxQuerySize > maxQuerySizeHeadroom {
 		maxQuerySize -= maxQuerySizeHeadroom
 	}
-	return maxQuerySize
+	return max(maxQuerySize, 1)
 }
 
 func (vr *vreplicator) insertLog(typ, message string) {

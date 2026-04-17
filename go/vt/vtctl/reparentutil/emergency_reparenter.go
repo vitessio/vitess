@@ -191,7 +191,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		err = vterrors.Wrapf(err, "restart replication cleanup failed: %v", cleanupErr)
+		err = vterrors.Wrapf(err, "%v, and restart replication cleanup failed", cleanupErr)
 	}()
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
