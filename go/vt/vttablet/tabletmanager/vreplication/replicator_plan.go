@@ -257,25 +257,31 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 
 // checkJSONRowSize sums the byte lengths of all JSON-typed columns in row and
 // returns an error if the sum exceeds limit. When limit <= 0 the check is a
-// no-op. Indices beyond len(tp.Fields) are silently skipped.
-func (tp *TablePlan) checkJSONRowSize(row []sqltypes.Value, limit int64) error {
-	if limit <= 0 {
+// no-op. It reads column sizes directly from row.Lengths so it can run in
+// hot loops without materializing []sqltypes.Value. Indices beyond
+// len(row.Lengths) are silently skipped. NULL columns (Lengths[i] < 0) are
+// treated as zero-size.
+func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
+	if limit <= 0 || row == nil {
 		return nil
 	}
 	var total int64
 	var largestName string
 	var largestSize int64
 	for i, field := range tp.Fields {
-		if i >= len(row) {
+		if i >= len(row.Lengths) {
 			break
 		}
 		if field.Type != querypb.Type_JSON {
 			continue
 		}
-		sz := int64(row[i].Len())
-		total += sz
-		if sz > largestSize {
-			largestSize = sz
+		n := row.Lengths[i]
+		if n < 0 {
+			continue
+		}
+		total += n
+		if n > largestSize {
+			largestSize = n
 			largestName = field.Name
 		}
 	}
@@ -313,11 +319,8 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 	rowCount := 0
 	for _, row := range rows {
 		if tp.WorkflowConfig != nil {
-			if limit := tp.WorkflowConfig.MaxRowJSONBytes; limit > 0 {
-				vals := sqltypes.MakeRowTrusted(tp.Fields, row)
-				if err := tp.checkJSONRowSize(vals, limit); err != nil {
-					return nil, err
-				}
+			if err := tp.checkJSONRowSize(row, tp.WorkflowConfig.MaxRowJSONBytes); err != nil {
+				return nil, err
 			}
 		}
 		beforeLen := sqlbuffer.Len()
@@ -474,12 +477,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 	}
 	if rowChange.After != nil {
+		if err := tp.checkJSONRowSize(rowChange.After, tp.WorkflowConfig.MaxRowJSONBytes); err != nil {
+			return nil, err
+		}
 		jsonIndex := 0
 		after = true
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
-		if err := tp.checkJSONRowSize(afterVals, tp.WorkflowConfig.MaxRowJSONBytes); err != nil {
-			return nil, err
-		}
 		for i, field := range tp.Fields {
 			var (
 				bindVar *querypb.BindVariable

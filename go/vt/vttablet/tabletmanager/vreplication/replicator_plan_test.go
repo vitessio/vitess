@@ -1266,52 +1266,70 @@ func TestCheckJSONRowSize(t *testing.T) {
 	intField := func(name string) *querypb.Field {
 		return &querypb.Field{Name: name, Type: querypb.Type_INT64}
 	}
-	jsonVal := func(s string) sqltypes.Value {
-		return sqltypes.MakeTrusted(querypb.Type_JSON, []byte(s))
-	}
-	intVal := func(s string) sqltypes.Value {
-		return sqltypes.MakeTrusted(querypb.Type_INT64, []byte(s))
+	// makeRow builds a *querypb.Row from per-column byte slices. A nil slice
+	// encodes a SQL NULL (Lengths[i] = -1).
+	makeRow := func(cols ...[]byte) *querypb.Row {
+		row := &querypb.Row{}
+		for _, c := range cols {
+			if c == nil {
+				row.Lengths = append(row.Lengths, -1)
+				continue
+			}
+			row.Lengths = append(row.Lengths, int64(len(c)))
+			row.Values = append(row.Values, c...)
+		}
+		return row
 	}
 
 	t.Run("disabled when limit is zero", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		row := []sqltypes.Value{jsonVal(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`)}
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
 		require.NoError(t, tp.checkJSONRowSize(row, 0))
 	})
 
 	t.Run("disabled when limit is negative", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		row := []sqltypes.Value{jsonVal(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`)}
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
 		require.NoError(t, tp.checkJSONRowSize(row, -1))
+	})
+
+	t.Run("nil row is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(nil, 100))
 	})
 
 	t.Run("no JSON columns is a no-op", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{intField("id")})
-		row := []sqltypes.Value{intVal("42")}
+		row := makeRow([]byte("42"))
 		require.NoError(t, tp.checkJSONRowSize(row, 100))
 	})
 
 	t.Run("empty row is a no-op", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		require.NoError(t, tp.checkJSONRowSize([]sqltypes.Value{}, 100))
+		require.NoError(t, tp.checkJSONRowSize(makeRow(), 100))
+	})
+
+	t.Run("NULL JSON column is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(makeRow(nil), 10))
 	})
 
 	t.Run("under limit passes", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		row := []sqltypes.Value{jsonVal(`{"k":"v"}`)}
+		row := makeRow([]byte(`{"k":"v"}`))
 		require.NoError(t, tp.checkJSONRowSize(row, 1000))
 	})
 
 	t.Run("exactly at limit passes", func(t *testing.T) {
-		payload := `{"k":"v"}`
+		payload := []byte(`{"k":"v"}`)
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		row := []sqltypes.Value{jsonVal(payload)}
+		row := makeRow(payload)
 		require.NoError(t, tp.checkJSONRowSize(row, int64(len(payload))))
 	})
 
 	t.Run("over limit returns error", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j")})
-		row := []sqltypes.Value{jsonVal(`{"key":"value"}`)}
+		row := makeRow([]byte(`{"key":"value"}`))
 		err := tp.checkJSONRowSize(row, 5)
 		require.ErrorContains(t, err, "vreplication: row JSON payload")
 		require.ErrorContains(t, err, "vreplication-max-row-json-bytes=5")
@@ -1321,7 +1339,7 @@ func TestCheckJSONRowSize(t *testing.T) {
 
 	t.Run("multi-column sum triggers error", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
-		row := []sqltypes.Value{jsonVal(`{"a":"bb"}`), jsonVal(`{"c":"dd"}`)}
+		row := makeRow([]byte(`{"a":"bb"}`), []byte(`{"c":"dd"}`))
 		// each is ~10 bytes; limit 15 should fail on their sum
 		err := tp.checkJSONRowSize(row, 15)
 		require.ErrorContains(t, err, "vreplication: row JSON payload")
@@ -1329,14 +1347,14 @@ func TestCheckJSONRowSize(t *testing.T) {
 
 	t.Run("multi-column under limit passes", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
-		row := []sqltypes.Value{jsonVal(`{"a":"b"}`), jsonVal(`{"c":"d"}`)}
+		row := makeRow([]byte(`{"a":"b"}`), []byte(`{"c":"d"}`))
 		require.NoError(t, tp.checkJSONRowSize(row, 1000))
 	})
 
 	t.Run("non-JSON columns not counted", func(t *testing.T) {
 		tp := newTablePlan([]*querypb.Field{intField("id"), jsonField("j"), intField("ts")})
-		// Only j (9 bytes) counted; id and ts are ints
-		row := []sqltypes.Value{intVal("1"), jsonVal(`{"k":"v"}`), intVal("99")}
+		// Only j (9 bytes) counted; id and ts are ints.
+		row := makeRow([]byte("1"), []byte(`{"k":"v"}`), []byte("99"))
 		require.NoError(t, tp.checkJSONRowSize(row, 10))
 		err := tp.checkJSONRowSize(row, 8)
 		require.ErrorContains(t, err, "vreplication: row JSON payload")
