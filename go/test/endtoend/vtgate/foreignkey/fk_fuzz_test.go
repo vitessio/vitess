@@ -55,6 +55,11 @@ type fuzzer struct {
 	queryFormat  QueryFormat
 	noFkSetVar   bool
 	fkState      *bool
+	// shardScoped disables query forms that mutate a vindex column
+	// (UPDATE, REPLACE, INSERT ... ON DUPLICATE KEY UPDATE). Required when
+	// running against the shard-scoped keyspace whose vschema uses the FK
+	// columns as vindexes.
+	shardScoped bool
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -74,7 +79,7 @@ type debugInfo struct {
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool, shardScoped bool) *fuzzer {
 	fz := &fuzzer{
 		concurrency:  concurrency,
 		maxValForId:  maxValForId,
@@ -85,6 +90,7 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 		queryFormat:  queryFormat,
 		fkState:      fkState,
 		noFkSetVar:   false,
+		shardScoped:  shardScoped,
 		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
@@ -96,18 +102,25 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 // The returned set is a list of strings, because for prepared statements, we have to run
 // set queries first and then the final query eventually.
 func (fz *fuzzer) generateQuery() []string {
-	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
+	updateShare := fz.updateShare
+	if fz.shardScoped {
+		// In shard-scoped keyspaces, the FK columns are vindexes and
+		// UPDATE/REPLACE that would change them is unsupported, so skip
+		// UPDATEs entirely here.
+		updateShare = 0
+	}
+	val := rand.IntN(fz.insertShare + updateShare + fz.deleteShare)
 	if val < fz.insertShare {
 		switch fz.queryFormat {
 		case OlapSQLQueries, SQLQueries:
-			return []string{fz.generateInsertDMLQuery(getInsertType())}
+			return []string{fz.generateInsertDMLQuery(fz.getInsertType())}
 		case PreparedStatmentQueries:
-			return fz.getPreparedInsertQueries(getInsertType())
+			return fz.getPreparedInsertQueries(fz.getInsertType())
 		default:
 			panic("Unknown query type")
 		}
 	}
-	if val < fz.insertShare+fz.updateShare {
+	if val < fz.insertShare+updateShare {
 		switch fz.queryFormat {
 		case OlapSQLQueries, SQLQueries:
 			return []string{fz.generateUpdateDMLQuery()}
@@ -127,7 +140,13 @@ func (fz *fuzzer) generateQuery() []string {
 	}
 }
 
-func getInsertType() string {
+// getInsertType picks INSERT vs REPLACE. REPLACE is disabled in shard-scoped
+// keyspaces because the deletion half can be routed to a different shard than
+// the insertion half if the FK column value is changed.
+func (fz *fuzzer) getInsertType() string {
+	if fz.shardScoped {
+		return "insert"
+	}
 	return []string{"insert", "replace"}[rand.IntN(2)]
 }
 
@@ -154,9 +173,10 @@ func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
 
 // getInsertOnDuplicateClause randomly returns an ON DUPLICATE KEY UPDATE
 // clause with a leading space (or empty string) for the given table shape.
-// Only applies to INSERT (not REPLACE).
+// Only applies to INSERT (not REPLACE) and is disabled in shard-scoped mode
+// because the update half would modify a vindex column.
 func (fz *fuzzer) getInsertOnDuplicateClause(insertType, tableName string) string {
-	if insertType != "insert" || rand.IntN(2) == 0 {
+	if fz.shardScoped || insertType != "insert" || rand.IntN(2) == 0 {
 		return ""
 	}
 	if tableName == "fk_t20" {
@@ -433,7 +453,7 @@ func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
 	tableName := fkTables[tableId]
 	// Decide up-front whether this INSERT should carry an ON DUPLICATE KEY
 	// UPDATE clause. REPLACE does not support ON DUPLICATE.
-	useOnDup := insertType == "insert" && rand.IntN(2) == 1
+	useOnDup := !fz.shardScoped && insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
@@ -539,11 +559,15 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 
 // generateParameterizedQuery generates a parameterized query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
-	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
-	if val < fz.insertShare {
-		return fz.generateParameterizedInsertQuery(getInsertType())
+	updateShare := fz.updateShare
+	if fz.shardScoped {
+		updateShare = 0
 	}
-	if val < fz.insertShare+fz.updateShare {
+	val := rand.IntN(fz.insertShare + updateShare + fz.deleteShare)
+	if val < fz.insertShare {
+		return fz.generateParameterizedInsertQuery(fz.getInsertType())
+	}
+	if val < fz.insertShare+updateShare {
 		return fz.generateParameterizedUpdateQuery()
 	}
 	return fz.generateParameterizedDeleteQuery()
@@ -554,7 +578,7 @@ func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query str
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
-	useOnDup := insertType == "insert" && rand.IntN(2) == 1
+	useOnDup := !fz.shardScoped && insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
@@ -713,7 +737,7 @@ func TestFkFuzzTest(t *testing.T) {
 	// Remove all the foreign key constraints for all the replicas.
 	// We can then verify that the replica, and the primary have the same data, to ensure
 	// that none of the queries ever lead to cascades/updates on MySQL level.
-	for _, ks := range []string{shardedKs, unshardedKs} {
+	for _, ks := range []string{shardedKs, unshardedKs, shardScopedKs} {
 		replicas := getReplicaTablets(ks)
 		for _, replica := range replicas {
 			removeAllForeignKeyConstraints(t, replica, ks)
@@ -796,7 +820,7 @@ func TestFkFuzzTest(t *testing.T) {
 	valFalse := false
 	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
 		for _, tt := range testcases {
-			for _, keyspace := range []string{unshardedKs, shardedKs} {
+			for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
 				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
 					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
@@ -815,7 +839,7 @@ func TestFkFuzzTest(t *testing.T) {
 						ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 						// Create the fuzzer.
-						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState)
+						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState, keyspace == shardScopedKs)
 
 						// Start the fuzzer.
 						fz.start(t, keyspace)
