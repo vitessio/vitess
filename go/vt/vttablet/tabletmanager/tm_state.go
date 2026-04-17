@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"syscall"
@@ -87,6 +88,10 @@ type tmState struct {
 	// and has its own mutex.
 	displayState displayState
 
+	// deferredWg tracks in-flight deferred updateLocked goroutines
+	// for test observability.
+	deferredWg sync.WaitGroup
+
 	// allowReadsFromDeniedTables allows readonly operations to execute against
 	// denied tables.
 	allowReadsFromDeniedTables map[topodatapb.TabletType]bool
@@ -123,10 +128,13 @@ func (ts *tmState) Open() {
 func (ts *tmState) Close() {
 	log.Info("In tmState.Close()")
 	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
 	ts.isOpen = false
 	ts.cancel()
+	ts.mu.Unlock()
+
+	// Wait for any in-flight deferred updateLocked goroutines to finish.
+	// cancel() above triggers ts.ctx.Done(), so they will exit promptly.
+	ts.deferredWg.Wait()
 }
 
 func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
@@ -288,7 +296,9 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 		// failures (e.g. MySQL still starting). Uses ts.ctx so the
 		// goroutine is cancelled when the TabletManager shuts down.
 		ts.publishForDisplay()
+		ts.deferredWg.Add(1)
 		go func() {
+			defer ts.deferredWg.Done()
 			const (
 				maxRetryDuration = 60 * time.Second
 				retryInterval    = 5 * time.Second
@@ -299,13 +309,17 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 				updateErr := ts.updateLocked(ts.ctx)
 				ts.mu.Unlock()
 				if updateErr == nil {
+					log.Info("Deferred updateLocked completed successfully")
 					return
 				}
 				if time.Now().After(deadline) {
-					log.Warn(fmt.Sprintf("Deferred updateLocked failed after retries, VTOrc or restart will reconcile: %v", updateErr))
+					log.Warn("Deferred updateLocked failed after retries, VTOrc or restart will reconcile",
+						slog.Any("error", updateErr))
 					return
 				}
-				log.Warn(fmt.Sprintf("Deferred updateLocked failed (will retry in %v): %v", retryInterval, updateErr))
+				log.Warn("Deferred updateLocked failed, will retry",
+					slog.Duration("retry-interval", retryInterval),
+					slog.Any("error", updateErr))
 				select {
 				case <-ts.ctx.Done():
 					log.Warn("Deferred updateLocked cancelled during shutdown")

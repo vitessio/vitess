@@ -844,7 +844,7 @@ func (mysqld *Mysqld) stopReplicationBeforeShutdown(ctx context.Context) bool {
 // to restore replication that was stopped by stopReplicationBeforeShutdown
 // when the subsequent shutdown failed. Uses a 5s timeout.
 func (mysqld *Mysqld) restartReplicationAfterFailedShutdown(ctx context.Context) {
-	startCtx, startCancel := context.WithTimeout(ctx, 5*time.Second)
+	startCtx, startCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer startCancel()
 	conn, err := getPoolReconnect(startCtx, mysqld.dbaPool)
 	if err != nil {
