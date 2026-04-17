@@ -515,11 +515,11 @@ func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlp
 			continue
 		}
 		// MySQL only reports ambiguity when two different bare column
-		// references share the same alias. Literals and expressions
-		// are allowed to duplicate.
+		// references share the same alias. Repeating the same column,
+		// literals, and expressions are allowed to duplicate.
 		_, matchIsCol := match.Expr.(*sqlparser.ColName)
 		_, thisIsCol := ae.Expr.(*sqlparser.ColName)
-		if matchIsCol && thisIsCol {
+		if matchIsCol && thisIsCol && !sqlparser.Equals.Expr(match.Expr, ae.Expr) {
 			return nil, newAmbiguousColumnError(sqlparser.NewColName(lowered))
 		}
 	}

@@ -5703,6 +5703,33 @@
     "plan": "Column 'foobar' in field list is ambiguous"
   },
   {
+    "comment": "Repeating the same column with the same alias is not ambiguous",
+    "query": "SELECT user_id AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id as foobar, user_id as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select user_id as foobar, user_id as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.authoritative"
+      ]
+    }
+  },
+  {
     "comment": "Duplicate literal aliases - subquery resolves to first matching alias, matching MySQL behavior",
     "query": "SELECT 1 AS foobar, 2 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
     "plan": {
