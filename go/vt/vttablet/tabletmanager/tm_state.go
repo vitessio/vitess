@@ -290,11 +290,16 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 
 	var err error
 	if deferUpdateLocked {
-		// Run updateLocked async — topo is updated synchronously below,
-		// but query service/VREngine transitions happen best-effort.
+		// Run updateLocked async — query service/VREngine transitions
+		// happen best-effort. Topo is published synchronously after
+		// launching this goroutine (via publishStateLocked below).
 		// We retry with backoff for up to 60 seconds to cover transient
 		// failures (e.g. MySQL still starting). Uses ts.ctx so the
 		// goroutine is cancelled when the TabletManager shuts down.
+		// Note: the goroutine operates on whatever tablet type is current
+		// when it acquires the lock, not a snapshot from launch time. If
+		// another ChangeTabletType call runs first, the goroutine applies
+		// the newer type's transitions. This is correct (idempotent).
 		ts.publishForDisplay()
 		ts.deferredWg.Add(1)
 		go func() {
@@ -320,11 +325,13 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 				log.Warn("Deferred updateLocked failed, will retry",
 					slog.Duration("retry-interval", retryInterval),
 					slog.Any("error", updateErr))
+				retryTimer := time.NewTimer(retryInterval)
 				select {
 				case <-ts.ctx.Done():
+					retryTimer.Stop()
 					log.Warn("Deferred updateLocked cancelled during shutdown")
 					return
-				case <-time.After(retryInterval):
+				case <-retryTimer.C:
 				}
 			}
 		}()

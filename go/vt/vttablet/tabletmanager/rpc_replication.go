@@ -845,8 +845,12 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 				return err
 			}
 		}
-		log.Warn("SetReplicationSource: MySQL is down, skipping replication configuration")
-		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped")
+		if tablet.Type != topodatapb.TabletType_PRIMARY {
+			log.Warn("SetReplicationSource: local MySQL is down, skipping replication configuration")
+			return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped")
+		}
+		log.Warn("SetReplicationSource: local MySQL is down, tablet demoted from PRIMARY to REPLICA, skipping replication configuration")
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down; tablet demoted from PRIMARY to REPLICA, replication configuration skipped")
 	}
 
 	// convertBoolToSemiSyncAction queries MySQL, so it requires MySQL to be reachable.

@@ -395,14 +395,14 @@ func TestMysqldIsLocalMySQLDown(t *testing.T) {
 	defer mysqld.Close()
 
 	t.Run("mysql is reachable", func(t *testing.T) {
-		assert.False(t, mysqld.IsLocalMySQLDown(context.Background()))
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()))
 	})
 
 	t.Run("mysql is down", func(t *testing.T) {
 		// Close the fake MySQL server to simulate MySQL being down.
 		closeDB()
 
-		assert.True(t, mysqld.IsLocalMySQLDown(context.Background()))
+		assert.True(t, mysqld.IsLocalMySQLDown(t.Context()))
 	})
 }
 
@@ -432,7 +432,7 @@ func TestShutdownStopsReplication(t *testing.T) {
 
 	// Shutdown will fail at the mysqladmin step, but STOP REPLICA
 	// happens before that.
-	mysqld.Shutdown(context.Background(), cnf, false, 1*time.Second)
+	mysqld.Shutdown(t.Context(), cnf, false, 1*time.Second)
 
 	assert.Contains(t, db.QueryLog(), "stop replica")
 }

@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -387,6 +388,9 @@ func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
 	// socket file after SIGKILL is expected — we fall through to return true.
 	fi, sErr := os.Stat(params.UnixSocket)
 	if sErr != nil && !os.IsNotExist(sErr) {
+		log.Warn("IsLocalMySQLDown: unexpected error checking socket file, assuming MySQL is not down",
+			slog.String("socket", params.UnixSocket),
+			slog.Any("error", sErr))
 		return false
 	}
 	if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
@@ -848,7 +852,8 @@ func (mysqld *Mysqld) restartReplicationAfterFailedShutdown(ctx context.Context)
 	defer startCancel()
 	conn, err := getPoolReconnect(startCtx, mysqld.dbaPool)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Failed to restart replication after failed shutdown: could not get connection: %v", err))
+		log.Warn("Failed to restart replication after failed shutdown: could not get connection",
+			slog.Any("error", err))
 		return
 	}
 	defer conn.Recycle()
@@ -857,7 +862,8 @@ func (mysqld *Mysqld) restartReplicationAfterFailedShutdown(ctx context.Context)
 		return
 	}
 	if err := mysqld.executeSuperQueryListConn(startCtx, conn, []string{startCmd}); err != nil {
-		log.Warn(fmt.Sprintf("Failed to restart replication after failed shutdown: %v", err))
+		log.Warn("Failed to restart replication after failed shutdown",
+			slog.Any("error", err))
 	}
 }
 
