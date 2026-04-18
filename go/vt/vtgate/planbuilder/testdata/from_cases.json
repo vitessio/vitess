@@ -4846,5 +4846,29 @@
         "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc"
       }
     }
+  },
+  {
+    "comment": "issue #19557: colocated inner join ON predicate inside LEFT JOIN must stay in ON clause",
+    "query": "select u.Id from user u left join (user_extra ue join ref on ue.col = ref.col) on u.Id = ue.user_id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.Id from user u left join (user_extra ue join ref on ue.col = ref.col) on u.Id = ue.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.Id from `user` as u left join (user_extra as ue, ref) on u.Id = ue.user_id and ue.col = ref.col where 1 != 1",
+        "Query": "select u.Id from `user` as u left join (user_extra as ue, ref) on u.Id = ue.user_id and ue.col = ref.col"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
