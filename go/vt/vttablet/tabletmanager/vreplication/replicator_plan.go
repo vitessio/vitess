@@ -293,6 +293,90 @@ func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
 	return nil
 }
 
+func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if limit <= 0 || afterRow == nil {
+		return nil
+	}
+
+	jsonLength := func(fieldIndex, jsonIndex int) int64 {
+		if partialJSONColumns != nil && beforeRow != nil && isBitSet(partialJSONColumns.Cols, jsonIndex) {
+			if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
+				return 0
+			}
+			return beforeRow.Lengths[fieldIndex]
+		}
+		if fieldIndex >= len(afterRow.Lengths) || afterRow.Lengths[fieldIndex] < 0 {
+			return 0
+		}
+		return afterRow.Lengths[fieldIndex]
+	}
+
+	var total int64
+	var largestName string
+	var largestSize int64
+	addJSONField := func(fieldIndex, jsonIndex int, field *querypb.Field) {
+		if field.Type != querypb.Type_JSON {
+			return
+		}
+		n := jsonLength(fieldIndex, jsonIndex)
+		total += n
+		if n > largestSize {
+			largestSize = n
+			largestName = field.Name
+		}
+	}
+
+	if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
+		fieldsIndex := 0
+		jsonIndex := 0
+		for range tp.BulkInsertValues.BindLocations() {
+			for fieldsIndex < len(tp.Fields) {
+				field := tp.Fields[fieldsIndex]
+				fieldIndex := fieldsIndex
+				fieldJSONIndex := jsonIndex
+				fieldsIndex++
+				if field.Type == querypb.Type_JSON {
+					jsonIndex++
+				}
+				if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+					continue
+				}
+				addJSONField(fieldIndex, fieldJSONIndex, field)
+				break
+			}
+		}
+	} else {
+		jsonIndex := 0
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			fieldJSONIndex := jsonIndex
+			if field.Type == querypb.Type_JSON {
+				jsonIndex++
+			}
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			addJSONField(i, fieldJSONIndex, field)
+		}
+	}
+
+	if total > limit {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: row JSON payload %d bytes exceeds vreplication-max-row-json-bytes=%d (table=%s, largest_json_column=%s @ %d bytes)",
+			total, limit, tp.TargetName, largestName, largestSize)
+	}
+	return nil
+}
+
+func (tp *TablePlan) maxRowJSONBytes() int64 {
+	if tp.WorkflowConfig == nil {
+		return 0
+	}
+	return tp.WorkflowConfig.MaxRowJSONBytes
+}
+
 func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
 	insertPrefix := tp.BulkInsertFront.Query + " values "
 	insertSuffixLen := 0
@@ -316,10 +400,11 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 	sqlbuffer.WriteString(insertPrefix)
 
 	var lastResult *sqltypes.Result
+	limit := tp.maxRowJSONBytes()
 	rowCount := 0
 	for _, row := range rows {
-		if tp.WorkflowConfig != nil {
-			if err := tp.checkJSONRowSize(row, tp.WorkflowConfig.MaxRowJSONBytes); err != nil {
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(row, nil, nil, limit); err != nil {
 				return nil, err
 			}
 		}
@@ -477,9 +562,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 	}
 	if rowChange.After != nil {
-		if err := tp.checkJSONRowSize(rowChange.After, tp.WorkflowConfig.MaxRowJSONBytes); err != nil {
-			return nil, err
-		}
 		jsonIndex := 0
 		after = true
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
@@ -527,11 +609,17 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			bindvars["a_"+field.Name] = bindVar
 		}
 	}
+	limit := tp.maxRowJSONBytes()
 	switch {
 	case !before && after:
 		// Only apply inserts for rows whose primary keys are within the range of rows already copied.
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
+		}
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
 		}
 		if tp.isPartial(rowChange) {
 			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
@@ -550,6 +638,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
+			if limit > 0 {
+				if err := tp.checkJSONRowSize(rowChange.After, limit); err != nil {
+					return nil, err
+				}
+			}
 			if tp.isPartial(rowChange) {
 				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
 				if err != nil {
@@ -561,12 +654,18 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return execParsedQuery(tp.Update, bindvars, executor)
 			}
 		}
+		skipInsert := tp.isOutsidePKRange(bindvars, before, after, "insert")
+		if !skipInsert && limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, rowChange.Before, rowChange.JsonPartialValues, limit); err != nil {
+				return nil, err
+			}
+		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
 		}
-		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+		if skipInsert {
 			return nil, nil
 		}
 		if tp.isPartial(rowChange) {
@@ -720,8 +819,14 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		return executor(insertPrefix + vals.String())
 	}
 
+	limit := tp.maxRowJSONBytes()
 	newStmt := true
 	for _, rowInsert := range rowInserts {
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
 		var (
 			err     error
 			bindVar *querypb.BindVariable
