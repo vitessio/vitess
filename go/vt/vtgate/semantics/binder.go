@@ -76,13 +76,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.JoinCondition:
 		return b.bindJoinCondition(node)
 	case *sqlparser.ColName:
-		if err := b.bindColName(node); err != nil {
-			return err
-		}
-		if expr, ok := b.aliasRewrites[node]; ok {
-			cursor.Replace(sqlparser.Clone(expr))
-		}
-		return nil
+		return b.bindColName(node)
 	case *sqlparser.CountStar:
 		return b.bindCountStar(node)
 	case *sqlparser.Union:

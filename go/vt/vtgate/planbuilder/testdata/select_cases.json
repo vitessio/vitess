@@ -5685,8 +5685,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from authoritative where 1 != 1",
-            "Query": "select 1 from authoritative"
+            "FieldQuery": "select 1 as foobar from authoritative where 1 != 1",
+            "Query": "select 1 as foobar from authoritative"
           },
           {
             "InputName": "Outer",
@@ -5696,8 +5696,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 as foobar, :__sq1 /* INT64 */ as `(select 1 from authoritative)` from authoritative where 1 != 1",
-            "Query": "select 1 as foobar, :__sq1 /* INT64 */ as `(select 1 from authoritative)` from authoritative where user_id = 1",
+            "FieldQuery": "select 1 as foobar, :__sq1 /* INT64 */ as `(select foobar from authoritative)` from authoritative where 1 != 1",
+            "Query": "select 1 as foobar, :__sq1 /* INT64 */ as `(select foobar from authoritative)` from authoritative where user_id = 1",
             "Values": [
               "1"
             ],
