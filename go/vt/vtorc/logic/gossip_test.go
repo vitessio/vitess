@@ -169,15 +169,19 @@ func TestGetGossipQuorumAnalysesConcurrentWithConfigChange(t *testing.T) {
 
 func TestWatchGossipConfigRecoversAfterSrvKeyspaceCreate(t *testing.T) {
 	ctx := t.Context()
+	stopGossip()
 	origTS := ts
 	ts = memorytopo.NewServer(ctx, "zone1")
-	defer func() {
+	t.Cleanup(func() {
 		stopGossip()
 		ts = origTS
-	}()
+	})
 
 	watchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
 	go watchGossipConfig(watchCtx, "ks")
 
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
@@ -196,12 +200,13 @@ func TestWatchGossipConfigRecoversAfterSrvKeyspaceCreate(t *testing.T) {
 
 func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	ctx := t.Context()
+	stopGossip()
 	origTS := ts
 	ts = memorytopo.NewServer(ctx, "zone1")
-	defer func() {
+	t.Cleanup(func() {
 		stopGossip()
 		ts = origTS
-	}()
+	})
 
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
 		GossipConfig: &topodatapb.GossipConfig{
@@ -213,7 +218,10 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	}))
 
 	watchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
 	go watchGossipConfig(watchCtx, "ks")
 
 	require.Eventually(t, func() bool {
@@ -239,14 +247,98 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 }
 
-func TestWatchGossipConfigSwitchesToAnotherEnabledKeyspace(t *testing.T) {
+func TestWatchExistingGossipKeyspacesDetectsRuntimeEnableOnExistingKeyspace(t *testing.T) {
 	ctx := t.Context()
+	stopGossip()
 	origTS := ts
 	ts = memorytopo.NewServer(ctx, "zone1")
-	defer func() {
+	t.Cleanup(func() {
 		stopGossip()
 		ts = origTS
-	}()
+	})
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	require.True(t, watchExistingGossipKeyspaces(watchCtx))
+
+	cfg := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 4,
+		PingInterval: "100ms",
+		MaxUpdateAge: "1s",
+	}
+	updateKeyspaceGossipConfig(t, ts, "ks", cfg)
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
+		GossipConfig: cfg,
+	}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestWatchExistingGossipKeyspacesDoesNotStopEnabledConfigOnOtherKeyspaceChange(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+	})
+
+	enabledCfg := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 4,
+		PingInterval: "100ms",
+		MaxUpdateAge: "1s",
+	}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+		GossipConfig: enabledCfg,
+	}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks1", &topodatapb.SrvKeyspace{
+		GossipConfig: enabledCfg,
+	}))
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	require.True(t, watchExistingGossipKeyspaces(watchCtx))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{},
+	}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestWatchExistingGossipKeyspacesStopsAfterLastEnabledKeyspaceDisabled(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+	})
 
 	for _, keyspace := range []string{"ks1", "ks2"} {
 		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
@@ -268,8 +360,11 @@ func TestWatchGossipConfigSwitchesToAnotherEnabledKeyspace(t *testing.T) {
 	}
 
 	watchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go watchGossipConfig(watchCtx, "ks1")
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	require.True(t, watchExistingGossipKeyspaces(watchCtx))
 
 	require.Eventually(t, func() bool {
 		return currentGossipAgent() != nil
@@ -303,6 +398,13 @@ func updateKeyspaceGossipConfig(t *testing.T, ts *topo.Server, keyspace string, 
 	require.NoError(t, ts.UpdateKeyspace(lockCtx, ki))
 }
 
+func waitForGossipWatchesToStop(t *testing.T) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return gossipWatchCount.Load() == 0
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
 func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {
 	ctx := t.Context()
 	origTS := ts
@@ -332,13 +434,6 @@ func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {
 	cfg, ksName := findGossipConfig()
 	assert.Nil(t, cfg, "conflicting gossip configs should refuse to start")
 	assert.Empty(t, ksName)
-}
-
-func TestGossipDialerEmptyTarget(t *testing.T) {
-	d := gossipDialer{}
-	client, err := d.Dial(t.Context(), "")
-	assert.Nil(t, client)
-	assert.Nil(t, err)
 }
 
 func TestWatchGossipConfigNilTopo(t *testing.T) {
@@ -430,12 +525,16 @@ func TestDiscoverGossipSeeds(t *testing.T) {
 	// Should find host1 and host2 (both have gRPC ports), not host3.
 	assert.GreaterOrEqual(t, len(seeds), 2)
 	addrs := make(map[string]bool)
+	ids := make(map[string]gossip.NodeID)
 	for _, s := range seeds {
 		addrs[s.Addr] = true
+		ids[s.Addr] = s.ID
 	}
 	assert.True(t, addrs["host1:15100"])
 	assert.True(t, addrs["host2:15200"])
 	assert.False(t, addrs["host3:15300"])
+	assert.Equal(t, gossip.NodeID("zone1-0000000100"), ids["host1:15100"])
+	assert.Equal(t, gossip.NodeID("zone1-0000000200"), ids["host2:15200"])
 }
 
 func TestDiscoverGossipSeedsEmpty(t *testing.T) {

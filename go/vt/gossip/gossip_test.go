@@ -19,6 +19,7 @@ package gossip
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -430,6 +431,36 @@ func TestGRPCTransportErrorPropagation(t *testing.T) {
 	joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, joinResp)
+}
+
+func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = lis.Close()
+	})
+
+	server := grpc.NewServer()
+	t.Cleanup(server.Stop)
+
+	agent := New(Config{NodeID: "node1", BindAddr: lis.Addr().String()}, nil, &testClock{now: time.Unix(0, 0)})
+	gossippb.RegisterGossipServer(server, &Service{GetAgent: func() *Gossip { return agent }})
+
+	go func() {
+		_ = server.Serve(lis)
+	}()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	client, err := GRPCDialer{}.Dial(ctx, lis.Addr().String())
+	require.NoError(t, err)
+
+	resp, err := client.Join(ctx, toProtoJoinRequest(&JoinRequest{
+		Member: Member{ID: "node2", Addr: "node2"},
+	}))
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.Members)
 }
 
 func TestGossipServiceNilAgent(t *testing.T) {

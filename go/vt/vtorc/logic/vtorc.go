@@ -266,12 +266,12 @@ func ContinuousDiscovery() {
 	}
 
 	go handleDiscoveryRequests()
-	go startGossip()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
+	go startGossip()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {

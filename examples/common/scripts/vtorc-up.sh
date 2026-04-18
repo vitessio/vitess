@@ -18,6 +18,7 @@ vtorc \
   --cell $cell \
   --port $port \
   --log-format text \
+  --gossip-listen-addr localhost:16110 \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!

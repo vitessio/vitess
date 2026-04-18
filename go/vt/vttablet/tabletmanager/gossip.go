@@ -93,7 +93,10 @@ func (tm *TabletManager) stopGossipLifecycle() {
 	}
 }
 
-var gossipServiceOnce sync.Once
+var (
+	gossipDebugHandlerOnce sync.Once
+	gossipGRPCServiceOnce  sync.Once
+)
 
 // registerGossipService registers the gossip gRPC service and debug HTTP
 // endpoint. It is safe to call multiple times — registration happens only
@@ -104,13 +107,7 @@ func registerGossipService(tm *TabletManager) {
 		return
 	}
 
-	gossipServiceOnce.Do(func() {
-		if servenv.GRPCCheckServiceMap("gossip") {
-			gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
-				GetAgent: func() *gossip.Gossip { return tm.currentGossipAgent() },
-			})
-		}
-
+	gossipDebugHandlerOnce.Do(func() {
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			agent := tm.currentGossipAgent()
@@ -119,6 +116,16 @@ func registerGossipService(tm *TabletManager) {
 			} else {
 				_, _ = w.Write([]byte("null\n"))
 			}
+		})
+	})
+
+	if servenv.GRPCServer == nil {
+		return
+	}
+
+	gossipGRPCServiceOnce.Do(func() {
+		gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
+			GetAgent: func() *gossip.Gossip { return tm.currentGossipAgent() },
 		})
 	})
 }

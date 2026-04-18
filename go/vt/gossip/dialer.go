@@ -34,7 +34,18 @@ type GRPCDialer struct{}
 
 // Dial creates a new gRPC connection to the target and returns a gossip client.
 func (GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
-	conn, err := grpcclient.DialContext(ctx, target, grpcclient.FailFast(false))
+	opt, err := grpcclient.SecureDialOption("", "", "", "", "")
+	if err != nil {
+		log.Error("gossip dial failed", slog.String("target", target), slog.Any("error", err))
+		return nil, err
+	}
+
+	conn, err := grpcclient.DialContext(
+		ctx,
+		target,
+		grpcclient.FailFast(false),
+		opt,
+	)
 	if err != nil {
 		log.Error("gossip dial failed", slog.String("target", target), slog.Any("error", err))
 		return nil, err
