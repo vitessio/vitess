@@ -47,6 +47,12 @@ type binder struct {
 	// walked. This is used to reject forward references to aliases in
 	// subqueries, matching MySQL's behavior.
 	availableAliases map[*sqlparser.AliasedExpr]struct{}
+
+	// aliasRewrites records column references that resolved to a parent
+	// SELECT alias whose expression has no table dependencies. These
+	// references are replaced with a clone of the alias expression so the
+	// subquery stays uncorrelated and can be planned as a standalone query.
+	aliasRewrites map[*sqlparser.ColName]sqlparser.Expr
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
@@ -59,6 +65,7 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		typer:            typer,
 		usingJoinInfo:    map[TableSet]map[string]TableSet{},
 		availableAliases: map[*sqlparser.AliasedExpr]struct{}{},
+		aliasRewrites:    map[*sqlparser.ColName]sqlparser.Expr{},
 	}
 }
 
@@ -69,7 +76,13 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.JoinCondition:
 		return b.bindJoinCondition(node)
 	case *sqlparser.ColName:
-		return b.bindColName(node)
+		if err := b.bindColName(node); err != nil {
+			return err
+		}
+		if expr, ok := b.aliasRewrites[node]; ok {
+			cursor.Replace(sqlparser.Clone(expr))
+		}
+		return nil
 	case *sqlparser.CountStar:
 		return b.bindCountStar(node)
 	case *sqlparser.Union:
@@ -331,16 +344,13 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 					typ := b.typer.exprType(ae.Expr)
 					if recursive.IsEmpty() && direct.IsEmpty() {
 						// The aliased expression has no table dependencies
-						// (e.g. a literal such as `1 AS x`). Attach the parent
-						// scope's tables so the subquery is still classified
-						// as correlated; otherwise the planner may pull it out
-						// and emit SQL that references the alias name as if it
-						// were a column of the subquery's own tables.
-						for _, tbl := range current.tables {
-							ts := tbl.getTableSet(b.org)
-							recursive = recursive.Merge(ts)
-							direct = direct.Merge(ts)
-						}
+						// (e.g. a literal such as `1 AS x`). Schedule a
+						// rewrite of this column reference to a clone of the
+						// alias expression so the subquery stays truly
+						// uncorrelated and can be planned as a standalone
+						// query instead of emitting SQL that references the
+						// alias name as if it were a column of the subquery.
+						b.aliasRewrites[colName] = ae.Expr
 					}
 					return dependency{certain: true, recursive: recursive, direct: direct, typ: typ}, nil
 				}
