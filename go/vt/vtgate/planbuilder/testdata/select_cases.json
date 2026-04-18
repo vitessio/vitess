@@ -5663,6 +5663,12 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
+    "comment": "Literal parent alias referenced by subquery with authoritative FROM is treated as correlated",
+    "query": "SELECT 1 AS foobar, (SELECT foobar FROM authoritative) FROM authoritative WHERE user_id = 1",
+    "skip_e2e": true,
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
     "comment": "Nested subquery resolves alias across multiple scope levels",
     "query": "SELECT user_id AS foobar, (SELECT (SELECT foobar) AS barbaz FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
     "skip_e2e": true,

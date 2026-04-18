@@ -329,6 +329,19 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 					recursive := b.recursive.dependencies(ae.Expr)
 					direct := b.direct.dependencies(ae.Expr)
 					typ := b.typer.exprType(ae.Expr)
+					if recursive.IsEmpty() && direct.IsEmpty() {
+						// The aliased expression has no table dependencies
+						// (e.g. a literal such as `1 AS x`). Attach the parent
+						// scope's tables so the subquery is still classified
+						// as correlated; otherwise the planner may pull it out
+						// and emit SQL that references the alias name as if it
+						// were a column of the subquery's own tables.
+						for _, tbl := range current.tables {
+							ts := tbl.getTableSet(b.org)
+							recursive = recursive.Merge(ts)
+							direct = direct.Merge(ts)
+						}
+					}
 					return dependency{certain: true, recursive: recursive, direct: direct, typ: typ}, nil
 				}
 			}
