@@ -1423,7 +1423,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 
 			// Set up consolidator pre-conditions.
 
-			fakePendingResult := &sync2.FakePendingResult{}
+			fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
 			fakePendingResult.SetResult(result)
 			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
 				Created:       !tcase.consolidatorHasIdenticalQuery,
@@ -1494,10 +1494,11 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	}
 
 	// Set up consolidator to simulate an identical query already running (Created=false)
-	fakePendingResult := &sync2.FakePendingResult{}
+	fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
 	fakePendingResult.SetResult(result)
 	// Start with waiter count above the cap (2 > 1), so the condition fails
 	fakePendingResult.WaiterCount = 2
+	fakeConsolidator.SetTotalWaiterCount(2)
 
 	fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
 		Created:       false, // Simulate identical query already running
@@ -1528,10 +1529,9 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	// Verify we did NOT broadcast (because we're not the original)
 	require.Equal(t, 0, fakePendingResult.BroadcastCalls)
 
-	// Verify AddWaiterCounter was called: once with 0 (to check count), once with -1 (cleanup)
-	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 2)
-	require.Equal(t, int64(0), fakePendingResult.AddWaiterCounterCalls[0])  // Check current count
-	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[1]) // Decrement
+	// Verify AddWaiterCounter was called once with -1 (cleanup)
+	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 1)
+	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[0])
 
 	// Verify fallback executed the query independently
 	require.Equal(t, 1, db.GetQueryCalledNum(input))
