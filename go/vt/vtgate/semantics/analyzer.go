@@ -387,14 +387,16 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	a.lateInit()
 
-	return a.lateAnalyze(statement)
+	if err := a.lateAnalyze(statement); err != nil {
+		return err
+	}
+
+	a.applyAliasRewrites(statement)
+	return nil
 }
 
 func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
-	if a.err == nil {
-		a.applyAliasRewrites(statement)
-	}
 	return a.err
 }
 
