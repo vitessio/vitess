@@ -73,24 +73,24 @@ func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps, cfg *querythrot
 
 // Configuration constants for caching behavior
 const (
-	// _throttleCheckTimeout defines the timeout for individual throttle check calls
-	_throttleCheckTimeout = 5 * time.Second
+	// throttleCheckTimeout defines the timeout for individual throttle check calls
+	throttleCheckTimeout = 5 * time.Second
 
-	_stmtTypeNotAvailable              = "NA"
-	_decisionPathFast                  = "fast"
-	_decisionPathFull                  = "full"
-	_decisionOutcomeAllowed            = "allowed"
-	_decisionOutcomeThrottled          = "throttled"
-	_decisionReasonBypassFast          = "bypass_fast"
-	_decisionReasonBypassPrior         = "bypass_priority"
-	_decisionReasonNoRuleForTabletType = "no_rule_for_tablet_type"
-	_decisionReasonNoRuleForStmtType   = "no_rule_for_stmt_type"
-	_decisionReasonNoMetricBreach      = "no_metric_breach"
-	_decisionReasonMetricBreach        = "metric_breach"
-	_decisionReasonQueryAllowed        = "query_allowed"
+	stmtTypeNotAvailable              = "NA"
+	decisionPathFast                  = "fast"
+	decisionPathFull                  = "full"
+	decisionOutcomeAllowed            = "allowed"
+	decisionOutcomeThrottled          = "throttled"
+	decisionReasonBypassFast          = "bypass_fast"
+	decisionReasonBypassPrior         = "bypass_priority"
+	decisionReasonNoRuleForTabletType = "no_rule_for_tablet_type"
+	decisionReasonNoRuleForStmtType   = "no_rule_for_stmt_type"
+	decisionReasonNoMetricBreach      = "no_metric_breach"
+	decisionReasonMetricBreach        = "metric_breach"
+	decisionReasonQueryAllowed        = "query_allowed"
 
-	_cacheRefreshStatusSuccess = "success"
-	_cacheRefreshStatusTimeout = "timeout"
+	cacheRefreshStatusSuccess = "success"
+	cacheRefreshStatusTimeout = "timeout"
 )
 
 // cacheState holds the immutable cached throttle check result state.
@@ -227,15 +227,15 @@ func (s *TabletThrottlerStrategy) runCacheUpdater() {
 
 // refreshCache updates the cached throttle check results.
 func (s *TabletThrottlerStrategy) refreshCache() {
-	ctx, cancel := context.WithTimeout(s.ctx, _throttleCheckTimeout)
+	ctx, cancel := context.WithTimeout(s.ctx, throttleCheckTimeout)
 	defer cancel()
 
 	start := time.Now()
 	checkResult, checkOk := s.throttleClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 
-	status := _cacheRefreshStatusSuccess
+	status := cacheRefreshStatusSuccess
 	if err := ctx.Err(); err == context.DeadlineExceeded {
-		status = _cacheRefreshStatusTimeout
+		status = cacheRefreshStatusTimeout
 	} else {
 		// Create new immutable state and store atomically
 		state := &cacheState{
@@ -278,7 +278,7 @@ func (s *TabletThrottlerStrategy) getCachedThrottleResult(ctx context.Context) (
 //
 // Parameters:
 //   - ctx: context for timeout/cancellation control.
-//   - targetTabletType: the type of tablet the query is being run against (e.g., MASTER, REPLICA).
+//   - targetTabletType: the type of tablet the query is being run against (e.g., PRIMARY, REPLICA).
 //   - sql: the raw SQL query string.
 //   - transactionID: the ID of the transaction (not used in throttling logic).
 //   - attrs: pre-computed query attributes containing workload name and priority.
@@ -303,7 +303,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// This optimizes for the common case (90-95% of queries) where checkOk == true
 	if s.running.Load() {
 		if state := s.cachedState.Load(); state != nil && state.ok {
-			s.recordFastDecision(tabletTypeStr, _decisionOutcomeAllowed, startTime)
+			s.recordFastDecision(tabletTypeStr, decisionOutcomeAllowed, startTime)
 			return registry.ThrottleDecision{
 				Throttle: false,
 				Message:  "System healthy, fast-path bypass",
@@ -325,7 +325,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// If priority check fails, skip all expensive throttle checks
 	priorityCheck := s.randIntN(sqlparser.MaxPriorityValue) < priority
 	if !priorityCheck {
-		s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeAllowed, _decisionReasonBypassPrior, startTime)
+		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonBypassPrior, startTime)
 		return registry.ThrottleDecision{
 			Throttle: false,
 			Message:  fmt.Sprintf("High priority query (priority=%d), skip throttling", priority),
@@ -337,7 +337,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	cfg := s.config.Load()
 	stmtRules, ok := cfg.TabletRules[tabletTypeStr]
 	if !ok {
-		s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeAllowed, _decisionReasonNoRuleForTabletType, startTime)
+		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoRuleForTabletType, startTime)
 		return registry.ThrottleDecision{
 			Throttle: false,
 			Message:  "No throttling rules for tablet type: " + targetTabletType.String(),
@@ -348,7 +348,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// Step 4: Look up metric rules for this statement type
 	metricRuleSet, ok := stmtRules.GetStatementRules()[stmtType]
 	if !ok {
-		s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeAllowed, _decisionReasonNoRuleForStmtType, startTime)
+		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoRuleForStmtType, startTime)
 		return registry.ThrottleDecision{
 			Throttle: false,
 			Message:  "No throttling rules for SQL type: " + stmtType,
@@ -360,7 +360,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	checkResult, checkOk := s.getCachedThrottleResult(ctx)
 	// If check passes, system is not overloaded → allow query
 	if checkOk {
-		s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeAllowed, _decisionReasonNoMetricBreach, startTime)
+		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: false,
 			Message:  "System not overloaded, allowing query",
@@ -401,7 +401,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 
 	// Step 8: Apply probabilistic throttling based on max throttle ratio (priority check already passed)
 	if maxThrottleRatio > 0 && maxThrottleRatio > s.randFloat64() {
-		s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeThrottled, _decisionReasonMetricBreach, startTime)
+		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeThrottled, decisionReasonMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: true,
 			Message: fmt.Sprintf("[VTTabletThrottler] Query=\"%s\" throttled: workload=%s priority=%d metric=%s value=%."+
@@ -414,7 +414,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 		}
 	}
 	// No throttle triggered → allow query
-	s.recordFullDecision(tabletTypeStr, stmtType, _decisionOutcomeAllowed, _decisionReasonQueryAllowed, startTime)
+	s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonQueryAllowed, startTime)
 	return registry.ThrottleDecision{
 		Throttle: false,
 		Message:  "No throttling conditions met",
@@ -423,7 +423,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 
 // GetStrategyName returns the name of the strategy.
 func (s *TabletThrottlerStrategy) GetStrategyName() string {
-	return string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())
+	return querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
 }
 
 // GetThrottleDecision determines the throttle ratio (0.0–1.0) and the breached threshold.
@@ -448,7 +448,7 @@ func GetThrottleDecision(value float64, thresholds []*querythrottlerpb.ThrottleT
 }
 
 func (s *TabletThrottlerStrategy) recordFastDecision(tabletType, outcome string, start time.Time) {
-	decisionCount.Add([]string{tabletType, _stmtTypeNotAvailable, _decisionPathFast, outcome, _decisionReasonBypassFast}, 1)
+	decisionCount.Add([]string{tabletType, stmtTypeNotAvailable, decisionPathFast, outcome, decisionReasonBypassFast}, 1)
 
 	if s.fastPathLatencySampleRate > 0 && s.randFloat64() < s.fastPathLatencySampleRate {
 		fastDecisionLatency.Record([]string{tabletType, outcome}, start)
@@ -456,7 +456,7 @@ func (s *TabletThrottlerStrategy) recordFastDecision(tabletType, outcome string,
 }
 
 func (s *TabletThrottlerStrategy) recordFullDecision(tabletType, stmtType, outcome, reason string, start time.Time) {
-	decisionCount.Add([]string{tabletType, stmtType, _decisionPathFull, outcome, reason}, 1)
+	decisionCount.Add([]string{tabletType, stmtType, decisionPathFull, outcome, reason}, 1)
 
 	fullDecisionLatency.Record([]string{tabletType, stmtType, outcome}, start)
 }
