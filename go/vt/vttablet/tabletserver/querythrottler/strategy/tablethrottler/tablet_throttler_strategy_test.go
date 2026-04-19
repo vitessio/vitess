@@ -118,7 +118,7 @@ type testRandomFuncs struct {
 }
 
 // newTestStrategyWithRandom creates a TabletThrottlerStrategy with injected random functions for deterministic testing.
-func newTestStrategyWithRandom(client ThrottleClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
+func newTestStrategyWithRandom(client ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
 	strategy := NewTabletThrottlerStrategy(client, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
 	if randFuncs.randFloat64 != nil {
 		strategy.randFloat64 = randFuncs.randFloat64

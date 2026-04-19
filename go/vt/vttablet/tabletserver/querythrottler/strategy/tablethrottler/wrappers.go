@@ -25,19 +25,19 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
-// ThrottleClientWrapper defines the methods we use from a Throttler client.
+// ThrottlerClientWrapper defines the methods we use from a Throttler client.
 // This is used to make the code testable.
-type ThrottleClientWrapper interface {
+type ThrottlerClientWrapper interface {
 	ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
 }
 
-// assert that throttle.Client implements ThrottleClientWrapper.
-var _ ThrottleClientWrapper = (*throttle.Client)(nil)
+// assert that throttle.Client implements ThrottlerClientWrapper.
+var _ ThrottlerClientWrapper = (*throttle.Client)(nil)
 
-// assert that FakeThrottleClientWrapper implements ThrottleClientWrapper.
-var _ ThrottleClientWrapper = (*FakeThrottleClientWrapper)(nil)
+// assert that FakeThrottleClientWrapper implements ThrottlerClientWrapper.
+var _ ThrottlerClientWrapper = (*FakeThrottleClientWrapper)(nil)
 
-// FakeThrottleClientWrapper is a test fake that implements ThrottleClientWrapper.
+// FakeThrottleClientWrapper is a test fake that implements ThrottlerClientWrapper.
 // It is thread-safe to prevent race conditions during testing.
 type FakeThrottleClientWrapper struct {
 	mu              sync.RWMutex
@@ -55,7 +55,7 @@ func NewFakeThrottleClientWrapper(checkResult *throttle.CheckResult, ok bool) *F
 	}
 }
 
-// ThrottleCheckOK implements the ThrottleClientWrapper interface.
+// ThrottleCheckOK implements the ThrottlerClientWrapper interface.
 // Thread-safe method that uses read lock for concurrent access.
 func (f *FakeThrottleClientWrapper) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (*throttle.CheckResult, bool) {
 	f.callCount.Add(1)

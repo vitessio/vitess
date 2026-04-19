@@ -101,12 +101,12 @@ type cacheState struct {
 
 // TabletThrottlerStrategy uses the Vitess Tablet Throttler (https://vitess.io/docs/21.0/reference/features/tablet-throttler) to enforce throttling.
 type TabletThrottlerStrategy struct {
-	throttleClient ThrottleClientWrapper
-	config         atomic.Pointer[querythrottlerpb.TabletStrategyConfig]
-	tabletConfig   *tabletenv.TabletConfig
-	keyspace       string // keyspace for targeted SrvKeyspace watch
-	cell           string
-	srvTopoServer  srvtopo.Server
+	throttlerClient ThrottlerClientWrapper
+	config          atomic.Pointer[querythrottlerpb.TabletStrategyConfig]
+	tabletConfig    *tabletenv.TabletConfig
+	keyspace        string // keyspace for targeted SrvKeyspace watch
+	cell            string
+	srvTopoServer   srvtopo.Server
 
 	// Caching field for throttle check results - single atomic for race-free access
 	cachedState atomic.Pointer[cacheState]
@@ -129,11 +129,11 @@ type TabletThrottlerStrategy struct {
 }
 
 // NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy.
-func NewTabletThrottlerStrategy(throttleClient ThrottleClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) *TabletThrottlerStrategy {
+func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) *TabletThrottlerStrategy {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	strategy := &TabletThrottlerStrategy{
-		throttleClient:            throttleClient,
+		throttlerClient:           throttleClient,
 		tabletConfig:              tabletConfig,
 		ctx:                       ctx,
 		cancel:                    cancel,
@@ -231,7 +231,7 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 	defer cancel()
 
 	start := time.Now()
-	checkResult, checkOk := s.throttleClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
+	checkResult, checkOk := s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 
 	status := cacheRefreshStatusSuccess
 	if err := ctx.Err(); err == context.DeadlineExceeded {
@@ -258,7 +258,7 @@ func (s *TabletThrottlerStrategy) getCachedThrottleResult(ctx context.Context) (
 		// If cache is running but state is nil (not initialized yet), fall back to direct call
 		if state == nil {
 			cacheMisses.Add(1)
-			return s.throttleClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
+			return s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 		}
 
 		cacheHits.Add(1)
@@ -266,7 +266,7 @@ func (s *TabletThrottlerStrategy) getCachedThrottleResult(ctx context.Context) (
 	}
 
 	// Fallback: direct call if cache not running (e.g., during startup)
-	return s.throttleClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
+	return s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 }
 
 // Evaluate determines whether a given SQL query should be throttled
