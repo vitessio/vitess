@@ -32,6 +32,7 @@ import "topodata.proto";
 import "vschema.proto";
 import "vtrpc.proto";
 import "vttime.proto";
+import "querythrottler.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -2287,4 +2288,12 @@ message SetVtorcEmergencyReparentRequest {
 }
 
 message SetVtorcEmergencyReparentResponse {
+}
+
+message UpdateQueryThrottlerConfigRequest {
+  string keyspace = 1;
+  querythrottler.Config query_throttler_config = 2;
+}
+
+message UpdateQueryThrottlerConfigResponse {
 }

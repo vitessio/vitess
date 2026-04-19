@@ -386,4 +386,7 @@ service Vtctld {
   // GetMirrorRules returns the VSchema routing rules.
   rpc GetMirrorRules(vtctldata.GetMirrorRulesRequest) returns (vtctldata.GetMirrorRulesResponse) {};
   rpc WorkflowMirrorTraffic(vtctldata.WorkflowMirrorTrafficRequest) returns (vtctldata.WorkflowMirrorTrafficResponse) {};
+  // UpdateQueryThrottlerConfig updated the query throttler config.
+  rpc UpdateQueryThrottlerConfig(vtctldata.UpdateQueryThrottlerConfigRequest) returns (vtctldata.UpdateQueryThrottlerConfigResponse) {};
+
 }
