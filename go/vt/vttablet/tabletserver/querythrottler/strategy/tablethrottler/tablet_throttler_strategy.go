@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"reflect"
 	"sort"
@@ -31,7 +32,6 @@ import (
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -46,62 +46,18 @@ var (
 	_ registry.ThrottlingStrategyHandler = (*TabletThrottlerStrategy)(nil)
 	_ registry.StrategyFactory           = (*tabletThrottlerStrategyFactory)(nil)
 
-	// Named exporter for TabletThrottlerStrategy metrics.
-	// Using a named exporter (non-empty name) ensures thread-safe deduplication
-	// via exporterMu mutex and exportedSingleCountVars/exportedTimingsVars maps.
-	// This prevents panics when switching strategies (TabletThrottler → Cinnamon → TabletThrottler)
-	// because the exporter returns existing metrics instead of re-registering them.
-	throttlerExporter = servenv.NewExporter("TabletThrottler", "Tablet")
-	sharedMetrics     *tabletThrottlerMetrics
+	_metricsPrefix = querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
+
+	cacheMisses         = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
+	cacheHits           = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
+	decisionCount       = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"tablet_type", "stmt_type", "path", "outcome", "reason"})
+	fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"tablet_type", "outcome"})
+	fullDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"tablet_type", "stmt_type", "outcome"})
+	cacheLoadLatency    = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"status"})
 )
 
 func init() {
 	registry.Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, &tabletThrottlerStrategyFactory{})
-}
-
-// initMetrics initializes metrics for TabletThrottlerStrategy using a dedicated named exporter.
-// Named exporters provide thread-safe deduplication via exporterMu mutex, preventing panics
-// when switching strategies (TabletThrottler → Cinnamon → TabletThrottler).
-//
-// Unlike unnamed exporters (empty name) which directly call expvar.Publish and panic on
-// duplicate names, named exporters check tracking maps first and return existing metrics.
-func initMetrics() *tabletThrottlerMetrics {
-	if sharedMetrics != nil {
-		return sharedMetrics
-	}
-
-	prefix := querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
-	sharedMetrics = &tabletThrottlerMetrics{
-		cacheMisses: throttlerExporter.NewCounter(
-			prefix+"CacheMisses",
-			"incoming query throttler cache misses",
-		),
-		cacheHits: throttlerExporter.NewCounter(
-			prefix+"CacheHits",
-			"incoming query throttler cache hits",
-		),
-		decisionCount: throttlerExporter.NewCountersWithMultiLabels(
-			prefix+"DecisionCount",
-			"tablet throttler decisions by outcome and reason",
-			[]string{"tablet_type", "stmt_type", "path", "outcome", "reason"},
-		),
-		fastDecisionLatency: throttlerExporter.NewMultiTimings(
-			prefix+"FastDecisionLatencyMicroseconds",
-			"fast-path tablet throttler decision latency in microseconds",
-			[]string{"tablet_type", "outcome"},
-		),
-		fullDecisionLatency: throttlerExporter.NewMultiTimings(
-			prefix+"FullDecisionLatencyMicroseconds",
-			"full-path tablet throttler decision latency in microseconds",
-			[]string{"tablet_type", "stmt_type", "outcome"},
-		),
-		cacheLoadLatency: throttlerExporter.NewMultiTimings(
-			prefix+"CacheLoadLatencyMilliseconds",
-			"tablet throttler cache load latency in milliseconds",
-			[]string{"status"},
-		),
-	}
-	return sharedMetrics
 }
 
 // tabletThrottlerStrategyFactory creates TabletThrottlerStrategy instances.
@@ -143,16 +99,6 @@ type cacheState struct {
 	result *throttle.CheckResult
 }
 
-// tabletThrottlerMetrics holds all metrics for the TabletThrottlerStrategy.
-type tabletThrottlerMetrics struct {
-	cacheMisses         *stats.Counter
-	cacheHits           *stats.Counter
-	decisionCount       *stats.CountersWithMultiLabels
-	fastDecisionLatency *servenv.MultiTimingsWrapper
-	fullDecisionLatency *servenv.MultiTimingsWrapper
-	cacheLoadLatency    *servenv.MultiTimingsWrapper
-}
-
 // TabletThrottlerStrategy uses the Vitess Tablet Throttler (https://vitess.io/docs/21.0/reference/features/tablet-throttler) to enforce throttling.
 type TabletThrottlerStrategy struct {
 	throttleClient ThrottleClientWrapper
@@ -175,8 +121,6 @@ type TabletThrottlerStrategy struct {
 	// SrvKeyspace watch lifecycle management
 	watchStarted atomic.Bool
 
-	// metrics - pointer to shared metrics using dedicated named exporter for thread-safe deduplication
-	metrics                   *tabletThrottlerMetrics
 	fastPathLatencySampleRate float64
 
 	// Injectable random functions for testing (defaults to math/rand/v2)
@@ -197,7 +141,6 @@ func NewTabletThrottlerStrategy(throttleClient ThrottleClientWrapper, cfg *query
 		cell:                      cell,
 		srvTopoServer:             srvTopoServer,
 		done:                      make(chan struct{}),
-		metrics:                   initMetrics(),
 		fastPathLatencySampleRate: 0.1,
 		randFloat64:               rand.Float64,
 		randIntN:                  rand.IntN,
@@ -247,14 +190,14 @@ func (s *TabletThrottlerStrategy) Stop() {
 // startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.
 // This uses the topo server watch mechanism to receive immediate notifications when the SrvKeyspace configuration changes.
 func (s *TabletThrottlerStrategy) startSrvKeyspaceWatch() {
-	log.Infof("TabletThrottlerStrategy: starting SrvKeyspace watch for keyspace=%s cell=%s", s.keyspace, s.cell)
+	log.Info("TabletThrottlerStrategy: starting SrvKeyspace watch", slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
 	// Only start once
 	if !s.watchStarted.CompareAndSwap(false, true) {
 		return
 	}
 
 	if s.srvTopoServer == nil || s.keyspace == "" || s.cell == "" {
-		log.Warningf("TabletThrottlerStrategy: cannot start SrvKeyspace watch, srvTopoServer=%v, keyspace=%s, cell=%s", s.srvTopoServer != nil, s.keyspace, s.cell)
+		log.Warn("TabletThrottlerStrategy: cannot start SrvKeyspace watch", slog.Bool("srvTopoServer", s.srvTopoServer != nil), slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
 		s.watchStarted.Store(false)
 		return
 	}
@@ -264,7 +207,7 @@ func (s *TabletThrottlerStrategy) startSrvKeyspaceWatch() {
 		s.srvTopoServer.WatchSrvKeyspace(s.ctx, s.cell, s.keyspace, s.HandleConfigUpdate)
 	}()
 
-	log.Infof("TabletThrottlerStrategy: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", s.keyspace, s.cell)
+	log.Info("TabletThrottlerStrategy: started event-driven watch for SrvKeyspace", slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
 }
 
 // runCacheUpdater runs in a background goroutine to periodically refresh cached throttle results.
@@ -302,7 +245,7 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 		s.cachedState.Store(state)
 	}
 
-	s.metrics.cacheLoadLatency.Record([]string{status}, start)
+	cacheLoadLatency.Record([]string{status}, start)
 }
 
 // getCachedThrottleResult returns the current cached throttle check result.
@@ -314,11 +257,11 @@ func (s *TabletThrottlerStrategy) getCachedThrottleResult(ctx context.Context) (
 
 		// If cache is running but state is nil (not initialized yet), fall back to direct call
 		if state == nil {
-			s.metrics.cacheMisses.Add(1)
+			cacheMisses.Add(1)
 			return s.throttleClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 		}
 
-		s.metrics.cacheHits.Add(1)
+		cacheHits.Add(1)
 		return state.result, state.ok
 	}
 
@@ -505,17 +448,17 @@ func GetThrottleDecision(value float64, thresholds []*querythrottlerpb.ThrottleT
 }
 
 func (s *TabletThrottlerStrategy) recordFastDecision(tabletType, outcome string, start time.Time) {
-	s.metrics.decisionCount.Add([]string{tabletType, _stmtTypeNotAvailable, _decisionPathFast, outcome, _decisionReasonBypassFast}, 1)
+	decisionCount.Add([]string{tabletType, _stmtTypeNotAvailable, _decisionPathFast, outcome, _decisionReasonBypassFast}, 1)
 
 	if s.fastPathLatencySampleRate > 0 && s.randFloat64() < s.fastPathLatencySampleRate {
-		s.metrics.fastDecisionLatency.Record([]string{tabletType, outcome}, start)
+		fastDecisionLatency.Record([]string{tabletType, outcome}, start)
 	}
 }
 
 func (s *TabletThrottlerStrategy) recordFullDecision(tabletType, stmtType, outcome, reason string, start time.Time) {
-	s.metrics.decisionCount.Add([]string{tabletType, stmtType, _decisionPathFull, outcome, reason}, 1)
+	decisionCount.Add([]string{tabletType, stmtType, _decisionPathFull, outcome, reason}, 1)
 
-	s.metrics.fullDecisionLatency.Record([]string{tabletType, stmtType, outcome}, start)
+	fullDecisionLatency.Record([]string{tabletType, stmtType, outcome}, start)
 }
 
 // HandleConfigUpdate is the callback invoked when the SrvKeyspace topology changes.
@@ -532,25 +475,25 @@ func (s *TabletThrottlerStrategy) HandleConfigUpdate(srvks *topodatapb.SrvKeyspa
 	if err != nil {
 		// Keyspace deleted from topology - stop watching
 		if topo.IsErrType(err, topo.NoNode) {
-			log.Warningf("tabletThrottler.HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", s.keyspace)
+			log.Warn("tabletThrottler.HandleConfigUpdate: keyspace deleted or not found, stopping watch", slog.String("keyspace", s.keyspace))
 			return false
 		}
 
 		// Context canceled or interrupted - graceful shutdown, stop watching
 		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Infof("tabletThrottler.HandleConfigUpdate: watch stopped (context canceled or interrupted)")
+			log.Info("tabletThrottler.HandleConfigUpdate: watch stopped (context canceled or interrupted)")
 			return false
 		}
 
 		// Transient error (network, temporary topo server issue) - keep watching
 		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warningf("tabletThrottler.HandleConfigUpdate: transient topo watch error (will retry): %v", err)
+		log.Warn("tabletThrottler.HandleConfigUpdate: transient topo watch error (will retry)", slog.String("error", err.Error()))
 		return true
 	}
 
 	newCfg := srvks.GetQueryThrottlerConfig().GetTabletStrategyConfig()
 	if newCfg == nil {
-		log.Errorf("tabletThrottler.HandleConfigUpdate: TabletStrategyConfig is nil for keyspace=%s, ignoring config update", s.keyspace)
+		log.Error("tabletThrottler.HandleConfigUpdate: TabletStrategyConfig is nil, ignoring config update", slog.String("keyspace", s.keyspace))
 		return true
 	}
 
@@ -568,6 +511,6 @@ func (s *TabletThrottlerStrategy) HandleConfigUpdate(srvks *topodatapb.SrvKeyspa
 	// Using atomic.Pointer ensures race-free reads in Evaluate() without needing locks
 	s.config.Store(newCfg)
 
-	log.Infof("tabletThrottler.HandleConfigUpdate: config updated for keyspace=%s", s.keyspace)
+	log.Info("tabletThrottler.HandleConfigUpdate: config updated", slog.String("keyspace", s.keyspace))
 	return true
 }

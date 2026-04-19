@@ -235,18 +235,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
 				},
-				env: env,
-				stats: Stats{
-					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"Strategy", "Workload", "Priority"}),
-					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
-					totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"Strategy", "Workload", "Priority"}),
-					evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"Strategy", "Workload", "Priority"}),
-				},
+				env:                     env,
 				strategyHandlerInstance: mockStrategy,
 			}
 
-			iqt.stats.requestsTotal.ResetAll()
-			iqt.stats.requestsThrottled.ResetAll()
+			requestsTotal.ResetAll()
+			requestsThrottled.ResetAll()
 
 			// Capture log output.
 			logCapture := &testLogCapture{}
@@ -285,10 +279,10 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify stats expectation
-			totalRequests := stats.CounterForDimension(iqt.stats.requestsTotal, "Strategy")
-			throttledRequests := stats.CounterForDimension(iqt.stats.requestsThrottled, "Strategy")
-			require.Equal(t, tt.expectedTotalRequests, totalRequests.Counts()["MockStrategy"], "Total requests should match expected")
-			require.Equal(t, tt.expectedThrottledRequests, throttledRequests.Counts()["MockStrategy"], "Throttled requests should match expected")
+			totalReqs := stats.CounterForDimension(requestsTotal, "Strategy")
+			throttledReqs := stats.CounterForDimension(requestsThrottled, "Strategy")
+			require.Equal(t, tt.expectedTotalRequests, totalReqs.Counts()["MockStrategy"], "Total requests should match expected")
+			require.Equal(t, tt.expectedThrottledRequests, throttledReqs.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
 	}
 }
@@ -480,7 +474,7 @@ func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
 		cfg:                     oldCfg,
 		strategyHandlerInstance: oldStrategy,
 		tabletConfig:            &tabletenv.TabletConfig{},
-		throttleClient:          &throttle.Client{},
+		throttlerClient:         &throttle.Client{},
 	}
 
 	// Create SrvKeyspace with different config values
@@ -542,7 +536,7 @@ func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
 		cfg:                     &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
 		strategyHandlerInstance: oldStrategy,
 		tabletConfig:            &tabletenv.TabletConfig{},
-		throttleClient:          &throttle.Client{},
+		throttlerClient:         &throttle.Client{},
 	}
 
 	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_UNKNOWN, false)
