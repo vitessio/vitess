@@ -1103,8 +1103,9 @@ message UpdateGossipConfigRequest {
   bool enable = 2;
   // disable turns gossip off for the keyspace.
   bool disable = 3;
-  // phi_threshold is the phi-accrual suspicion threshold. 0 means no change.
-  double phi_threshold = 4;
+  // phi_threshold is the phi-accrual suspicion threshold. If unset when creating
+  // a config, the default is 4. 0 means no change.
+  optional double phi_threshold = 4;
   // ping_interval is the gossip exchange interval. Empty means no change.
   string ping_interval = 5;
   // max_update_age is how long before marking a peer down. Empty means no change.

@@ -2511,9 +2511,12 @@ func (m *UpdateGossipConfigRequest) CloneVT() *UpdateGossipConfigRequest {
 	r.Keyspace = m.Keyspace
 	r.Enable = m.Enable
 	r.Disable = m.Disable
-	r.PhiThreshold = m.PhiThreshold
 	r.PingInterval = m.PingInterval
 	r.MaxUpdateAge = m.MaxUpdateAge
+	if rhs := m.PhiThreshold; rhs != nil {
+		tmpVal := *rhs
+		r.PhiThreshold = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -13192,9 +13195,9 @@ func (m *UpdateGossipConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i--
 		dAtA[i] = 0x2a
 	}
-	if m.PhiThreshold != 0 {
+	if m.PhiThreshold != nil {
 		i -= 8
-		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.PhiThreshold))))
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(*m.PhiThreshold))))
 		i--
 		dAtA[i] = 0x21
 	}
@@ -25403,7 +25406,7 @@ func (m *UpdateGossipConfigRequest) SizeVT() (n int) {
 	if m.Disable {
 		n += 2
 	}
-	if m.PhiThreshold != 0 {
+	if m.PhiThreshold != nil {
 		n += 9
 	}
 	l = len(m.PingInterval)
@@ -47029,7 +47032,8 @@ func (m *UpdateGossipConfigRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			m.PhiThreshold = float64(math.Float64frombits(v))
+			v2 := float64(math.Float64frombits(v))
+			m.PhiThreshold = &v2
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PingInterval", wireType)

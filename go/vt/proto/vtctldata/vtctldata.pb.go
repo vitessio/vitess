@@ -7024,8 +7024,9 @@ type UpdateGossipConfigRequest struct {
 	Enable bool `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`
 	// disable turns gossip off for the keyspace.
 	Disable bool `protobuf:"varint,3,opt,name=disable,proto3" json:"disable,omitempty"`
-	// phi_threshold is the phi-accrual suspicion threshold. 0 means no change.
-	PhiThreshold float64 `protobuf:"fixed64,4,opt,name=phi_threshold,json=phiThreshold,proto3" json:"phi_threshold,omitempty"`
+	// phi_threshold is the phi-accrual suspicion threshold. If unset when creating
+	// a config, the default is 4. 0 means no change.
+	PhiThreshold *float64 `protobuf:"fixed64,4,opt,name=phi_threshold,json=phiThreshold,proto3,oneof" json:"phi_threshold,omitempty"`
 	// ping_interval is the gossip exchange interval. Empty means no change.
 	PingInterval string `protobuf:"bytes,5,opt,name=ping_interval,json=pingInterval,proto3" json:"ping_interval,omitempty"`
 	// max_update_age is how long before marking a peer down. Empty means no change.
@@ -7086,8 +7087,8 @@ func (x *UpdateGossipConfigRequest) GetDisable() bool {
 }
 
 func (x *UpdateGossipConfigRequest) GetPhiThreshold() float64 {
-	if x != nil {
-		return x.PhiThreshold
+	if x != nil && x.PhiThreshold != nil {
+		return *x.PhiThreshold
 	}
 	return 0
 }
@@ -18129,14 +18130,15 @@ const file_vtctldata_proto_rawDesc = "" +
 	"metricName\x12\x19\n" +
 	"\bapp_name\x18\v \x01(\tR\aappName\x12.\n" +
 	"\x13app_checked_metrics\x18\f \x03(\tR\x11appCheckedMetrics\"\x1f\n" +
-	"\x1dUpdateThrottlerConfigResponse\"\xd9\x01\n" +
+	"\x1dUpdateThrottlerConfigResponse\"\xf0\x01\n" +
 	"\x19UpdateGossipConfigRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x16\n" +
 	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x18\n" +
-	"\adisable\x18\x03 \x01(\bR\adisable\x12#\n" +
-	"\rphi_threshold\x18\x04 \x01(\x01R\fphiThreshold\x12#\n" +
+	"\adisable\x18\x03 \x01(\bR\adisable\x12(\n" +
+	"\rphi_threshold\x18\x04 \x01(\x01H\x00R\fphiThreshold\x88\x01\x01\x12#\n" +
 	"\rping_interval\x18\x05 \x01(\tR\fpingInterval\x12$\n" +
-	"\x0emax_update_age\x18\x06 \x01(\tR\fmaxUpdateAge\"\x1c\n" +
+	"\x0emax_update_age\x18\x06 \x01(\tR\fmaxUpdateAgeB\x10\n" +
+	"\x0e_phi_threshold\"\x1c\n" +
 	"\x1aUpdateGossipConfigResponse\"*\n" +
 	"\x14GetSrvVSchemaRequest\x12\x12\n" +
 	"\x04cell\x18\x01 \x01(\tR\x04cell\"N\n" +
@@ -19489,6 +19491,7 @@ func file_vtctldata_proto_init() {
 		return
 	}
 	file_vtctldata_proto_msgTypes[23].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[106].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[248].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

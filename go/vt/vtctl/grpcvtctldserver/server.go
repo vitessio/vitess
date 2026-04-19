@@ -2193,8 +2193,8 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 	if req.Enable && req.Disable {
 		return nil, errors.New("--enable and --disable are mutually exclusive")
 	}
-	if req.PhiThreshold < 0 {
-		return nil, fmt.Errorf("invalid phi-threshold: must be non-negative, got %v", req.PhiThreshold)
+	if req.PhiThreshold != nil && *req.PhiThreshold < 0 {
+		return nil, fmt.Errorf("invalid phi-threshold: must be non-negative, got %v", *req.PhiThreshold)
 	}
 	if req.PingInterval != "" {
 		if d, err := time.ParseDuration(req.PingInterval); err != nil || d <= 0 {
@@ -2208,6 +2208,7 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 	}
 
 	update := func(gossipConfig *topodatapb.GossipConfig) *topodatapb.GossipConfig {
+		creatingConfig := gossipConfig == nil
 		if gossipConfig == nil {
 			gossipConfig = &topodatapb.GossipConfig{}
 		}
@@ -2217,8 +2218,12 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 		if req.Disable {
 			gossipConfig.Enabled = false
 		}
-		if req.PhiThreshold > 0 {
-			gossipConfig.PhiThreshold = req.PhiThreshold
+		if req.PhiThreshold != nil {
+			if *req.PhiThreshold > 0 {
+				gossipConfig.PhiThreshold = *req.PhiThreshold
+			}
+		} else if creatingConfig {
+			gossipConfig.PhiThreshold = 4
 		}
 		if req.PingInterval != "" {
 			gossipConfig.PingInterval = req.PingInterval
