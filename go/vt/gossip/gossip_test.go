@@ -388,6 +388,13 @@ func TestProtoConversions(t *testing.T) {
 	assert.Equal(t, state.Status, roundTripped.Status)
 	assert.Equal(t, state.Phi, roundTripped.Phi)
 	assert.True(t, state.LastUpdate.Equal(roundTripped.LastUpdate))
+
+	unknownState := StateDigest{NodeID: "node2", Status: StatusUnknown}
+	protoUnknownState := toProtoState(unknownState)
+	assert.Zero(t, protoUnknownState.LastUpdateUnix)
+	roundTrippedUnknown, err := fromProtoState(protoUnknownState)
+	require.NoError(t, err)
+	assert.True(t, roundTrippedUnknown.LastUpdate.IsZero())
 }
 
 func TestPhiAccrualReturnsHighPhiForOldHeartbeat(t *testing.T) {

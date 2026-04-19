@@ -50,9 +50,10 @@ func TestFindGossipConfig(t *testing.T) {
 		ts = memorytopo.NewServer(ctx, "zone1")
 		defer func() { ts = origTS }()
 
-		cfg, ksName := findGossipConfig()
+		cfg, ksName, conflict := findGossipConfig()
 		assert.Nil(t, cfg)
 		assert.Empty(t, ksName)
+		assert.False(t, conflict)
 	})
 
 	t.Run("keyspace with gossip enabled", func(t *testing.T) {
@@ -69,11 +70,12 @@ func TestFindGossipConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		cfg, ksName := findGossipConfig()
+		cfg, ksName, conflict := findGossipConfig()
 		require.NotNil(t, cfg)
 		assert.True(t, cfg.Enabled)
 		assert.Equal(t, float64(5), cfg.PhiThreshold)
 		assert.Equal(t, "ks1", ksName)
+		assert.False(t, conflict)
 	})
 
 	t.Run("keyspace with gossip disabled", func(t *testing.T) {
@@ -86,8 +88,9 @@ func TestFindGossipConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		cfg, _ := findGossipConfig()
+		cfg, _, conflict := findGossipConfig()
 		assert.Nil(t, cfg)
+		assert.False(t, conflict)
 	})
 
 	t.Run("nil topo server", func(t *testing.T) {
@@ -95,8 +98,9 @@ func TestFindGossipConfig(t *testing.T) {
 		ts = nil
 		defer func() { ts = origTS }()
 
-		cfg, _ := findGossipConfig()
+		cfg, _, conflict := findGossipConfig()
 		assert.Nil(t, cfg)
+		assert.False(t, conflict)
 	})
 }
 
@@ -153,13 +157,13 @@ func TestGetGossipQuorumAnalysesConcurrentWithConfigChange(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			_ = getGossipQuorumAnalyses()
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			applyGossipConfigChange(disabled)
 			applyGossipConfigChange(enabled)
 		}
@@ -430,10 +434,44 @@ func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Conflicting configs should fail fast — return nil.
-	cfg, ksName := findGossipConfig()
+	// Conflicting configs should fail fast.
+	cfg, ksName, conflict := findGossipConfig()
 	assert.Nil(t, cfg, "conflicting gossip configs should refuse to start")
 	assert.Empty(t, ksName)
+	assert.True(t, conflict)
+}
+
+func TestReconcileGossipConfigFailsClosedOnConflict(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+	})
+
+	cfg1 := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 4,
+		PingInterval: "1s",
+		MaxUpdateAge: "5s",
+	}
+	cfg2 := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 8,
+		PingInterval: "2s",
+		MaxUpdateAge: "10s",
+	}
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{GossipConfig: cfg1}))
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{GossipConfig: cfg2}))
+
+	startGossipAgent(cfg1)
+	require.NotNil(t, currentGossipAgent())
+
+	reconcileGossipConfig(cfg1)
+
+	assert.Nil(t, currentGossipAgent())
 }
 
 func TestWatchGossipConfigNilTopo(t *testing.T) {

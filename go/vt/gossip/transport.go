@@ -18,6 +18,7 @@ package gossip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,7 +68,7 @@ func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest)
 
 func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
 	if t.dialer == nil {
-		return nil, fmt.Errorf("gossip transport dialer is nil")
+		return nil, errors.New("gossip transport dialer is nil")
 	}
 	client, err := t.dialer.Dial(ctx, addr)
 	if err != nil {
@@ -223,11 +224,15 @@ func fromProtoMember(member *gossippb.Member) Member {
 }
 
 func toProtoState(state StateDigest) *gossippb.GossipState {
+	var lastUpdateUnix int64
+	if !state.LastUpdate.IsZero() {
+		lastUpdateUnix = state.LastUpdate.UnixNano()
+	}
 	return &gossippb.GossipState{
 		NodeId:         string(state.NodeID),
 		Status:         toProtoStatus(state.Status),
 		Phi:            state.Phi,
-		LastUpdateUnix: state.LastUpdate.UnixNano(),
+		LastUpdateUnix: lastUpdateUnix,
 	}
 }
 
@@ -239,11 +244,15 @@ func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 	if err != nil {
 		return StateDigest{}, err
 	}
+	var lastUpdate time.Time
+	if state.LastUpdateUnix != 0 {
+		lastUpdate = time.Unix(0, state.LastUpdateUnix)
+	}
 	return StateDigest{
 		NodeID:     NodeID(state.NodeId),
 		Status:     status,
 		Phi:        state.Phi,
-		LastUpdate: time.Unix(0, state.LastUpdateUnix),
+		LastUpdate: lastUpdate,
 	}, nil
 }
 

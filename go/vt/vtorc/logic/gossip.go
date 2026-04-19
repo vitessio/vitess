@@ -210,18 +210,18 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 // findGossipConfig scans all keyspaces for an enabled GossipConfig.
 // Returns the config and the keyspace name it was found in (for watching).
 // If multiple keyspaces have gossip enabled with differing configs,
-// the first one found is used and a warning is logged.
-func findGossipConfig() (*topodatapb.GossipConfig, string) {
+// it returns conflict=true so callers can fail closed.
+func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
 	topoServer := ts
 	if topoServer == nil {
-		return nil, ""
+		return nil, "", false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 
 	keyspaces, err := topoServer.GetKeyspaces(ctx)
 	if err != nil {
-		return nil, ""
+		return nil, "", false
 	}
 	var found *topodatapb.GossipConfig
 	var foundKs string
@@ -244,10 +244,10 @@ func findGossipConfig() (*topodatapb.GossipConfig, string) {
 			log.Error("refusing to start gossip: multiple keyspaces have conflicting configs",
 				slog.String("keyspace1", foundKs),
 				slog.String("keyspace2", ksName))
-			return nil, ""
+			return nil, "", true
 		}
 	}
-	return found, foundKs
+	return found, foundKs, false
 }
 
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
@@ -273,11 +273,11 @@ func stopGossip() {
 }
 
 func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
-	cfg, _ := findGossipConfig()
-	if cfg == nil && localCfg != nil && localCfg.Enabled {
+	cfg, _, conflict := findGossipConfig()
+	if !conflict && cfg == nil && localCfg != nil && localCfg.Enabled {
 		cfg = localCfg
 	}
-	if cfg == nil || !cfg.Enabled {
+	if conflict || cfg == nil || !cfg.Enabled {
 		if agent := clearGossipAgent(); agent != nil {
 			agent.Stop()
 		}
@@ -309,7 +309,6 @@ func watchExistingGossipKeyspaces(ctx context.Context) bool {
 	}
 
 	for _, ksName := range keyspaces {
-		ksName := ksName
 		go watchGossipConfig(ctx, ksName)
 	}
 
@@ -384,7 +383,7 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 					log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
 				}
 				reconcileGossipConfig(nil)
-				if _, fallbackKeyspace := findGossipConfig(); fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
+				if _, fallbackKeyspace, conflict := findGossipConfig(); !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
 					keyspace = fallbackKeyspace
 				}
 				restart = true
@@ -394,7 +393,7 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 				cfg := change.Value.GossipConfig
 				reconcileGossipConfig(cfg)
 				if cfg == nil || !cfg.Enabled {
-					if _, fallbackKeyspace := findGossipConfig(); fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
+					if _, fallbackKeyspace, conflict := findGossipConfig(); !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
 						keyspace = fallbackKeyspace
 						restart = true
 						break

@@ -160,7 +160,7 @@ func TestCellTabletsWatcherRefreshesTabletType(t *testing.T) {
 	tablet.Type = topodatapb.TabletType_REPLICA
 
 	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "ReplaceTablet": 1})
+	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "ReplaceTablet": 1})
 
 	allTablets = fhc.GetAllTablets()
 	require.Contains(t, allTablets, key)

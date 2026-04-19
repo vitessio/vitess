@@ -59,7 +59,7 @@ func TestTabletManagerStopConcurrentWithGossipConfigChange(t *testing.T) {
 
 	go func() {
 		defer close(done)
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			tm.applyGossipConfigChange(enabled, tablet)
 			tm.applyGossipConfigChange(disabled, tablet)
 		}
