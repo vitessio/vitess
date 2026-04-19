@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -50,10 +51,11 @@ var (
 	gossipAgent   *gossip.Gossip
 	gossipCancel  context.CancelFunc
 
-	gossipRPCMu       sync.Mutex
-	gossipRPCServer   *grpc.Server
-	gossipRPCListener net.Listener
-	gossipWatchCount  atomic.Int32
+	gossipRPCMu        sync.Mutex
+	gossipRPCServer    *grpc.Server
+	gossipRPCListener  net.Listener
+	gossipWatchCount   atomic.Int32
+	gossipPollInterval = time.Second
 )
 
 func currentGossipAgent() *gossip.Gossip {
@@ -136,7 +138,7 @@ func startGossipRPCServer() {
 		return
 	}
 
-	server := grpc.NewServer()
+	server := servenv.NewGRPCServer()
 	gossippb.RegisterGossipServer(server, &gossip.Service{
 		GetAgent: currentGossipAgent,
 	})
@@ -172,7 +174,7 @@ func stopGossipRPCServer() {
 // startGossipAgent creates and starts the gossip agent from the given config.
 func startGossipAgent(cfg *topodatapb.GossipConfig) {
 	seeds := discoverGossipSeeds()
-	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{})
+	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{SecureDialOption: grpctmclient.SecureDialOption})
 
 	pingInterval := parseDurationVTOrc(cfg.PingInterval, 1*time.Second)
 	maxUpdateAge := parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second)
@@ -212,19 +214,30 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 // If multiple keyspaces have gossip enabled with differing configs,
 // it returns conflict=true so callers can fail closed.
 func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
+	cfg, enabledKeyspaces, conflict := findGossipConfigState()
+	if conflict {
+		return nil, "", true
+	}
+	if len(enabledKeyspaces) == 0 {
+		return cfg, "", false
+	}
+	return cfg, enabledKeyspaces[0], false
+}
+
+func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 	topoServer := ts
 	if topoServer == nil {
-		return nil, "", false
+		return nil, nil, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 
 	keyspaces, err := topoServer.GetKeyspaces(ctx)
 	if err != nil {
-		return nil, "", false
+		return nil, nil, false
 	}
 	var found *topodatapb.GossipConfig
-	var foundKs string
+	var enabledKeyspaces []string
 	for _, ksName := range keyspaces {
 		ki, err := topoServer.GetKeyspace(ctx, ksName)
 		if err != nil {
@@ -233,21 +246,21 @@ func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
 		if ki.GossipConfig == nil || !ki.GossipConfig.Enabled {
 			continue
 		}
+		enabledKeyspaces = append(enabledKeyspaces, ksName)
 		if found == nil {
 			found = ki.GossipConfig
-			foundKs = ksName
 			continue
 		}
 		if found.PhiThreshold != ki.GossipConfig.PhiThreshold ||
 			found.PingInterval != ki.GossipConfig.PingInterval ||
 			found.MaxUpdateAge != ki.GossipConfig.MaxUpdateAge {
 			log.Error("refusing to start gossip: multiple keyspaces have conflicting configs",
-				slog.String("keyspace1", foundKs),
+				slog.String("keyspace1", enabledKeyspaces[0]),
 				slog.String("keyspace2", ksName))
-			return nil, "", true
+			return nil, enabledKeyspaces, true
 		}
 	}
-	return found, foundKs, false
+	return found, enabledKeyspaces, false
 }
 
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
@@ -298,13 +311,8 @@ func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 }
 
 func watchExistingGossipKeyspaces(ctx context.Context) bool {
-	topoServer := ts
-	if topoServer == nil {
-		return false
-	}
-
-	keyspaces, err := topoServer.GetKeyspaces(ctx)
-	if err != nil || len(keyspaces) == 0 {
+	_, keyspaces, _ := findGossipConfigState()
+	if len(keyspaces) == 0 {
 		return false
 	}
 
@@ -430,7 +438,7 @@ func applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace) {
 // to the normal SrvKeyspace watcher. Only stops polling after a watch
 // is successfully established.
 func pollForGossipKeyspace(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(gossipPollInterval)
 	defer ticker.Stop()
 	for {
 		select {

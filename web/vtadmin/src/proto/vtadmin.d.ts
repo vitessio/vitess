@@ -65825,7 +65825,7 @@ export namespace vtctldata {
         public disable: boolean;
 
         /** UpdateGossipConfigRequest phi_threshold. */
-        public phi_threshold: number;
+        public phi_threshold?: (number|null);
 
         /** UpdateGossipConfigRequest ping_interval. */
         public ping_interval: string;

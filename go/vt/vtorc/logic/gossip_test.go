@@ -104,6 +104,36 @@ func TestFindGossipConfig(t *testing.T) {
 	})
 }
 
+func TestFindGossipConfigState(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("returns enabled keyspaces even on conflict", func(t *testing.T) {
+		origTS := ts
+		ts = memorytopo.NewServer(ctx, "zone1")
+		t.Cleanup(func() { ts = origTS })
+
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 4,
+				PingInterval: "1s",
+			},
+		}))
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 8,
+				PingInterval: "2s",
+			},
+		}))
+
+		cfg, enabledKeyspaces, conflict := findGossipConfigState()
+		assert.Nil(t, cfg)
+		assert.ElementsMatch(t, []string{"ks1", "ks2"}, enabledKeyspaces)
+		assert.True(t, conflict)
+	})
+}
+
 func TestStopGossipNilAgent(t *testing.T) {
 	origAgent := gossipAgent
 	gossipAgent = nil
@@ -251,7 +281,7 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 }
 
-func TestWatchExistingGossipKeyspacesDetectsRuntimeEnableOnExistingKeyspace(t *testing.T) {
+func TestWatchExistingGossipKeyspacesReturnsFalseWithoutEnabledConfig(t *testing.T) {
 	ctx := t.Context()
 	stopGossip()
 	origTS := ts
@@ -269,7 +299,32 @@ func TestWatchExistingGossipKeyspacesDetectsRuntimeEnableOnExistingKeyspace(t *t
 		cancel()
 		waitForGossipWatchesToStop(t)
 	})
-	require.True(t, watchExistingGossipKeyspaces(watchCtx))
+	require.False(t, watchExistingGossipKeyspaces(watchCtx))
+	assert.Zero(t, gossipWatchCount.Load())
+}
+
+func TestPollForGossipKeyspaceDetectsRuntimeEnableOnExistingKeyspace(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	origPollInterval := gossipPollInterval
+	gossipPollInterval = 10 * time.Millisecond
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+		gossipPollInterval = origPollInterval
+	})
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	go pollForGossipKeyspace(watchCtx)
 
 	cfg := &topodatapb.GossipConfig{
 		Enabled:      true,
@@ -284,6 +339,45 @@ func TestWatchExistingGossipKeyspacesDetectsRuntimeEnableOnExistingKeyspace(t *t
 
 	require.Eventually(t, func() bool {
 		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestWatchExistingGossipKeyspacesWatchesOnlyEnabledKeyspaces(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+	})
+
+	enabledCfg := &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 4,
+		PingInterval: "100ms",
+		MaxUpdateAge: "1s",
+	}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+		GossipConfig: enabledCfg,
+	}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks1", &topodatapb.SrvKeyspace{
+		GossipConfig: enabledCfg,
+	}))
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	require.True(t, watchExistingGossipKeyspaces(watchCtx))
+
+	require.Eventually(t, func() bool {
+		return gossipWatchCount.Load() == 1
 	}, 5*time.Second, 20*time.Millisecond)
 }
 

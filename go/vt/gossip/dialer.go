@@ -30,11 +30,13 @@ import (
 )
 
 // GRPCDialer implements the Dialer interface using Vitess gRPC client connections.
-type GRPCDialer struct{}
+type GRPCDialer struct {
+	SecureDialOption func() (grpc.DialOption, error)
+}
 
 // Dial creates a new gRPC connection to the target and returns a gossip client.
-func (GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
-	opt, err := grpcclient.SecureDialOption("", "", "", "", "")
+func (d GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
+	opt, err := d.secureDialOption()
 	if err != nil {
 		log.Error("gossip dial failed", slog.String("target", target), slog.Any("error", err))
 		return nil, err
@@ -52,6 +54,13 @@ func (GRPCDialer) Dial(ctx context.Context, target string) (gossippb.GossipClien
 	}
 	client := gossippb.NewGossipClient(conn)
 	return &grpcClient{client: client, closer: conn}, nil
+}
+
+func (d GRPCDialer) secureDialOption() (grpc.DialOption, error) {
+	if d.SecureDialOption != nil {
+		return d.SecureDialOption()
+	}
+	return grpcclient.SecureDialOption("", "", "", "", "")
 }
 
 type grpcClient struct {

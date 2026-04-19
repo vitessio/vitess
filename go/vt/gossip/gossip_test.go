@@ -470,6 +470,17 @@ func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
 	assert.NotEmpty(t, resp.Members)
 }
 
+func TestGRPCDialerUsesConfiguredSecureDialOption(t *testing.T) {
+	expectedErr := errors.New("boom")
+
+	_, err := (GRPCDialer{
+		SecureDialOption: func() (grpc.DialOption, error) {
+			return nil, expectedErr
+		},
+	}).Dial(t.Context(), "127.0.0.1:1")
+	require.ErrorIs(t, err, expectedErr)
+}
+
 func TestGossipServiceNilAgent(t *testing.T) {
 	service := &Service{GetAgent: func() *Gossip { return nil }}
 
