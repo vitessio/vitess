@@ -72,6 +72,7 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Duration("discovery-high-replication-lag-minimum-serving", highReplicationLagMinServing.Default(), "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
 	fs.Int("min-number-serving-vttablets", minNumTablets.Default(), "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
 	fs.Bool("legacy-replication-lag-algorithm", legacyReplicationLagAlgorithm.Default(), "(DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.")
+	_ = fs.MarkDeprecated("legacy-replication-lag-algorithm", "this flag is a no-op and will be removed in v26")
 
 	viperutil.BindFlags(fs,
 		lowReplicationLag,
@@ -149,16 +150,9 @@ func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
 //   - degraded-threshold: this is only used by vttablet for display. It should match
 //     discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
 func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHealth {
-	if !legacyReplicationLagAlgorithm.Get() {
-		return filterStatsByLag(tabletHealthList)
-	}
-	res := filterStatsByLagWithLegacyAlgorithm(tabletHealthList)
-	// Run the filter again if exactly one tablet is removed,
-	// and we have spare tablets.
-	if len(res) > minNumTablets.Get() && len(res) == len(tabletHealthList)-1 {
-		res = filterStatsByLagWithLegacyAlgorithm(res)
-	}
-	return res
+	// The legacy algorithm has been deprecated; the --legacy-replication-lag-algorithm
+	// flag is now a no-op and will be removed in v26. See https://github.com/vitessio/vitess/issues/18914.
+	return filterStatsByLag(tabletHealthList)
 }
 
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
@@ -188,6 +182,8 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	return res
 }
 
+// Deprecated: the legacy algorithm is no longer used by FilterStatsByReplicationLag
+// and will be removed in v26 along with the --legacy-replication-lag-algorithm flag.
 func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*TabletHealth {
 	list := make([]*TabletHealth, 0, len(tabletHealthList))
 	// Filter out non-serving tablets.
