@@ -115,6 +115,20 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 	}
 }
 
+func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
+	ctx := context.Background()
+	// When using external MySQL (e.g. Cloud SQL, RDS), Cnf is nil because
+	// vttablet skips loading my.cnf when connection parameters are specified.
+	// MysqlHostMetrics should return an empty response instead of panicking.
+	tm := &TabletManager{
+		Cnf: nil,
+	}
+	resp, err := tm.MysqlHostMetrics(ctx, &tabletmanagerdatapb.MysqlHostMetricsRequest{})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Nil(t, resp.HostMetrics)
+}
+
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 	ctx := context.Background()
 	cp := mysql.ConnParams{}

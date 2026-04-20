@@ -1271,8 +1271,8 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
-		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
+		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
 
 	return primaryStatus.Position, nil

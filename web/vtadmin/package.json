@@ -2,6 +2,7 @@
   "name": "vtadmin",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22.13.0",
     "npm": ">=10.9.2"
@@ -20,10 +21,10 @@
     "downshift": "^9.3.2",
     "history": "^5.3.0",
     "lodash-es": "^4.17.23",
-    "path-to-regexp": "^8.3.0",
+    "path-to-regexp": "^8.4.0",
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-preset-env": "^11.2.0",
-    "protobufjs": "^7.4.0",
+    "protobufjs": "^8.0.0",
     "query-string": "^9.3.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -43,18 +44,12 @@
     "preview": "vite preview",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:fix": "npm run lint:eslint:fix && npm run lint:prettier:fix && npm run lint:stylelint:fix",
-    "lint:eslint": "eslint --ext js,ts,tsx src",
+    "lint:eslint": "eslint src",
     "lint:eslint:fix": "npm run lint:eslint -- --fix",
     "lint:prettier": "prettier --config \"./.prettiercc\" --check \"src/**/*.{js,jsx,ts,tsx,css,scss}\"",
     "lint:prettier:fix": "npm run lint:prettier -- --write",
     "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
   },
   "browserslist": {
     "production": [
@@ -74,6 +69,7 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@rollup/plugin-commonjs": "^29.0.2",
     "@tailwindcss/postcss": "^4.2.1",
     "@testing-library/dom": "^10.4.1",
@@ -87,22 +83,26 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
     "cross-fetch": "^4.1.0",
-    "eslint": "^8.57.1",
-    "eslint-config-react-app": "^7.0.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
     "i": "^0.3.7",
     "jsdom": "^29.0.0",
     "msw": "^2.12.13",
     "postcss": "^8.5.8",
     "prettier": "^3.8.1",
-    "protobufjs-cli": "^2.0.0",
+    "protobufjs-cli": "^2.0.1",
     "serve": "^14.2.6",
     "stylelint": "^17.4.0",
     "stylelint-config-standard-scss": "^17.0.0",
     "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.0",
-    "vite-plugin-eslint": "^1.8.1",
-    "vite-plugin-svgr": "^4.5.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^8.0.5",
+    "vite-plugin-eslint2": "^5.1.0",
+    "vite-plugin-svgr": "^5.0.0",
     "vitest": "^4.1.0"
   }
 }

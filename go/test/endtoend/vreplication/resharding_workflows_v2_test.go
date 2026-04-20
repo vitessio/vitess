@@ -464,7 +464,7 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	// from the product to the customer keyspace. Let's delete and insert a row to
 	// ensure that the PK -- which is on (cid, typ) with typ being an ENUM -- is
 	// managed correctly in the WHERE clause for the delete. The end result is that
-	// we should see the proper deletes propogate and not get a duplicate key error
+	// we should see the proper deletes propagate and not get a duplicate key error
 	// when we re-insert the same row values and ultimately VDiff shows the table as
 	// being identical in both keyspaces.
 

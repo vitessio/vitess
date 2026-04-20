@@ -32,6 +32,6 @@ for keyspace in $keyspaces; do
       exit 1
     fi
     echo "Retrying SetKeyspaceDurabilityPolicy for ${keyspace} (attempt ${retry_count}/${max_retries})..."
-    sleep 10
+    sleep 5
   done
 done

@@ -207,6 +207,40 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
+// replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
+// stopped and should restart during cleanup.
+func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
+	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
+
+	for alias, stopStatus := range rs.statusMap {
+		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		if err != nil || !ioThreadWasRunning {
+			continue
+		}
+
+		tabletInfo := tabletMap[alias]
+		if tabletInfo == nil || tabletInfo.Tablet == nil {
+			continue
+		}
+
+		replicas = append(replicas, tabletInfo.Tablet)
+	}
+
+	return replicas
+}
+
+// replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
+// that ERS stopped a healthy IO thread that should restart during cleanup.
+func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
+
+	return replStatus.IOHealthy(), nil
+}
+
 // tabletAliasError wraps an error with the tablet alias that produced it.
 type tabletAliasError struct {
 	alias *topodatapb.TabletAlias
@@ -253,7 +287,7 @@ func stopReplicationAndBuildStatusMaps(
 	var (
 		m          sync.Mutex
 		errChan    = make(chan concurrency.Error)
-		allTablets []*topodatapb.Tablet
+		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
@@ -391,7 +425,7 @@ func stopReplicationAndBuildStatusMaps(
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
 
 	return res, nil
