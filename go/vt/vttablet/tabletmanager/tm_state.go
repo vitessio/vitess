@@ -301,40 +301,42 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 		// another ChangeTabletType call runs first, the goroutine applies
 		// the newer type's transitions. This is correct (idempotent).
 		ts.publishForDisplay()
-		ts.deferredWg.Add(1)
-		go func() {
-			defer ts.deferredWg.Done()
-			const (
-				maxRetryDuration = 60 * time.Second
-				retryInterval    = 5 * time.Second
-			)
-			deadline := time.Now().Add(maxRetryDuration)
-			for {
-				ts.mu.Lock()
-				updateErr := ts.updateLocked(ts.ctx)
-				ts.mu.Unlock()
-				if updateErr == nil {
-					log.Info("Deferred updateLocked completed successfully")
-					return
-				}
-				if time.Now().After(deadline) {
-					log.Warn("Deferred updateLocked failed after retries, VTOrc or restart will reconcile",
+		if !ts.isOpen {
+			log.Warn("Skipping deferred updateLocked, TabletManager is shutting down")
+		} else {
+			ts.deferredWg.Go(func() {
+				const (
+					maxRetryDuration = 60 * time.Second
+					retryInterval    = 5 * time.Second
+				)
+				deadline := time.Now().Add(maxRetryDuration)
+				for {
+					ts.mu.Lock()
+					updateErr := ts.updateLocked(ts.ctx)
+					ts.mu.Unlock()
+					if updateErr == nil {
+						log.Info("Deferred updateLocked completed successfully")
+						return
+					}
+					if time.Now().After(deadline) {
+						log.Warn("Deferred updateLocked failed after retries, VTOrc or restart will reconcile",
+							slog.Any("error", updateErr))
+						return
+					}
+					log.Warn("Deferred updateLocked failed, will retry",
+						slog.Duration("retry-interval", retryInterval),
 						slog.Any("error", updateErr))
-					return
+					retryTimer := time.NewTimer(retryInterval)
+					select {
+					case <-ts.ctx.Done():
+						retryTimer.Stop()
+						log.Warn("Deferred updateLocked cancelled during shutdown")
+						return
+					case <-retryTimer.C:
+					}
 				}
-				log.Warn("Deferred updateLocked failed, will retry",
-					slog.Duration("retry-interval", retryInterval),
-					slog.Any("error", updateErr))
-				retryTimer := time.NewTimer(retryInterval)
-				select {
-				case <-ts.ctx.Done():
-					retryTimer.Stop()
-					log.Warn("Deferred updateLocked cancelled during shutdown")
-					return
-				case <-retryTimer.C:
-				}
-			}
-		}()
+			})
+		}
 	} else {
 		err = ts.updateLocked(ctx)
 	}

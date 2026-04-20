@@ -117,11 +117,14 @@ func TestDownPrimary(t *testing.T) {
 	// PrimaryTermStartTime comparison and self-demote to REPLICA even though
 	// mysqld is unavailable.
 	//
-	// First, confirm the old primary's topo record still says PRIMARY — ERS
-	// could not update it because the tablet was unreachable.
+	// Check the old primary's topo record. ERS could not update it because
+	// the tablet was unreachable, so it is typically still PRIMARY. However,
+	// VTOrc's ReconcileStaleTopoPrimary may have already reconciled it to
+	// REPLICA asynchronously — that is fine, the rest of the test still
+	// exercises the restart-and-rejoin path.
 	tablet, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(curPrimary.Alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet.GetType())
+	t.Logf("Old primary %s topo type before vttablet restart: %v", curPrimary.Alias, tablet.GetType())
 
 	err = curPrimary.VttabletProcess.Setup()
 	require.NoError(t, err)
