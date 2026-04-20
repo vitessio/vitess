@@ -383,12 +383,10 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
-	var maxStreamAgeExceeded chan struct{}
 	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
 		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
 		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
 		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
-		maxStreamAgeExceeded = make(chan struct{})
 
 		go func() {
 			ageTimer := time.NewTimer(maxAge + jitter)
@@ -405,7 +403,6 @@ func (vs *vstream) stream(ctx context.Context) error {
 					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
 				})
 				vs.cancel()
-				close(maxStreamAgeExceeded)
 			case <-ctx.Done():
 			}
 		}()
@@ -426,20 +423,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 	for _, sgtid := range copylist {
 		vs.startOneStream(ctx, sgtid)
 	}
-
-	if maxStreamAgeExceeded != nil {
-		streamingCompleted := make(chan struct{})
-		go func() {
-			vs.wg.Wait()
-			close(streamingCompleted)
-		}()
-		select {
-		case <-streamingCompleted:
-		case <-maxStreamAgeExceeded:
-		}
-	} else {
-		vs.wg.Wait()
-	}
+	vs.wg.Wait()
 
 	return vs.getError()
 }

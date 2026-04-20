@@ -1349,7 +1349,10 @@ type VStreamFlags struct {
 	// Events are still chunked to prevent OOM. Transactions smaller than this are sent
 	// without locking for better parallelism.
 	TransactionChunkSize int64 `protobuf:"varint,11,opt,name=transaction_chunk_size,json=transactionChunkSize,proto3" json:"transaction_chunk_size,omitempty"`
-	// Maximum duration (in seconds) a VStream can run before termination with UNAVAILABLE.
+	// Maximum duration (in seconds) a VStream runs before the server terminates it with
+	// UNAVAILABLE. This is best-effort: if a send to the client is in-flight when the age is reached,
+	// the server waits for it to complete before returning.
+	// The client is expected to reconnect.
 	// A random jitter of +/-10% is added to spread out reconnections.
 	// 0 means no maximum age.
 	MaxStreamAgeSeconds uint32 `protobuf:"varint,12,opt,name=max_stream_age_seconds,json=maxStreamAgeSeconds,proto3" json:"max_stream_age_seconds,omitempty"`

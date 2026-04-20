@@ -25,6 +25,7 @@ import (
 	"runtime/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -2060,30 +2061,53 @@ func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
 		}},
 	}
 
+	maxAge := 1 * time.Second
+	callbackDelay := 3 * time.Second
+	testTimeout := 10 * time.Second
+
+	t.Log("test parameters",
+		slog.Duration("max_age", maxAge),
+		slog.Duration("callback_delay", callbackDelay),
+		slog.Duration("test_timeout", testTimeout),
+	)
+
 	flags := &vtgatepb.VStreamFlags{
-		MaxStreamAgeSeconds: 1,
+		MaxStreamAgeSeconds: uint32(maxAge.Seconds()),
 	}
 
+	var callbackInFlight atomic.Bool
+
 	done := make(chan error, 1)
+	start := time.Now()
 	go func() {
 		done <- vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(30 * time.Second):
-				return nil
-			}
+			callbackInFlight.Store(true)
+			defer callbackInFlight.Store(false)
+			time.Sleep(callbackDelay)
+			return nil
 		})
 	}()
 
+	assert.Eventually(t, callbackInFlight.Load, 5*time.Second, 10*time.Millisecond,
+		"callback was never entered")
+
 	select {
 	case err := <-done:
-		t.Logf("VStream returned error: %v (code: %v)", err, vterrors.Code(err))
+		elapsed := time.Since(start)
+		t.Log("VStream returned",
+			slog.Duration("elapsed", elapsed),
+			slog.Any("error", err),
+			slog.Any("code", vterrors.Code(err)),
+		)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "vstream exceeded maximum age")
 		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
-	case <-time.After(10 * time.Second):
-		t.Fatal("VStream did not terminate within 10s despite max age of 1s; blocked send prevented max-age preemption")
+		assert.Falsef(t, callbackInFlight.Load(),
+			"callback is still in-flight after VStream() returned; lifecycle violation")
+		assert.GreaterOrEqual(t, elapsed, callbackDelay,
+			"VStream should wait for blocked send to finish before returning (best-effort max-age)")
+	case <-time.After(testTimeout):
+		t.Fatalf("VStream did not terminate within %v despite max age of %v", testTimeout, maxAge)
 	}
 }
 
