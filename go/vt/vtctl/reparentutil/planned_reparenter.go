@@ -637,8 +637,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 
 	if needsRefresh {
 		// Refresh the state to force the tabletserver to reconnect after db has been created.
+		// This is best-effort — internal components retry initialization on their own, and
+		// returning an error here would report a functionally-successful reparent as failed.
 		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
-			pr.logger.Warningf("RefreshState failed: %v", err)
+			pr.logger.Warningf("RefreshState failed on new primary %v: %v", topoproto.TabletAliasString(ev.NewPrimary.Alias), err)
 		}
 	}
 	return nil
