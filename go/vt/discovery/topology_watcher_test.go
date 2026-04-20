@@ -115,58 +115,6 @@ func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
 	checkWatcher(t, false)
 }
 
-func TestCellTabletsWatcherRefreshesTabletType(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
-
-	ts := memorytopo.NewServer(ctx, "aa")
-	defer ts.Close()
-	fhc := NewFakeHealthCheck(nil)
-	defer fhc.Close()
-	topologyWatcherOperations.ZeroAll()
-	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, true)
-	defer tw.Stop()
-
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "aa",
-			Uid:  100,
-		},
-		Hostname: "host1",
-		PortMap: map[string]int32{
-			"vt": 123,
-		},
-		Keyspace: "keyspace",
-		Shard:    "0",
-		Type:     topodatapb.TabletType_PRIMARY,
-	}
-	require.NoError(t, ts.CreateTablet(ctx, tablet))
-
-	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "AddTablet": 1})
-
-	key := TabletToMapKey(tablet)
-	allTablets := fhc.GetAllTablets()
-	require.Contains(t, allTablets, key)
-	assert.Equal(t, topodatapb.TabletType_PRIMARY, allTablets[key].Type)
-
-	_, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-		t.Type = topodatapb.TabletType_REPLICA
-		return nil
-	})
-	require.NoError(t, err)
-
-	tablet = tablet.CloneVT()
-	tablet.Type = topodatapb.TabletType_REPLICA
-
-	tw.loadTablets()
-	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "ReplaceTablet": 1})
-
-	allTablets = fhc.GetAllTablets()
-	require.Contains(t, allTablets, key)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, allTablets[key].Type)
-}
-
 func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	ctx := utils.LeakCheckContext(t)
 

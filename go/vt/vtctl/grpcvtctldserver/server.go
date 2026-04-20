@@ -2221,15 +2221,21 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 		if req.PhiThreshold != nil {
 			if *req.PhiThreshold > 0 {
 				gossipConfig.PhiThreshold = *req.PhiThreshold
+			} else if creatingConfig {
+				gossipConfig.PhiThreshold = 4
 			}
 		} else if creatingConfig {
 			gossipConfig.PhiThreshold = 4
 		}
 		if req.PingInterval != "" {
 			gossipConfig.PingInterval = req.PingInterval
+		} else if creatingConfig {
+			gossipConfig.PingInterval = "1s"
 		}
 		if req.MaxUpdateAge != "" {
 			gossipConfig.MaxUpdateAge = req.MaxUpdateAge
+		} else if creatingConfig {
+			gossipConfig.MaxUpdateAge = "5s"
 		}
 		return gossipConfig
 	}

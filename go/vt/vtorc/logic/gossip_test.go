@@ -132,6 +132,31 @@ func TestFindGossipConfigState(t *testing.T) {
 		assert.ElementsMatch(t, []string{"ks1", "ks2"}, enabledKeyspaces)
 		assert.True(t, conflict)
 	})
+
+	t.Run("treats equivalent effective defaults as non-conflicting", func(t *testing.T) {
+		origTS := ts
+		ts = memorytopo.NewServer(ctx, "zone1")
+		t.Cleanup(func() { ts = origTS })
+
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled: true,
+			},
+		}))
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 4,
+				PingInterval: "1s",
+				MaxUpdateAge: "5s",
+			},
+		}))
+
+		cfg, enabledKeyspaces, conflict := findGossipConfigState()
+		require.NotNil(t, cfg)
+		assert.ElementsMatch(t, []string{"ks1", "ks2"}, enabledKeyspaces)
+		assert.False(t, conflict)
+	})
 }
 
 func TestStopGossipNilAgent(t *testing.T) {

@@ -15111,7 +15111,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 		assert.Equal(t, "20s", ki.GossipConfig.MaxUpdateAge, "max update age should be updated")
 	})
 
-	t.Run("enable without phi threshold stores the default", func(t *testing.T) {
+	t.Run("enable without tuning values stores the defaults", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
@@ -15131,11 +15131,11 @@ func TestUpdateGossipConfig(t *testing.T) {
 		require.NotNil(t, ki.GossipConfig)
 		assert.True(t, ki.GossipConfig.Enabled)
 		assert.Equal(t, float64(4), ki.GossipConfig.PhiThreshold)
-		assert.Empty(t, ki.GossipConfig.PingInterval)
-		assert.Empty(t, ki.GossipConfig.MaxUpdateAge)
+		assert.Equal(t, "1s", ki.GossipConfig.PingInterval)
+		assert.Equal(t, "5s", ki.GossipConfig.MaxUpdateAge)
 	})
 
-	t.Run("enable with explicit zero phi threshold preserves zero", func(t *testing.T) {
+	t.Run("enable with explicit zero phi threshold stores the default", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
@@ -15155,7 +15155,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, ki.GossipConfig)
 		assert.True(t, ki.GossipConfig.Enabled)
-		assert.Equal(t, float64(0), ki.GossipConfig.PhiThreshold)
+		assert.Equal(t, float64(4), ki.GossipConfig.PhiThreshold)
 	})
 
 	t.Run("zero and empty values do not overwrite existing config", func(t *testing.T) {

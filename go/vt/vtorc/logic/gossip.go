@@ -175,22 +175,16 @@ func stopGossipRPCServer() {
 func startGossipAgent(cfg *topodatapb.GossipConfig) {
 	seeds := discoverGossipSeeds()
 	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{SecureDialOption: grpctmclient.SecureDialOption})
-
-	pingInterval := parseDurationVTOrc(cfg.PingInterval, 1*time.Second)
-	maxUpdateAge := parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second)
-	phiThreshold := cfg.PhiThreshold
-	if phiThreshold <= 0 {
-		phiThreshold = 4
-	}
+	tuning := effectiveGossipTuning(cfg)
 
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(config.GossipNodeID()),
 		BindAddr:     config.GossipListenAddr(),
 		Seeds:        seeds,
-		PhiThreshold: phiThreshold,
-		PingInterval: pingInterval,
+		PhiThreshold: tuning.PhiThreshold,
+		PingInterval: tuning.PingInterval,
 		ProbeTimeout: 500 * time.Millisecond,
-		MaxUpdateAge: maxUpdateAge,
+		MaxUpdateAge: tuning.MaxUpdateAge,
 	}, transport, nil)
 
 	if agent == nil {
@@ -251,9 +245,7 @@ func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 			found = ki.GossipConfig
 			continue
 		}
-		if found.PhiThreshold != ki.GossipConfig.PhiThreshold ||
-			found.PingInterval != ki.GossipConfig.PingInterval ||
-			found.MaxUpdateAge != ki.GossipConfig.MaxUpdateAge {
+		if effectiveGossipTuning(found) != effectiveGossipTuning(ki.GossipConfig) {
 			log.Error("refusing to start gossip: multiple keyspaces have conflicting configs",
 				slog.String("keyspace1", enabledKeyspaces[0]),
 				slog.String("keyspace2", ksName))
@@ -261,6 +253,29 @@ func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 		}
 	}
 	return found, enabledKeyspaces, false
+}
+
+type gossipTuning struct {
+	PhiThreshold float64
+	PingInterval time.Duration
+	MaxUpdateAge time.Duration
+}
+
+func effectiveGossipTuning(cfg *topodatapb.GossipConfig) gossipTuning {
+	if cfg == nil {
+		return gossipTuning{}
+	}
+
+	phiThreshold := cfg.PhiThreshold
+	if phiThreshold <= 0 {
+		phiThreshold = 4
+	}
+
+	return gossipTuning{
+		PhiThreshold: phiThreshold,
+		PingInterval: parseDurationVTOrc(cfg.PingInterval, 1*time.Second),
+		MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 5*time.Second),
+	}
 }
 
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
@@ -303,10 +318,11 @@ func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 		return
 	}
 
+	tuning := effectiveGossipTuning(cfg)
 	agent.Reconfigure(gossip.Config{
-		PhiThreshold: cfg.PhiThreshold,
-		PingInterval: parseDurationVTOrc(cfg.PingInterval, 0),
-		MaxUpdateAge: parseDurationVTOrc(cfg.MaxUpdateAge, 0),
+		PhiThreshold: tuning.PhiThreshold,
+		PingInterval: tuning.PingInterval,
+		MaxUpdateAge: tuning.MaxUpdateAge,
 	})
 }
 

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -135,4 +136,25 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 		return tm.currentGossipAgent() != nil
 	}, 5*time.Second, 20*time.Millisecond)
 	tm.stopGossipLifecycle()
+}
+
+func TestCurrentProcessGossipAgentTracksLatestTabletManager(t *testing.T) {
+	old := processGossipManager.Load()
+	t.Cleanup(func() {
+		processGossipManager.Store(old)
+	})
+
+	agent1 := gossip.New(gossip.Config{NodeID: "node1"}, nil, nil)
+	agent2 := gossip.New(gossip.Config{NodeID: "node2"}, nil, nil)
+
+	tm1 := &TabletManager{}
+	tm1.SetGossip(agent1, true)
+	tm2 := &TabletManager{}
+	tm2.SetGossip(agent2, true)
+
+	setProcessGossipManager(tm1)
+	require.Same(t, agent1, currentProcessGossipAgent())
+
+	setProcessGossipManager(tm2)
+	require.Same(t, agent2, currentProcessGossipAgent())
 }

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/servenv"
@@ -96,7 +97,23 @@ func (tm *TabletManager) stopGossipLifecycle() {
 var (
 	gossipDebugHandlerOnce sync.Once
 	gossipGRPCServiceOnce  sync.Once
+	processGossipManager   atomic.Pointer[TabletManager]
 )
+
+func setProcessGossipManager(tm *TabletManager) {
+	if tm == nil {
+		return
+	}
+	processGossipManager.Store(tm)
+}
+
+func currentProcessGossipAgent() *gossip.Gossip {
+	tm := processGossipManager.Load()
+	if tm == nil {
+		return nil
+	}
+	return tm.currentGossipAgent()
+}
 
 // registerGossipService registers the gossip gRPC service and debug HTTP
 // endpoint. It is safe to call multiple times — registration happens only
@@ -106,11 +123,12 @@ func registerGossipService(tm *TabletManager) {
 	if tm == nil {
 		return
 	}
+	setProcessGossipManager(tm)
 
 	gossipDebugHandlerOnce.Do(func() {
 		servenv.HTTPHandleFunc("/debug/gossip", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			agent := tm.currentGossipAgent()
+			agent := currentProcessGossipAgent()
 			if agent != nil {
 				_ = json.NewEncoder(w).Encode(agent.Debug())
 			} else {
@@ -119,13 +137,13 @@ func registerGossipService(tm *TabletManager) {
 		})
 	})
 
-	if servenv.GRPCServer == nil {
+	if servenv.GRPCServer == nil || !servenv.GRPCCheckServiceMap("gossip") {
 		return
 	}
 
 	gossipGRPCServiceOnce.Do(func() {
 		gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
-			GetAgent: func() *gossip.Gossip { return tm.currentGossipAgent() },
+			GetAgent: currentProcessGossipAgent,
 		})
 	})
 }
