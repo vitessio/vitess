@@ -164,7 +164,6 @@ Flags:
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
-      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -177,6 +176,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
+      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --proxy-protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)

@@ -261,7 +261,6 @@ Flags:
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -274,6 +273,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
+      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --proto-topo vttest.TopoData                                       vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.
       --proxy-protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --proxy-tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
