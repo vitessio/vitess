@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -338,6 +339,77 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 
 	_, _, err = execCmd(name, args, env, "", nil)
 	return err
+}
+
+// IsMySQLLocal returns true if the DBA connection uses a local unix socket.
+func (mysqld *Mysqld) IsMySQLLocal() bool {
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	return err == nil && strings.TrimSpace(params.UnixSocket) != ""
+}
+
+// IsLocalMySQLDown probes MySQL by attempting a DBA connection and returns true
+// if MySQL appears to be down. Only meaningful when IsMySQLLocal returns true.
+func (mysqld *Mysqld) IsLocalMySQLDown(ctx context.Context) bool {
+	// Resolve params once for both connection probe and socket file validation.
+	// Returns false (not down) on param failure — conservative to avoid false
+	// positives that could trigger unnecessary demotions.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil || strings.TrimSpace(params.UnixSocket) == "" {
+		return false
+	}
+
+	// Test if mysql is available by attempting a DBA connection.
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err == nil {
+		conn.Close()
+		return false
+	}
+
+	// "too many connections" proves MySQL is alive.
+	if sqlerror.IsTooManyConnectionsErr(err) {
+		return false
+	}
+
+	// Only use CRConnectionError (errno 2002, unix socket) as a signal MySQL is down.
+	// TCP-based connection errors (errno 2003) may be network-related, not MySQL.
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	if !ok || sqlErr.Num != sqlerror.CRConnectionError {
+		return false
+	}
+
+	// File-descriptor exhaustion is client-side; it is not a good signal of MySQL's state.
+	// It is unfortunately possible for file-descriptor exhaustion to be the cause of the
+	// CRConnectionError (errno 2002) error.
+	if isFileDescriptorExhaustedProbe() {
+		return false
+	}
+
+	// Validate the socket file exists and that it really is a socket. A stale
+	// socket file after SIGKILL is expected — we fall through to return true.
+	fi, sErr := os.Stat(params.UnixSocket)
+	if sErr != nil && !os.IsNotExist(sErr) {
+		log.Warn("IsLocalMySQLDown: unexpected error checking socket file, assuming MySQL is not down",
+			slog.String("socket", params.UnixSocket),
+			slog.Any("error", sErr))
+		return false
+	}
+	if sErr == nil && fi.Mode()&os.ModeSocket == 0 {
+		return false
+	}
+
+	// We conclude MySQL is down.
+	return true
+}
+
+// isFileDescriptorExhaustedProbe uses syscall.Socket to detect EMFILE/ENFILE,
+// since the MySQL connector wraps the original syscall error.
+func isFileDescriptorExhaustedProbe() bool {
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE)
+	}
+	syscall.Close(fd)
+	return false
 }
 
 // Start will start the mysql daemon, either by running the
@@ -662,37 +734,19 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 	case hook.HOOK_DOES_NOT_EXIST:
-		// hook doesn't exist, try mysqladmin
+		// When no shutdown hook is configured, we own the full shutdown
+		// path. Stop replication before shutting down to avoid a brief
+		// race in MySQL's close_connections() (mysqld.cc) where
+		// close_listener() removes the unix socket before end_slave()
+		// stops replication threads. Best-effort with a 5s timeout.
+		// When a hook IS configured, the operator is responsible for
+		// handling STOP REPLICA in their hook if desired.
+		stoppedReplication := mysqld.stopReplicationBeforeShutdown(ctx)
 		log.Info("No mysqld_shutdown hook, running mysqladmin directly")
-		dir, err := vtenv.VtMysqlRoot()
-		if err != nil {
-			return err
-		}
-		name, err := binaryPath(dir, "mysqladmin")
-		if err != nil {
-			return err
-		}
-		params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-		if err != nil {
-			return err
-		}
-		cnf, err := mysqld.defaultsExtraFile(params)
-		if err != nil {
-			return err
-		}
-		defer os.Remove(cnf)
-		args := []string{
-			"--defaults-extra-file=" + cnf,
-			fmt.Sprintf("--shutdown-timeout=%d", int(shutdownTimeout.Seconds())),
-			"--connect-timeout=30",
-			"--wait=10",
-			"shutdown",
-		}
-		env, err := buildLdPaths()
-		if err != nil {
-			return err
-		}
-		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
+		if err := mysqld.shutdownMysqladmin(ctx, shutdownTimeout); err != nil {
+			if stoppedReplication {
+				mysqld.restartReplicationAfterFailedShutdown(ctx)
+			}
 			return err
 		}
 	default:
@@ -722,6 +776,95 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		}
 	}
 	return nil
+}
+
+// shutdownMysqladmin runs mysqladmin shutdown with the given timeout.
+func (mysqld *Mysqld) shutdownMysqladmin(ctx context.Context, shutdownTimeout time.Duration) error {
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+	name, err := binaryPath(dir, "mysqladmin")
+	if err != nil {
+		return err
+	}
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
+	defaultsFile, err := mysqld.defaultsExtraFile(params)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(defaultsFile)
+	args := []string{
+		"--defaults-extra-file=" + defaultsFile,
+		fmt.Sprintf("--shutdown-timeout=%d", int(shutdownTimeout.Seconds())),
+		"--connect-timeout=30",
+		"--wait=10",
+		"shutdown",
+	}
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
+	}
+	_, _, err = execCmd(name, args, env, dir, nil)
+	return err
+}
+
+// stopReplicationBeforeShutdown issues a best-effort STOP REPLICA before
+// MySQL shutdown to avoid a brief race in MySQL's close_connections() where
+// close_listener() removes the unix socket before end_slave() stops
+// replication threads. Uses a 5s timeout. Returns true if replication was
+// running and was successfully stopped, so the caller can restart it if
+// shutdown subsequently fails. If replication was already stopped (e.g.
+// intentionally by an operator), returns false to avoid unintentionally
+// starting it on rollback.
+func (mysqld *Mysqld) stopReplicationBeforeShutdown(ctx context.Context) bool {
+	stopCtx, stopCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer stopCancel()
+
+	// Check if replication is actually running. If it's already stopped,
+	// skip the STOP REPLICA so we don't restart it on failed shutdown.
+	status, err := mysqld.ReplicationStatus(stopCtx)
+	if err != nil || !status.Running() {
+		return false
+	}
+
+	conn, err := getPoolReconnect(stopCtx, mysqld.dbaPool)
+	if err != nil {
+		return false
+	}
+	defer conn.Recycle()
+	stopCmd := conn.Conn.StopReplicationCommand()
+	if stopCmd == "" || stopCmd == "unsupported" {
+		return false
+	}
+	err = mysqld.executeSuperQueryListConn(stopCtx, conn, []string{stopCmd})
+	return err == nil
+}
+
+// restartReplicationAfterFailedShutdown issues a best-effort START REPLICA
+// to restore replication that was stopped by stopReplicationBeforeShutdown
+// when the subsequent shutdown failed. Uses a 5s timeout.
+func (mysqld *Mysqld) restartReplicationAfterFailedShutdown(ctx context.Context) {
+	startCtx, startCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer startCancel()
+	conn, err := getPoolReconnect(startCtx, mysqld.dbaPool)
+	if err != nil {
+		log.Warn("Failed to restart replication after failed shutdown: could not get connection",
+			slog.Any("error", err))
+		return
+	}
+	defer conn.Recycle()
+	startCmd := conn.Conn.StartReplicationCommand()
+	if startCmd == "" || startCmd == "unsupported" {
+		return
+	}
+	if err := mysqld.executeSuperQueryListConn(startCtx, conn, []string{startCmd}); err != nil {
+		log.Warn("Failed to restart replication after failed shutdown",
+			slog.Any("error", err))
+	}
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.

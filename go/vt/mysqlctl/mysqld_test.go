@@ -21,12 +21,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -354,4 +356,83 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	env, err := buildLdPaths()
 	assert.NoError(t, err)
 	assert.Contains(t, env, "TZ=Europe/Berlin")
+}
+
+func TestMysqldIsMySQLLocal(t *testing.T) {
+	t.Run("unix socket", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		cp := *db.ConnParams()
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		mysqld := NewMysqld(dbc)
+		defer mysqld.Close()
+		assert.True(t, mysqld.IsMySQLLocal())
+	})
+
+	t.Run("tcp", func(t *testing.T) {
+		cp := mysql.ConnParams{
+			Host: "127.0.0.1",
+			Port: 1,
+		}
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+		mysqld := NewMysqld(dbc)
+		defer mysqld.Close()
+		assert.False(t, mysqld.IsMySQLLocal())
+	})
+}
+
+func TestMysqldIsLocalMySQLDown(t *testing.T) {
+	db := fakesqldb.New(t)
+	var closeOnce sync.Once
+	closeDB := func() { closeOnce.Do(db.Close) }
+	t.Cleanup(closeDB)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	mysqld := NewMysqld(dbc)
+	defer mysqld.Close()
+
+	t.Run("mysql is reachable", func(t *testing.T) {
+		assert.False(t, mysqld.IsLocalMySQLDown(t.Context()))
+	})
+
+	t.Run("mysql is down", func(t *testing.T) {
+		// Close the fake MySQL server to simulate MySQL being down.
+		closeDB()
+
+		assert.True(t, mysqld.IsLocalMySQLDown(t.Context()))
+	})
+}
+
+func TestShutdownStopsReplication(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Replica_IO_Running|Replica_SQL_Running", "varchar|varchar"),
+		"Yes|Yes",
+	))
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
+
+	cp := *db.ConnParams()
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	mysqld := NewMysqld(dbc)
+	defer mysqld.Close()
+
+	// Create fake socket and pid files so Shutdown doesn't bail early.
+	cnf := &Mycnf{
+		SocketFile: t.TempDir() + "/mysql.sock",
+		PidFile:    t.TempDir() + "/mysql.pid",
+	}
+	require.NoError(t, os.WriteFile(cnf.SocketFile, nil, 0o600))
+	require.NoError(t, os.WriteFile(cnf.PidFile, nil, 0o600))
+
+	// Shutdown will fail at the mysqladmin step, but STOP REPLICA
+	// happens before that.
+	mysqld.Shutdown(t.Context(), cnf, false, 1*time.Second)
+
+	assert.Contains(t, db.QueryLog(), "stop replica")
 }

@@ -765,7 +765,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			return err
 		}
 		if ti.Type == topodatapb.TabletType_PRIMARY {
-			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, false)
 		}
 	}
 
@@ -830,6 +830,30 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
+	// If MySQL is local and down, demote PRIMARY in topo and return early — replication
+	// config requires MySQL.
+	// TOCTOU note: MySQL could come back between IsLocalMySQLDown and ChangeTabletTypeDeferUpdate,
+	// causing an unnecessary demotion. This is acceptable because VTOrc's repair loop will
+	// detect the mismatch and re-promote the tablet. VTOrc (or equivalent) is required for
+	// correctness of this code path.
+	// Uses ChangeTabletTypeDeferUpdate so topo is updated synchronously
+	// but updateLocked (query service, VREngine) runs async best-effort.
+	if tm.MysqlDaemon.IsMySQLLocal() && tm.MysqlDaemon.IsLocalMySQLDown(ctx) {
+		tablet := tm.Tablet()
+		if tablet.Type == topodatapb.TabletType_PRIMARY {
+			if err := tm.tmState.ChangeTabletTypeDeferUpdate(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+				return err
+			}
+		}
+		if tablet.Type != topodatapb.TabletType_PRIMARY {
+			log.Warn("SetReplicationSource: local MySQL is down, skipping replication configuration")
+			return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down, replication configuration skipped")
+		}
+		log.Warn("SetReplicationSource: local MySQL is down, tablet demoted from PRIMARY to REPLICA, skipping replication configuration")
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "local MySQL is down; tablet demoted from PRIMARY to REPLICA, replication configuration skipped")
+	}
+
+	// convertBoolToSemiSyncAction queries MySQL, so it requires MySQL to be reachable.
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
@@ -1339,7 +1363,6 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 			"Encountered recoverable replication initialization error, restarting replication",
 			slog.Any("error", err),
 		)
-
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}

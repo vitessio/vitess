@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -88,11 +89,10 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
-	defer func() {
-		// we remove the tablet from our global list
+	t.Cleanup(func() {
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
-	}()
+	})
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
@@ -111,6 +111,38 @@ func TestDownPrimary(t *testing.T) {
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
+
+	// Simulate case where a stale primary's vttablet restarts while mysqld is
+	// still down. The vttablet should detect it's a stale primary via
+	// PrimaryTermStartTime comparison and self-demote to REPLICA even though
+	// mysqld is unavailable.
+	//
+	// Check the old primary's topo record. ERS could not update it because
+	// the tablet was unreachable, so it is typically still PRIMARY. However,
+	// VTOrc's ReconcileStaleTopoPrimary may have already reconciled it to
+	// REPLICA asynchronously — that is fine, the rest of the test still
+	// exercises the restart-and-rejoin path.
+	tablet, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(curPrimary.Alias)
+	require.NoError(t, err)
+	t.Logf("Old primary %s topo type before vttablet restart: %v", curPrimary.Alias, tablet.GetType())
+
+	err = curPrimary.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	// Verify the old primary self-demotes: both the tablet's own view and
+	// the topo record should show REPLICA.
+	err = curPrimary.VttabletProcess.WaitForTabletTypes([]string{"replica"})
+	require.NoError(t, err)
+	tablet, err = clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(curPrimary.Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tablet.GetType())
+
+	// Now start mysqld — the tablet should set up replication and catch up.
+	err = curPrimary.MysqlctlProcess.StartProvideInit(false)
+	require.NoError(t, err)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, crossCellReplica}, 15*time.Second)
+	err = curPrimary.VttabletProcess.WaitForTabletStatus("SERVING")
+	require.NoError(t, err)
 }
 
 // bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.

@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"syscall"
@@ -87,6 +88,10 @@ type tmState struct {
 	// and has its own mutex.
 	displayState displayState
 
+	// deferredWg tracks in-flight deferred updateLocked goroutines.
+	// Close() waits on this to ensure clean shutdown.
+	deferredWg sync.WaitGroup
+
 	// allowReadsFromDeniedTables allows readonly operations to execute against
 	// denied tables.
 	allowReadsFromDeniedTables map[topodatapb.TabletType]bool
@@ -123,10 +128,13 @@ func (ts *tmState) Open() {
 func (ts *tmState) Close() {
 	log.Info("In tmState.Close()")
 	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
 	ts.isOpen = false
 	ts.cancel()
+	ts.mu.Unlock()
+
+	// Wait for any in-flight deferred updateLocked goroutines to finish.
+	// cancel() above triggers ts.ctx.Done(), so they will exit promptly.
+	ts.deferredWg.Wait()
 }
 
 func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
@@ -205,7 +213,20 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 	return nil
 }
 
+// ChangeTabletTypeDeferUpdate is like ChangeTabletType but runs
+// updateLocked (query service, VREngine, etc) asynchronously. Use when
+// MySQL may be down — topo is updated synchronously, and updateLocked
+// runs best-effort in the background with bounded retries. If it still
+// fails after retries, VTOrc or a vttablet restart will reconcile.
+func (ts *tmState) ChangeTabletTypeDeferUpdate(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+	return ts.changeTabletType(ctx, tabletType, action, true)
+}
+
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+	return ts.changeTabletType(ctx, tabletType, action, false)
+}
+
+func (ts *tmState) changeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, deferUpdateLocked bool) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
@@ -240,12 +261,12 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 	}
 
-	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action)
+	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action, deferUpdateLocked)
 	return err
 }
 
 // updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
-func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction, deferUpdateLocked bool) error {
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
@@ -267,7 +288,58 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 	statsTabletType.Set(s)
 	statsTabletTypeCount.Add(s, 1)
 
-	err := ts.updateLocked(ctx)
+	var err error
+	if deferUpdateLocked {
+		// Run updateLocked async — query service/VREngine transitions
+		// happen best-effort. Topo is published synchronously after
+		// launching this goroutine (via publishStateLocked below).
+		// We retry with backoff for up to 60 seconds to cover transient
+		// failures (e.g. MySQL still starting). Uses ts.ctx so the
+		// goroutine is cancelled when the TabletManager shuts down.
+		// Note: the goroutine operates on whatever tablet type is current
+		// when it acquires the lock, not a snapshot from launch time. If
+		// another ChangeTabletType call runs first, the goroutine applies
+		// the newer type's transitions. This is correct (idempotent).
+		ts.publishForDisplay()
+		if !ts.isOpen {
+			log.Warn("Skipping deferred updateLocked, TabletManager is shutting down")
+		} else {
+			ts.deferredWg.Go(func() {
+				const (
+					maxRetryDuration = 60 * time.Second
+					retryInterval    = 5 * time.Second
+				)
+				deadline := time.Now().Add(maxRetryDuration)
+				for {
+					ts.mu.Lock()
+					updateErr := ts.updateLocked(ts.ctx)
+					ts.mu.Unlock()
+					if updateErr == nil {
+						log.Info("Deferred updateLocked completed successfully")
+						return
+					}
+					if time.Now().After(deadline) {
+						log.Warn("Deferred updateLocked failed after retries, VTOrc or restart will reconcile",
+							slog.Any("error", updateErr))
+						return
+					}
+					log.Warn("Deferred updateLocked failed, will retry",
+						slog.Duration("retry-interval", retryInterval),
+						slog.Any("error", updateErr))
+					retryTimer := time.NewTimer(retryInterval)
+					select {
+					case <-ts.ctx.Done():
+						retryTimer.Stop()
+						log.Warn("Deferred updateLocked cancelled during shutdown")
+						return
+					case <-retryTimer.C:
+					}
+				}
+			})
+		}
+	} else {
+		err = ts.updateLocked(ctx)
+	}
 	// No need to short circuit. Apply all steps and return error in the end.
 	ts.publishStateLocked(ctx)
 	ts.tm.notifyShardSync()
