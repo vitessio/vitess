@@ -920,6 +920,11 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, replica, "ON"), "REPLICA should be a semi-sync acker")
 	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF"), "RDONLY should not be a semi-sync acker")
 
+	// Snapshot the FixReplica counter before stopping replication.
+	// VTOrc may have already incremented it during setup (e.g., for
+	// ReplicaSemiSyncMustBeSet under semi_sync durability).
+	fixReplicaCount := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)
+
 	// Stop replication on the semi-sync acker (REPLICA). This causes
 	// PrimarySemiSyncBlocked on the primary. VTOrc should fix replication
 	// via the BeforeAnalysesFunc bypass in recheckPrimaryHealth.
@@ -929,6 +934,6 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	// Wait for VTOrc to fix the replica before checking replication.
 	// Without this, CheckReplication's INSERT on the primary can hang
 	// if the primary is still semi-sync blocked.
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, fixReplicaCount+1)
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }

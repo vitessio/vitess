@@ -77,23 +77,18 @@ func (dap *DetectionAnalysisProblem) RequiresOrderedExecution(self *DetectionAna
 		return true
 	}
 	// Check if any other problem references this one in its dependencies.
-	// Find each problem's corresponding analysis entry to pass as self.
-	// Skip problems with no matching analysis entry (pSelf == nil) to
-	// avoid passing nil to BeforeAnalysesFunc/AfterAnalysesFunc, which
-	// may not nil-check self.
+	// Evaluate all matching shard entries for each problem type (not just
+	// the first), since dynamic dependency functions are self-dependent
+	// and different tablets may produce different results (e.g., an acker
+	// vs non-acker ReplicationStopped).
 	for _, p := range detectionAnalysisProblems {
-		var pSelf *DetectionAnalysis
 		for _, a := range shardAnalyses {
-			if a.Analysis == p.Meta.Analysis {
-				pSelf = a
-				break
+			if a.Analysis != p.Meta.Analysis {
+				continue
 			}
-		}
-		if pSelf == nil {
-			continue
-		}
-		if slices.Contains(p.GetBeforeAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) || slices.Contains(p.GetAfterAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) {
-			return true
+			if slices.Contains(p.GetBeforeAnalyses(a, shardAnalyses), dap.Meta.Analysis) || slices.Contains(p.GetAfterAnalyses(a, shardAnalyses), dap.Meta.Analysis) {
+				return true
+			}
 		}
 	}
 	return false
