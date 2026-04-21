@@ -1463,6 +1463,91 @@ func TestApplyChangeChecksEffectiveJSONSizeForPartialDeleteInsert(t *testing.T) 
 	require.Empty(t, executed)
 }
 
+func TestApplyChangeIgnoresSkippedJSONColumnsWhenCheckingUpdateLimit(t *testing.T) {
+	skippedJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Update: sqlparser.BuildParsedQuery("update t set v=%a where id=%a",
+			":a_v", ":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "v", Type: querypb.Type_VARCHAR},
+			{Name: "j_generated", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_generated": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1old"), skippedJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1new"), skippedJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Equal(t, "update t set v='new' where id=1", executed[0])
+}
+
+func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
+	beforeJSON := []byte(`{"small":"x"}`)
+	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.big', CAST(JSON_QUOTE(_utf8mb4'` + strings.Repeat("x", 64) + `') as JSON))`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(beforeJSON))},
+			Values:  append([]byte("1"), beforeJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(diff))},
+			Values:  append([]byte("2"), diff...),
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.Empty(t, executed)
+}
+
 func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
 	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
 	tp := &TablePlan{

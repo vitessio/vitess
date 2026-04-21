@@ -255,36 +255,25 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-// checkJSONRowSize sums the byte lengths of all JSON-typed columns in row and
-// returns an error if the sum exceeds limit. When limit <= 0 the check is a
-// no-op. It reads column sizes directly from row.Lengths so it can run in
-// hot loops without materializing []sqltypes.Value. Indices beyond
-// len(row.Lengths) are silently skipped. NULL columns (Lengths[i] < 0) are
-// treated as zero-size.
-func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
-	if limit <= 0 || row == nil {
+func (tp *TablePlan) checkJSONFieldSizes(limit int64, addJSONFieldSizes func(add func(field *querypb.Field, size int64))) error {
+	if limit <= 0 {
 		return nil
 	}
+
 	var total int64
 	var largestName string
 	var largestSize int64
-	for i, field := range tp.Fields {
-		if i >= len(row.Lengths) {
-			break
+	addJSONFieldSizes(func(field *querypb.Field, size int64) {
+		if field == nil || size < 0 {
+			return
 		}
-		if field.Type != querypb.Type_JSON {
-			continue
-		}
-		n := row.Lengths[i]
-		if n < 0 {
-			continue
-		}
-		total += n
-		if n > largestSize {
-			largestSize = n
+		total += size
+		if size > largestSize {
+			largestSize = size
 			largestName = field.Name
 		}
-	}
+	})
+
 	if total > limit {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"vreplication: row JSON payload %d bytes exceeds vreplication-max-row-json-bytes=%d (table=%s, largest_json_column=%s @ %d bytes)",
@@ -293,59 +282,84 @@ func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
 	return nil
 }
 
-func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
-	if limit <= 0 || afterRow == nil {
+// checkJSONRowSize sums the byte lengths of all JSON-typed columns in row and
+// returns an error if the sum exceeds limit. When limit <= 0 the check is a
+// no-op. It reads column sizes directly from row.Lengths so it can run in
+// hot loops without materializing []sqltypes.Value. Indices beyond
+// len(row.Lengths) are silently skipped. NULL columns (Lengths[i] < 0) are
+// treated as zero-size.
+func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
+	if row == nil {
 		return nil
 	}
 
-	jsonLength := func(fieldIndex, jsonIndex int) int64 {
-		if partialJSONColumns != nil && beforeRow != nil && isBitSet(partialJSONColumns.Cols, jsonIndex) {
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		for i, field := range tp.Fields {
+			if i >= len(row.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			add(field, row.Lengths[i])
+		}
+	})
+}
+
+func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
+	}
+
+	jsonInsertSize := func(fieldIndex, jsonIndex int) int64 {
+		if fieldIndex >= len(afterRow.Lengths) {
+			return 0
+		}
+		afterLen := afterRow.Lengths[fieldIndex]
+		if afterLen < 0 {
+			return 0
+		}
+		if partialJSONColumns == nil || beforeRow == nil || !isBitSet(partialJSONColumns.Cols, jsonIndex) {
+			return afterLen
+		}
+		if afterLen == 0 {
 			if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
 				return 0
 			}
 			return beforeRow.Lengths[fieldIndex]
 		}
-		if fieldIndex >= len(afterRow.Lengths) || afterRow.Lengths[fieldIndex] < 0 {
-			return 0
+		beforeLen := int64(0)
+		if fieldIndex < len(beforeRow.Lengths) && beforeRow.Lengths[fieldIndex] > 0 {
+			beforeLen = beforeRow.Lengths[fieldIndex]
 		}
-		return afterRow.Lengths[fieldIndex]
+		return beforeLen + afterLen
 	}
 
-	var total int64
-	var largestName string
-	var largestSize int64
-	addJSONField := func(fieldIndex, jsonIndex int, field *querypb.Field) {
-		if field.Type != querypb.Type_JSON {
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
+			fieldsIndex := 0
+			jsonIndex := 0
+			for range tp.BulkInsertValues.BindLocations() {
+				for fieldsIndex < len(tp.Fields) {
+					field := tp.Fields[fieldsIndex]
+					fieldIndex := fieldsIndex
+					fieldJSONIndex := jsonIndex
+					fieldsIndex++
+					if field.Type == querypb.Type_JSON {
+						jsonIndex++
+					}
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						continue
+					}
+					if field.Type == querypb.Type_JSON {
+						add(field, jsonInsertSize(fieldIndex, fieldJSONIndex))
+					}
+					break
+				}
+			}
 			return
 		}
-		n := jsonLength(fieldIndex, jsonIndex)
-		total += n
-		if n > largestSize {
-			largestSize = n
-			largestName = field.Name
-		}
-	}
 
-	if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
-		fieldsIndex := 0
-		jsonIndex := 0
-		for range tp.BulkInsertValues.BindLocations() {
-			for fieldsIndex < len(tp.Fields) {
-				field := tp.Fields[fieldsIndex]
-				fieldIndex := fieldsIndex
-				fieldJSONIndex := jsonIndex
-				fieldsIndex++
-				if field.Type == querypb.Type_JSON {
-					jsonIndex++
-				}
-				if tp.FieldsToSkip[strings.ToLower(field.Name)] {
-					continue
-				}
-				addJSONField(fieldIndex, fieldJSONIndex, field)
-				break
-			}
-		}
-	} else {
 		jsonIndex := 0
 		for i, field := range tp.Fields {
 			if i >= len(afterRow.Lengths) {
@@ -358,16 +372,35 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
 			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
 				continue
 			}
-			addJSONField(i, fieldJSONIndex, field)
+			if field.Type == querypb.Type_JSON {
+				add(field, jsonInsertSize(i, fieldJSONIndex))
+			}
 		}
+	})
+}
+
+func (tp *TablePlan) checkUpdateJSONRowSize(afterRow *querypb.Row, dataColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
 	}
 
-	if total > limit {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"vreplication: row JSON payload %d bytes exceeds vreplication-max-row-json-bytes=%d (table=%s, largest_json_column=%s @ %d bytes)",
-			total, limit, tp.TargetName, largestName, largestSize)
-	}
-	return nil
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if dataColumns != nil && dataColumns.Count > 0 && !isBitSet(dataColumns.Cols, i) {
+				continue
+			}
+			add(field, afterRow.Lengths[i])
+		}
+	})
 }
 
 func (tp *TablePlan) maxRowJSONBytes() int64 {
@@ -639,7 +672,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			if limit > 0 {
-				if err := tp.checkJSONRowSize(rowChange.After, limit); err != nil {
+				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.DataColumns, limit); err != nil {
 					return nil, err
 				}
 			}
