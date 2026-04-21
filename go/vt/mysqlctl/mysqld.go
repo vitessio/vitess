@@ -74,6 +74,12 @@ const maxLogFileSampleSize = 4096
 // DbaGrantWaitTime is the amount of time to wait for the grants to have applied
 const DbaGrantWaitTime = 10 * time.Second
 
+const (
+	// mysqldExitPollInterval is how often waitForMysqldExit checks whether
+	// mysqld has removed its socket and pid files.
+	mysqldExitPollInterval = 100 * time.Millisecond
+)
+
 var (
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
@@ -734,7 +740,7 @@ func waitForMysqldExit(ctx context.Context, socketFile, pidFile string) error {
 		select {
 		case <-ctx.Done():
 			return errors.New("gave up waiting for mysqld to stop")
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(mysqldExitPollInterval):
 		}
 	}
 }
