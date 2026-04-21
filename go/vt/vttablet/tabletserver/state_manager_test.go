@@ -850,7 +850,7 @@ func (te *testSchemaEngine) Open() error {
 	return nil
 }
 
-func (te *testSchemaEngine) MakeNonPrimary(topodatapb.TabletType) {
+func (te *testSchemaEngine) MakeNonPrimary() {
 	te.nonPrimary = true
 }
 

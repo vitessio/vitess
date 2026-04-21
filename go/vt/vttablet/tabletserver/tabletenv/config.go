@@ -112,14 +112,6 @@ func SchemaUserTablesFreeSpacePercentThreshold() int {
 	return schemaUserTablesFreeSpacePercentThreshold.Get()
 }
 
-// SetSchemaUserTablesFreeSpacePercentThreshold overrides the value of the
-// viper-backed schema-user-tables-free-space-percent-threshold setting.
-// Intended for tests that want to exercise the enabled path; in production
-// the value comes from the flag / config file.
-func SetSchemaUserTablesFreeSpacePercentThreshold(v int) {
-	schemaUserTablesFreeSpacePercentThreshold.Set(v)
-}
-
 func init() {
 	currentConfig = *NewDefaultConfig()
 	currentConfig.DB = &dbconfigs.GlobalDBConfigs

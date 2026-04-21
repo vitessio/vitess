@@ -30,118 +30,41 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestIsOptimizeEligibleTabletType verifies that OPTIMIZE is only attempted
-// on REPLICA and RDONLY tablet types.
-func TestIsOptimizeEligibleTabletType(t *testing.T) {
-	tests := []struct {
-		tabletType topodatapb.TabletType
-		eligible   bool
-	}{
-		{topodatapb.TabletType_UNKNOWN, false},
-		{topodatapb.TabletType_PRIMARY, false},
-		{topodatapb.TabletType_REPLICA, true},
-		{topodatapb.TabletType_RDONLY, true},
-		{topodatapb.TabletType_SPARE, false},
-		{topodatapb.TabletType_EXPERIMENTAL, false},
-		{topodatapb.TabletType_BACKUP, false},
-		{topodatapb.TabletType_RESTORE, false},
-		{topodatapb.TabletType_DRAINED, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.tabletType.String(), func(t *testing.T) {
-			se := &Engine{currentTabletType: tc.tabletType}
-			assert.Equal(t, tc.eligible, se.isOptimizeEligibleTabletTypeLocked())
-		})
-	}
-}
-
-// TestTabletTypeFlipStampsTime verifies that tabletTypeLastChangedAt is
-// stamped only on an actual type change, not on idempotent calls.
-func TestTabletTypeFlipStampsTime(t *testing.T) {
-	se := &Engine{}
-
-	// Fresh engine: MakePrimary transitions from UNKNOWN to PRIMARY → stamp.
-	se.MakePrimary(true)
-	assert.Equal(t, topodatapb.TabletType_PRIMARY, se.currentTabletType)
-	assert.True(t, se.isServingPrimary)
-	require.False(t, se.tabletTypeLastChangedAt.IsZero(), "expected stamp on first MakePrimary")
-	stamp1 := se.tabletTypeLastChangedAt
-
-	// Idempotent MakePrimary: type stays PRIMARY → no new stamp.
-	time.Sleep(time.Millisecond)
-	se.MakePrimary(true)
-	assert.Equal(t, stamp1, se.tabletTypeLastChangedAt, "idempotent MakePrimary should not re-stamp")
-
-	// Flip to REPLICA via MakeNonPrimary: type changes → stamp.
-	time.Sleep(time.Millisecond)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, se.currentTabletType)
-	assert.False(t, se.isServingPrimary)
-	assert.True(t, se.tabletTypeLastChangedAt.After(stamp1), "expected stamp update on flip")
-	stamp2 := se.tabletTypeLastChangedAt
-
-	// Same type via MakeNonPrimary(REPLICA) again: no new stamp.
-	time.Sleep(time.Millisecond)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
-	assert.Equal(t, stamp2, se.tabletTypeLastChangedAt, "idempotent MakeNonPrimary should not re-stamp")
-
-	// Transition REPLICA → RDONLY: stamp.
-	time.Sleep(time.Millisecond)
-	se.MakeNonPrimary(topodatapb.TabletType_RDONLY)
-	assert.Equal(t, topodatapb.TabletType_RDONLY, se.currentTabletType)
-	assert.True(t, se.tabletTypeLastChangedAt.After(stamp2), "expected stamp update on REPLICA→RDONLY")
-}
-
 // TestShouldAttemptGtidExecutedOptimizeLocked exercises the three gates:
-// eligible tablet type, tablet-type stability cooldown, and per-tablet 24h
+// primary/non-primary, tablet-role stability cooldown, and per-tablet 24h
 // throttle.
 func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	now := time.Now()
 
-	t.Run("ineligible tablet type skips", func(t *testing.T) {
-		se := &Engine{currentTabletType: topodatapb.TabletType_PRIMARY}
+	t.Run("primary tablet skips", func(t *testing.T) {
+		se := &Engine{isServingPrimary: true}
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
 	t.Run("within stability cooldown skips", func(t *testing.T) {
-		se := &Engine{
-			currentTabletType:       topodatapb.TabletType_REPLICA,
-			tabletTypeLastChangedAt: now.Add(-1 * time.Minute),
-		}
+		se := &Engine{tabletTypeLastChangedAt: now.Add(-1 * time.Minute)}
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
 	t.Run("past stability cooldown proceeds", func(t *testing.T) {
-		se := &Engine{
-			currentTabletType:       topodatapb.TabletType_REPLICA,
-			tabletTypeLastChangedAt: now.Add(-10 * time.Minute),
-		}
+		se := &Engine{tabletTypeLastChangedAt: now.Add(-10 * time.Minute)}
 		assert.True(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
 	t.Run("within 24h throttle skips", func(t *testing.T) {
-		se := &Engine{
-			currentTabletType:          topodatapb.TabletType_RDONLY,
-			gtidExecutedOptimizeLastAt: now.Add(-1 * time.Hour),
-		}
+		se := &Engine{gtidExecutedOptimizeLastAt: now.Add(-1 * time.Hour)}
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
 	t.Run("past 24h throttle proceeds", func(t *testing.T) {
-		se := &Engine{
-			currentTabletType:          topodatapb.TabletType_RDONLY,
-			gtidExecutedOptimizeLastAt: now.Add(-25 * time.Hour),
-		}
+		se := &Engine{gtidExecutedOptimizeLastAt: now.Add(-25 * time.Hour)}
 		assert.True(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
 	t.Run("no prior history proceeds", func(t *testing.T) {
-		se := &Engine{currentTabletType: topodatapb.TabletType_REPLICA}
+		se := &Engine{}
 		assert.True(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 }
@@ -155,23 +78,20 @@ func TestSelectUserTablesToOptimizeLocked(t *testing.T) {
 		"tbl_b": 2000,
 	}
 
-	t.Run("ineligible tablet returns nil", func(t *testing.T) {
-		se := &Engine{currentTabletType: topodatapb.TabletType_PRIMARY}
+	t.Run("primary tablet returns nil", func(t *testing.T) {
+		se := &Engine{isServingPrimary: true}
 		assert.Empty(t, se.selectUserTablesToOptimizeLocked(now, overThreshold))
 		assert.Empty(t, se.userTableOptimizeLastAt, "no stamps when skipped")
 	})
 
 	t.Run("within stability cooldown returns nil", func(t *testing.T) {
-		se := &Engine{
-			currentTabletType:       topodatapb.TabletType_REPLICA,
-			tabletTypeLastChangedAt: now.Add(-30 * time.Second),
-		}
+		se := &Engine{tabletTypeLastChangedAt: now.Add(-30 * time.Second)}
 		assert.Empty(t, se.selectUserTablesToOptimizeLocked(now, overThreshold))
 		assert.Empty(t, se.userTableOptimizeLastAt)
 	})
 
 	t.Run("eligible with empty history returns all tables", func(t *testing.T) {
-		se := &Engine{currentTabletType: topodatapb.TabletType_REPLICA}
+		se := &Engine{}
 		got := se.selectUserTablesToOptimizeLocked(now, overThreshold)
 		assert.ElementsMatch(t, []string{"tbl_a", "tbl_b"}, got)
 		assert.Len(t, se.userTableOptimizeLastAt, 2, "both tables get stamped")
@@ -181,7 +101,6 @@ func TestSelectUserTablesToOptimizeLocked(t *testing.T) {
 
 	t.Run("per-table throttle skips recently-optimized table", func(t *testing.T) {
 		se := &Engine{
-			currentTabletType:       topodatapb.TabletType_RDONLY,
 			userTableOptimizeLastAt: map[string]time.Time{"tbl_a": now.Add(-1 * time.Hour)},
 		}
 		got := se.selectUserTablesToOptimizeLocked(now, overThreshold)
@@ -192,7 +111,6 @@ func TestSelectUserTablesToOptimizeLocked(t *testing.T) {
 
 	t.Run("per-table throttle expires past 24h", func(t *testing.T) {
 		se := &Engine{
-			currentTabletType:       topodatapb.TabletType_RDONLY,
 			userTableOptimizeLastAt: map[string]time.Time{"tbl_a": now.Add(-25 * time.Hour)},
 		}
 		got := se.selectUserTablesToOptimizeLocked(now, map[string]uint64{"tbl_a": 1000})
@@ -293,6 +211,33 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
 	})
+
+	t.Run("restore skipped if tablet was promoted to primary", func(t *testing.T) {
+		// Regression for the PRS/ERS-during-OPTIMIZE race: if a tablet is
+		// promoted while OPTIMIZE is in flight, the promotion itself turns
+		// super_read_only OFF. The deferred restore must NOT stomp that back
+		// ON or a freshly-promoted primary ends up read-only.
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("super_read_only", "int64"),
+			"1",
+		))
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		conn := newTestDBConnection(t, db)
+		defer conn.Close()
+
+		restore, err := se.disableSuperReadOnly(conn)
+		require.NoError(t, err)
+
+		// Simulate PRS/ERS landing while OPTIMIZE was in flight.
+		se.MakePrimary(true)
+
+		restore()
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"restore must skip SET GLOBAL super_read_only = 'ON' after promotion")
+	})
 }
 
 // TestRunOptimizeGtidExecutedSuccess exercises the full goroutine body on
@@ -311,7 +256,6 @@ func TestRunOptimizeGtidExecutedSuccess(t *testing.T) {
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	// Push tabletTypeLastChangedAt into the past so the stability cooldown
 	// does not trip the re-check.
 	se.mu.Lock()
@@ -364,12 +308,12 @@ func TestRunOptimizeUserTableSuccess(t *testing.T) {
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t", &sqltypes.Result{})
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_RDONLY)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
 	se.mu.Unlock()
 
+	se.userTableOptimizeSem <- struct{}{}
 	se.runOptimizeUserTable("bloated_t", 1234567)
 
 	assert.Equal(t, 1, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t"))
@@ -391,6 +335,7 @@ func TestRunOptimizeUserTableSkipsOnTabletTypeFlip(t *testing.T) {
 	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
 	se.mu.Unlock()
 
+	se.userTableOptimizeSem <- struct{}{}
 	se.runOptimizeUserTable("bloated_t", 1234567)
 
 	// The per-table throttle entry is cleared so the next reload retries.
@@ -416,7 +361,6 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated OPTIMIZE failure"))
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.gtidExecutedOptimizeLastAt = time.Now()
@@ -446,12 +390,12 @@ func TestRunOptimizeUserTableOptimizeFailureRestoresSRO(t *testing.T) {
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated OPTIMIZE failure"))
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
 	se.mu.Unlock()
 
+	se.userTableOptimizeSem <- struct{}{}
 	se.runOptimizeUserTable("bloated_t", 1234567)
 
 	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
@@ -469,7 +413,6 @@ func TestMaybeOptimizeUserTablesEmptyInput(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -492,19 +435,17 @@ func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	se.tableDataFreeBytes.Set("t_old", 12345)
 	se.surfacedFreeSpaceTables = map[string]struct{}{"t_old": {}}
 
-	// Feature disabled (threshold at its zero default).
-	require.Zero(t, tabletenv.SchemaUserTablesFreeSpacePercentThreshold())
-
-	// With the feature off, updateUserTableFreeSpaceLocked must not call the DB
-	// at all. To assert that, we install an unconditionally-rejecting query
-	// pattern that matches the format's prefix.
+	// With the feature off (threshold=0), updateUserTableFreeSpaceLocked
+	// must not call the DB at all. To assert that, we install an
+	// unconditionally-rejecting query pattern that matches the format's
+	// prefix.
 	db.RejectQueryPattern(".*data_free.*", "updateUserTableFreeSpaceLocked must not query when feature is disabled")
 
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 0)
 	se.mu.Unlock()
 	conn.Recycle()
 
@@ -514,49 +455,11 @@ func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	assert.Nil(t, se.surfacedFreeSpaceTables)
 }
 
-// TestVerifySchemaUserTablesFreeSpacePercentThreshold exercises
-// TabletConfig.Verify() against the viper-backed setting across its legal
-// and illegal ranges.
-func TestVerifySchemaUserTablesFreeSpacePercentThreshold(t *testing.T) {
-	prev := tabletenv.SchemaUserTablesFreeSpacePercentThreshold()
-	t.Cleanup(func() { tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(prev) })
-
-	cfg := tabletenv.NewDefaultConfig()
-
-	tests := []struct {
-		value   int
-		wantErr bool
-	}{
-		{0, false},
-		{1, false},
-		{50, false},
-		{100, false},
-		{-1, true},
-		{101, true},
-		{1_000, true},
-	}
-	for _, tc := range tests {
-		t.Run("", func(t *testing.T) {
-			tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(tc.value)
-			err := cfg.Verify()
-			if tc.wantErr {
-				require.ErrorContains(t, err, "--schema-user-tables-free-space-percent-threshold")
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 // TestUpdateUserTableFreeSpaceEnabled verifies the enabled-feature flow:
 // DATA_FREE query runs with the configured percentage, returned rows
 // populate the gauge, and tables that drop out of the result get their
 // gauge labels reset on the next reload.
 func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
-	prev := tabletenv.SchemaUserTablesFreeSpacePercentThreshold()
-	t.Cleanup(func() { tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(prev) })
-	tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(50)
-
 	db := fakesqldb.New(t)
 	defer db.Close()
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -578,7 +481,7 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	conn, err := se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
 	se.mu.Unlock()
 	conn.Recycle()
 
@@ -595,7 +498,7 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	conn, err = se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
 	se.mu.Unlock()
 	conn.Recycle()
 
@@ -615,7 +518,6 @@ func TestMaybeOptimizeGtidExecutedSmallFileSkips(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("file_size", "uint64"), "1024"),
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.mu.Unlock()
@@ -657,7 +559,6 @@ func TestMaybeOptimizeGtidExecutedLargeFileSpawns(t *testing.T) {
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.mu.Unlock()
@@ -792,13 +693,8 @@ func TestExecuteFetchCtxFastFailOnExpiredCtx(t *testing.T) {
 // emits a throttled warning. Without this, a negative threshold would
 // make the SQL predicate match every table (integer arithmetic inverts).
 func TestUpdateUserTableFreeSpaceOutOfRangeThresholdTreatedAsDisabled(t *testing.T) {
-	prev := tabletenv.SchemaUserTablesFreeSpacePercentThreshold()
-	t.Cleanup(func() { tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(prev) })
-
 	for _, bad := range []int{-1, -50, 101, 200} {
 		t.Run("", func(t *testing.T) {
-			tabletenv.SetSchemaUserTablesFreeSpacePercentThreshold(bad)
-
 			db := fakesqldb.New(t)
 			defer db.Close()
 			se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -813,11 +709,75 @@ func TestUpdateUserTableFreeSpaceOutOfRangeThresholdTreatedAsDisabled(t *testing
 			conn, err := se.conns.Get(ctx, nil)
 			require.NoError(t, err)
 			se.mu.Lock()
-			se.updateUserTableFreeSpaceLocked(ctx, conn.Conn)
+			se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, bad)
 			se.mu.Unlock()
 			conn.Recycle()
 		})
 	}
+}
+
+// TestMaybeOptimizeUserTablesConcurrencyCap verifies that when multiple
+// user tables are over the threshold on the same reload cycle, at most one
+// OPTIMIZE is launched (picked by largest DATA_FREE). The rest have their
+// throttle stamps rewound so the next reload reconsiders them immediately.
+func TestMaybeOptimizeUserTablesConcurrencyCap(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	// Occupy the semaphore so selectUserTablesToOptimizeLocked stamps all
+	// candidates, then the outer loop rewinds them because spawn is blocked.
+	se.userTableOptimizeSem <- struct{}{}
+	defer func() { <-se.userTableOptimizeSem }()
+
+	se.mu.Lock()
+	defer se.mu.Unlock()
+
+	over := map[string]uint64{
+		"t_small":  100,
+		"t_medium": 500,
+		"t_big":    5000,
+	}
+	se.maybeOptimizeUserTablesLocked(over)
+
+	// No table should have a stamped throttle entry because the only "winner"
+	// couldn't acquire the sem and the losers were rewound.
+	assert.Empty(t, se.userTableOptimizeLastAt,
+		"all candidates rewound when semaphore is full")
+}
+
+// TestMaybeOptimizeUserTablesPicksWorstOffender verifies the ordering: when
+// several tables are eligible and the semaphore is free, the spawned
+// OPTIMIZE is for the table with the largest DATA_FREE, and the others are
+// rewound for a later reload.
+func TestMaybeOptimizeUserTablesPicksWorstOffender(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+	se.mu.Lock()
+	over := map[string]uint64{
+		"t_small":  100,
+		"t_medium": 500,
+		"t_big":    5000,
+	}
+	se.maybeOptimizeUserTablesLocked(over)
+	// Exactly one table should be stamped — the worst offender.
+	assert.Len(t, se.userTableOptimizeLastAt, 1, "only one candidate should be stamped")
+	_, ok := se.userTableOptimizeLastAt["t_big"]
+	assert.True(t, ok, "worst offender (t_big) must be the one spawned")
+	se.mu.Unlock()
+
+	// Wait for the goroutine to release the semaphore so it doesn't leak
+	// into other tests. It will fail to open a real connection pool slot
+	// (dbconfigs point at a fakesqldb that hasn't registered OPTIMIZE) and
+	// quickly exit.
+	assert.Eventually(t, func() bool {
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		_, stillStamped := se.userTableOptimizeLastAt["t_big"]
+		return !stillStamped
+	}, 10*time.Second, 10*time.Millisecond,
+		"spawned goroutine should exit and release its throttle stamp")
 }
 
 // TestMakeNonPrimaryResetsSequenceInfo covers the sequence-reset branch of
@@ -829,7 +789,7 @@ func TestMakeNonPrimaryResetsSequenceInfo(t *testing.T) {
 			"reg_tbl": {},
 		},
 	}
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
+	se.MakeNonPrimary()
 	assert.Equal(t, int64(0), se.tables["seq_tbl"].SequenceInfo.NextVal,
 		"sequence info must be reset when leaving primaryship")
 	assert.Equal(t, int64(0), se.tables["seq_tbl"].SequenceInfo.LastVal)
@@ -845,7 +805,6 @@ func TestMaybeOptimizeGtidExecutedFileSizeQueryError(t *testing.T) {
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated"),
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.mu.Unlock()
@@ -876,7 +835,6 @@ func TestMaybeOptimizeGtidExecutedEmptyResult(t *testing.T) {
 		&sqltypes.Result{Fields: sqltypes.MakeTestFields("file_size", "uint64")},
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakeNonPrimary(topodatapb.TabletType_REPLICA)
 	se.mu.Lock()
 	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
 	se.mu.Unlock()

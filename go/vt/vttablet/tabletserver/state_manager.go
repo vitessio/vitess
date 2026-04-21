@@ -150,7 +150,7 @@ type (
 	schemaEngine interface {
 		EnsureConnectionAndDB(topodatapb.TabletType, bool) error
 		Open() error
-		MakeNonPrimary(topodatapb.TabletType)
+		MakeNonPrimary()
 		MakePrimary(bool)
 		Close()
 	}
@@ -505,7 +505,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.tableGC.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
-	sm.se.MakeNonPrimary(wantTabletType)
+	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType, true); err != nil {
@@ -523,7 +523,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	sm.unserveCommon()
 
-	sm.se.MakeNonPrimary(wantTabletType)
+	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType, false); err != nil {
