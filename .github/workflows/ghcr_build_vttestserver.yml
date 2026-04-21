@@ -1,0 +1,72 @@
+# .github/workflows/ghcr_build_vttestserver.yml — Publish vttestserver to GHCR
+#
+# Builds the vttestserver:mysql84 image and pushes to ghcr.io/block/vitess/vttestserver.
+# Currently amd64 only; arm64 support can be added later via QEMU + buildx.
+#
+# Triggers:
+#   - Push to release-23.0: build + push (tagged as "latest" and SHA)
+#   - Tag v*:               build + push (tagged with version)
+#   - Pull request:         build only (no push), for CI validation
+
+name: Build and Push vttestserver to GHCR
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [release-23.0]
+  pull_request:
+    paths:
+      - 'docker/vttestserver/**'
+      - '.github/workflows/ghcr_build_vttestserver.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: block/vitess/vttestserver
+
+jobs:
+  build-and-push:
+    name: Build vttestserver (mysql84)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=semver,pattern=v{{version}},suffix=-mysql84
+            type=raw,value=mysql84,enable=${{ github.ref == 'refs/heads/release-23.0' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release-23.0' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/vttestserver/Dockerfile.mysql84
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
