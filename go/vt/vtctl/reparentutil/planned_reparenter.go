@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -753,12 +754,12 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
-		if tablet.Type == topodatapb.TabletType_RESTORE {
-			continue
-		}
 		errorGroup.Go(func() error {
 			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
 			if err != nil {
+				if tablet.Type == topodatapb.TabletType_RESTORE && slices.Contains([]vtrpc.Code{vtrpc.Code_UNAVAILABLE, vtrpc.Code_UNKNOWN}, vterrors.Code(err)) {
+					return nil
+				}
 				return err
 			}
 			// We are ignoring the error in conversion because some MySQL variants might not have this
