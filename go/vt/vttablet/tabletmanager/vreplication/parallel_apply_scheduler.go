@@ -18,9 +18,18 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 )
+
+// errSchedulerAbandonedPendingWork is returned by nextReady when the scheduler
+// is closed with pending work that can never become ready because nothing is
+// inflight to advance the scheduler's state (lastCommittedSequence, writeset,
+// inflight* counters). Workers surface this to their caller so the controller
+// retries the stream from the last saved position rather than silently
+// treating the abandoned pending work as "stream finished cleanly".
+var errSchedulerAbandonedPendingWork = errors.New("parallel apply scheduler closed with unreachable pending transactions")
 
 type applyTxn struct {
 	// order is a monotonically increasing sequence number assigned by
@@ -191,11 +200,23 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 			return txn, nil
 		}
 		// Check closed only after attempting to drain any queued work so
-		// transactions already scheduled before shutdown still commit. A
-		// closed scheduler may still have blocked pending work that becomes
-		// ready only after inflight transactions commit.
-		if s.closed && s.pendingCount == 0 {
-			return nil, io.EOF
+		// transactions already scheduled before shutdown still commit.
+		if s.closed {
+			if s.pendingCount == 0 {
+				return nil, io.EOF
+			}
+			// A closed scheduler may still have blocked pending work that
+			// becomes ready only after an inflight txn commits — in that
+			// case we keep waiting so the blocked pending txns unblock.
+			// But if nothing is inflight AND no pending txn is ready,
+			// nothing will ever advance lastCommittedSequence or release
+			// writeset/inflight counters, so workers would park forever.
+			// Return a non-EOF error so the controller retries the stream
+			// from the last saved position instead of silently abandoning
+			// the pending work.
+			if s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 {
+				return nil, errSchedulerAbandonedPendingWork
+			}
 		}
 		s.cond.Wait()
 	}
