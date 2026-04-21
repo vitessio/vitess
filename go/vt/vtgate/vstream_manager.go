@@ -72,14 +72,17 @@ const tabletPickerContextTimeout = 90 * time.Second
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
 
-// streamAgeJitterPct is the percentage of jitter (+/-) added to max stream age
+// streamAgeJitterRatio is the jitter (+/-) added to max stream age as a fraction,
 // to spread out reconnections.
-const streamAgeJitterPct = 10
+const streamAgeJitterRatio = 0.1
 
 // StreamAgeJitterRange returns the jitter range for a given max age duration.
-// Jitter is +/- streamAgeJitterPct% of the max age.
+// Jitter is +/- streamAgeJitterRatio of the max age.
 func StreamAgeJitterRange(maxAge time.Duration) time.Duration {
-	return maxAge * streamAgeJitterPct / 100
+	if maxAge <= 0 {
+		return 0
+	}
+	return time.Duration(float64(maxAge) * streamAgeJitterRatio)
 }
 
 // livenessTimeout is the point at which we return an error to the client if the stream has received
