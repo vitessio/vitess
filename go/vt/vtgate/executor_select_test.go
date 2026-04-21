@@ -234,6 +234,18 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestDeniedSystemVariablesWithSetVarHint(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.vConfig.DeniedSystemVariables = map[string]struct{}{"unique_checks": {}}
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+
+	_, err := executorExecSession(context.Background(), executor, session, "select /*+ SET_VAR(unique_checks=0) */ 1 from user", map[string]*querypb.BindVariable{})
+	require.Error(t, err)
+	assert.Equal(t, "VT12001: unsupported: system setting: unique_checks", err.Error())
+	assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+	assert.Empty(t, sbc1.Queries)
+}
+
 func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.1")
 	executor.config.Normalize = true

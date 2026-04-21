@@ -285,6 +285,26 @@ func TestExecutorSet(t *testing.T) {
 	}
 }
 
+func TestExecutorInitVConfigUsesSetVarFlag(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	oldSetVarEnabled := setVarEnabled
+	oldSysVarSetEnabled := sysVarSetEnabled
+	t.Cleanup(func() {
+		setVarEnabled = oldSetVarEnabled
+		sysVarSetEnabled = oldSysVarSetEnabled
+	})
+
+	sysVarSetEnabled = true
+	setVarEnabled = false
+	executor.initVConfig(false, querypb.ExecuteOptions_Gen4)
+	assert.False(t, executor.vConfig.SetVarEnabled)
+
+	sysVarSetEnabled = false
+	setVarEnabled = true
+	executor.initVConfig(false, querypb.ExecuteOptions_Gen4)
+	assert.True(t, executor.vConfig.SetVarEnabled)
+}
+
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 	sysVarSetEnabled = true
@@ -415,6 +435,11 @@ func TestExecutorSetDeniedSystemVariables(t *testing.T) {
 		denied:  map[string]struct{}{"unique_checks": {}},
 		query:   "set UNIQUE_CHECKS = 0",
 		wantErr: "VT12001: unsupported: system setting: UNIQUE_CHECKS",
+	}, {
+		name:    "global scope denied",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set @@global.unique_checks = 0",
+		wantErr: "VT12001: unsupported: system setting: unique_checks",
 	}, {
 		name:   "unrelated sysvars unaffected",
 		denied: map[string]struct{}{"unique_checks": {}},

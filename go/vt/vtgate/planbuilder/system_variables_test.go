@@ -55,6 +55,24 @@ func TestDeniedSystemVariables(t *testing.T) {
 		wantErr:  "VT12001: unsupported: system setting: UNIQUE_CHECKS",
 		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
 	}, {
+		name:     "global scope is denied",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "set @@global.unique_checks = 0",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
+		name:     "SET_VAR hint is denied",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "select /*+ SET_VAR(unique_checks=0) */ id from user",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
+		name:     "SET_VAR hint match is case-insensitive",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "select /*+ SET_VAR(UNIQUE_CHECKS=0) */ id from user",
+		wantErr:  "VT12001: unsupported: system setting: UNIQUE_CHECKS",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
 		name:     "denylist applies to VitessAware sysvars",
 		denied:   map[string]struct{}{"autocommit": {}},
 		query:    "set autocommit = 0",
@@ -64,6 +82,10 @@ func TestDeniedSystemVariables(t *testing.T) {
 		name:   "unrelated sysvars are unaffected",
 		denied: map[string]struct{}{"unique_checks": {}},
 		query:  "set foreign_key_checks = 0",
+	}, {
+		name:   "unrelated SET_VAR hints are unaffected",
+		denied: map[string]struct{}{"unique_checks": {}},
+		query:  "select /*+ SET_VAR(sql_mode='ANSI') */ id from user",
 	}, {
 		// An unknown sysvar should still return the existing VT05006
 		// "unknown system variable" error, not the denylist error.

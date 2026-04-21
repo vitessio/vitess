@@ -63,6 +63,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 		// phase of planning
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
+			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
+				return nil, vterrors.VT12001(fmt.Sprintf("system setting: %s", expr.Var.Name))
+			}
 			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
 			if err != nil {
 				return nil, err

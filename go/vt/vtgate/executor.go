@@ -1556,7 +1556,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
 
-		SetVarEnabled:         sysVarSetEnabled,
+		SetVarEnabled:         setVarEnabled,
 		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
 		EnableViews:           enableViews,
 		ForeignKeyMode:        fkMode(foreignKeyMode),
