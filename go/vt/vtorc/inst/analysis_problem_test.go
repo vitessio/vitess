@@ -92,9 +92,10 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 
 func TestRequiresOrderedExecution(t *testing.T) {
 	tests := []struct {
-		name     string
-		problem  *DetectionAnalysisProblem
-		expected bool
+		name          string
+		problem       *DetectionAnalysisProblem
+		shardAnalyses []*DetectionAnalysis
+		expected      bool
 	}{
 		{
 			name: "shard-wide action priority",
@@ -131,16 +132,30 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: true,
 		},
 		{
+			// PrimarySemiSyncMustNotBeSet's BeforeAnalysesFunc references
+			// ReplicaSemiSyncMustNotBeSet, so the latter requires ordered
+			// execution. Shard analyses must contain PrimarySemiSyncMustNotBeSet
+			// so the referencing problem's pSelf is non-nil.
 			name: "referenced by another problem's BeforeAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
 			},
+			shardAnalyses: []*DetectionAnalysis{
+				{Analysis: PrimarySemiSyncMustNotBeSet},
+			},
 			expected: true,
 		},
 		{
+			// ReplicaSemiSyncMustNotBeSet's AfterAnalysesFunc references
+			// PrimarySemiSyncMustNotBeSet, so the latter requires ordered
+			// execution. Shard analyses must contain ReplicaSemiSyncMustNotBeSet
+			// so the referencing problem's pSelf is non-nil.
 			name: "referenced by another problem's AfterAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
+			},
+			shardAnalyses: []*DetectionAnalysis{
+				{Analysis: ReplicaSemiSyncMustNotBeSet},
 			},
 			expected: true,
 		},
@@ -154,7 +169,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.problem.RequiresOrderedExecution(nil, nil))
+			assert.Equal(t, tt.expected, tt.problem.RequiresOrderedExecution(nil, tt.shardAnalyses))
 		})
 	}
 }

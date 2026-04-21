@@ -878,15 +878,11 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 }
 
 // TestReplicationStoppedWithSemiSyncBlocked verifies that VTOrc restarts
-// replication on replicas even when the primary has PrimarySemiSyncBlocked
-// detected simultaneously. This is a regression test for a deadlock where
-// recheckPrimaryHealth would abort fixReplica because the primary had a
-// problem, but the primary problem existed because replicas weren't
-// replicating. See https://github.com/vitessio/vitess/issues/19921.
-//
-// The test also verifies that only semi-sync acker replicas trigger the
-// dependency bypass — stopping a non-acker (RDONLY) replica should not
-// prevent recheckPrimaryHealth from aborting normally.
+// replication on a semi-sync acker replica even when the primary has
+// PrimarySemiSyncBlocked detected simultaneously. This is a regression test
+// for a deadlock where recheckPrimaryHealth would abort fixReplica because
+// the primary had a problem, but the primary problem existed because replicas
+// weren't replicating. See https://github.com/vitessio/vitess/issues/19921.
 func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// 2 REPLICA (semi-sync ackers) + 1 RDONLY (not an acker).
@@ -930,5 +926,9 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
 	require.NoError(t, err)
 
+	// Wait for VTOrc to fix the replica before checking replication.
+	// Without this, CheckReplication's INSERT on the primary can hang
+	// if the primary is still semi-sync blocked.
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }

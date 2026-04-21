@@ -1071,6 +1071,9 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	// blocks the replica fix (e.g., ReplicationStopped) that would resolve it.
 	problem := inst.GetDetectionAnalysisProblem(originalAnalysisEntry)
 	if problem != nil {
+		// Use the original analysisEntry (not re-queried) as self — the
+		// tablet's acker status (SemiSyncReplicaEnabled) is a property of
+		// the replica itself and won't change from rediscovering the primary.
 		beforeCodes := problem.GetBeforeAnalyses(analysisEntry, shardAnalyses)
 		for _, entry := range shardAnalyses {
 			if slices.Contains(beforeCodes, entry.Analysis) {
@@ -1110,7 +1113,12 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, []*inst.D
 		}
 	}
 
-	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
+	// We didn't find a replication analysis matching the original failure,
+	// which means some other agent probably fixed it. Note: GetDetectionAnalysis
+	// skips subsequent tablets after finding a shard-wide action (hasShardWideAction),
+	// so a still-broken replica may appear "fixed" when it was only suppressed.
+	// Callers (e.g., recheckPrimaryHealth) handle this by checking dependency
+	// ordering before aborting.
 	return true, analysisEntries, nil
 }
 

@@ -78,6 +78,9 @@ func (dap *DetectionAnalysisProblem) RequiresOrderedExecution(self *DetectionAna
 	}
 	// Check if any other problem references this one in its dependencies.
 	// Find each problem's corresponding analysis entry to pass as self.
+	// Skip problems with no matching analysis entry (pSelf == nil) to
+	// avoid passing nil to BeforeAnalysesFunc/AfterAnalysesFunc, which
+	// may not nil-check self.
 	for _, p := range detectionAnalysisProblems {
 		var pSelf *DetectionAnalysis
 		for _, a := range shardAnalyses {
@@ -85,6 +88,9 @@ func (dap *DetectionAnalysisProblem) RequiresOrderedExecution(self *DetectionAna
 				pSelf = a
 				break
 			}
+		}
+		if pSelf == nil {
+			continue
 		}
 		if slices.Contains(p.GetBeforeAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) || slices.Contains(p.GetAfterAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) {
 			return true
