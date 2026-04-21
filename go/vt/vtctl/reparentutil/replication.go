@@ -368,6 +368,7 @@ func stopReplicationAndBuildStatusMaps(
 	if tabletToWaitFor != nil {
 		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
 	}
+	numGoRoutines := 0
 	for alias, tabletInfo := range tabletMap {
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
@@ -379,11 +380,14 @@ func stopReplicationAndBuildStatusMaps(
 			if mustWaitFor {
 				numErrorsToWaitFor++
 			}
+			numGoRoutines++
 			go fillStatus(alias, tabletInfo, mustWaitFor)
 		}
 	}
 
-	numGoRoutines := len(tabletMap) - ignoredTablets.Len()
+	if numGoRoutines == 0 && len(tabletMap) > 0 {
+		return res, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tablets available to stop replication on (%d tablets in map, %d ignored)", len(tabletMap), ignoredTablets.Len())
+	}
 	// In general we want to wait for n-1 tablets to respond, since we know the primary tablet is down.
 	requiredSuccesses := numGoRoutines - 1
 	if waitForAllTablets {
