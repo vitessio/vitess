@@ -306,33 +306,33 @@ func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
 	})
 }
 
+func jsonRowChangeSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, fieldIndex, jsonIndex int) int64 {
+	if fieldIndex >= len(afterRow.Lengths) {
+		return 0
+	}
+	afterLen := afterRow.Lengths[fieldIndex]
+	if afterLen < 0 {
+		return 0
+	}
+	if partialJSONColumns == nil || beforeRow == nil || !isBitSet(partialJSONColumns.Cols, jsonIndex) {
+		return afterLen
+	}
+	if afterLen == 0 {
+		if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
+			return 0
+		}
+		return beforeRow.Lengths[fieldIndex]
+	}
+	beforeLen := int64(0)
+	if fieldIndex < len(beforeRow.Lengths) && beforeRow.Lengths[fieldIndex] > 0 {
+		beforeLen = beforeRow.Lengths[fieldIndex]
+	}
+	return beforeLen + afterLen
+}
+
 func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
 	if afterRow == nil {
 		return nil
-	}
-
-	jsonInsertSize := func(fieldIndex, jsonIndex int) int64 {
-		if fieldIndex >= len(afterRow.Lengths) {
-			return 0
-		}
-		afterLen := afterRow.Lengths[fieldIndex]
-		if afterLen < 0 {
-			return 0
-		}
-		if partialJSONColumns == nil || beforeRow == nil || !isBitSet(partialJSONColumns.Cols, jsonIndex) {
-			return afterLen
-		}
-		if afterLen == 0 {
-			if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
-				return 0
-			}
-			return beforeRow.Lengths[fieldIndex]
-		}
-		beforeLen := int64(0)
-		if fieldIndex < len(beforeRow.Lengths) && beforeRow.Lengths[fieldIndex] > 0 {
-			beforeLen = beforeRow.Lengths[fieldIndex]
-		}
-		return beforeLen + afterLen
 	}
 
 	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
@@ -352,7 +352,7 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
 						continue
 					}
 					if field.Type == querypb.Type_JSON {
-						add(field, jsonInsertSize(fieldIndex, fieldJSONIndex))
+						add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, fieldIndex, fieldJSONIndex))
 					}
 					break
 				}
@@ -373,18 +373,19 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
 				continue
 			}
 			if field.Type == querypb.Type_JSON {
-				add(field, jsonInsertSize(i, fieldJSONIndex))
+				add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
 			}
 		}
 	})
 }
 
-func (tp *TablePlan) checkUpdateJSONRowSize(afterRow *querypb.Row, dataColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+func (tp *TablePlan) checkUpdateJSONRowSize(afterRow, beforeRow *querypb.Row, dataColumns, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
 	if afterRow == nil {
 		return nil
 	}
 
 	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		jsonIndex := 0
 		for i, field := range tp.Fields {
 			if i >= len(afterRow.Lengths) {
 				break
@@ -392,13 +393,15 @@ func (tp *TablePlan) checkUpdateJSONRowSize(afterRow *querypb.Row, dataColumns *
 			if field.Type != querypb.Type_JSON {
 				continue
 			}
+			fieldJSONIndex := jsonIndex
+			jsonIndex++
 			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
 				continue
 			}
 			if dataColumns != nil && dataColumns.Count > 0 && !isBitSet(dataColumns.Cols, i) {
 				continue
 			}
-			add(field, afterRow.Lengths[i])
+			add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
 		}
 	})
 }
@@ -672,7 +675,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			if limit > 0 {
-				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.DataColumns, limit); err != nil {
+				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.Before, rowChange.DataColumns, rowChange.JsonPartialValues, limit); err != nil {
 					return nil, err
 				}
 			}
