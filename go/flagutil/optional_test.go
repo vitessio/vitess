@@ -17,7 +17,6 @@ limitations under the License.
 package flagutil
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -81,7 +80,7 @@ func TestNewOptionalFlag_Custom(t *testing.T) {
 		return strconv.ParseBool(s)
 	}
 	formatBool := func(v bool) string {
-		return fmt.Sprintf("%t", v)
+		return strconv.FormatBool(v)
 	}
 
 	fl := NewOptionalFlag(false, parseBool, formatBool, "bool")

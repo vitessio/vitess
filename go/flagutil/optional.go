@@ -18,7 +18,6 @@ package flagutil
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/spf13/pflag"
@@ -134,7 +133,7 @@ func NewOptionalInt64(val int64) *OptionalFlag[int64] {
 			return v, nil
 		},
 		func(v int64) string {
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		},
 		"int64",
 	)
