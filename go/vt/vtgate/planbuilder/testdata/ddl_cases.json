@@ -783,5 +783,25 @@
         "user.employees"
       ]
     }
+  },
+  {
+    "comment": "alter internal gc table is blocked",
+    "query": "alter table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ add column foo int",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "drop internal gc table is blocked",
+    "query": "drop table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "rename internal gc table is blocked",
+    "query": "rename table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ to foo",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "truncate internal gc table is blocked",
+    "query": "truncate table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
   }
 ]
