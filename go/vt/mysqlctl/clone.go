@@ -400,8 +400,8 @@ func (c *CloneExecutor) buildCloneCommand() string {
 }
 
 func isCloneConnError(err error) bool {
-	var sqlErr *sqlerror.SQLError
-	if !errors.As(err, &sqlErr) {
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	if !ok {
 		return false
 	}
 	switch sqlErr.Number() {
@@ -416,8 +416,8 @@ func isCloneConnError(err error) bool {
 // meaning MySQL completed the clone but could not restart itself because it is
 // not managed by a process supervisor.
 func isRestartServerFailed(err error) bool {
-	var sqlErr *sqlerror.SQLError
-	return errors.As(err, &sqlErr) && sqlErr.Number() == sqlerror.ERRestartServerFailed
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	return ok && sqlErr.Number() == sqlerror.ERRestartServerFailed
 }
 
 // checkClonePluginInstalled verifies that the clone plugin is loaded.
