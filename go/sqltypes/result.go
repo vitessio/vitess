@@ -36,6 +36,12 @@ type Result struct {
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
 	Info                string           `json:"info"`
+
+	// proto3Rows caches the proto3-encoded representation of Rows, avoiding
+	// redundant encoding when multiple consumers share the same Result (i.e.
+	// query consolidation). Not populated for the non-consolidation flow;
+	// don't depend on it being present.
+	proto3Rows []*querypb.Row
 }
 
 //goland:noinspection GoUnusedConst
@@ -76,6 +82,7 @@ type MultiResultStream interface {
 // Repair fixes the type info in the rows
 // to conform to the supplied field types.
 func (result *Result) Repair(fields []*querypb.Field) {
+	result.proto3Rows = nil
 	// Usage of j is intentional.
 	for j, f := range fields {
 		for _, r := range result.Rows {
@@ -119,6 +126,7 @@ func (result *Result) Copy() *Result {
 			out.Rows = append(out.Rows, CopyRow(r))
 		}
 	}
+	// proto3Rows is intentionally not propagated: callers may modify Rows
 	return out
 }
 
@@ -132,6 +140,15 @@ func (result *Result) ShallowCopy() *Result {
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
 		Rows:                result.Rows,
+		// proto3Rows is intentionally not propagated: callers may modify Rows
+	}
+}
+
+func (result *Result) CacheProto3Rows() {
+	// result can be nil when the query errors out (e.g. execDBConn returns
+	// a nil Result alongside an error).
+	if result != nil && len(result.Rows) > 0 {
+		result.proto3Rows = RowsToProto3(result.Rows)
 	}
 }
 
@@ -339,6 +356,7 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
+	result.proto3Rows = nil
 	result.RowsAffected += src.RowsAffected
 	if src.InsertIDUpdated() {
 		result.InsertID = src.InsertID

@@ -204,6 +204,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
 	fs.StringVar(&currentConfig.ConsolidatorQueryWaiterCapMethod, "consolidator-query-waiter-cap-method", "fallthrough", "Configure the method when consolidator waiter cap is exceeded. Options: fallthrough, reject.")
+	fs.BoolVar(&currentConfig.ConsolidatorCacheProto3Rows, "consolidator-cache-proto3-rows", defaultConfig.ConsolidatorCacheProto3Rows, "If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.")
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
@@ -344,6 +345,7 @@ type TabletConfig struct {
 	ConsolidatorStreamQuerySize      int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap       int64         `json:"consolidatorMaxQueryWait,omitempty"`
 	ConsolidatorQueryWaiterCapMethod string        `json:"consolidatorQueryWaiterCapMethod,omitempty"`
+	ConsolidatorCacheProto3Rows      bool          `json:"consolidatorCacheProto3Rows,omitempty"`
 	QueryCacheMemory                 int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper             bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval             time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
@@ -1093,6 +1095,7 @@ var defaultConfig = TabletConfig{
 	ConsolidatorStreamTotalSize:      128 * 1024 * 1024,
 	ConsolidatorStreamQuerySize:      2 * 1024 * 1024,
 	ConsolidatorQueryWaiterCapMethod: "fallthrough",
+	ConsolidatorCacheProto3Rows:      false,
 	// The value for StreamBufferSize was chosen after trying out a few of
 	// them. Too small buffers force too many packets to be sent. Too big
 	// buffers force the clients to read them in multiple chunks and make

@@ -21,6 +21,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -49,9 +51,23 @@ func TestAddWaiterCount(t *testing.T) {
 	wgAdd.Wait()
 	wgSub.Wait()
 
-	if *pr.AddWaiterCounter(0) != 0 {
-		t.Fatalf("Expect 0 totalWaiterCount but got: %v", *pr.AddWaiterCounter(0))
-	}
+	require.Zero(t, con.TotalWaiterCount(), "expected 0 totalWaiterCount")
+}
+
+func TestHasWaiters(t *testing.T) {
+	con := NewConsolidator()
+	sql := "select * from SomeTable"
+
+	orig, created := con.Create(sql)
+	require.True(t, created, "expected consolidator to register a new entry")
+	require.False(t, orig.HasWaiters(), "expected no waiters for a fresh entry")
+
+	_, created = con.Create(sql)
+	require.False(t, created, "did not expect consolidator to register a new entry")
+	require.True(t, orig.HasWaiters(), "expected waiters after a duplicate Create")
+
+	orig.SetResult(&sqltypes.Result{})
+	orig.Broadcast()
 }
 
 func TestConsolidator(t *testing.T) {
