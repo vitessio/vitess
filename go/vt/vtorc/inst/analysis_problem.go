@@ -68,19 +68,17 @@ type DetectionAnalysisProblem struct {
 	MatchFunc func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool
 }
 
-// RequiresOrderedExecution returns true if the problem must be executed
-// sequentially relative to other problems in the same shard. This includes
-// problems that declare dependencies directly (BeforeAnalysesFunc/AfterAnalysesFunc)
-// as well as problems that are referenced by another problem's dependencies.
+// RequiresOrderedExecution returns true if the problem must be executed sequentially
+// relative to other problems in the same shard. This includes problems that declare
+// dependencies directly (BeforeAnalysesFunc/AfterAnalysesFunc) as well as problems
+// that are referenced by another problem's dependencies.
 func (dap *DetectionAnalysisProblem) RequiresOrderedExecution(a *DetectionAnalysis, as []*DetectionAnalysis) bool {
 	if dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.GetBeforeAnalyses(a, as)) > 0 || len(dap.GetAfterAnalyses(a, as)) > 0 {
 		return true
 	}
 	// Check if any other problem references this one in its dependencies.
 	// Evaluate all matching shard entries for each problem type (not just
-	// the first), since dynamic dependency functions are tablet-dependent
-	// and different tablets may produce different results (e.g., an acker
-	// vs non-acker ReplicationStopped).
+	// the first).
 	for _, p := range detectionAnalysisProblems {
 		for _, entry := range as {
 			if entry.Analysis != p.Meta.Analysis {
