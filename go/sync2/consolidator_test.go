@@ -76,8 +76,8 @@ func TestConsolidator(t *testing.T) {
 	}()
 	dup.Wait()
 
-	assert.Equal(t, result, orig.Result(), "failed to pass result")
-	require.Equal(t, orig.Result(), dup.Result(), "failed to share the result")
+	assert.Same(t, result, orig.Result(), "failed to pass result")
+	require.Same(t, orig.Result(), dup.Result(), "failed to share the result")
 
 	want = []ConsolidatorCacheItem{{Query: sql, Count: 1}}
 	require.Equal(t, want, con.Items(), "expected consolidator to have one item")
