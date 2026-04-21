@@ -41,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	// Import strategy packages for side-effect registration via init()
+	_ "vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/strategy/tablethrottler"
 )
 
 const (
@@ -299,30 +302,22 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 // not be called directly from other contexts.
 //
 // Return value contract (required by WatchSrvKeyspace):
-//   - true: Continue watching (resilient watcher will auto-retry on transient errors)
-//   - false: Stop watching permanently (for fatal errors like NoNode, context canceled, or Interrupted)
+//   - Always returns true to keep the watch alive. Errors are logged but never stop the watch,
+//     matching the pattern used by throttle.Throttler.WatchSrvKeyspaceCallback.
 //
 // **NOTE: this method is written with the assumption that this is the only piece of code which will be changing the config of QueryThrottler**
 func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err error) bool {
-	// Handle topology errors using a hybrid approach:
-	// - Permanent errors (NoNode, context canceled): stop watching (return false)
-	// - Transient errors (network issues, etc.): keep watching (return true, auto-retry will reconnect)
+	// Log errors by type for observability, but always keep watching.
+	// The resilient watcher will automatically retry on transient errors.
 	if err != nil {
-		// Keyspace deleted from topology - stop watching
-		if topo.IsErrType(err, topo.NoNode) {
-			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", qt.keyspace))
-			return false
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s not found in topology (may not be created yet): %v", qt.keyspace, err))
+		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
+			log.Info(fmt.Sprintf("HandleConfigUpdate: watch interrupted for keyspace %s: %v", qt.keyspace, err))
+		default:
+			log.Error(fmt.Sprintf("HandleConfigUpdate: SrvKeyspace watch error for keyspace %s: %v", qt.keyspace, err))
 		}
-
-		// Context canceled or interrupted - graceful shutdown, stop watching
-		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Info("HandleConfigUpdate: watch stopped (context canceled or interrupted)")
-			return false
-		}
-
-		// Transient error (network, temporary topo server issue) - keep watching
-		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warn(fmt.Sprintf("HandleConfigUpdate: transient topo watch error (will retry): %v", err))
 		return true
 	}
 
@@ -346,7 +341,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	var newStrategy registry.ThrottlingStrategyHandler
 	if needsStrategyChange {
 		// Create the new strategy (doesn't need lock)
-		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig)
+		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
 	// Acquire write lock only for the actual swap operation.
@@ -376,10 +371,14 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) registry.ThrottlingStrategyHandler {
 	deps := registry.Deps{
 		ThrottleClient: client,
 		TabletConfig:   tabletConfig,
+		Env:            env,
+		Keyspace:       keyspace,
+		Cell:           cell,
+		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
 }

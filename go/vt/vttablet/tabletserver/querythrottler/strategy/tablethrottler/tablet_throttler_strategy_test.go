@@ -424,17 +424,17 @@ func TestTabletThrottlerStrategy_HandleConfigUpdate_ErrorHandling(t *testing.T) 
 		{
 			name:           "ContextCanceledError",
 			inputErr:       context.Canceled,
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			name:           "NoNodeError",
 			inputErr:       topo.NewError(topo.NoNode, "keyspace/test_keyspace"),
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			name:           "InterruptedError",
 			inputErr:       topo.NewError(topo.Interrupted, "interrupted"),
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			name:           "TransientNetworkError",

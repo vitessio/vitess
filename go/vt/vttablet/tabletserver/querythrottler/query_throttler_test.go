@@ -65,7 +65,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 				QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 			}
 
-			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
+			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config, nil, "", "", nil)
 
 			require.IsType(t, tt.expectedType, strategy)
 		})
@@ -417,8 +417,8 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 		{
 			name:           "ContextCanceledError",
 			inputErr:       context.Canceled,
-			expectedResult: false,
-			description:    "callback should return false to stop watching on context cancellation",
+			expectedResult: true,
+			description:    "callback should return true to keep watching on context cancellation",
 		},
 		{
 			name:           "TransientTopoError",
@@ -429,14 +429,14 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 		{
 			name:           "NoNodeError",
 			inputErr:       topo.NewError(topo.NoNode, "keyspace/test_keyspace"),
-			expectedResult: false,
-			description:    "callback should return false to stop watching when keyspace is deleted (NoNode)",
+			expectedResult: true,
+			description:    "callback should return true to keep watching when keyspace is not found (NoNode)",
 		},
 		{
 			name:           "InterruptedError",
 			inputErr:       topo.NewError(topo.Interrupted, "watch interrupted"),
-			expectedResult: false,
-			description:    "callback should return false to stop watching on Interrupted error",
+			expectedResult: true,
+			description:    "callback should return true to keep watching on Interrupted error",
 		},
 	}
 

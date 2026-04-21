@@ -162,6 +162,9 @@ func (s *TabletThrottlerStrategy) Start() {
 		s.refreshCache()
 
 		updateInterval := s.tabletConfig.TabletThrottlerCacheUpdateInterval
+		if updateInterval <= 0 {
+			updateInterval = 10 * time.Second
+		}
 		s.updateTicker = time.NewTicker(updateInterval)
 		go s.runCacheUpdater()
 		log.Info("TabletThrottlerStrategy: started background throttle cache updater")
@@ -466,28 +469,19 @@ func (s *TabletThrottlerStrategy) recordFullDecision(tabletType, stmtType, outco
 // IMPORTANT: This method is designed ONLY to be called as a callback from srvtopo.WatchSrvKeyspace.
 // It relies on the resilient watcher's auto-retry behavior (see go/vt/srvtopo/watch.go) and should not be called directly from other contexts.
 // Return value contract (required by WatchSrvKeyspace):
-//   - true: Continue watching (resilient watcher will auto-retry on transient errors)
-//   - false: Stop watching permanently (for fatal errors like NoNode, context canceled, or Interrupted)
+//   - Always returns true to keep the watch alive. Errors are logged but never stop the watch.
 func (s *TabletThrottlerStrategy) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err error) bool {
-	// Handle topology errors using a hybrid approach:
-	// - Permanent errors (NoNode, context canceled): stop watching (return false)
-	// - Transient errors (network issues, etc.): keep watching (return true, auto-retry will reconnect)
+	// Log errors by type for observability, but always keep watching.
+	// The resilient watcher will automatically retry on transient errors.
 	if err != nil {
-		// Keyspace deleted from topology - stop watching
-		if topo.IsErrType(err, topo.NoNode) {
-			log.Warn("tabletThrottler.HandleConfigUpdate: keyspace deleted or not found, stopping watch", slog.String("keyspace", s.keyspace))
-			return false
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			log.Warn("tabletThrottler.HandleConfigUpdate: keyspace not found in topology (may not be created yet)", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
+		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
+			log.Info("tabletThrottler.HandleConfigUpdate: watch interrupted", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
+		default:
+			log.Error("tabletThrottler.HandleConfigUpdate: SrvKeyspace watch error", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
 		}
-
-		// Context canceled or interrupted - graceful shutdown, stop watching
-		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Info("tabletThrottler.HandleConfigUpdate: watch stopped (context canceled or interrupted)")
-			return false
-		}
-
-		// Transient error (network, temporary topo server issue) - keep watching
-		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warn("tabletThrottler.HandleConfigUpdate: transient topo watch error (will retry)", slog.String("error", err.Error()))
 		return true
 	}
 
