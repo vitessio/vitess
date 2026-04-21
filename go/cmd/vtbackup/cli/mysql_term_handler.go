@@ -39,7 +39,7 @@ func (h *mySQLTermHandler) ignoreTermsFor(fn func() error) error {
 
 func (h *mySQLTermHandler) onTerm() {
 	if h.ignoreTerms.Load() {
-		log.Info("Ignoring expected MySQL termination during clone restart")
+		log.Info("Ignoring MySQL termination while term suppression is enabled")
 		return
 	}
 	h.onTermFn()
