@@ -363,6 +363,14 @@ func (c *CloneExecutor) prepareCloneVerification(ctx context.Context, mysqld Mys
 			verifyCancel()
 			return nil, nil, vterrors.Wrapf(cloneErr, "mysqld could not restart itself after clone and no my.cnf available for manual restart")
 		}
+
+		// mysqlctld exits when mysqld stops on its own, so there is no remote
+		// server left to handle a restart request in --mysqlctl-socket mode.
+		if socketFile != "" {
+			verifyCancel()
+			return nil, nil, vterrors.Wrapf(cloneErr, "mysqld could not restart itself after clone, and manual restart is not supported with --mysqlctl-socket")
+		}
+
 		log.Info("MySQL could not restart itself after CLONE; restarting manually")
 		if err := mysqld.StartAfterExit(verifyCtx, mycnf); err != nil {
 			verifyCancel()

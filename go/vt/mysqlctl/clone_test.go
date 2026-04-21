@@ -774,6 +774,27 @@ func TestCloneFromDonor(t *testing.T) {
 			cancelCtxOnClone: true,
 			wantErr:          false,
 		},
+		{
+			name:            "ERRestartServerFailed with remote mysqlctld fails fast",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				socketFile = "/tmp/mysqlctld.sock"
+
+				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
+				}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					cloneCmd: &execError{
+						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)", cloneCmd),
+						cause: sqlerror.NewSQLError(sqlerror.ERRestartServerFailed, sqlerror.SSUnknownSQLState, "Restart server failed (mysqld is not managed by supervisor process)."),
+					},
+				}
+			},
+			mycnf:           &Mycnf{},
+			wantErr:         true,
+			wantErrContains: "manual restart is not supported with --mysqlctl-socket",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -785,11 +806,13 @@ func TestCloneFromDonor(t *testing.T) {
 			oldCloneFromTablet := cloneFromTablet
 			oldCloneUser := dbconfigs.GlobalDBConfigs.CloneUser
 			oldMysqlCloneEnabled := mysqlCloneEnabled
+			oldSocketFile := socketFile
 			defer func() {
 				cloneFromPrimary = oldCloneFromPrimary
 				cloneFromTablet = oldCloneFromTablet
 				dbconfigs.GlobalDBConfigs.CloneUser = oldCloneUser
 				mysqlCloneEnabled = oldMysqlCloneEnabled
+				socketFile = oldSocketFile
 			}()
 
 			// Set test flag values
