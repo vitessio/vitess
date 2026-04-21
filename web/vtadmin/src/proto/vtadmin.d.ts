@@ -36528,6 +36528,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
+
+        /** CheckThrottlerRequest throttler_type */
+        throttler_type?: (tabletmanagerdata.ThrottlerType|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -36550,6 +36553,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
+
+        /** CheckThrottlerRequest throttler_type. */
+        public throttler_type: tabletmanagerdata.ThrottlerType;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -36637,6 +36643,12 @@ export namespace tabletmanagerdata {
         APP_DENIED = 3,
         UNKNOWN_METRIC = 4,
         INTERNAL_ERROR = 5
+    }
+
+    /** ThrottlerType enum. */
+    enum ThrottlerType {
+        DefaultLagThrottler = 0,
+        DedicatedQueryThrottler = 1
     }
 
     /** Properties of a CheckThrottlerResponse. */
@@ -36922,6 +36934,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a GetThrottlerStatusRequest. */
     interface IGetThrottlerStatusRequest {
+
+        /** GetThrottlerStatusRequest throttler_type */
+        throttler_type?: (tabletmanagerdata.ThrottlerType|null);
     }
 
     /** Represents a GetThrottlerStatusRequest. */
@@ -36932,6 +36947,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IGetThrottlerStatusRequest);
+
+        /** GetThrottlerStatusRequest throttler_type. */
+        public throttler_type: tabletmanagerdata.ThrottlerType;
 
         /**
          * Creates a new GetThrottlerStatusRequest instance using the specified properties.
@@ -57934,6 +57952,9 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
+
+        /** CheckThrottlerRequest throttler_type */
+        throttler_type?: (tabletmanagerdata.ThrottlerType|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -57959,6 +57980,9 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
+
+        /** CheckThrottlerRequest throttler_type. */
+        public throttler_type: tabletmanagerdata.ThrottlerType;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -66468,6 +66492,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusRequest tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** GetThrottlerStatusRequest throttler_type */
+        throttler_type?: (tabletmanagerdata.ThrottlerType|null);
     }
 
     /** Represents a GetThrottlerStatusRequest. */
@@ -66481,6 +66508,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusRequest tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** GetThrottlerStatusRequest throttler_type. */
+        public throttler_type: tabletmanagerdata.ThrottlerType;
 
         /**
          * Creates a new GetThrottlerStatusRequest instance using the specified properties.
