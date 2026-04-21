@@ -115,7 +115,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			name: "has BeforeAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-				BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+				BeforeAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 					return []AnalysisCode{DeadPrimary}
 				},
 			},
@@ -125,7 +125,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			name: "has AfterAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-				AfterAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 					return []AnalysisCode{DeadPrimary}
 				},
 			},

@@ -185,7 +185,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary has a stalled disk",
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
-		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+		BeforeAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 			return []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas}
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -288,7 +288,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary semi-sync must be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		AfterAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+		AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 			return []AnalysisCode{ReplicaSemiSyncMustBeSet}
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -304,7 +304,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+		BeforeAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 			return []AnalysisCode{ReplicaSemiSyncMustNotBeSet}
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -317,7 +317,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replica semi-sync must be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+		BeforeAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 			return []AnalysisCode{PrimarySemiSyncMustBeSet}
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -330,7 +330,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replica semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		AfterAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+		AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
 			return []AnalysisCode{PrimarySemiSyncMustNotBeSet}
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
