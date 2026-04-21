@@ -79,7 +79,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.NextTxScope, sqlparser.SessionScope:
-			planFunc, err := sysvarPlanningFuncs.Get(vschema.Environment(), expr)
+			planFunc, err := sysvarPlanningFuncs.Get(vschema, expr)
 			if err != nil {
 				return nil, err
 			}

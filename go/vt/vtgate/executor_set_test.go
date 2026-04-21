@@ -395,6 +395,53 @@ func TestExecutorSetOp(t *testing.T) {
 	}
 }
 
+func TestExecutorSetDeniedSystemVariables(t *testing.T) {
+	cases := []struct {
+		name    string
+		denied  map[string]struct{}
+		query   string
+		wantErr string // empty = expect success
+	}{{
+		name:    "unique_checks denied",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set unique_checks = 0",
+		wantErr: "VT12001: unsupported: system setting: unique_checks",
+	}, {
+		name:   "unique_checks allowed when flag empty",
+		denied: nil,
+		query:  "set unique_checks = 0",
+	}, {
+		name:    "case-insensitive match",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set UNIQUE_CHECKS = 0",
+		wantErr: "VT12001: unsupported: system setting: UNIQUE_CHECKS",
+	}, {
+		name:   "unrelated sysvars unaffected",
+		denied: map[string]struct{}{"unique_checks": {}},
+		query:  "set foreign_key_checks = 0",
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			executor.vConfig.DeniedSystemVariables = tc.denied
+
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{
+				TargetString:         KsTestUnsharded,
+				EnableSystemSettings: true,
+			})
+			_, err := executorExecSession(ctx, executor, session, tc.query, nil)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tc.wantErr, err.Error())
+			assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+		})
+	}
+}
+
 func TestExecutorSetMetadata(t *testing.T) {
 	t.Run("Session 1", func(t *testing.T) {
 		executor, _, _, _, ctx := createExecutorEnv(t)
