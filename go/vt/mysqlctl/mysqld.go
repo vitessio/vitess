@@ -1515,7 +1515,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		log.Info("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
-			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warn("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
 				log.Error(fmt.Sprintf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err))
