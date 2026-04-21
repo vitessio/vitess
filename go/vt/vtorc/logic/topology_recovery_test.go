@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -465,6 +466,70 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
+		})
+	}
+}
+
+func TestShouldProceedDespiteShardProblems(t *testing.T) {
+	tests := []struct {
+		name          string
+		analysisEntry *inst.DetectionAnalysis
+		shardAnalyses []*inst.DetectionAnalysis
+		expected      bool
+	}{
+		{
+			name: "acker ReplicationStopped proceeds when PrimarySemiSyncBlocked present",
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:               inst.ReplicationStopped,
+				SemiSyncReplicaEnabled: true,
+			},
+			shardAnalyses: []*inst.DetectionAnalysis{
+				{Analysis: inst.PrimarySemiSyncBlocked},
+			},
+			expected: true,
+		},
+		{
+			name: "non-acker ReplicationStopped does not proceed",
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:               inst.ReplicationStopped,
+				SemiSyncReplicaEnabled: false,
+			},
+			shardAnalyses: []*inst.DetectionAnalysis{
+				{Analysis: inst.PrimarySemiSyncBlocked},
+			},
+			expected: false,
+		},
+		{
+			name: "ReplicationStopped does not proceed without PrimarySemiSyncBlocked",
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:               inst.ReplicationStopped,
+				SemiSyncReplicaEnabled: true,
+			},
+			shardAnalyses: []*inst.DetectionAnalysis{
+				{Analysis: inst.DeadPrimary},
+			},
+			expected: false,
+		},
+		{
+			name: "unrelated problem does not proceed",
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis: inst.PrimaryIsReadOnly,
+			},
+			shardAnalyses: []*inst.DetectionAnalysis{
+				{Analysis: inst.PrimarySemiSyncBlocked},
+			},
+			expected: false,
+		},
+		{
+			name:          "empty shard analyses",
+			analysisEntry: &inst.DetectionAnalysis{Analysis: inst.ReplicationStopped, SemiSyncReplicaEnabled: true},
+			shardAnalyses: nil,
+			expected:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, shouldProceedDespiteShardProblems(tt.analysisEntry, tt.shardAnalyses))
 		})
 	}
 }
