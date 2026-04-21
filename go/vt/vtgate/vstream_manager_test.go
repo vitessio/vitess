@@ -2100,14 +2100,14 @@ func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
 			slog.Any("code", vterrors.Code(err)),
 		)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "vstream exceeded maximum age")
+		assert.ErrorContains(t, err, "vstream exceeded maximum age")
 		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 		assert.Falsef(t, callbackInFlight.Load(),
 			"callback is still in-flight after VStream() returned; lifecycle violation")
 		assert.GreaterOrEqual(t, elapsed, callbackDelay,
 			"VStream should wait for blocked send to finish before returning (best-effort max-age)")
 	case <-time.After(testTimeout):
-		t.Fatalf("VStream did not terminate within %v despite max age of %v", testTimeout, maxAge)
+		require.FailNowf(t, "VStream did not terminate in time", "timeout=%v max_age=%v", testTimeout, maxAge)
 	}
 }
 
