@@ -3,6 +3,7 @@ module vitess.io/vitess
 go 1.26.2
 
 tool (
+	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
 	github.com/vitessio/goyacc
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
@@ -137,6 +138,7 @@ require (
 	github.com/DataDog/dd-trace-go/v2 v2.7.2 // indirect
 	github.com/DataDog/go-libddwaf/v4 v4.9.0 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20260217080614-b0f4edc38a6d // indirect
+	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.9 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
