@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -351,7 +352,10 @@ func (c *CloneExecutor) prepareCloneVerification(ctx context.Context, mysqld Mys
 		return ctx, func() {}, nil
 	}
 
-	log.Info(fmt.Sprintf("CLONE command returned (connection likely lost due to MySQL restart): %v", cloneErr))
+	log.Info(
+		"CLONE command returned, connection was likely lost during MySQL restart",
+		slog.Any("error", cloneErr),
+	)
 
 	verifyCtx, verifyCancel := context.WithTimeout(context.WithoutCancel(ctx), waitTimeout)
 	if isRestartServerFailed(cloneErr) {
