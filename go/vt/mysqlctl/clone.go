@@ -45,6 +45,10 @@ import (
 const (
 	clonePluginStatusQuery = "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'"
 	cloneStatusQuery       = "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
+
+	// clonePrimaryPositionTimeout is how long we wait to read the GTID position
+	// after the clone is done.
+	clonePrimaryPositionTimeout = 30 * time.Second
 )
 
 var (
@@ -132,7 +136,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	// Use a detached context for post-clone operations: the parent context may
 	// have been canceled by an OnTerm callback when MySQL exited during the
 	// clone-induced restart.
-	posCtx, posCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	posCtx, posCancel := context.WithTimeout(context.WithoutCancel(ctx), clonePrimaryPositionTimeout)
 	defer posCancel()
 
 	pos, err := mysqld.PrimaryPosition(posCtx)
