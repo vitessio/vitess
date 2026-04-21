@@ -155,7 +155,7 @@ func initClusterForClone() error {
 	// Create a combined init file that includes clone user
 	initDBWithClone, err := createInitDBWithCloneUser()
 	if err != nil {
-		return fmt.Errorf("failed to create init DB file: %v", err)
+		return fmt.Errorf("failed to create init DB with clone user: %v", err)
 	}
 	log.Info("Created combined init file at: " + initDBWithClone)
 
@@ -205,7 +205,7 @@ func initClusterForClone() error {
 	// Wait for MySQL processes to be ready
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("MySQL process failed to start: %v", err)
+			return fmt.Errorf("failed waiting for MySQL process: %v", err)
 		}
 	}
 	log.Info("MySQL processes started successfully")
@@ -237,13 +237,13 @@ func createInitDBWithCloneUser() (string, error) {
 	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
 	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
 	if err != nil {
-		return "", fmt.Errorf("failed to inject clone SQL: %v", err)
+		return "", fmt.Errorf("failed to generate combined init SQL: %v", err)
 	}
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
 	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
-		return "", fmt.Errorf("failed to write combined init file: %v", err)
+		return "", fmt.Errorf("failed to write combined init SQL: %v", err)
 	}
 
 	return combinedPath, nil

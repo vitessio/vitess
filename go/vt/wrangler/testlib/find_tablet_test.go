@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFindTablet(t *testing.T) {
@@ -46,16 +47,12 @@ func TestFindTablet(t *testing.T) {
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// make sure we can find the tablets
 	// even with a datacenter being down.
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell1"})
-	if err != nil {
-		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
-	}
+	require.NoError(t, err)
 	primary, err := topotools.FindTabletByHostAndPort(tabletMap, oldPrimary.Tablet.Hostname, "vt", oldPrimary.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(primary, oldPrimary.Tablet.Alias) {
 		t.Fatalf("FindTabletByHostAndPort(primary) failed: %v %v", err, primary)
@@ -79,9 +76,7 @@ func TestFindTablet(t *testing.T) {
 	// Get tablet map for all cells.  If there were to be failures talking to local cells, this will return the tablet map
 	// and forward a partial result error
 	tabletMap, err = ts.GetTabletMapForShard(ctx, "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("GetTabletMapForShard should nil but got: %v", err)
-	}
+	require.NoError(t, err)
 	primary, err = topotools.FindTabletByHostAndPort(tabletMap, oldPrimary.Tablet.Hostname, "vt", oldPrimary.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(primary, oldPrimary.Tablet.Alias) {
 		t.Fatalf("FindTabletByHostAndPort(primary) failed: %v %v", err, primary)

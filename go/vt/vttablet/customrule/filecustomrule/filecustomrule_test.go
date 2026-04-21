@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"github.com/stretchr/testify/require"
 )
 
 var customRule1 = `[
@@ -51,14 +52,10 @@ func TestFileCustomRule(t *testing.T) {
 	fcr := NewFileCustomRule()
 	// Let FileCustomRule to build rule from the local file
 	err = fcr.Open(tqsc, rulepath)
-	if err != nil {
-		t.Fatalf("Cannot open file custom rule service, err=%v", err)
-	}
+	require.NoError(t, err)
 	// Fetch query rules we built to verify correctness
 	qrs, _, err = fcr.GetRules()
-	if err != nil {
-		t.Fatalf("GetRules returns error: %v", err)
-	}
+	require.NoError(t, err)
 	qr := qrs.Find("r1")
 	if qr == nil {
 		t.Fatalf("Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)

@@ -58,7 +58,7 @@ func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
 			remoteResult := remote.WeightString(nil, tc.input, 0)
 
 			if err := remote.LastError(); err != nil {
-				t.Fatalf("remote collation failed: %v", err)
+				require.NoError(t, err)
 			}
 			assert.True(t, bytes.Equal(localResult, remoteResult), "expected WEIGHT_STRING(%#v) = %#v (got %#v)", tc.input, remoteResult, localResult)
 
@@ -91,7 +91,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 			remoteResult := remote.Collate(tc.left, tc.right, false)
 
 			if err := remote.LastError(); err != nil {
-				t.Fatalf("remote collation failed: %v", err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, remoteResult, localResult, "expected STRCMP(%q, %q) = %d (got %d)", string(tc.left), string(tc.right), remoteResult, localResult)
 
@@ -119,7 +119,7 @@ func verifyWeightString(t *testing.T, local colldata.Collation, remote *remote.C
 	remoteResult := remote.WeightString(nil, text, 0)
 
 	if err := remote.LastError(); err != nil {
-		t.Fatalf("remote collation failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if len(remoteResult) == 0 {

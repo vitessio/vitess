@@ -19,6 +19,7 @@ package json
 
 import (
 	"testing"
+	"github.com/stretchr/testify/require"
 )
 
 func MustParse(j string) *Value {
@@ -37,9 +38,7 @@ func TestObjectDelSet(t *testing.T) {
 	o.Del("xx")
 
 	v, err := p.Parse(`{"fo\no": "bar", "x": [1,2,3]}`)
-	if err != nil {
-		t.Fatalf("unexpected error during parse: %s", err)
-	}
+	require.NoError(t, err)
 	o, ok := v.Object()
 	if !ok {
 		t.Fatalf("cannot obtain object")
@@ -82,9 +81,7 @@ func TestObjectDelSet(t *testing.T) {
 func TestValueDelSet(t *testing.T) {
 	var p Parser
 	v, err := p.Parse(`{"xx": 123, "x": [1,2,3]}`)
-	if err != nil {
-		t.Fatalf("unexpected error during parse: %s", err)
-	}
+	require.NoError(t, err)
 
 	o, _ := v.Object()
 

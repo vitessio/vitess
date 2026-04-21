@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"github.com/stretchr/testify/require"
 )
 
 var customRule1 = `
@@ -68,11 +69,11 @@ func waitForValue(t *testing.T, qsc *tabletservermock.Controller, expected *rule
 func TestUpdate(t *testing.T) {
 	custom1 := rules.New()
 	if err := custom1.UnmarshalJSON([]byte(customRule1)); err != nil {
-		t.Fatalf("error unmarshaling customRule1: %v", err)
+		require.NoError(t, err)
 	}
 	custom2 := rules.New()
 	if err := custom2.UnmarshalJSON([]byte(customRule2)); err != nil {
-		t.Fatalf("error unmarshaling customRule2: %v", err)
+		require.NoError(t, err)
 	}
 
 	cell := "cell1"
@@ -85,25 +86,21 @@ func TestUpdate(t *testing.T) {
 	sleepDuringTopoFailure = time.Millisecond
 
 	cr, err := newTopoCustomRule(qsc, cell, filePath)
-	if err != nil {
-		t.Fatalf("newTopoCustomRule failed: %v", err)
-	}
+	require.NoError(t, err)
 	cr.start()
 	defer cr.stop()
 
 	// Set a value, wait until we get it.
 	conn, err := ts.ConnForCell(ctx, cell)
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := conn.Create(ctx, filePath, []byte(customRule1)); err != nil {
-		t.Fatalf("conn.Create failed: %v", err)
+		require.NoError(t, err)
 	}
 	waitForValue(t, qsc, custom1)
 
 	// update the value, wait until we get it.
 	if _, err := conn.Update(ctx, filePath, []byte(customRule2), nil); err != nil {
-		t.Fatalf("conn.Update failed: %v", err)
+		require.NoError(t, err)
 	}
 	waitForValue(t, qsc, custom2)
 }

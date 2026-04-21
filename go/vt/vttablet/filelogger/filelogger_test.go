@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
@@ -34,9 +35,7 @@ func TestFileLog(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
 	defer logger.Stop()
-	if err != nil {
-		t.Fatalf("error setting up file logger: %v", err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -80,9 +79,7 @@ func TestFileLogRedacted(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
 	defer logger.Stop()
-	if err != nil {
-		t.Fatalf("error setting up file logger: %v", err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 

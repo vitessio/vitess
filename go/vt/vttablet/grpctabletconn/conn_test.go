@@ -46,9 +46,7 @@ func TestGRPCTabletConn(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -80,9 +78,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 

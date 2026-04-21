@@ -87,7 +87,7 @@ func TestComInitDB(t *testing.T) {
 
 	// Write ComInitDB packet, read it, compare.
 	if err := cConn.writeComInitDB("my_db"); err != nil {
-		t.Fatalf("writeComInitDB failed: %v", err)
+		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ComInitDB {
@@ -107,7 +107,7 @@ func TestComSetOption(t *testing.T) {
 
 	// Write ComSetOption packet, read it, compare.
 	if err := cConn.writeComSetOption(1); err != nil {
-		t.Fatalf("writeComSetOption failed: %v", err)
+		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ComSetOption {
@@ -130,7 +130,7 @@ func TestComStmtPrepare(t *testing.T) {
 	mockData := preparePacket(t, sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	data, err := sConn.ReadPacket()
@@ -145,7 +145,7 @@ func TestComStmtPrepare(t *testing.T) {
 
 	// write the response to the client
 	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("sConn.writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	resp, err := cConn.ReadPacket()
@@ -209,7 +209,7 @@ func TestComStmtSendLongData(t *testing.T) {
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
@@ -334,7 +334,7 @@ func TestComStmtClose(t *testing.T) {
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID

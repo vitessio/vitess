@@ -575,7 +575,7 @@ func TestIdentifierCIMarshal(t *testing.T) {
 	}
 	var out IdentifierCI
 	if err := json.Unmarshal(b, &out); err != nil {
-		t.Errorf("Unmarshal err: %v, want nil", err)
+		assert.NoError(t, err)
 	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)
@@ -601,7 +601,7 @@ func TestIdentifierCSMarshal(t *testing.T) {
 	}
 	var out IdentifierCS
 	if err := json.Unmarshal(b, &out); err != nil {
-		t.Errorf("Unmarshal err: %v, want nil", err)
+		assert.NoError(t, err)
 	}
 	if !reflect.DeepEqual(out, str) {
 		t.Errorf("Unmarshal: %v, want %v", out, str)

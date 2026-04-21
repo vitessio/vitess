@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"github.com/stretchr/testify/require"
 )
 
 // This file tests the CellsAliases part of the topo.Server API.
@@ -37,17 +38,15 @@ func TestCellsAliases(t *testing.T) {
 	defer ts.Close()
 
 	if err := ts.CreateCellsAlias(ctx, "alias", &topodatapb.CellsAlias{Cells: []string{"cell1", "cell2"}}); err != nil {
-		t.Fatalf("CreateCellsAlias failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.CreateCellsAlias(ctx, "aliasb", &topodatapb.CellsAlias{Cells: []string{"cell3", "cell4"}}); err != nil {
-		t.Fatalf("CreateCellsAlias failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	aliases, err := ts.GetCellsAliases(ctx, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellsAliases failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	var aliasesName []string
 	for aliasName := range aliases {
@@ -87,13 +86,11 @@ func TestCellsAliases(t *testing.T) {
 		ca.Cells = want
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateCellsAlias failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellsAliases failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if !reflect.DeepEqual(aliases["newalias"].Cells, want) {
 		t.Fatalf("Expected newalias to be: %v, got %v", want, aliases["newalias"])
@@ -107,13 +104,11 @@ func TestCellsAliases(t *testing.T) {
 		ca.Cells = want
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateCellsAlias failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellsAliases failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if !reflect.DeepEqual(aliases["newalias"].Cells, want) {
 		t.Fatalf("Expected newalias to be: %v, got %v", want, aliases["newalias"])
@@ -122,13 +117,11 @@ func TestCellsAliases(t *testing.T) {
 	// Test delete alias
 
 	if err := ts.DeleteCellsAlias(ctx, "newalias"); err != nil {
-		t.Fatalf("UpdateCellsAlias failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellsAliases failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if aliases["newalias"] != nil {
 		t.Fatalf("Expected newalias to be: nil, got %v", aliases["newalias"])
