@@ -471,9 +471,10 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 
 func TestRecheckPrimaryHealth(t *testing.T) {
 	tests := []struct {
-		name    string
-		info    []*test.InfoForRecoveryAnalysis
-		wantErr string
+		name                   string
+		info                   []*test.InfoForRecoveryAnalysis
+		semiSyncReplicaEnabled bool
+		wantErr                string
 	}{
 		{
 			name: "analysis change",
@@ -494,6 +495,36 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				CountValidReplicatingReplicas: 0,
 			}},
 			wantErr: "aborting ReplicationStopped, primary mitigation is required",
+		},
+		{
+			name:                   "analysis changed but BeforeAnalysesFunc covers primary problem",
+			semiSyncReplicaEnabled: true,
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:                   policy.DurabilitySemiSync,
+				LastCheckValid:                     1,
+				CountReplicas:                      1,
+				CountValidReplicas:                 1,
+				CountValidReplicatingReplicas:      0,
+				CountValidOracleGTIDReplicas:       1,
+				CountLoggingReplicas:               1,
+				IsPrimary:                          1,
+				CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+				SemiSyncPrimaryEnabled:             1,
+				SemiSyncPrimaryStatus:              1,
+				SemiSyncBlocked:                    1,
+				SemiSyncPrimaryWaitForReplicaCount: 1,
+				SemiSyncPrimaryClients:             0,
+				CountSemiSyncReplicasEnabled:       1,
+			}},
 		},
 		{
 			name: "analysis did not change",
@@ -552,10 +583,11 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
-				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-				Analysis:              inst.ReplicationStopped,
-				AnalyzedKeyspace:      "ks",
-				AnalyzedShard:         "0",
+				AnalyzedInstanceAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Analysis:               inst.ReplicationStopped,
+				AnalyzedKeyspace:       "ks",
+				AnalyzedShard:          "0",
+				SemiSyncReplicaEnabled: tt.semiSyncReplicaEnabled,
 			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})

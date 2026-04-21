@@ -52,11 +52,17 @@ type DetectionAnalysisProblem struct {
 	// Meta contains the metadata describing a problem.
 	Meta *DetectionAnalysisProblemMeta
 
-	// AfterAnalyses defines problems that must be recovered before this problem.
-	AfterAnalyses []AnalysisCode
+	// AfterAnalysesFunc returns AnalysisCodes that must be recovered before
+	// this problem. It receives the current tablet's analysis and all matched
+	// analyses in the shard so that dependencies can be determined dynamically.
+	// A nil func means no "after" dependencies.
+	AfterAnalysesFunc func(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) []AnalysisCode
 
-	// BeforeAnalyses defines problems that must be recovered after this problem.
-	BeforeAnalyses []AnalysisCode
+	// BeforeAnalysesFunc returns AnalysisCodes that must be recovered after
+	// this problem. It receives the current tablet's analysis and all matched
+	// analyses in the shard so that dependencies can be determined dynamically.
+	// A nil func means no "before" dependencies.
+	BeforeAnalysesFunc func(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) []AnalysisCode
 
 	// MatchFunc is a function that returns true when the provided conditions match this problem.
 	MatchFunc func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool
@@ -64,14 +70,58 @@ type DetectionAnalysisProblem struct {
 
 // RequiresOrderedExecution returns true if the problem must be executed
 // sequentially relative to other problems in the same shard. This includes
-// problems that declare dependencies directly (BeforeAnalyses/AfterAnalyses)
+// problems that declare dependencies directly (BeforeAnalysesFunc/AfterAnalysesFunc)
 // as well as problems that are referenced by another problem's dependencies.
-func (dap *DetectionAnalysisProblem) RequiresOrderedExecution() bool {
-	if dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.BeforeAnalyses) > 0 || len(dap.AfterAnalyses) > 0 {
+func (dap *DetectionAnalysisProblem) RequiresOrderedExecution(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) bool {
+	if dap.Meta.Priority == detectionAnalysisPriorityShardWideAction || len(dap.GetBeforeAnalyses(self, shardAnalyses)) > 0 || len(dap.GetAfterAnalyses(self, shardAnalyses)) > 0 {
 		return true
 	}
+	// Check if any other problem references this one in its dependencies.
+	// Find each problem's corresponding analysis entry to pass as self.
 	for _, p := range detectionAnalysisProblems {
-		if slices.Contains(p.BeforeAnalyses, dap.Meta.Analysis) || slices.Contains(p.AfterAnalyses, dap.Meta.Analysis) {
+		var pSelf *DetectionAnalysis
+		for _, a := range shardAnalyses {
+			if a.Analysis == p.Meta.Analysis {
+				pSelf = a
+				break
+			}
+		}
+		if slices.Contains(p.GetBeforeAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) || slices.Contains(p.GetAfterAnalyses(pSelf, shardAnalyses), dap.Meta.Analysis) {
+			return true
+		}
+	}
+	return false
+}
+
+// GetBeforeAnalyses returns the before-analyses for this problem given the
+// current tablet's analysis and shard analyses. Returns nil if
+// BeforeAnalysesFunc is nil.
+func (dap *DetectionAnalysisProblem) GetBeforeAnalyses(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) []AnalysisCode {
+	if dap.BeforeAnalysesFunc == nil {
+		return nil
+	}
+	return dap.BeforeAnalysesFunc(self, shardAnalyses)
+}
+
+// GetAfterAnalyses returns the after-analyses for this problem given the
+// current tablet's analysis and shard analyses. Returns nil if
+// AfterAnalysesFunc is nil.
+func (dap *DetectionAnalysisProblem) GetAfterAnalyses(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) []AnalysisCode {
+	if dap.AfterAnalysesFunc == nil {
+		return nil
+	}
+	return dap.AfterAnalysesFunc(self, shardAnalyses)
+}
+
+// isSemiSyncAcker returns true if the tablet is currently a semi-sync acker
+// or should be one according to the durability policy (indicated by
+// ReplicaSemiSyncMustBeSet being among the matched problems).
+func isSemiSyncAcker(a *DetectionAnalysis) bool {
+	if a.SemiSyncReplicaEnabled {
+		return true
+	}
+	for _, p := range a.AnalysisMatchedProblems {
+		if p.Analysis == ReplicaSemiSyncMustBeSet {
 			return true
 		}
 	}
@@ -135,7 +185,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary has a stalled disk",
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
-		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
+		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+			return []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas}
+		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled
 		},
@@ -236,7 +288,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary semi-sync must be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		AfterAnalyses: []AnalysisCode{ReplicaSemiSyncMustBeSet},
+		AfterAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+			return []AnalysisCode{ReplicaSemiSyncMustBeSet}
+		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			if !hasMinSemiSyncAckers(ca.durability, primary, a) {
 				return false
@@ -250,7 +304,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
+		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+			return []AnalysisCode{ReplicaSemiSyncMustNotBeSet}
+		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled
 		},
@@ -261,7 +317,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replica semi-sync must be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
+		BeforeAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+			return []AnalysisCode{PrimarySemiSyncMustBeSet}
+		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled
 		},
@@ -272,7 +330,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replica semi-sync must not be set",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
+		AfterAnalysesFunc: func(_ *DetectionAnalysis, _ []*DetectionAnalysis) []AnalysisCode {
+			return []AnalysisCode{PrimarySemiSyncMustNotBeSet}
+		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
 		},
@@ -347,6 +407,33 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// Replica connectivity checks
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    ReplicationStopped,
+			Description: "Replication is stopped",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		BeforeAnalysesFunc: func(self *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) []AnalysisCode {
+			// Only declare a dependency on PrimarySemiSyncBlocked if this
+			// replica is (or should be) a semi-sync acker. Restarting a
+			// non-acker replica won't unblock semi-sync, so it shouldn't
+			// delay the primary recovery. When self is nil (e.g., during
+			// type-level ordering checks), return nil since we can't
+			// determine acker status without a specific tablet.
+			if self == nil || !isSemiSyncAcker(self) {
+				return nil
+			}
+			for _, a := range shardAnalyses {
+				if a.Analysis == PrimarySemiSyncBlocked {
+					return []AnalysisCode{PrimarySemiSyncBlocked}
+				}
+			}
+			return nil
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    NotConnectedToPrimary,
 			Description: "Not connected to the primary",
 			Priority:    detectionAnalysisPriorityMedium,
@@ -375,17 +462,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
 		},
 	},
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    ReplicationStopped,
-			Description: "Replication is stopped",
-			Priority:    detectionAnalysisPriorityMedium,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
-		},
-	},
-
 	// Unreachable primary checks
 	{
 		Meta: &DetectionAnalysisProblemMeta{
@@ -485,29 +561,46 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {
 	// use slices.SortStableFunc because it keeps the original order of equal elements.
-	slices.SortStableFunc(allProblems, compareDetectionAnalysisProblems)
+	// self is nil because this sorts per-tablet matched problems where
+	// the specific tablet analysis is not available to the comparator.
+	slices.SortStableFunc(allProblems, func(a, b *DetectionAnalysisProblem) int {
+		if a.Meta == nil || b.Meta == nil {
+			return 0
+		}
+		aPriority := a.GetPriority()
+		bPriority := b.GetPriority()
+		switch {
+		case aPriority > bPriority:
+			return 1
+		case aPriority < bPriority:
+			return -1
+		}
+		return 0
+	})
 }
 
-// compareDetectionAnalysisProblems compares two DetectionAnalysisProblems using
-// the same logic as sortDetectionAnalysisMatchedProblems.
-func compareDetectionAnalysisProblems(a, b *DetectionAnalysisProblem) int {
-	if a.Meta == nil || b.Meta == nil {
+// compareDetectionAnalyses compares two DetectionAnalysis entries using the
+// problem definitions' priority and dynamic dependency functions.
+func compareDetectionAnalyses(a, b *DetectionAnalysis, shardAnalyses []*DetectionAnalysis) int {
+	aProblem := GetDetectionAnalysisProblem(a.Analysis)
+	bProblem := GetDetectionAnalysisProblem(b.Analysis)
+	if aProblem == nil || bProblem == nil || aProblem.Meta == nil || bProblem.Meta == nil {
 		return 0
 	}
 
 	// handle before/after dependencies
-	aAnalysis := a.Meta.Analysis
-	bAnalysis := b.Meta.Analysis
-	if slices.Contains(b.BeforeAnalyses, aAnalysis) || slices.Contains(a.AfterAnalyses, bAnalysis) {
+	aAnalysis := aProblem.Meta.Analysis
+	bAnalysis := bProblem.Meta.Analysis
+	if slices.Contains(bProblem.GetBeforeAnalyses(b, shardAnalyses), aAnalysis) || slices.Contains(aProblem.GetAfterAnalyses(a, shardAnalyses), bAnalysis) {
 		return 1
 	}
-	if slices.Contains(a.BeforeAnalyses, bAnalysis) || slices.Contains(b.AfterAnalyses, aAnalysis) {
+	if slices.Contains(aProblem.GetBeforeAnalyses(a, shardAnalyses), bAnalysis) || slices.Contains(bProblem.GetAfterAnalyses(b, shardAnalyses), aAnalysis) {
 		return -1
 	}
 
 	// effective priority (lower is better).
-	aPriority := a.GetPriority()
-	bPriority := b.GetPriority()
+	aPriority := aProblem.GetPriority()
+	bPriority := bProblem.GetPriority()
 	switch {
 	case aPriority > bPriority:
 		return 1
@@ -523,12 +616,7 @@ func compareDetectionAnalysisProblems(a, b *DetectionAnalysisProblem) int {
 // same priority/dependency logic as sortDetectionAnalysisMatchedProblems.
 func sortDetectionAnalyses(analyses []*DetectionAnalysis) {
 	slices.SortStableFunc(analyses, func(a, b *DetectionAnalysis) int {
-		aProblem := GetDetectionAnalysisProblem(a.Analysis)
-		bProblem := GetDetectionAnalysisProblem(b.Analysis)
-		if aProblem == nil || bProblem == nil {
-			return 0
-		}
-		return compareDetectionAnalysisProblems(aProblem, bProblem)
+		return compareDetectionAnalyses(a, b, analyses)
 	})
 }
 

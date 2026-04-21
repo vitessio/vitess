@@ -797,7 +797,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 // TestSemiSyncRecoveryOrdering verifies that when the durability policy changes
 // to semi_sync, VTOrc fixes ReplicaSemiSyncMustBeSet before PrimarySemiSyncMustBeSet.
-// This ordering is enforced by the AfterAnalyses/BeforeAnalyses dependencies.
+// This ordering is enforced by the AfterAnalysesFunc/BeforeAnalysesFunc dependencies.
 func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// Start with durability "none" so no semi-sync is required initially.
@@ -875,4 +875,60 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 				"all ReplicaSemiSyncMustBeSet recoveries should have lower recovery_id than PrimarySemiSyncMustBeSet")
 		}
 	}, 30*time.Second, time.Second)
+}
+
+// TestReplicationStoppedWithSemiSyncBlocked verifies that VTOrc restarts
+// replication on replicas even when the primary has PrimarySemiSyncBlocked
+// detected simultaneously. This is a regression test for a deadlock where
+// recheckPrimaryHealth would abort fixReplica because the primary had a
+// problem, but the primary problem existed because replicas weren't
+// replicating. See https://github.com/vitessio/vitess/issues/19921.
+//
+// The test also verifies that only semi-sync acker replicas trigger the
+// dependency bypass — stopping a non-acker (RDONLY) replica should not
+// prevent recheckPrimaryHealth from aborting normally.
+func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	// 2 REPLICA (semi-sync ackers) + 1 RDONLY (not an acker).
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, primary, "should have elected a primary")
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	// Identify the replica (acker) and rdonly (non-acker).
+	// One of the 2 replicas was elected primary, so 1 replica remains.
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		} else {
+			replica = tablet
+		}
+	}
+	require.NotNil(t, replica, "should have a REPLICA tablet")
+	require.NotNil(t, rdonly, "should have an RDONLY tablet")
+
+	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
+	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
+
+	// Verify semi-sync acker status: replica ON, rdonly OFF.
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, replica, "ON"), "REPLICA should be a semi-sync acker")
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF"), "RDONLY should not be a semi-sync acker")
+
+	// Stop replication on the semi-sync acker (REPLICA). This causes
+	// PrimarySemiSyncBlocked on the primary. VTOrc should fix replication
+	// via the BeforeAnalysesFunc bypass in recheckPrimaryHealth.
+	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
+	require.NoError(t, err)
+
+	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }

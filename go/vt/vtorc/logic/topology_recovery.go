@@ -983,7 +983,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				DiscoverInstance(primaryTablet.Alias, true)
 			}
 		}
-		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
+		alreadyFixed, _, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.AnalyzedInstanceAlias, err))
@@ -1054,43 +1054,64 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	discoveryFunc(primaryTabletAlias, true)
 
 	// checking if the original analysis is valid even after the primary refresh.
-	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
+	alreadyFixed, shardAnalyses, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
 		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
 	}
 
-	// The original analysis for the tablet has changed.
-	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
-	// In either case, the original analysis is stale which can be safely aborted.
-	if recoveryRequired {
-		log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
-		// original analysis is stale, abort.
-		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
+	if !alreadyFixed {
+		return nil
 	}
 
-	return nil
+	// The original analysis for the tablet has changed. Before aborting, check
+	// if the dependency ordering says the original problem should run before any
+	// of the shard's current problems (via BeforeAnalysesFunc/AfterAnalysesFunc).
+	// This prevents a deadlock where a primary problem (e.g., PrimarySemiSyncBlocked)
+	// blocks the replica fix (e.g., ReplicationStopped) that would resolve it.
+	problem := inst.GetDetectionAnalysisProblem(originalAnalysisEntry)
+	if problem != nil {
+		beforeCodes := problem.GetBeforeAnalyses(analysisEntry, shardAnalyses)
+		for _, entry := range shardAnalyses {
+			if slices.Contains(beforeCodes, entry.Analysis) {
+				log.Info(fmt.Sprintf("recheckPrimaryHealth: %s declares it should run before %s, proceeding with recovery", originalAnalysisEntry, entry.Analysis))
+				return nil
+			}
+			// Also check the inverse: if a shard problem declares it should
+			// run after the original problem, the original should proceed.
+			entryProblem := inst.GetDetectionAnalysisProblem(entry.Analysis)
+			if entryProblem != nil && slices.Contains(entryProblem.GetAfterAnalyses(entry, shardAnalyses), originalAnalysisEntry) {
+				log.Info(fmt.Sprintf("recheckPrimaryHealth: %s declares it should run after %s, proceeding with recovery", entry.Analysis, originalAnalysisEntry))
+				return nil
+			}
+		}
+	}
+
+	log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
+	recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
+	// original analysis is stale, abort.
+	return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 }
 
-// checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
-func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+// checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not.
+// It returns the fresh shard analyses alongside the result so callers can inspect them without re-querying.
+func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, []*inst.DetectionAnalysis, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	for _, entry := range analysisEntries {
 		// If there is a analysis which has the same recovery required, then we should proceed with the recovery
 		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
 		if tabletAliasesEqual && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
-			return false, nil
+			return false, analysisEntries, nil
 		}
 	}
 
 	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
-	return true, nil
+	return true, analysisEntries, nil
 }
 
 // recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
@@ -1100,7 +1121,7 @@ func recoverShardAnalyses(analyses []*inst.DetectionAnalysis, recoverFunc func(*
 	var concurrent []*inst.DetectionAnalysis
 	for _, analysisEntry := range analyses {
 		problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
-		if problem != nil && problem.RequiresOrderedExecution() {
+		if problem != nil && problem.RequiresOrderedExecution(analysisEntry, analyses) {
 			if err := recoverFunc(analysisEntry); err != nil {
 				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
 			}
