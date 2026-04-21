@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	maps0 "maps"
 	"net/http"
 	"strings"
@@ -61,6 +62,23 @@ const (
 	maxTableCount         = 10000
 	maxPartitionsPerTable = 8192
 	maxIndexesPerTable    = 64
+
+	// gtidExecutedOptimizeThresholdBytes is the on-disk file_size above which
+	// we'll OPTIMIZE mysql.gtid_executed on a REPLICA or RDONLY tablet to
+	// reclaim free space that accumulates from high-churn replication tracking.
+	gtidExecutedOptimizeThresholdBytes = 128 * 1024 * 1024 // 128 MiB
+	// gtidExecutedOptimizeInterval caps how often we'll run OPTIMIZE per tablet.
+	gtidExecutedOptimizeInterval = 24 * time.Hour
+	// gtidExecutedOptimizeTimeout bounds a single OPTIMIZE invocation. In
+	// normal operation it completes in well under a second; 20s is an outlier;
+	// 60s means something pathological is happening and we abort so we don't
+	// leave a long-running admin statement in flight indefinitely.
+	gtidExecutedOptimizeTimeout = 60 * time.Second
+	// tabletTypeStabilityCooldown is how long after an isServingPrimary flip
+	// we'll defer the OPTIMIZE: a reparent (PRS/ERS) flips the bit on this
+	// tablet, and we don't want to kick off background admin work while the
+	// tablet's role is still settling.
+	tabletTypeStabilityCooldown = 5 * time.Minute
 )
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
@@ -82,6 +100,25 @@ type Engine struct {
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool
+	// currentTabletType records the tablet's most recently reported type. It is
+	// updated by MakePrimary (which sets it to PRIMARY) and MakeNonPrimary
+	// (which takes the current non-primary type). Used by the OPTIMIZE paths to
+	// restrict background admin work to REPLICA and RDONLY tablets.
+	currentTabletType topodatapb.TabletType
+	// tabletTypeLastChangedAt records the wall-clock time at which
+	// currentTabletType last changed. Used by the OPTIMIZE paths to avoid
+	// kicking off background admin work while a PRS/ERS may still be settling.
+	tabletTypeLastChangedAt time.Time
+	// gtidExecutedOptimizeLastAt records when the background OPTIMIZE of
+	// mysql.gtid_executed last ran successfully on this tablet (throttling).
+	gtidExecutedOptimizeLastAt time.Time
+	// userTableOptimizeLastAt tracks, per user table, when the opt-in background
+	// OPTIMIZE last ran successfully. Keyed by table name in the tablet's DB.
+	userTableOptimizeLastAt map[string]time.Time
+	// surfacedFreeSpaceTables tracks which user tables we last set on the
+	// tableDataFreeBytes gauge, so we can Reset labels for tables that have
+	// dropped below the threshold and avoid stale entries.
+	surfacedFreeSpaceTables map[string]struct{}
 	// schemaCopy stores if the user has requested signals on schema changes. If they have, then we
 	// also track the underlying schema and make a copy of it in our MySQL instance.
 	schemaCopy bool
@@ -103,6 +140,13 @@ type Engine struct {
 	tableAllocatedSizeGauge      *stats.GaugesWithSingleLabel
 	tableRowsGauge               *stats.GaugesWithSingleLabel
 	tableClusteredIndexSizeGauge *stats.GaugesWithSingleLabel
+	// tableDataFreeBytes exposes DATA_FREE (bytes reclaimable via OPTIMIZE)
+	// per user table for tables whose DATA_FREE exceeds
+	// SchemaUserTablesFreeSpacePercentThreshold of the table's total
+	// allocated space. Only populated when the threshold is non-zero and a
+	// table is currently exceeding it; labels are reset when a table drops
+	// below it or is removed.
+	tableDataFreeBytes *stats.GaugesWithSingleLabel
 
 	indexCardinalityGauge *stats.GaugesWithMultiLabels
 	indexBytesGauge       *stats.GaugesWithMultiLabels
@@ -131,6 +175,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "estimated number of rows in the table", "Table")
 	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "byte size of the clustered index (i.e. row data)", "Table")
+	se.tableDataFreeBytes = env.Exporter().NewGaugesWithSingleLabel("SchemaTableDataFreeBytes", "DATA_FREE bytes (reclaimable via OPTIMIZE) for user tables whose free-space ratio exceeds --schema-user-tables-free-space-percent-threshold", "Table")
 	se.indexCardinalityGauge = env.Exporter().NewGaugesWithMultiLabels("IndexCardinality", "estimated number of unique values in the index", []string{"Table", "Index"})
 	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the index", []string{"Table", "Index"})
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
@@ -342,11 +387,17 @@ func (se *Engine) closeLocked() {
 }
 
 // MakeNonPrimary clears the sequence caches to make sure that
-// they don't get accidentally reused after losing primaryship.
-func (se *Engine) MakeNonPrimary() {
+// they don't get accidentally reused after losing primaryship. The tabletType
+// is the tablet's current non-primary type (e.g. REPLICA, RDONLY, DRAINED, …)
+// and is used to gate OPTIMIZE to REPLICA/RDONLY only.
+func (se *Engine) MakeNonPrimary(tabletType topodatapb.TabletType) {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if se.currentTabletType != tabletType {
+		se.tabletTypeLastChangedAt = time.Now()
+	}
+	se.currentTabletType = tabletType
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
@@ -360,7 +411,71 @@ func (se *Engine) MakeNonPrimary() {
 func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if se.currentTabletType != topodatapb.TabletType_PRIMARY {
+		se.tabletTypeLastChangedAt = time.Now()
+	}
+	se.currentTabletType = topodatapb.TabletType_PRIMARY
 	se.isServingPrimary = serving
+}
+
+// isOptimizeEligibleTabletTypeLocked reports whether this tablet's current
+// type is one we will run OPTIMIZE on. We deliberately restrict this to
+// REPLICA and RDONLY; other non-primary types (DRAINED, BACKUP, RESTORE,
+// SPARE, …) are excluded because they represent tablets mid-operation where
+// background admin work could interfere. The caller must hold se.mu.
+func (se *Engine) isOptimizeEligibleTabletTypeLocked() bool {
+	switch se.currentTabletType {
+	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldAttemptGtidExecutedOptimizeLocked reports whether we should run the
+// mysql.gtid_executed OPTIMIZE gating-query+spawn sequence right now. It
+// checks the tablet type, the tablet-type stability cooldown, and the
+// per-tablet 24h throttle. Caller must hold se.mu.
+func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
+	if !se.isOptimizeEligibleTabletTypeLocked() {
+		return false
+	}
+	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
+		return false
+	}
+	if !se.gtidExecutedOptimizeLastAt.IsZero() && now.Sub(se.gtidExecutedOptimizeLastAt) < gtidExecutedOptimizeInterval {
+		return false
+	}
+	return true
+}
+
+// selectUserTablesToOptimizeLocked returns the subset of overThreshold tables
+// that are eligible for OPTIMIZE right now, and stamps
+// userTableOptimizeLastAt to prevent a concurrent reload from spawning a
+// duplicate goroutine. Returns nil if the tablet-type or stability gates
+// fail; otherwise returns the list of tables to spawn OPTIMIZE for.
+// Caller must hold se.mu.
+func (se *Engine) selectUserTablesToOptimizeLocked(now time.Time, overThreshold map[string]uint64) []string {
+	if !se.isOptimizeEligibleTabletTypeLocked() {
+		return nil
+	}
+	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
+		return nil
+	}
+	if se.userTableOptimizeLastAt == nil {
+		se.userTableOptimizeLastAt = make(map[string]time.Time, len(overThreshold))
+	}
+	var toOptimize []string
+	for tableName := range overThreshold {
+		if last, seen := se.userTableOptimizeLastAt[tableName]; seen && now.Sub(last) < gtidExecutedOptimizeInterval {
+			continue
+		}
+		// Mark start time now to prevent a concurrent reload from spawning a
+		// duplicate goroutine for the same table. On failure we reset below.
+		se.userTableOptimizeLastAt[tableName] = now
+		toOptimize = append(toOptimize, tableName)
+	}
+	return toOptimize
 }
 
 // EnableHistorian forces tracking to be on or off.
@@ -458,6 +573,434 @@ func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*
 	return innodbTablesStats, nil
 }
 
+// gtidExecutedFileSizeQuery reads the on-disk size of mysql.gtid_executed.
+// Separate from populateInnoDBStats because that query scopes to the tablet's
+// user database; mysql.gtid_executed lives in the mysql schema.
+const gtidExecutedFileSizeQuery = `select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'`
+
+// optimizeGtidExecutedStatement is run on REPLICA and RDONLY tablets to
+// reclaim free space on mysql.gtid_executed. NO_WRITE_TO_BINLOG keeps this
+// admin statement off the binlog so it does not propagate to other replicas.
+const optimizeGtidExecutedStatement = `OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed`
+
+// maybeOptimizeGtidExecutedLocked checks mysql.gtid_executed's on-disk size
+// and, on a REPLICA or RDONLY tablet that meets the throttling and
+// stability conditions, kicks off the OPTIMIZE in a background goroutine so
+// neither reload nor a subsequent MakePrimary/MakeNonPrimary waits on the
+// admin statement. The OPTIMIZE itself is bounded by
+// gtidExecutedOptimizeTimeout so we don't leave a pathological invocation
+// in flight.
+//
+// The background goroutine intentionally re-checks the tablet type under
+// se.mu immediately before executing: we do NOT run OPTIMIZE if the tablet
+// is no longer REPLICA or RDONLY, even if the state flipped after we spawned.
+//
+// Caller must hold se.mu — this function is called from reload(), which
+// holds se.mu for its entire duration, so we deliberately avoid
+// re-acquiring the lock here (Go mutexes are not re-entrant).
+func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *connpool.Conn) {
+	if !se.shouldAttemptGtidExecutedOptimizeLocked(time.Now()) {
+		return
+	}
+
+	result, err := conn.Exec(ctx, gtidExecutedFileSizeQuery, 1, false)
+	if err != nil {
+		se.throttledLogger.Warningf("schema engine: reading mysql.gtid_executed file_size failed: %v", err)
+		return
+	}
+	if len(result.Rows) == 0 {
+		// Table not present in innodb_tablespaces (e.g. not created yet).
+		return
+	}
+	fileSize, err := result.Rows[0][0].ToCastUint64()
+	if err != nil {
+		se.throttledLogger.Warningf("schema engine: parsing mysql.gtid_executed file_size failed: %v", err)
+		return
+	}
+	if fileSize <= gtidExecutedOptimizeThresholdBytes {
+		return
+	}
+
+	// Stamp the start time before spawning so we won't launch again until
+	// the 24h throttle expires. The stamp is reset on failure below so a
+	// real error path retries on the next reload instead of waiting 24h.
+	se.gtidExecutedOptimizeLastAt = time.Now()
+
+	go se.runOptimizeGtidExecuted(fileSize)
+}
+
+// disableSuperReadOnly turns off @@global.super_read_only if it is currently
+// on (which it will be for a healthy REPLICA/RDONLY). It returns a restore
+// function that the caller MUST invoke via defer to re-enable
+// super_read_only regardless of how the OPTIMIZE returns (success, error, or
+// panic). The returned restore function is a no-op when super_read_only was
+// already off or when the MySQL flavor does not support super_read_only (e.g.
+// MariaDB), so deferring it unconditionally is always safe.
+//
+// The restore opens its own fresh DBA connection rather than reusing the
+// OPTIMIZE conn. This matters because the OPTIMIZE conn may have been
+// closed by the time restore fires — notably the executeFetchCtx KILL path
+// closes the conn after timing out, which would strand the tablet
+// super_read_only=OFF if restore depended on that handle. super_read_only
+// is a GLOBAL variable, so flipping it from a different session is
+// equivalent.
+//
+// MariaDB and some older MySQL versions don't support super_read_only; in
+// that case we return ERUnknownSystemVariable from the initial read and
+// treat it as "nothing to do" (no-op restore). Any other failure to read or
+// to flip the value returns an error so the caller can skip OPTIMIZE.
+func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore func(), err error) {
+	noop := func() {}
+	result, err := conn.ExecuteFetch("SELECT @@global.super_read_only", 1, false)
+	if err != nil {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			return noop, nil
+		}
+		return noop, fmt.Errorf("reading @@global.super_read_only: %w", err)
+	}
+	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+		return noop, nil
+	}
+	wasOn := result.Rows[0][0].ToString()
+	if wasOn != "1" && wasOn != "ON" {
+		return noop, nil
+	}
+	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+		return noop, fmt.Errorf("disabling super_read_only: %w", err)
+	}
+	return se.restoreSuperReadOnly, nil
+}
+
+// restoreSuperReadOnly re-enables @@global.super_read_only on a fresh
+// DBA connection (independent of any connection the caller may have been
+// using for OPTIMIZE). Called via defer from disableSuperReadOnly's restore
+// closure. Failures are logged loudly but not returned — nothing actionable
+// the caller can do at this point except alert.
+func (se *Engine) restoreSuperReadOnly() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
+	if err != nil {
+		log.Warn("schema engine: CRITICAL: failed to open connection to re-enable super_read_only after OPTIMIZE; tablet may now accept writes — investigate immediately",
+			slog.Any("error", err))
+		return
+	}
+	defer conn.Close()
+	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
+		log.Warn("schema engine: CRITICAL: failed to re-enable super_read_only after OPTIMIZE; tablet may now accept writes — investigate immediately",
+			slog.Any("error", err))
+	}
+}
+
+// executeFetchCtx runs conn.ExecuteFetch while honouring ctx. If ctx expires
+// before the query returns, executeFetchCtx opens a separate connection and
+// issues KILL <conn.ID> to abort the in-flight query server-side, then waits
+// for the original ExecuteFetch call to unwind.
+//
+// This is necessary because mysql.Conn.ExecuteFetch is not context-aware:
+// the caller's context.WithTimeout only bounds connection setup, so a
+// pathological OPTIMIZE would otherwise run indefinitely (and keep
+// super_read_only OFF longer than intended). Pattern modelled on
+// (*Mysqld).executeFetchContext in go/vt/mysqlctl/query.go.
+func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	var (
+		result  *sqltypes.Result
+		execErr error
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		result, execErr = conn.ExecuteFetch(query, maxrows, wantfields)
+	}()
+
+	select {
+	case <-done:
+		return result, execErr
+	case <-ctx.Done():
+		// select chooses pseudorandomly when both channels are ready — if
+		// the query already completed, return its result.
+		select {
+		case <-done:
+			return result, execErr
+		default:
+		}
+
+		// Context expired. Try to kill the in-flight query from a separate
+		// connection so we don't leave the tablet writeable and the conn busy.
+		connID := conn.Conn.ID()
+		log.Warn("schema engine: OPTIMIZE timed out, killing in-flight query",
+			slog.Int64("connID", connID), slog.String("query", query))
+		se.killMySQLConn(connID)
+
+		// Wait for ExecuteFetch to unwind (KILL makes it error out).
+		<-done
+		// Close the connection so it doesn't get reused after KILL.
+		conn.Close()
+		if execErr == nil {
+			// ExecuteFetch won the race and returned a result before KILL
+			// reached it — prefer the actual result over the ctx error.
+			return result, nil
+		}
+		return nil, ctx.Err()
+	}
+}
+
+// killMySQLConn opens a standalone DB connection, bounded by a fresh 10s
+// timeout (since the caller's context is likely already expired), and
+// issues a KILL statement for the given connection ID.
+func (se *Engine) killMySQLConn(connID int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	killConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
+	if err != nil {
+		log.Warn("schema engine: failed to open connection to KILL runaway OPTIMIZE",
+			slog.Int64("connID", connID), slog.Any("error", err))
+		return
+	}
+	defer killConn.Close()
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("KILL %d", connID), 1, false); err != nil {
+		log.Warn("schema engine: failed to KILL runaway OPTIMIZE conn",
+			slog.Int64("connID", connID), slog.Any("error", err))
+	}
+}
+
+// runOptimizeGtidExecuted is the background goroutine spawned by
+// maybeOptimizeGtidExecutedLocked. Uses a standalone DB connection (not se.conns)
+// so a pathological run doesn't starve the reloader/historian/tracker slots.
+// Temporarily disables super_read_only for the duration of OPTIMIZE (a
+// REPLICA/RDONLY is normally super_read_only so the OPTIMIZE would otherwise
+// be rejected) and restores it via defer.
+func (se *Engine) runOptimizeGtidExecuted(fileSizeAtSpawn uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), gtidExecutedOptimizeTimeout)
+	defer cancel()
+
+	se.mu.Lock()
+	stillEligible := se.isOptimizeEligibleTabletTypeLocked()
+	se.mu.Unlock()
+	if !stillEligible {
+		se.mu.Lock()
+		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.mu.Unlock()
+		return
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
+	if err != nil {
+		log.Warn("schema engine: failed to open connection for mysql.gtid_executed OPTIMIZE", slog.Any("error", err))
+		se.mu.Lock()
+		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.mu.Unlock()
+		return
+	}
+	defer conn.Close()
+
+	restoreSRO, err := se.disableSuperReadOnly(conn)
+	// Always defer restore before running OPTIMIZE: we re-enable
+	// super_read_only no matter how the body of this function exits.
+	defer restoreSRO()
+	if err != nil {
+		log.Warn("schema engine: skipping mysql.gtid_executed OPTIMIZE; could not disable super_read_only",
+			slog.Any("error", err))
+		se.mu.Lock()
+		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.mu.Unlock()
+		return
+	}
+
+	start := time.Now()
+	if _, err := se.executeFetchCtx(ctx, conn, optimizeGtidExecutedStatement, 100, false); err != nil {
+		elapsed := time.Since(start)
+		log.Warn("schema engine: OPTIMIZE of mysql.gtid_executed failed",
+			slog.Any("error", err),
+			slog.Duration("elapsed", elapsed),
+			slog.Uint64("fileSizeAtSpawn", fileSizeAtSpawn),
+		)
+		se.mu.Lock()
+		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.mu.Unlock()
+		return
+	}
+	log.Info("schema engine: OPTIMIZE of mysql.gtid_executed completed",
+		slog.Duration("elapsed", time.Since(start)),
+		slog.Uint64("fileSizeAtSpawn", fileSizeAtSpawn),
+	)
+}
+
+// userTableFreeSpaceQueryFormat selects user tables whose DATA_FREE
+// (bytes reclaimable via OPTIMIZE) is more than the given percentage of
+// the table's total allocated space (DATA_LENGTH + INDEX_LENGTH +
+// DATA_FREE). The predicate is written as
+// `data_free * 100 > (data_length + index_length + data_free) * <percent>`
+// to keep the comparison in integer arithmetic.
+const userTableFreeSpaceQueryFormat = `select table_name, data_free, data_length + index_length + data_free as total_size from information_schema.TABLES where table_schema = database() and data_free * 100 > (data_length + index_length + data_free) * %d`
+
+// updateUserTableFreeSpaceLocked populates the SchemaTableDataFreeBytes
+// gauge for user tables where DATA_FREE exceeds
+// SchemaUserTablesFreeSpacePercentThreshold of the table's total allocated
+// space, and emits a throttled INFO log summarizing the offenders. Runs on
+// all tablet types. When the configured threshold is 0 the feature is
+// disabled and this function is a no-op (after clearing any stale gauge
+// labels from a prior enabled run).
+//
+// On REPLICA and RDONLY tablets the surfaced tables are also run through
+// OPTIMIZE NO_WRITE_TO_BINLOG in a background goroutine (one per table),
+// subject to the per-table 24h throttle and the tablet-type stability
+// cooldown. PRIMARY and other non-primary types (DRAINED, BACKUP, RESTORE,
+// SPARE, …) surface the metric/log but never have OPTIMIZE run against them.
+//
+// Caller must hold se.mu — this is called from reload(), which holds se.mu
+// for its entire duration. The function reads and writes
+// se.surfacedFreeSpaceTables under the caller's lock.
+func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *connpool.Conn) {
+	percentThreshold := tabletenv.SchemaUserTablesFreeSpacePercentThreshold()
+	// The flag is viper-dynamic, so even though TabletConfig.Verify() enforces
+	// [0, 100] at startup an operator can still push an out-of-range value via
+	// the config file at runtime. Clamp-to-disabled here: a negative value
+	// would make the SQL predicate match every table (see integer arithmetic
+	// in userTableFreeSpaceQueryFormat) and a value > 100 is nonsensical.
+	if percentThreshold < 0 || percentThreshold > 100 {
+		se.throttledLogger.Warningf("schema engine: --schema-user-tables-free-space-percent-threshold=%d is out of range [0, 100]; treating as disabled", percentThreshold)
+		percentThreshold = 0
+	}
+	if percentThreshold <= 0 {
+		// Clear any gauge labels we might have set while previously enabled.
+		for tableName := range se.surfacedFreeSpaceTables {
+			se.tableDataFreeBytes.Reset(tableName)
+		}
+		se.surfacedFreeSpaceTables = nil
+		return
+	}
+	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), maxTableCount, false)
+	if err != nil {
+		se.throttledLogger.Warningf("schema engine: reading user table DATA_FREE failed: %v", err)
+		return
+	}
+	current := make(map[string]uint64, len(result.Rows))
+	logSummary := make(map[string]string, len(result.Rows))
+	for _, row := range result.Rows {
+		tableName := row[0].ToString()
+		dataFree, err := row[1].ToCastUint64()
+		if err != nil {
+			continue
+		}
+		totalSize, err := row[2].ToCastUint64()
+		if err != nil {
+			continue
+		}
+		current[tableName] = dataFree
+		se.tableDataFreeBytes.Set(tableName, int64(dataFree))
+		if totalSize > 0 {
+			logSummary[tableName] = fmt.Sprintf("%d/%d bytes (%.1f%%)", dataFree, totalSize, float64(dataFree)/float64(totalSize)*100)
+		} else {
+			logSummary[tableName] = fmt.Sprintf("%d bytes", dataFree)
+		}
+	}
+	// Zero out labels for tables that were over the threshold previously but
+	// no longer are (dropped, truncated, or OPTIMIZEd out).
+	for tableName := range se.surfacedFreeSpaceTables {
+		if _, stillOver := current[tableName]; !stillOver {
+			se.tableDataFreeBytes.Reset(tableName)
+		}
+	}
+	se.surfacedFreeSpaceTables = make(map[string]struct{}, len(current))
+	for tableName := range current {
+		se.surfacedFreeSpaceTables[tableName] = struct{}{}
+	}
+	if len(current) > 0 {
+		se.throttledLogger.Infof("schema engine: %d user table(s) have reclaimable free space exceeding %d%% of total size: %v",
+			len(current), percentThreshold, logSummary)
+	}
+	se.maybeOptimizeUserTablesLocked(current)
+}
+
+// maybeOptimizeUserTablesLocked kicks off background OPTIMIZE goroutines for
+// any surfaced user tables that pass the REPLICA/RDONLY-only tablet-type
+// check, the tablet-type stability cooldown, and the per-table 24h
+// throttle. Each OPTIMIZE runs in its own goroutine using a standalone DB
+// connection and is bounded by gtidExecutedOptimizeTimeout.
+//
+// Caller must hold se.mu — this is called from
+// updateUserTableFreeSpaceLocked, which runs under the reload() call stack
+// (se.mu held by ReloadAtEx), so re-acquiring the lock here would deadlock.
+func (se *Engine) maybeOptimizeUserTablesLocked(overThreshold map[string]uint64) {
+	if len(overThreshold) == 0 {
+		return
+	}
+	toOptimize := se.selectUserTablesToOptimizeLocked(time.Now(), overThreshold)
+	for _, tableName := range toOptimize {
+		go se.runOptimizeUserTable(tableName, overThreshold[tableName])
+	}
+}
+
+// runOptimizeUserTable is the background goroutine spawned by
+// maybeOptimizeUserTablesLocked. It re-checks the tablet type before
+// executing so a type flip after spawning is honoured. Temporarily disables
+// super_read_only for the duration of OPTIMIZE and restores it via defer.
+func (se *Engine) runOptimizeUserTable(tableName string, dataFreeAtSpawn uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), gtidExecutedOptimizeTimeout)
+	defer cancel()
+
+	se.mu.Lock()
+	stillEligible := se.isOptimizeEligibleTabletTypeLocked()
+	se.mu.Unlock()
+	if !stillEligible {
+		se.mu.Lock()
+		delete(se.userTableOptimizeLastAt, tableName)
+		se.mu.Unlock()
+		return
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
+	if err != nil {
+		log.Warn("schema engine: failed to open connection for user-table OPTIMIZE",
+			slog.String("table", tableName), slog.Any("error", err))
+		se.mu.Lock()
+		delete(se.userTableOptimizeLastAt, tableName)
+		se.mu.Unlock()
+		return
+	}
+	defer conn.Close()
+
+	restoreSRO, err := se.disableSuperReadOnly(conn)
+	// Always defer restore before running OPTIMIZE: we re-enable
+	// super_read_only no matter how the body of this function exits.
+	defer restoreSRO()
+	if err != nil {
+		log.Warn("schema engine: skipping user-table OPTIMIZE; could not disable super_read_only",
+			slog.String("table", tableName), slog.Any("error", err))
+		se.mu.Lock()
+		delete(se.userTableOptimizeLastAt, tableName)
+		se.mu.Unlock()
+		return
+	}
+
+	stmt := fmt.Sprintf("OPTIMIZE NO_WRITE_TO_BINLOG TABLE %s", sqlparser.String(sqlparser.NewIdentifierCS(tableName)))
+	start := time.Now()
+	if _, err := se.executeFetchCtx(ctx, conn, stmt, 100, false); err != nil {
+		log.Warn("schema engine: OPTIMIZE of user table failed",
+			slog.String("table", tableName),
+			slog.Any("error", err),
+			slog.Duration("elapsed", time.Since(start)),
+			slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
+		)
+		se.mu.Lock()
+		delete(se.userTableOptimizeLastAt, tableName)
+		se.mu.Unlock()
+		return
+	}
+	log.Info("schema engine: OPTIMIZE of user table completed",
+		slog.String("table", tableName),
+		slog.Duration("elapsed", time.Since(start)),
+		slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
+	)
+}
+
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	start := time.Now()
@@ -499,6 +1042,14 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
 			log.Error(fmt.Sprintf("Updating index/table statistics failed, error: %v", err))
 		}
+		// Surface user tables with reclaimable free space (all tablet types)
+		// and consider OPTIMIZing mysql.gtid_executed / surfaced user tables
+		// on REPLICA and RDONLY tablets. All of this is best-effort and must
+		// not fail the reload. These helpers rely on ReloadAtEx holding
+		// se.mu for the lifetime of the reload, and do not re-acquire it
+		// (Go mutexes are not re-entrant).
+		se.updateUserTableFreeSpaceLocked(ctx, conn.Conn)
+		se.maybeOptimizeGtidExecutedLocked(ctx, conn.Conn)
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
