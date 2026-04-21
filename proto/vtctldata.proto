@@ -557,6 +557,8 @@ message CheckThrottlerRequest {
   bool skip_request_heartbeats = 4;
   // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 5;
+  // ThrottlerType specifies which throttler to check (defaults to DefaultLagThrottler)
+  tabletmanagerdata.ThrottlerType throttler_type = 6;
 }
 
 message CheckThrottlerResponse {
@@ -1155,6 +1157,8 @@ message GetTabletsResponse {
 message GetThrottlerStatusRequest {
   // TabletAlias is the alias of the tablet to probe
   topodata.TabletAlias tablet_alias = 1;
+  // ThrottlerType specifies which throttler to query (defaults to DefaultLagThrottler)
+  tabletmanagerdata.ThrottlerType throttler_type = 2;
 }
 
 message GetThrottlerStatusResponse {

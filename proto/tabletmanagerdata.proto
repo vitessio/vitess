@@ -852,6 +852,8 @@ message CheckThrottlerRequest {
   bool ok_if_not_exists = 4;
   reserved 5; // used to be multi_metrics_enabled, introduced in v21 for backwards compatibility, and removed in v22
   reserved "multi_metrics_enabled";
+  // ThrottlerType specifies which throttler to check (defaults to DefaultLagThrottler)
+  ThrottlerType throttler_type = 6;
 }
 
 enum CheckThrottlerResponseCode {
@@ -861,6 +863,12 @@ enum CheckThrottlerResponseCode {
   APP_DENIED = 3;
   UNKNOWN_METRIC = 4;
   INTERNAL_ERROR = 5;
+}
+
+// ThrottlerType specifies which throttler to use
+enum ThrottlerType {
+  DefaultLagThrottler = 0;       // Default - replication lag throttler
+  DedicatedQueryThrottler = 1;   // Dedicated query throttler
 }
 
 message CheckThrottlerResponse {
@@ -910,6 +918,8 @@ message CheckThrottlerResponse {
 }
 
 message GetThrottlerStatusRequest {
+  // ThrottlerType specifies which throttler to query (defaults to DefaultLagThrottler)
+  ThrottlerType throttler_type = 1;
 }
 
 message GetThrottlerStatusResponse {
