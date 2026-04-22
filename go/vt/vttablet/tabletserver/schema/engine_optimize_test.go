@@ -38,8 +38,16 @@ import (
 func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	now := time.Now()
 
-	t.Run("primary tablet skips", func(t *testing.T) {
-		se := &Engine{isServingPrimary: true}
+	t.Run("serving primary tablet skips", func(t *testing.T) {
+		se := &Engine{isPrimaryTablet: true, isServingPrimary: true}
+		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
+	})
+
+	t.Run("primary-not-serving tablet skips", func(t *testing.T) {
+		// Regression for the unservePrimary() path where isServingPrimary
+		// is false but the tablet is still of type PRIMARY: OPTIMIZE must
+		// not run on it.
+		se := &Engine{isPrimaryTablet: true, isServingPrimary: false}
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
@@ -362,15 +370,15 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	assert.Equal(t, int64(900), se.tableDataFreeBytes.Counts()["t_b"])
 }
 
-// TestMaybeOptimizeGtidExecutedSmallFileSkips verifies that when
-// mysql.gtid_executed is under the 128 MiB threshold, we neither spawn the
-// OPTIMIZE goroutine nor stamp the last-run time.
-func TestMaybeOptimizeGtidExecutedSmallFileSkips(t *testing.T) {
+// TestMaybeOptimizeGtidExecutedSmallDataFreeSkips verifies that when
+// mysql.gtid_executed's DATA_FREE is under the 128 MiB threshold, we
+// neither spawn the OPTIMIZE goroutine nor stamp the last-run time.
+func TestMaybeOptimizeGtidExecutedSmallDataFreeSkips(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery(
-		"select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("file_size", "uint64"), "1024"),
+		"select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("data_free", "uint64"), "1024"),
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 	se.mu.Lock()
@@ -387,7 +395,7 @@ func TestMaybeOptimizeGtidExecutedSmallFileSkips(t *testing.T) {
 	se.mu.Unlock()
 	conn.Recycle()
 
-	// File size is well under threshold so no spawn: last-run is still zero
+	// DATA_FREE is well under threshold so no spawn: last-run is still zero
 	// and no OPTIMIZE was dispatched.
 	se.mu.Lock()
 	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
@@ -395,16 +403,16 @@ func TestMaybeOptimizeGtidExecutedSmallFileSkips(t *testing.T) {
 	assert.Equal(t, 0, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed"))
 }
 
-// TestMaybeOptimizeGtidExecutedLargeFileSpawns verifies the full happy
-// path: when the file is over threshold and all gates pass, we stamp the
+// TestMaybeOptimizeGtidExecutedLargeDataFreeSpawns verifies the full happy
+// path: when DATA_FREE is over threshold and all gates pass, we stamp the
 // last-run time and spawn the goroutine (which we then wait for).
-func TestMaybeOptimizeGtidExecutedLargeFileSpawns(t *testing.T) {
+func TestMaybeOptimizeGtidExecutedLargeDataFreeSpawns(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	// file_size > 128 MiB threshold.
+	// DATA_FREE > 128 MiB threshold.
 	db.AddQuery(
-		"select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("file_size", "uint64"), "209715200"),
+		"select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("data_free", "uint64"), "209715200"),
 	)
 	// Queries the goroutine will issue.
 	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
@@ -440,14 +448,14 @@ func TestMaybeOptimizeGtidExecutedLargeFileSpawns(t *testing.T) {
 }
 
 // TestMaybeOptimizeGtidExecutedIneligibleTabletSkips verifies that a
-// PRIMARY tablet short-circuits without even running the file_size query.
+// PRIMARY tablet short-circuits without even running the DATA_FREE query.
 func TestMaybeOptimizeGtidExecutedIneligibleTabletSkips(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	// If the file_size query is issued, it errors out so the failure is
+	// If the DATA_FREE query is issued, it errors out so the failure is
 	// loud.
 	db.AddRejectedQuery(
-		"select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'",
+		"select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'",
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "must not be queried on PRIMARY"),
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -586,13 +594,13 @@ func TestMakeNonPrimaryResetsSequenceInfo(t *testing.T) {
 	assert.Equal(t, int64(0), se.tables["seq_tbl"].SequenceInfo.LastVal)
 }
 
-// TestMaybeOptimizeGtidExecutedFileSizeQueryError covers the file_size
+// TestMaybeOptimizeGtidExecutedDataFreeQueryError covers the DATA_FREE
 // read-error branch.
-func TestMaybeOptimizeGtidExecutedFileSizeQueryError(t *testing.T) {
+func TestMaybeOptimizeGtidExecutedDataFreeQueryError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddRejectedQuery(
-		"select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'",
+		"select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'",
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated"),
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -616,14 +624,14 @@ func TestMaybeOptimizeGtidExecutedFileSizeQueryError(t *testing.T) {
 	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
 }
 
-// TestMaybeOptimizeGtidExecutedEmptyResult covers the "table not present in
-// innodb_tablespaces" branch.
+// TestMaybeOptimizeGtidExecutedEmptyResult covers the "table not present"
+// branch (e.g. before mysql.gtid_executed has been created).
 func TestMaybeOptimizeGtidExecutedEmptyResult(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery(
-		"select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'",
-		&sqltypes.Result{Fields: sqltypes.MakeTestFields("file_size", "uint64")},
+		"select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'",
+		&sqltypes.Result{Fields: sqltypes.MakeTestFields("data_free", "uint64")},
 	)
 	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 	se.mu.Lock()

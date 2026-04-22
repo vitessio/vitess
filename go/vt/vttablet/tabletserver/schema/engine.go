@@ -63,10 +63,16 @@ const (
 	maxPartitionsPerTable = 8192
 	maxIndexesPerTable    = 64
 
-	// gtidExecutedOptimizeThresholdBytes is the on-disk file_size above which
-	// we'll OPTIMIZE mysql.gtid_executed on a non-primary tablet to reclaim
-	// free space that accumulates from high-churn replication tracking.
-	gtidExecutedOptimizeThresholdBytes = 128 * 1024 * 1024 // 128 MiB
+	// gtidExecutedOptimizeDataFreeThresholdBytes is the amount of
+	// reclaimable free space (information_schema.TABLES.DATA_FREE) on
+	// mysql.gtid_executed above which we'll OPTIMIZE the table on a
+	// non-primary tablet. This is free space, not total size: a table that
+	// is 1 GiB total but only 10 MiB of which is DATA_FREE is left alone,
+	// while one that is 300 MiB total with 200 MiB of DATA_FREE triggers
+	// OPTIMIZE. The free-space signal tracks bloat accumulation from
+	// high-churn replication tracking, which is the failure mode this
+	// feature prevents.
+	gtidExecutedOptimizeDataFreeThresholdBytes = 128 * 1024 * 1024 // 128 MiB
 	// gtidExecutedOptimizeInterval caps how often we'll run OPTIMIZE per tablet.
 	gtidExecutedOptimizeInterval = 24 * time.Hour
 	// gtidExecutedOptimizeTimeout bounds a single OPTIMIZE invocation. In
@@ -74,10 +80,10 @@ const (
 	// 60s means something pathological is happening and we abort so we don't
 	// leave a long-running admin statement in flight indefinitely.
 	gtidExecutedOptimizeTimeout = 60 * time.Second
-	// tabletTypeStabilityCooldown is how long after an isServingPrimary flip
-	// we'll defer the OPTIMIZE: a reparent (PRS/ERS) flips the bit on this
-	// tablet, and we don't want to kick off background admin work while the
-	// tablet's role is still settling.
+	// tabletTypeStabilityCooldown is how long after a transition between
+	// PRIMARY and non-PRIMARY we'll defer OPTIMIZE: a reparent (PRS/ERS)
+	// flips the type, and we don't want to kick off background admin work
+	// while the tablet's role is still settling.
 	tabletTypeStabilityCooldown = 5 * time.Minute
 )
 
@@ -100,9 +106,17 @@ type Engine struct {
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool
-	// tabletTypeLastChangedAt records the wall-clock time at which
-	// isServingPrimary last flipped. Used by the OPTIMIZE paths to avoid
-	// kicking off background admin work while a PRS/ERS may still be settling.
+	// isPrimaryTablet records whether this tablet is of type PRIMARY,
+	// regardless of whether it is currently serving. This is distinct from
+	// isServingPrimary, which only flips when the tablet moves between
+	// serving and non-serving primary states. Used by the OPTIMIZE paths so
+	// we never run background admin work against a primary tablet — even a
+	// primary-not-serving one (e.g. during an orderly transition).
+	isPrimaryTablet bool
+	// tabletTypeLastChangedAt records the wall-clock time at which the
+	// tablet most recently transitioned between PRIMARY and non-PRIMARY.
+	// Used by the OPTIMIZE paths to avoid kicking off background admin
+	// work while a PRS/ERS may still be settling.
 	tabletTypeLastChangedAt time.Time
 	// gtidExecutedOptimizeLastAt records when the background OPTIMIZE of
 	// mysql.gtid_executed last ran successfully on this tablet (throttling).
@@ -384,9 +398,10 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	if se.isServingPrimary {
+	if se.isPrimaryTablet {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
+	se.isPrimaryTablet = false
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
@@ -400,19 +415,21 @@ func (se *Engine) MakeNonPrimary() {
 func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	if se.isServingPrimary != serving {
+	if !se.isPrimaryTablet {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
+	se.isPrimaryTablet = true
 	se.isServingPrimary = serving
 }
 
 // shouldAttemptGtidExecutedOptimizeLocked reports whether we should run the
 // mysql.gtid_executed OPTIMIZE gating-query+spawn sequence right now. It
-// checks that the tablet is non-primary, that the tablet-role stability
-// cooldown has elapsed, and that the per-tablet 24h throttle has elapsed.
-// Caller must hold se.mu.
+// checks that the tablet is not of type PRIMARY (including a
+// primary-not-serving tablet mid-transition), that the tablet-role
+// stability cooldown has elapsed, and that the per-tablet 24h throttle has
+// elapsed. Caller must hold se.mu.
 func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
-	if se.isServingPrimary {
+	if se.isPrimaryTablet {
 		return false
 	}
 	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
@@ -519,26 +536,34 @@ func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*
 	return innodbTablesStats, nil
 }
 
-// gtidExecutedFileSizeQuery reads the on-disk size of mysql.gtid_executed.
-// Separate from populateInnoDBStats because that query scopes to the tablet's
-// user database; mysql.gtid_executed lives in the mysql schema.
-const gtidExecutedFileSizeQuery = `select file_size from information_schema.innodb_tablespaces where name = 'mysql/gtid_executed'`
+// gtidExecutedDataFreeQuery reads the reclaimable free space
+// (DATA_FREE) of mysql.gtid_executed from information_schema.TABLES.
+// Separate from populateInnoDBStats because that query scopes to the
+// tablet's user database; mysql.gtid_executed lives in the mysql schema.
+const gtidExecutedDataFreeQuery = `select data_free from information_schema.TABLES where table_schema = 'mysql' and table_name = 'gtid_executed'`
 
 // optimizeGtidExecutedStatement is run on non-primary tablets to reclaim
 // free space on mysql.gtid_executed. NO_WRITE_TO_BINLOG keeps this admin
 // statement off the binlog so it does not propagate to other replicas.
 const optimizeGtidExecutedStatement = `OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed`
 
-// maybeOptimizeGtidExecutedLocked checks mysql.gtid_executed's on-disk size
-// and, on a non-primary tablet that meets the throttling and stability
-// conditions, kicks off the OPTIMIZE in a background goroutine so neither
-// reload nor a subsequent MakePrimary/MakeNonPrimary waits on the admin
-// statement. The OPTIMIZE itself is bounded by gtidExecutedOptimizeTimeout
-// so we don't leave a pathological invocation in flight.
+// maybeOptimizeGtidExecutedLocked checks mysql.gtid_executed's reclaimable
+// free space (DATA_FREE) and, on a non-primary tablet that meets the
+// throttling and stability conditions, kicks off the OPTIMIZE in a
+// background goroutine so neither reload nor a subsequent
+// MakePrimary/MakeNonPrimary waits on the admin statement. The OPTIMIZE
+// itself is bounded by gtidExecutedOptimizeTimeout so we don't leave a
+// pathological invocation in flight.
 //
-// The background goroutine intentionally re-checks isServingPrimary under
+// We trigger on DATA_FREE rather than total file size because a small but
+// heavily churned table can cause the outage we're preventing, while a
+// large but cleanly-packed table cannot — the InnoDB bloat scan that the
+// binlog-rotation path performs is only expensive in proportion to
+// delete-marked/free pages.
+//
+// The background goroutine intentionally re-checks isPrimaryTablet under
 // se.mu immediately before executing: we do NOT run OPTIMIZE if the tablet
-// has been promoted to primary, even if the state flipped after we spawned.
+// has been promoted to PRIMARY, even if the state flipped after we spawned.
 //
 // Caller must hold se.mu — this function is called from reload(), which
 // holds se.mu for its entire duration, so we deliberately avoid
@@ -548,21 +573,21 @@ func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *con
 		return
 	}
 
-	result, err := conn.Exec(ctx, gtidExecutedFileSizeQuery, 1, false)
+	result, err := conn.Exec(ctx, gtidExecutedDataFreeQuery, 1, false)
 	if err != nil {
-		se.throttledLogger.Warningf("schema engine: reading mysql.gtid_executed file_size failed: %v", err)
+		se.throttledLogger.Warningf("schema engine: reading mysql.gtid_executed DATA_FREE failed: %v", err)
 		return
 	}
 	if len(result.Rows) == 0 {
-		// Table not present in innodb_tablespaces (e.g. not created yet).
+		// Table not present (e.g. not created yet).
 		return
 	}
-	fileSize, err := result.Rows[0][0].ToCastUint64()
+	dataFree, err := result.Rows[0][0].ToCastUint64()
 	if err != nil {
-		se.throttledLogger.Warningf("schema engine: parsing mysql.gtid_executed file_size failed: %v", err)
+		se.throttledLogger.Warningf("schema engine: parsing mysql.gtid_executed DATA_FREE failed: %v", err)
 		return
 	}
-	if fileSize <= gtidExecutedOptimizeThresholdBytes {
+	if dataFree <= gtidExecutedOptimizeDataFreeThresholdBytes {
 		return
 	}
 
@@ -571,7 +596,7 @@ func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *con
 	// real error path retries on the next reload instead of waiting 24h.
 	se.gtidExecutedOptimizeLastAt = time.Now()
 
-	go se.runOptimizeGtidExecuted(fileSize)
+	go se.runOptimizeGtidExecuted(dataFree)
 }
 
 // disableSuperReadOnly turns off @@global.super_read_only if it is currently
@@ -622,16 +647,16 @@ func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore f
 // closure. Failures are logged loudly but not returned — nothing actionable
 // the caller can do at this point except alert.
 //
-// If the tablet has since been promoted to the serving primary (e.g. a
-// PRS/ERS landed while OPTIMIZE was running), we skip the restore: the
-// promotion flow itself turns super_read_only OFF and we must not stomp
-// that back ON and leave a freshly-promoted primary read-only.
+// If the tablet has since been promoted to PRIMARY (e.g. a PRS/ERS landed
+// while OPTIMIZE was running), we skip the restore: the promotion flow
+// itself turns super_read_only OFF and we must not stomp that back ON and
+// leave a freshly-promoted primary read-only.
 func (se *Engine) restoreSuperReadOnly() {
 	se.mu.Lock()
-	promoted := se.isServingPrimary
+	promoted := se.isPrimaryTablet
 	se.mu.Unlock()
 	if promoted {
-		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to serving primary since OPTIMIZE started")
+		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
 		return
 	}
 
@@ -754,12 +779,12 @@ func (se *Engine) killMySQLConn(connID int64) {
 // Temporarily disables super_read_only for the duration of OPTIMIZE (a
 // non-primary tablet is normally super_read_only so the OPTIMIZE would
 // otherwise be rejected) and restores it via defer.
-func (se *Engine) runOptimizeGtidExecuted(fileSizeAtSpawn uint64) {
+func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), gtidExecutedOptimizeTimeout)
 	defer cancel()
 
 	se.mu.Lock()
-	stillNonPrimary := !se.isServingPrimary
+	stillNonPrimary := !se.isPrimaryTablet
 	se.mu.Unlock()
 	if !stillNonPrimary {
 		se.mu.Lock()
@@ -797,7 +822,7 @@ func (se *Engine) runOptimizeGtidExecuted(fileSizeAtSpawn uint64) {
 		log.Warn("schema engine: OPTIMIZE of mysql.gtid_executed failed",
 			slog.Any("error", err),
 			slog.Duration("elapsed", elapsed),
-			slog.Uint64("fileSizeAtSpawn", fileSizeAtSpawn),
+			slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
 		)
 		se.mu.Lock()
 		se.gtidExecutedOptimizeLastAt = time.Time{}
@@ -806,7 +831,7 @@ func (se *Engine) runOptimizeGtidExecuted(fileSizeAtSpawn uint64) {
 	}
 	log.Info("schema engine: OPTIMIZE of mysql.gtid_executed completed",
 		slog.Duration("elapsed", time.Since(start)),
-		slog.Uint64("fileSizeAtSpawn", fileSizeAtSpawn),
+		slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
 	)
 }
 
