@@ -121,6 +121,8 @@ type Engine struct {
 	// gtidExecutedOptimizeLastAt records when the background OPTIMIZE of
 	// mysql.gtid_executed last ran successfully on this tablet (throttling).
 	gtidExecutedOptimizeLastAt time.Time
+	backgroundCtx              context.Context
+	backgroundCancel           context.CancelFunc
 	// surfacedFreeSpaceTables tracks which user tables we last set on the
 	// tableDataFreeBytes gauge, so we can Reset labels for tables that have
 	// dropped below the threshold and avoid stale entries.
@@ -164,6 +166,7 @@ type Engine struct {
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
 	reloadTime := env.Config().SchemaReloadInterval
+	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
@@ -172,8 +175,11 @@ func NewEngine(env tabletenv.Env) *Engine {
 			Size:        3,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
-		ticks:           timer.NewTimer(reloadTime),
-		throttledLogger: logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
+		ticks:                   timer.NewTimer(reloadTime),
+		throttledLogger:         logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
+		tabletTypeLastChangedAt: time.Now(),
+		backgroundCtx:           backgroundCtx,
+		backgroundCancel:        backgroundCancel,
 	}
 	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
@@ -306,6 +312,7 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
+	se.ensureBackgroundContextLocked()
 	log.Info("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
@@ -369,6 +376,10 @@ func (se *Engine) Close() {
 // closeLocked closes the schema engine. It is meant to be called after locking the mutex of the schema engine.
 // It also unlocks the engine when it returns.
 func (se *Engine) closeLocked() {
+	if se.backgroundCancel != nil {
+		se.backgroundCancel()
+	}
+
 	// Close the Timer in a separate go routine because
 	// there might be a tick after we have acquired the lock above
 	// but before closing the timer, in which case Stop function will wait for the
@@ -439,6 +450,23 @@ func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
 		return false
 	}
 	return true
+}
+
+func (se *Engine) ensureBackgroundContextLocked() {
+	if se.backgroundCtx != nil && se.backgroundCtx.Err() == nil {
+		return
+	}
+	se.backgroundCtx, se.backgroundCancel = context.WithCancel(context.Background())
+}
+
+func (se *Engine) backgroundTimeoutContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	se.mu.Lock()
+	backgroundCtx := se.backgroundCtx
+	se.mu.Unlock()
+	if backgroundCtx == nil {
+		backgroundCtx = context.Background()
+	}
+	return context.WithTimeout(backgroundCtx, timeout)
 }
 
 // EnableHistorian forces tracking to be on or off.
@@ -660,7 +688,7 @@ func (se *Engine) restoreSuperReadOnly() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := se.backgroundTimeoutContext(10 * time.Second)
 	defer cancel()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
@@ -758,7 +786,7 @@ func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnec
 // timeout (since the caller's context is likely already expired), and
 // issues a KILL statement for the given connection ID.
 func (se *Engine) killMySQLConn(connID int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := se.backgroundTimeoutContext(10 * time.Second)
 	defer cancel()
 	killConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
@@ -780,7 +808,7 @@ func (se *Engine) killMySQLConn(connID int64) {
 // non-primary tablet is normally super_read_only so the OPTIMIZE would
 // otherwise be rejected) and restores it via defer.
 func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
-	ctx, cancel := context.WithTimeout(context.Background(), gtidExecutedOptimizeTimeout)
+	ctx, cancel := se.backgroundTimeoutContext(gtidExecutedOptimizeTimeout)
 	defer cancel()
 
 	se.mu.Lock()

@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -71,9 +72,12 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 		assert.True(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
-	t.Run("no prior history proceeds", func(t *testing.T) {
-		se := &Engine{}
-		assert.True(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
+	t.Run("fresh engine waits for cooldown", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(time.Now()))
 	})
 }
 
@@ -282,6 +286,61 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 	se.mu.Lock()
 	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
 	se.mu.Unlock()
+}
+
+func TestCloseCancelsInFlightOptimize(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
+
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseQuery := func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+	}
+	t.Cleanup(releaseQuery)
+	db.SetBeforeFunc("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", func() {
+		<-release
+	})
+
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.mu.Lock()
+	se.isOpen = true
+	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
+	se.tables = map[string]*Table{"dual": NewTable("dual", NoType)}
+	se.notifiers = make(map[string]notifier)
+	se.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		se.runOptimizeGtidExecuted(200 * 1024 * 1024)
+	}()
+
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed") == 1
+	}, 30*time.Second, 10*time.Millisecond)
+
+	se.Close()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	releaseQuery()
+	assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+		"engine shutdown must cancel the restore path instead of re-enabling super_read_only after close")
 }
 
 // TestUpdateUserTableFreeSpaceDisabled verifies that when the threshold is
