@@ -21,9 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -130,10 +130,6 @@ type fakeTracer struct {
 	log  []string
 }
 
-func (f *fakeTracer) GetOpenTracingTracer() opentracing.Tracer {
-	return opentracing.GlobalTracer()
-}
-
 func (f *fakeTracer) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	if parent == "" {
 		return nil, nil, errors.New("parent is empty")
@@ -183,6 +179,35 @@ func (m *mockSpan) Finish() {
 func (m *mockSpan) Annotate(key string, value any) {
 	m.tracer.log = append(m.tracer.log, fmt.Sprintf("key: %v values:%v", key, value))
 	fmt.Println(m.tracer.log)
+}
+
+// captureOutput redirects stdout or stderr to capture output from f.
+func captureOutput(t *testing.T, f func(), captureStdout bool) string {
+	oldVal := os.Stderr
+	if captureStdout {
+		oldVal = os.Stdout
+	}
+	t.Cleanup(func() {
+		if captureStdout {
+			os.Stdout = oldVal
+		} else {
+			os.Stderr = oldVal
+		}
+	})
+
+	r, w, _ := os.Pipe()
+	if captureStdout {
+		os.Stdout = w
+	} else {
+		os.Stderr = w
+	}
+
+	f()
+
+	w.Close()
+	got, _ := io.ReadAll(r)
+
+	return string(got)
 }
 
 type fakeStringer struct {
