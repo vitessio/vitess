@@ -380,6 +380,13 @@ message VStreamFlags {
   // Events are still chunked to prevent OOM. Transactions smaller than this are sent
   // without locking for better parallelism.
   int64 transaction_chunk_size = 11;
+  // Maximum duration (in seconds) a VStream runs before the server terminates it with
+  // UNAVAILABLE. This is best-effort: if a send to the client is in-flight when the age is reached,
+  // the server waits for it to complete before returning.
+  // The client is expected to reconnect.
+  // A random jitter of +/-10% is added to spread out reconnections.
+  // 0 means no maximum age.
+  uint32 max_stream_age_seconds = 12;
 }
 
 // VStreamRequest is the payload for VStream.
