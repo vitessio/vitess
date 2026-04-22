@@ -17,11 +17,13 @@ limitations under the License.
 package vttablet
 
 import (
+	"io"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/utils"
@@ -164,16 +166,13 @@ func TestNewVReplicationConfig(t *testing.T) {
 
 func TestMaxRowJSONBytesOverride(t *testing.T) {
 	InitVReplicationConfigDefaults()
-	for _, key := range []string{"max-row-json-bytes", "max_row_json_bytes"} {
-		t.Run(key, func(t *testing.T) {
-			cfg, err := NewVReplicationConfig(map[string]string{key: "1048576"})
-			require.NoError(t, err)
-			require.EqualValues(t, int64(1048576), cfg.MaxRowJSONBytes)
-			m := cfg.Map()
-			require.Equal(t, "1048576", m["max-row-json-bytes"])
-			require.Equal(t, "1048576", m["max_row_json_bytes"])
-		})
-	}
+	cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "1048576"})
+	require.NoError(t, err)
+	require.EqualValues(t, int64(1048576), cfg.MaxRowJSONBytes)
+	m := cfg.Map()
+	require.Equal(t, "1048576", m["max-row-json-bytes"])
+	require.NotContains(t, m, "max_row_json_bytes")
+
 	t.Run("zero preserves default", func(t *testing.T) {
 		cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "0"})
 		require.NoError(t, err)
@@ -184,4 +183,24 @@ func TestMaxRowJSONBytesOverride(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "invalid value for max-row-json-bytes")
 	})
+	t.Run("negative value returns error", func(t *testing.T) {
+		_, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "-1"})
+		require.Error(t, err)
+		require.ErrorContains(t, err, "invalid value for max-row-json-bytes")
+	})
+	t.Run("underscore key returns error", func(t *testing.T) {
+		_, err := NewVReplicationConfig(map[string]string{"max_row_json_bytes": "1048576"})
+		require.Error(t, err)
+		require.ErrorContains(t, err, "unknown vreplication config flag: max_row_json_bytes")
+	})
+}
+
+func TestVReplicationMaxRowJSONBytesFlagRejectsNegative(t *testing.T) {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registerFlags(fs)
+
+	err := fs.Parse([]string{"--vreplication-max-row-json-bytes=-1"})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "must be non-negative")
 }

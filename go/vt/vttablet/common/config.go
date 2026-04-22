@@ -246,9 +246,9 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamBinlogRotationThresholdOverride = true
 				c.VStreamBinlogRotationThreshold = value
 			}
-		case "max-row-json-bytes", "max_row_json_bytes":
+		case "max-row-json-bytes":
 			value, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
+			if err != nil || value < 0 {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.MaxRowJSONBytes = value
@@ -288,7 +288,6 @@ func (c VReplicationConfig) Map() map[string]string {
 		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
 		"max-row-json-bytes":                      strconv.FormatInt(c.MaxRowJSONBytes, 10),
-		"max_row_json_bytes":                      strconv.FormatInt(c.MaxRowJSONBytes, 10),
 	}
 }
 

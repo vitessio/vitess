@@ -17,6 +17,8 @@ limitations under the License.
 package vttablet
 
 import (
+	"errors"
+	"strconv"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -32,6 +34,35 @@ const (
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
 	VReplicationExperimentalFlagVPlayerBatching           = int64(4)
 )
+
+type (
+	nonNegativeInt64Flag struct {
+		value *int64
+	}
+)
+
+func (f nonNegativeInt64Flag) Set(v string) error {
+	value, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return err
+	}
+	if value < 0 {
+		return errors.New("must be non-negative")
+	}
+	*f.value = value
+	return nil
+}
+
+func (f nonNegativeInt64Flag) String() string {
+	if f.value == nil {
+		return "0"
+	}
+	return strconv.FormatInt(*f.value, 10)
+}
+
+func (f nonNegativeInt64Flag) Type() string {
+	return "int"
+}
 
 var (
 	vreplicationExperimentalFlags   = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage | VReplicationExperimentalFlagVPlayerBatching
@@ -104,5 +135,5 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 
 	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
-	fs.Int64Var(&vreplicationMaxRowJSONBytes, "vreplication-max-row-json-bytes", vreplicationMaxRowJSONBytes, "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
+	fs.Var(nonNegativeInt64Flag{value: &vreplicationMaxRowJSONBytes}, "vreplication-max-row-json-bytes", "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
 }
