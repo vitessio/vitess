@@ -706,10 +706,16 @@ func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldI
 // parent table's PK-based writeset keys.
 func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintRef, error) {
 	query := fmt.Sprintf(
-		"SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME "+
-			"FROM information_schema.KEY_COLUMN_USAGE "+
-			"WHERE TABLE_SCHEMA = %s AND REFERENCED_TABLE_NAME IS NOT NULL "+
-			"ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION",
+		"SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, "+
+			"child_cols.DATA_TYPE, COALESCE(child_cols.CHARACTER_SET_NAME, ''), COALESCE(child_cols.COLLATION_NAME, ''), COALESCE(child_cols.COLUMN_TYPE, ''), "+
+			"parent_cols.DATA_TYPE, COALESCE(parent_cols.CHARACTER_SET_NAME, ''), COALESCE(parent_cols.COLLATION_NAME, ''), COALESCE(parent_cols.COLUMN_TYPE, '') "+
+			"FROM information_schema.KEY_COLUMN_USAGE kcu "+
+			"JOIN information_schema.COLUMNS child_cols "+
+			"ON child_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND child_cols.TABLE_NAME = kcu.TABLE_NAME AND child_cols.COLUMN_NAME = kcu.COLUMN_NAME "+
+			"JOIN information_schema.COLUMNS parent_cols "+
+			"ON parent_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND parent_cols.TABLE_NAME = kcu.REFERENCED_TABLE_NAME AND parent_cols.COLUMN_NAME = kcu.REFERENCED_COLUMN_NAME "+
+			"WHERE kcu.TABLE_SCHEMA = %s AND kcu.REFERENCED_TABLE_NAME IS NOT NULL "+
+			"ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION",
 		encodeString(dbName),
 	)
 	qr, err := dbClient.ExecuteFetch(query, -1)
@@ -740,12 +746,54 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 	var constraints []constraintEntry
 	idx := map[constraintKey]int{}
 
+	type fkColumnDigestMeta struct {
+		dataType   string
+		charset    string
+		collation  string
+		columnType string
+	}
+	parseDigestMeta := func(offset int, row []sqltypes.Value) fkColumnDigestMeta {
+		return fkColumnDigestMeta{
+			dataType:   strings.ToLower(row[offset].ToString()),
+			charset:    row[offset+1].ToString(),
+			collation:  row[offset+2].ToString(),
+			columnType: strings.ToLower(row[offset+3].ToString()),
+		}
+	}
+	usesTextDigest := func(meta fkColumnDigestMeta) bool {
+		return meta.charset != "" || meta.collation != ""
+	}
+	columnsShareWritesetEncoding := func(child, parent fkColumnDigestMeta) bool {
+		if usesTextDigest(child) || usesTextDigest(parent) {
+			return usesTextDigest(child) && usesTextDigest(parent) &&
+				child.charset == parent.charset &&
+				child.collation == parent.collation
+		}
+		return child.columnType == parent.columnType
+	}
+
 	for _, row := range qr.Rows {
 		childTable := row[0].ToString()
 		constraintName := row[1].ToString()
 		colName := row[2].ToString()
 		parentTable := row[3].ToString()
 		referencedColName := row[4].ToString()
+		childMeta := parseDigestMeta(5, row)
+		parentMeta := parseDigestMeta(9, row)
+		if !columnsShareWritesetEncoding(childMeta, parentMeta) {
+			return nil, vterrors.Errorf(
+				vtrpcpb.Code_FAILED_PRECONDITION,
+				"incompatible FK column definitions for %s.%s referencing %s.%s: child=%s/%s parent=%s/%s; align the definitions or disable parallel apply for this workflow",
+				childTable,
+				colName,
+				parentTable,
+				referencedColName,
+				childMeta.columnType,
+				childMeta.collation,
+				parentMeta.columnType,
+				parentMeta.collation,
+			)
+		}
 
 		k := constraintKey{childTable: childTable, constraintName: constraintName}
 		if i, ok := idx[k]; ok {

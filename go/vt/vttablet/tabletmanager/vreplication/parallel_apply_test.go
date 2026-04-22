@@ -5792,8 +5792,8 @@ func TestCommitLoop_EXECIGNOREIdempotentDropForeignKeyRefreshesFKMetadata(t *tes
 
 	mockDB.RemoveInvariant("information_schema.key_column_usage")
 	mockDB.ExpectRequestRE("update _vt\\.vreplication set pos='MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5', time_updated=.*", &sqltypes.Result{}, nil)
-	mockDB.ExpectRequest(
-		"SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = 'db' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION",
+	mockDB.ExpectRequestRE(
+		"SELECT kcu\\.TABLE_NAME, kcu\\.CONSTRAINT_NAME, kcu\\.COLUMN_NAME, kcu\\.REFERENCED_TABLE_NAME, kcu\\.REFERENCED_COLUMN_NAME, .* FROM information_schema\\.KEY_COLUMN_USAGE kcu JOIN information_schema\\.COLUMNS child_cols .* JOIN information_schema\\.COLUMNS parent_cols .* WHERE kcu\\.TABLE_SCHEMA = 'db' AND kcu\\.REFERENCED_TABLE_NAME IS NOT NULL ORDER BY kcu\\.TABLE_NAME, kcu\\.CONSTRAINT_NAME, kcu\\.ORDINAL_POSITION",
 		&sqltypes.Result{},
 		nil,
 	)

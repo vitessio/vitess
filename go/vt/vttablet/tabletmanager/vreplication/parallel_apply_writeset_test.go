@@ -444,12 +444,12 @@ func TestQueryFKRefs(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME",
-			"varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent|id",
-		"child|fk_child_parent|parent_id2|parent|id2",
-		"other|fk_other_parent|parent_id|parent|id",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int",
+		"child|fk_child_parent|parent_id2|parent|id2|int|||int|int|||int",
+		"other|fk_other_parent|parent_id|parent|id|int|||int|int|||int",
 	)
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
 	refs, err := queryFKRefs(client, "db")
@@ -520,13 +520,18 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME",
-			"varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent|id",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int",
 	)
 	client := newVDBClient(&maxRowsAssertingDBClient{
 		result: qr,
+		assertQuery: func(query string) {
+			require.Contains(t, query, "JOIN information_schema.COLUMNS child_cols")
+			require.Contains(t, query, "JOIN information_schema.COLUMNS parent_cols")
+			require.NotContains(t, query, "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA")
+		},
 		assertRows: func(maxrows int) error {
 			if maxrows != -1 {
 				return fmt.Errorf("expected fetch-all maxrows, got %d", maxrows)
@@ -541,6 +546,47 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 	require.Equal(t, "parent", refs["child"][0].ParentTable)
 	require.Equal(t, []string{"parent_id"}, refs["child"][0].ChildColumnNames)
 	require.Equal(t, []string{"id"}, refs["child"][0].ReferencedColumnNames)
+}
+
+func TestQueryFKRefsRejectsHashIncompatibleFKColumnDefinitions(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	qr := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"child|fk_child_parent|parent_id|parent|id|int|||int|bigint|||bigint",
+	)
+
+	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
+	refs, err := queryFKRefs(client, "db")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "incompatible FK column definitions")
+	require.Nil(t, refs)
+}
+
+func TestQueryFKRefsAllowsCompatibleCharacterFKColumns(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	qr := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"child|fk_child_parent|parent_code|parent|code|varchar|utf8mb4|utf8mb4_0900_ai_ci|varchar(64)|char|utf8mb4|utf8mb4_0900_ai_ci|char(32)",
+	)
+
+	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
+	refs, err := queryFKRefs(client, "db")
+	require.NoError(t, err)
+	require.Len(t, refs["child"], 1)
+	require.Equal(t, []string{"parent_code"}, refs["child"][0].ChildColumnNames)
+	require.Equal(t, []string{"code"}, refs["child"][0].ReferencedColumnNames)
 }
 
 func TestBuildTxnWritesetMissingTablePlan(t *testing.T) {

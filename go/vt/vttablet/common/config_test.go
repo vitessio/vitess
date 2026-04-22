@@ -206,6 +206,14 @@ func TestVReplicationConfigRejectsInvalidParallelWorkers(t *testing.T) {
 	}
 }
 
+func TestVReplicationConfigAcceptsZeroParallelReplicationWorkers(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-parallel-replication-workers": "0",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, config.ParallelReplicationWorkers)
+}
+
 func TestVReplicationConfigSourceOverridesIncludeSourceConsumedWorkflowKeys(t *testing.T) {
 	config, err := NewVReplicationConfig(map[string]string{
 		"vreplication-experimental-flags":           "3",
