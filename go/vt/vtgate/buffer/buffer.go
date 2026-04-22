@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/semaphore"
 
@@ -152,19 +153,14 @@ type Buffer struct {
 	bufferSizeSema *semaphore.Weighted
 	bufferSize     int
 
-	// mu guards all fields in this group.
-	// In particular, it is used to serialize the following Go routines:
-	// - 1. Requests which may buffer (RLock, can be run in parallel)
-	// - 2. Request which starts buffering (based on the seen error)
-	// - 3. HealthCheck subscriber ("StatsUpdate") which stops buffering
-	// - 4. Timer which may stop buffering after -buffer-max-failover-duration
-	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
-	// progress.
-	// Key Format: "<keyspace>/<shard>"
-	buffers map[string]*shardBuffer
+	// progress. Uses sync.Map for lock-free reads on the hot path (every query)
+	// since writes only occur once per shard at startup.
+	// Key: string ("<keyspace>/<shard>"), Value: *shardBuffer
+	buffers sync.Map
+
 	// stopped is true after Shutdown() was run.
-	stopped bool
+	stopped atomic.Bool
 }
 
 // New creates a new Buffer object.
@@ -173,7 +169,6 @@ func New(cfg *Config) *Buffer {
 		config:         cfg,
 		bufferSizeSema: semaphore.NewWeighted(int64(cfg.Size)),
 		bufferSize:     cfg.Size,
-		buffers:        make(map[string]*shardBuffer),
 	}
 }
 
@@ -221,27 +216,33 @@ func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
 // getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.
 // It returns nil if Buffer is shut down and all calls should be ignored.
 func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
-	key := topoproto.KeyspaceShardString(keyspace, shard)
-	b.mu.RLock()
-	sb, ok := b.buffers[key]
-	stopped := b.stopped
-	b.mu.RUnlock()
-
-	if stopped {
+	if b.stopped.Load() {
 		return nil
 	}
-	if ok {
-		return sb
+
+	key := topoproto.KeyspaceShardString(keyspace, shard)
+
+	if v, ok := b.buffers.Load(key); ok {
+		return v.(*shardBuffer)
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	// Look it up again because it could have been created in the meantime.
-	sb, ok = b.buffers[key]
-	if !ok {
-		sb = newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
-		b.buffers[key] = sb
+	// First access for this shard: create and store atomically.
+	sb := newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
+	v, loaded := b.buffers.LoadOrStore(key, sb)
+	if loaded {
+		return v.(*shardBuffer)
 	}
+
+	// Shutdown may have completed its Range between our stopped check above
+	// and the LoadOrStore, so this buffer would never be visited. Clean it up.
+	if b.stopped.Load() {
+		if actual, ok := b.buffers.LoadAndDelete(key); ok && actual == sb {
+			sb.shutdown()
+			sb.waitForShutdown()
+		}
+		return nil
+	}
+
 	return sb
 }
 
@@ -254,20 +255,16 @@ func (b *Buffer) Shutdown() {
 }
 
 func (b *Buffer) shutdown() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	for _, sb := range b.buffers {
-		sb.shutdown()
-	}
-	b.stopped = true
+	b.stopped.Store(true)
+	b.buffers.Range(func(_, value any) bool {
+		value.(*shardBuffer).shutdown()
+		return true
+	})
 }
 
 func (b *Buffer) waitForShutdown() {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	for _, sb := range b.buffers {
-		sb.waitForShutdown()
-	}
+	b.buffers.Range(func(_, value any) bool {
+		value.(*shardBuffer).waitForShutdown()
+		return true
+	})
 }
