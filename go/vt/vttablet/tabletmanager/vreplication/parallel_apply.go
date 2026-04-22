@@ -1814,6 +1814,10 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// immediately. We must wait here because rotate() switches to the
 		// connection that the commitLoop was using for the previous txn.
 		if err := waitPending(); err != nil {
+			worker.rollback()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
 

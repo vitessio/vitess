@@ -6318,6 +6318,110 @@ func TestWorkerLoop_CapturesDoneChannelBeforeDispatch(t *testing.T) {
 	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
+func TestWorkerLoop_CancelDuringWaitPendingRollsBackCurrentTxn(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.batchMode = true
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {
+			TargetName:       "t1",
+			IdentityColumns:  []string{"id"},
+			Insert:           sqlparser.BuildParsedQuery("insert into t1 values (:a_id)"),
+			Fields:           []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+			PKIndices:        []bool{true},
+			PKReferences:     []string{"id"},
+			Stats:            vp.vr.stats,
+			TablePlanBuilder: &tablePlanBuilder{},
+			WorkflowConfig:   vp.vr.workflowConfig,
+		},
+	}}
+	vp.tablePlans["t1"] = vp.replicatorPlan.TablePlans["t1"]
+	vp.tablePlansVersion.Store(1)
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 1)
+
+	firstClient := newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	firstClient.maxBatchSize = 1024
+	secondClient := newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	secondClient.maxBatchSize = 1024
+
+	worker := &applyWorker{
+		ctx:       ctx,
+		conns:     [2]*vdbClient{firstClient, secondClient},
+		client:    firstClient,
+		batchMode: true,
+	}
+	worker.bindFunctions()
+
+	waitingOnPending := make(chan chan struct{}, 1)
+	workerLoopTestHookBeforeWaitPending = func(done chan struct{}) {
+		select {
+		case waitingOnPending <- done:
+		default:
+		}
+	}
+	t.Cleanup(func() {
+		workerLoopTestHookBeforeWaitPending = nil
+	})
+
+	makeTxn := func(order int64) *applyTxn {
+		txn := acquireApplyTxn()
+		txn.order = order
+		txn.noConflict = true
+		txn.payload = &applyTxnPayload{events: []*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: "t1",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+				}},
+			},
+		}}}
+		return txn
+	}
+	require.NoError(t, scheduler.enqueue(makeTxn(1)))
+	require.NoError(t, scheduler.enqueue(makeTxn(2)))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+	}()
+
+	var firstDispatched *applyTxn
+	select {
+	case firstDispatched = <-commitCh:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for first dispatched transaction")
+	}
+
+	var pendingDone chan struct{}
+	select {
+	case pendingDone = <-waitingOnPending:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for workerLoop to block in waitPending")
+	}
+
+	require.True(t, firstDispatched.done == pendingDone)
+	require.True(t, secondClient.InTransaction)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for workerLoop to exit after cancellation")
+	}
+
+	assert.Eventually(t, func() bool {
+		return !secondClient.InTransaction
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestWorkerLoop_ErrorRollsBack(t *testing.T) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
