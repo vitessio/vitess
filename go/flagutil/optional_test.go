@@ -103,6 +103,12 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 	require.NotNil(t, str)
 }
 
+func TestNewOptionalFlag_NilParsePanics(t *testing.T) {
+	require.Panics(t, func() {
+		NewOptionalFlag(0, "int", nil, func(v int) string { return strconv.Itoa(v) })
+	})
+}
+
 func TestOptionalFlagValue_ZeroValue(t *testing.T) {
 	// A zero-value struct must not panic.
 	var f OptionalFlagValue[int]
