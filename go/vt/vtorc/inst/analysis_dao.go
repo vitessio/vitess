@@ -79,8 +79,15 @@ type clusterAnalysis struct {
 	hasShardWideAction    bool
 	shardWideAnalysisCode AnalysisCode
 	shardWideProblem      *DetectionAnalysisProblem
-	totalTablets          int
-	primaryAlias          *topodatapb.TabletAlias
+	// deferShardWideAction is set when a before-dependency analysis
+	// survives suppression. The dependency recovery is expected to
+	// resolve the shard-wide problem, so we drop the shard-wide
+	// action from this detection pass and let it be re-detected
+	// fresh on the next poll if it persists.
+	// See https://github.com/vitessio/vitess/issues/19941
+	deferShardWideAction bool
+	totalTablets         int
+	primaryAlias         *topodatapb.TabletAlias
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -515,6 +522,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 						return nil
 					}
 				}
+				// A before-dependency survived — the dependency recovery
+				// is expected to resolve the shard-wide problem. Defer
+				// the shard-wide action so it isn't processed from the
+				// same stale detection pass.
+				ca.deferShardWideAction = true
 			}
 		}
 
@@ -630,6 +642,24 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		}
 		if !resultChanged {
 			break
+		}
+	}
+	// Drop deferred shard-wide actions. When a before-dependency
+	// analysis survived suppression, the dependency recovery is
+	// expected to resolve the shard-wide problem. Processing the
+	// stale shard-wide entry from the same detection pass could
+	// trigger ERS against stale state.
+	// See https://github.com/vitessio/vitess/issues/19941
+	for keyspaceShard, ca := range clusters {
+		if !ca.deferShardWideAction {
+			continue
+		}
+		for i, analysis := range result {
+			if getKeyspaceShardName(analysis.AnalyzedKeyspace, analysis.AnalyzedShard) == keyspaceShard &&
+				analysis.Analysis == ca.shardWideAnalysisCode {
+				result = append(result[:i], result[i+1:]...)
+				break
+			}
 		}
 	}
 	return result

@@ -1499,6 +1499,75 @@ func TestPostProcessAnalyses(t *testing.T) {
 			},
 		},
 	}
+	// Separate test for deferShardWideAction since it needs its own clusters map.
+	t.Run("deferred shard-wide action is dropped", func(t *testing.T) {
+		deferClusters := map[string]*clusterAnalysis{
+			getKeyspaceShardName(keyspace, shard0): {
+				totalTablets:          2,
+				deferShardWideAction:  true,
+				shardWideAnalysisCode: PrimarySemiSyncBlocked,
+			},
+		}
+		analyses := []*DetectionAnalysis{
+			{
+				Analysis:              PrimarySemiSyncBlocked,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard0,
+				TabletType:            topodatapb.TabletType_PRIMARY,
+			},
+			{
+				Analysis:              ReplicationStopped,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard0,
+				TabletType:            topodatapb.TabletType_REPLICA,
+				LastCheckValid:        true,
+			},
+		}
+		want := []*DetectionAnalysis{
+			{
+				Analysis:              ReplicationStopped,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard0,
+				TabletType:            topodatapb.TabletType_REPLICA,
+				LastCheckValid:        true,
+			},
+		}
+		result := postProcessAnalyses(analyses, deferClusters)
+		require.ElementsMatch(t, want, result)
+	})
+
+	t.Run("shard-wide action not dropped without deferral", func(t *testing.T) {
+		noDeferClusters := map[string]*clusterAnalysis{
+			getKeyspaceShardName(keyspace, shard0): {
+				totalTablets:          2,
+				deferShardWideAction:  false,
+				shardWideAnalysisCode: PrimarySemiSyncBlocked,
+			},
+		}
+		analyses := []*DetectionAnalysis{
+			{
+				Analysis:              PrimarySemiSyncBlocked,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard0,
+				TabletType:            topodatapb.TabletType_PRIMARY,
+			},
+			{
+				Analysis:              ReplicationStopped,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard0,
+				TabletType:            topodatapb.TabletType_REPLICA,
+				LastCheckValid:        true,
+			},
+		}
+		result := postProcessAnalyses(analyses, noDeferClusters)
+		require.ElementsMatch(t, analyses, result)
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.want == nil {

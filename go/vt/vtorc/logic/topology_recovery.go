@@ -1074,6 +1074,12 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not.
+//
+// Note: GetDetectionAnalysis may suppress non-primary analyses when a shard-wide
+// action is detected. Problems that declare a dependency on the shard-wide action
+// (via BeforeAnalysesFunc/AfterAnalysesFunc) survive suppression and will still
+// be found here. Non-dependent problems are intentionally suppressed — the
+// shard-wide action takes priority and they will be re-detected on a future poll.
 func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})

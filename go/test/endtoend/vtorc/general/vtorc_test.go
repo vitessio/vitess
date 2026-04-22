@@ -878,14 +878,19 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 }
 
 // TestReplicationStoppedWithSemiSyncBlocked verifies that VTOrc restarts
-// replication on a semi-sync acker replica even when the primary has
-// PrimarySemiSyncBlocked detected simultaneously. This is a regression test
-// for a deadlock where recheckPrimaryHealth would abort fixReplica because
-// the primary had a problem, but the primary problem existed because replicas
-// weren't replicating. See https://github.com/vitessio/vitess/issues/19921.
+// replication on a semi-sync acker replica under semi_sync durability.
+// This is a regression test for a deadlock where recheckPrimaryHealth
+// would abort fixReplica because the primary had PrimarySemiSyncBlocked,
+// but the primary problem existed because replicas weren't replicating.
+// The precise deadlock timing (blocked write + simultaneous detection) is
+// covered by unit tests; this test exercises the acker detection path and
+// the suppression bypass end-to-end.
+// See https://github.com/vitessio/vitess/issues/19921.
 func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// 2 REPLICA (semi-sync ackers) + 1 RDONLY (not an acker).
+	// The RDONLY is included to verify semi-sync acker detection
+	// is selective — only the REPLICA acker's replication is stopped.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
