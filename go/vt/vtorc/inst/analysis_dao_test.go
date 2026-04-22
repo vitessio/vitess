@@ -1567,3 +1567,58 @@ func TestDeclaresBefore(t *testing.T) {
 		})
 	}
 }
+
+func TestDeclaresAfter(t *testing.T) {
+	tests := []struct {
+		name             string
+		shardWideProblem *DetectionAnalysisProblem
+		shardWideCode    AnalysisCode
+		code             AnalysisCode
+		expected         bool
+	}{
+		{
+			name: "shard-wide problem with AfterAnalysesFunc referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
+					return []AnalysisCode{ReplicationStopped}
+				},
+			},
+			shardWideCode: PrimarySemiSyncBlocked,
+			code:          ReplicationStopped,
+			expected:      true,
+		},
+		{
+			name: "shard-wide problem with AfterAnalysesFunc not referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
+					return []AnalysisCode{ReplicationStopped}
+				},
+			},
+			shardWideCode: PrimarySemiSyncBlocked,
+			code:          NotConnectedToPrimary,
+			expected:      false,
+		},
+		{
+			name:             "shard-wide problem with no AfterAnalysesFunc",
+			shardWideProblem: GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
+			shardWideCode:    PrimarySemiSyncBlocked,
+			code:             ReplicationStopped,
+			expected:         false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.shardWideCode, tt.code))
+		})
+	}
+}

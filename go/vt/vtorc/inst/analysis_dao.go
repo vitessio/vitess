@@ -63,9 +63,22 @@ func declaresBefore(problem *DetectionAnalysisProblem, a *DetectionAnalysis, cod
 	return slices.Contains(problem.GetBeforeAnalyses(a, synthetic), code)
 }
 
+// declaresAfter returns true if the shard-wide problem declares (via
+// AfterAnalysesFunc) that it should run after the given analysis code.
+// This is the symmetric counterpart to declaresBefore — a dependency
+// can be expressed from either side.
+func declaresAfter(shardWideProblem *DetectionAnalysisProblem, shardWideCode AnalysisCode, code AnalysisCode) bool {
+	if shardWideProblem.AfterAnalysesFunc == nil {
+		return false
+	}
+	synthetic := []*DetectionAnalysis{{Analysis: code}}
+	return slices.Contains(shardWideProblem.GetAfterAnalyses(&DetectionAnalysis{Analysis: shardWideCode}, synthetic), code)
+}
+
 type clusterAnalysis struct {
 	hasShardWideAction    bool
 	shardWideAnalysisCode AnalysisCode
+	shardWideProblem      *DetectionAnalysisProblem
 	totalTablets          int
 	primaryAlias          *topodatapb.TabletAlias
 
@@ -472,16 +485,26 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				}
 				ca.hasShardWideAction = true
 				ca.shardWideAnalysisCode = chosenProblem.Meta.Analysis
+				ca.shardWideProblem = chosenProblem
 			} else if ca.hasShardWideAction {
 				// A shard-wide action was already detected. Only keep this
-				// tablet's analysis if any matched problem declares a
-				// BeforeAnalysesFunc dependency on the shard-wide action.
+				// tablet's analysis if a dependency exists between it and
+				// the shard-wide action. The dependency can be expressed
+				// from either side:
+				//   - the tablet's problem declares BeforeAnalysesFunc on
+				//     the shard-wide action, OR
+				//   - the shard-wide problem declares AfterAnalysesFunc on
+				//     the tablet's problem.
 				// If a non-chosen problem declares the dependency, promote
 				// it to the chosen problem so the recovery targets it.
-				if !declaresBefore(chosenProblem, a, ca.shardWideAnalysisCode) {
+				survives := func(p *DetectionAnalysisProblem) bool {
+					return declaresBefore(p, a, ca.shardWideAnalysisCode) ||
+						declaresAfter(ca.shardWideProblem, ca.shardWideAnalysisCode, p.Meta.Analysis)
+				}
+				if !survives(chosenProblem) {
 					found := false
 					for _, p := range matchedProblems[1:] {
-						if declaresBefore(p, a, ca.shardWideAnalysisCode) {
+						if survives(p) {
 							a.Analysis = p.Meta.Analysis
 							a.Description = p.Meta.Description
 							found = true
