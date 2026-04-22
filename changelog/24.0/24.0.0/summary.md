@@ -152,7 +152,7 @@ This is particularly useful in multi-cell deployments where a tablet in the loca
 
 #### <a id="vstream-max-stream-age"/>VStream `max_stream_age_seconds` flag</a>
 
-VStream now supports a `max_stream_age_seconds` flag that limits how long a stream can run before automatic termination. When set to a non-zero value, the stream terminates with an `UNAVAILABLE` error after the specified duration. A random jitter of +/-10% spreads out reconnections across clients.
+VStream now supports a `max_stream_age_seconds` flag that limits how long a stream can run before automatic termination. When set to a non-zero value, the stream terminates with an `UNAVAILABLE` error after the specified duration. A random jitter of +/-10% spreads out reconnections across clients. This is best-effort: if a send to the client is in-flight when the age is reached, the server waits for it to complete before returning.
 
 This feature improves client-side load balancing when used with [gRPC ORCA metrics](https://github.com/vitessio/vitess/pull/18282). Long-running VStream connections can cause load imbalance across VTGate servers because ORCA metrics are only exchanged when connections are established. Setting a maximum stream age causes clients to periodically reconnect and receive updated load information, distributing traffic more evenly.
 
