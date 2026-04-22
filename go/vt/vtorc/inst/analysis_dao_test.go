@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -1505,6 +1506,64 @@ func TestPostProcessAnalyses(t *testing.T) {
 			}
 			result := postProcessAnalyses(tt.analyses, clusters)
 			require.ElementsMatch(t, tt.want, result)
+		})
+	}
+}
+
+func TestDeclaresBefore(t *testing.T) {
+	replicationStoppedProblem := GetDetectionAnalysisProblem(ReplicationStopped)
+	require.NotNil(t, replicationStoppedProblem)
+
+	tests := []struct {
+		name     string
+		problem  *DetectionAnalysisProblem
+		a        *DetectionAnalysis
+		code     AnalysisCode
+		expected bool
+	}{
+		{
+			name:    "acker ReplicationStopped declares before PrimarySemiSyncBlocked",
+			problem: replicationStoppedProblem,
+			a: &DetectionAnalysis{
+				Analysis:               ReplicationStopped,
+				SemiSyncReplicaEnabled: true,
+			},
+			code:     PrimarySemiSyncBlocked,
+			expected: true,
+		},
+		{
+			name:    "non-acker ReplicationStopped does not declare before PrimarySemiSyncBlocked",
+			problem: replicationStoppedProblem,
+			a: &DetectionAnalysis{
+				Analysis:               ReplicationStopped,
+				SemiSyncReplicaEnabled: false,
+			},
+			code:     PrimarySemiSyncBlocked,
+			expected: false,
+		},
+		{
+			name:    "acker ReplicationStopped does not declare before DeadPrimary",
+			problem: replicationStoppedProblem,
+			a: &DetectionAnalysis{
+				Analysis:               ReplicationStopped,
+				SemiSyncReplicaEnabled: true,
+			},
+			code:     DeadPrimary,
+			expected: false,
+		},
+		{
+			name:    "problem with no BeforeAnalysesFunc",
+			problem: GetDetectionAnalysisProblem(NotConnectedToPrimary),
+			a: &DetectionAnalysis{
+				Analysis: NotConnectedToPrimary,
+			},
+			code:     PrimarySemiSyncBlocked,
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresBefore(tt.problem, tt.a, tt.code))
 		})
 	}
 }

@@ -983,25 +983,16 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				DiscoverInstance(primaryTablet.Alias, true)
 			}
 		}
-		alreadyFixed, shardAnalyses, err := checkIfAlreadyFixed(analysisEntry)
+		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.AnalyzedInstanceAlias, err))
 			return err
 		}
 		if alreadyFixed {
-			// Before skipping, check if dependency ordering says this
-			// problem should still proceed. GetDetectionAnalysis may
-			// have suppressed this tablet's analysis due to
-			// hasShardWideAction, making it appear "fixed" when it's
-			// actually just overshadowed by a shard-wide problem.
-			if shouldProceedDespiteShardProblems(analysisEntry, shardAnalyses) {
-				logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - suppressed by shard-wide action but dependency ordering says to proceed", analysisEntry.Analysis, analyzedInstanceAliasString))
-			} else {
-				logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
-				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
-				return nil
-			}
+			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
+			return nil
 		}
 	}
 
@@ -1051,29 +1042,6 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	return err
 }
 
-// shouldProceedDespiteShardProblems checks whether the given analysis entry
-// should proceed with recovery despite its problem being absent from a fresh
-// re-analysis. This happens when GetDetectionAnalysis suppresses the tablet's
-// analysis due to hasShardWideAction, but the dependency ordering says this
-// problem should run before (or a shard problem should run after) it.
-func shouldProceedDespiteShardProblems(analysisEntry *inst.DetectionAnalysis, shardAnalyses []*inst.DetectionAnalysis) bool {
-	problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
-	if problem == nil {
-		return false
-	}
-	beforeCodes := problem.GetBeforeAnalyses(analysisEntry, shardAnalyses)
-	for _, entry := range shardAnalyses {
-		if slices.Contains(beforeCodes, entry.Analysis) {
-			return true
-		}
-		entryProblem := inst.GetDetectionAnalysisProblem(entry.Analysis)
-		if entryProblem != nil && slices.Contains(entryProblem.GetAfterAnalyses(entry, shardAnalyses), analysisEntry.Analysis) {
-			return true
-		}
-	}
-	return false
-}
-
 // recheckPrimaryHealth check the health of the primary node.
 // It then checks whether, given the re-discovered primary health, the original recovery is still valid.
 // If not valid then it will abort the current analysis.
@@ -1086,7 +1054,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	discoveryFunc(primaryTabletAlias, true)
 
 	// checking if the original analysis is valid even after the primary refresh.
-	alreadyFixed, shardAnalyses, err := checkIfAlreadyFixed(analysisEntry)
+	alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
 		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
@@ -1096,49 +1064,33 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 		return nil
 	}
 
-	// The original analysis for the tablet has changed. Before aborting, check
-	// if the dependency ordering says the original problem should run before any
-	// of the shard's current problems (via BeforeAnalysesFunc/AfterAnalysesFunc).
-	// This prevents a deadlock where a primary problem (e.g., PrimarySemiSyncBlocked)
-	// blocks the replica fix (e.g., ReplicationStopped) that would resolve it.
-	// Uses the original analysisEntry (not re-queried) as self — the tablet's
-	// acker status (SemiSyncReplicaEnabled) is a property of the replica itself
-	// and won't change from rediscovering the primary.
-	if shouldProceedDespiteShardProblems(analysisEntry, shardAnalyses) {
-		log.Info(fmt.Sprintf("recheckPrimaryHealth: dependency ordering says %s should proceed despite shard problems", originalAnalysisEntry))
-		return nil
-	}
-
+	// The original analysis for the tablet has changed.
+	// This could mean that either the original analysis has changed or some other
+	// VTOrc instance has already performing the mitigation.
+	// In either case, the original analysis is stale which can be safely aborted.
 	log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
 	recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
-	// original analysis is stale, abort.
 	return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not.
-// It returns the fresh shard analyses alongside the result so callers can inspect them without re-querying.
-func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, []*inst.DetectionAnalysis, error) {
+func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 
 	for _, entry := range analysisEntries {
 		// If there is a analysis which has the same recovery required, then we should proceed with the recovery
 		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
 		if tabletAliasesEqual && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
-			return false, analysisEntries, nil
+			return false, nil
 		}
 	}
 
-	// We didn't find a replication analysis matching the original failure,
-	// which means some other agent probably fixed it. Note: GetDetectionAnalysis
-	// skips subsequent tablets after finding a shard-wide action (hasShardWideAction),
-	// so a still-broken replica may appear "fixed" when it was only suppressed.
-	// Callers (e.g., recheckPrimaryHealth) handle this by checking dependency
-	// ordering before aborting.
-	return true, analysisEntries, nil
+	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
+	return true, nil
 }
 
 // recoverShardAnalyses executes recoveries for a shard's analyses. Analyses

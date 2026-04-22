@@ -31,7 +31,6 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -470,76 +469,11 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 	}
 }
 
-func TestShouldProceedDespiteShardProblems(t *testing.T) {
-	tests := []struct {
-		name          string
-		analysisEntry *inst.DetectionAnalysis
-		shardAnalyses []*inst.DetectionAnalysis
-		expected      bool
-	}{
-		{
-			name: "acker ReplicationStopped proceeds when PrimarySemiSyncBlocked present",
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:               inst.ReplicationStopped,
-				SemiSyncReplicaEnabled: true,
-			},
-			shardAnalyses: []*inst.DetectionAnalysis{
-				{Analysis: inst.PrimarySemiSyncBlocked},
-			},
-			expected: true,
-		},
-		{
-			name: "non-acker ReplicationStopped does not proceed",
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:               inst.ReplicationStopped,
-				SemiSyncReplicaEnabled: false,
-			},
-			shardAnalyses: []*inst.DetectionAnalysis{
-				{Analysis: inst.PrimarySemiSyncBlocked},
-			},
-			expected: false,
-		},
-		{
-			name: "ReplicationStopped does not proceed without PrimarySemiSyncBlocked",
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:               inst.ReplicationStopped,
-				SemiSyncReplicaEnabled: true,
-			},
-			shardAnalyses: []*inst.DetectionAnalysis{
-				{Analysis: inst.DeadPrimary},
-			},
-			expected: false,
-		},
-		{
-			name: "unrelated problem does not proceed",
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis: inst.PrimaryIsReadOnly,
-			},
-			shardAnalyses: []*inst.DetectionAnalysis{
-				{Analysis: inst.PrimarySemiSyncBlocked},
-			},
-			expected: false,
-		},
-		{
-			name:          "empty shard analyses",
-			analysisEntry: &inst.DetectionAnalysis{Analysis: inst.ReplicationStopped, SemiSyncReplicaEnabled: true},
-			shardAnalyses: nil,
-			expected:      false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, shouldProceedDespiteShardProblems(tt.analysisEntry, tt.shardAnalyses))
-		})
-	}
-}
-
 func TestRecheckPrimaryHealth(t *testing.T) {
 	tests := []struct {
-		name                   string
-		info                   []*test.InfoForRecoveryAnalysis
-		semiSyncReplicaEnabled bool
-		wantErr                string
+		name    string
+		info    []*test.InfoForRecoveryAnalysis
+		wantErr string
 	}{
 		{
 			name: "analysis change",
@@ -562,34 +496,58 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			wantErr: "aborting ReplicationStopped, primary mitigation is required",
 		},
 		{
-			name:                   "analysis changed but BeforeAnalysesFunc covers primary problem",
-			semiSyncReplicaEnabled: true,
-			info: []*test.InfoForRecoveryAnalysis{{
-				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
-					Hostname:      "localhost",
-					Keyspace:      "ks",
-					Shard:         "0",
-					Type:          topodatapb.TabletType_PRIMARY,
-					MysqlHostname: "localhost",
-					MysqlPort:     6708,
+			// PrimarySemiSyncBlocked on the primary, acker replica has
+			// ReplicationStopped. GetDetectionAnalysis preserves the
+			// acker's analysis (via declaresBefore), so checkIfAlreadyFixed
+			// finds it and returns alreadyFixed=false → proceed.
+			name: "acker ReplicationStopped preserved despite shard-wide PrimarySemiSyncBlocked",
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:                   policy.DurabilitySemiSync,
+					LastCheckValid:                     1,
+					CountReplicas:                      1,
+					CountValidReplicas:                 1,
+					CountValidReplicatingReplicas:      0,
+					CountValidOracleGTIDReplicas:       1,
+					CountLoggingReplicas:               1,
+					IsPrimary:                          1,
+					CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+					SemiSyncPrimaryEnabled:             1,
+					SemiSyncPrimaryStatus:              1,
+					SemiSyncBlocked:                    1,
+					SemiSyncPrimaryWaitForReplicaCount: 1,
+					SemiSyncPrimaryClients:             0,
+					CountSemiSyncReplicasEnabled:       1,
 				},
-				DurabilityPolicy:                   policy.DurabilitySemiSync,
-				LastCheckValid:                     1,
-				CountReplicas:                      1,
-				CountValidReplicas:                 1,
-				CountValidReplicatingReplicas:      0,
-				CountValidOracleGTIDReplicas:       1,
-				CountLoggingReplicas:               1,
-				IsPrimary:                          1,
-				CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
-				SemiSyncPrimaryEnabled:             1,
-				SemiSyncPrimaryStatus:              1,
-				SemiSyncBlocked:                    1,
-				SemiSyncPrimaryWaitForReplicaCount: 1,
-				SemiSyncPrimaryClients:             0,
-				CountSemiSyncReplicasEnabled:       1,
-			}},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					ReplicationStopped:     1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
 		},
 		{
 			name: "analysis did not change",
@@ -648,11 +606,10 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
-				AnalyzedInstanceAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-				Analysis:               inst.ReplicationStopped,
-				AnalyzedKeyspace:       "ks",
-				AnalyzedShard:          "0",
-				SemiSyncReplicaEnabled: tt.semiSyncReplicaEnabled,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Analysis:              inst.ReplicationStopped,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
 			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})

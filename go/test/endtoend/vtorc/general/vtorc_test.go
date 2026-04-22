@@ -925,15 +925,22 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	// ReplicaSemiSyncMustBeSet under semi_sync durability).
 	fixReplicaCount := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)
 
-	// Stop replication on the semi-sync acker (REPLICA). This causes
-	// PrimarySemiSyncBlocked on the primary. VTOrc should fix replication
-	// via the BeforeAnalysesFunc bypass in recheckPrimaryHealth.
+	// Stop replication on the semi-sync acker (REPLICA). VTOrc should
+	// detect ReplicationStopped and fix it. The GetDetectionAnalysis
+	// change ensures the acker's analysis is not suppressed by
+	// hasShardWideAction even if PrimarySemiSyncBlocked is also present.
+	//
+	// Note: we cannot reliably assert PrimarySemiSyncBlocked is detected
+	// in this test because it requires a blocked write (SemiSyncBlocked
+	// only flips when a write is waiting for acks), and VTOrc fixes the
+	// replica faster than we can create the blocking condition. The
+	// deadlock scenario is covered by unit tests in analysis_dao_test.go
+	// (TestDeclaresBefore) and topology_recovery_test.go
+	// (TestRecheckPrimaryHealth).
 	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
 	require.NoError(t, err)
 
 	// Wait for VTOrc to fix the replica before checking replication.
-	// Without this, CheckReplication's INSERT on the primary can hang
-	// if the primary is still semi-sync blocked.
 	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, fixReplicaCount+1)
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }
