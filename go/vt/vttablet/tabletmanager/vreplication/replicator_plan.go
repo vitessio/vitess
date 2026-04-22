@@ -616,6 +616,15 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 		if i >= len(afterVals) {
 			break
 		}
+		// FieldsToSkip columns (e.g. target-side generated columns) are never
+		// referenced by the generated SQL, so there is no bindvar to populate.
+		// jsonIndex must still advance: JsonPartialValues bits are indexed by
+		// the source's JSON-column ordering, so a skipped JSON column still
+		// consumes a bit position.
+		if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			jsonIndex++
+			continue
+		}
 
 		var (
 			bindVar *querypb.BindVariable
@@ -759,6 +768,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			jsonIndex := 0
 			for i, field := range tp.Fields {
 				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
+					// Skipped JSON columns (e.g. target-side generated columns)
+					// are not referenced by the INSERT, so there is no bindvar
+					// to rewrite. jsonIndex must still advance so subsequent
+					// JSON columns read the correct JsonPartialValues bit.
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						jsonIndex++
+						continue
+					}
 					switch {
 					case !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
 						// We use the full AFTER value which we already have.

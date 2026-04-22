@@ -1536,6 +1536,116 @@ func TestApplyChangeIgnoresSkippedJSONColumnsWhenCheckingUpdateLimit(t *testing.
 	assert.Equal(t, "update t set v='new' where id=1", executed[0])
 }
 
+func TestApplyChangeSkipsMarshallingGeneratedJSONColumns(t *testing.T) {
+	// The skipped column's bytes are intentionally not valid JSON:
+	// vjson.MarshalSQLValue errors on this input, so if bindAfterJSONFieldVals
+	// wastefully marshals a FieldsToSkip column, applyChange returns that
+	// error. A passing test proves we bypass the marshal for skipped fields.
+	skippedInvalid := []byte(`not-json`)
+	validJSON := []byte(`{"ok":true}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalid)), int64(len(validJSON))},
+			Values:  append(append([]byte("1"), skippedInvalid...), validJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Contains(t, executed[0], "JSON_OBJECT(")
+	assert.NotContains(t, executed[0], "not-json")
+}
+
+func TestApplyChangePartialRebuildSkipsGeneratedJSONColumns(t *testing.T) {
+	// Exercises the DELETE+INSERT partial-rebuild loop. The skipped generated
+	// JSON column has its partial bit set AND an empty AFTER diff, which
+	// routes into the "marshal the BEFORE value" branch. The BEFORE bytes
+	// are intentionally not valid JSON, so vjson.MarshalSQLValue errors if
+	// called. A passing test proves the rebuild loop skips the column
+	// instead of wastefully marshalling it — and keeps jsonIndex aligned
+	// so the non-skipped JSON column's partial bit is read correctly.
+	skippedInvalidBefore := []byte(`not-json`)
+	validBeforeJSON := []byte(`{"k":"before"}`)
+	validAfterJSON := []byte(`{"k":"after"}`)
+
+	beforeVals := append([]byte("1"), skippedInvalidBefore...)
+	beforeVals = append(beforeVals, validBeforeJSON...)
+	afterVals := append([]byte("2"), validAfterJSON...)
+
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalidBefore)), int64(len(validBeforeJSON))},
+			Values:  beforeVals,
+		},
+		After: &querypb.Row{
+			// j_gen has an empty AFTER diff ("column not updated").
+			Lengths: []int64{1, 0, int64(len(validAfterJSON))},
+			Values:  afterVals,
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 3,
+			Cols:  []byte{0x07},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			// j_gen is partial (bit 0); j is not (bit 1 unset).
+			Cols: []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 2)
+	assert.Equal(t, "delete from t where id=1", executed[0])
+	assert.Contains(t, executed[1], "insert into t(id, j) values (2,")
+	assert.Contains(t, executed[1], "JSON_OBJECT(")
+	assert.NotContains(t, executed[1], "not-json")
+}
+
 func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
 	beforeJSON := []byte(`{"small":"x"}`)
 	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.big', CAST(JSON_QUOTE(_utf8mb4'` + strings.Repeat("x", 64) + `') as JSON))`)
