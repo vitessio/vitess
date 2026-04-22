@@ -69,56 +69,6 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	})
 }
 
-// TestSelectUserTablesToOptimizeLocked exercises the per-table selection
-// logic used by maybeOptimizeUserTablesLocked.
-func TestSelectUserTablesToOptimizeLocked(t *testing.T) {
-	now := time.Now()
-	overThreshold := map[string]uint64{
-		"tbl_a": 1000,
-		"tbl_b": 2000,
-	}
-
-	t.Run("primary tablet returns nil", func(t *testing.T) {
-		se := &Engine{isServingPrimary: true}
-		assert.Empty(t, se.selectUserTablesToOptimizeLocked(now, overThreshold))
-		assert.Empty(t, se.userTableOptimizeLastAt, "no stamps when skipped")
-	})
-
-	t.Run("within stability cooldown returns nil", func(t *testing.T) {
-		se := &Engine{tabletTypeLastChangedAt: now.Add(-30 * time.Second)}
-		assert.Empty(t, se.selectUserTablesToOptimizeLocked(now, overThreshold))
-		assert.Empty(t, se.userTableOptimizeLastAt)
-	})
-
-	t.Run("eligible with empty history returns all tables", func(t *testing.T) {
-		se := &Engine{}
-		got := se.selectUserTablesToOptimizeLocked(now, overThreshold)
-		assert.ElementsMatch(t, []string{"tbl_a", "tbl_b"}, got)
-		assert.Len(t, se.userTableOptimizeLastAt, 2, "both tables get stamped")
-		assert.Equal(t, now, se.userTableOptimizeLastAt["tbl_a"])
-		assert.Equal(t, now, se.userTableOptimizeLastAt["tbl_b"])
-	})
-
-	t.Run("per-table throttle skips recently-optimized table", func(t *testing.T) {
-		se := &Engine{
-			userTableOptimizeLastAt: map[string]time.Time{"tbl_a": now.Add(-1 * time.Hour)},
-		}
-		got := se.selectUserTablesToOptimizeLocked(now, overThreshold)
-		assert.Equal(t, []string{"tbl_b"}, got, "tbl_a is in the 24h throttle window")
-		assert.Equal(t, now.Add(-1*time.Hour), se.userTableOptimizeLastAt["tbl_a"], "existing stamp preserved")
-		assert.Equal(t, now, se.userTableOptimizeLastAt["tbl_b"])
-	})
-
-	t.Run("per-table throttle expires past 24h", func(t *testing.T) {
-		se := &Engine{
-			userTableOptimizeLastAt: map[string]time.Time{"tbl_a": now.Add(-25 * time.Hour)},
-		}
-		got := se.selectUserTablesToOptimizeLocked(now, map[string]uint64{"tbl_a": 1000})
-		assert.Equal(t, []string{"tbl_a"}, got)
-		assert.Equal(t, now, se.userTableOptimizeLastAt["tbl_a"])
-	})
-}
-
 // TestDisableSuperReadOnly covers the SRO toggle helper's branches:
 // already-off, on-and-flipped-with-restore, and unknown-system-variable
 // (MariaDB / older MySQL).
@@ -296,56 +246,6 @@ func TestRunOptimizeGtidExecutedSkipsOnTabletTypeFlip(t *testing.T) {
 	assert.Equal(t, 0, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed"))
 }
 
-// TestRunOptimizeUserTableSuccess exercises the user-table OPTIMIZE happy
-// path, including SRO flip and restore.
-func TestRunOptimizeUserTableSuccess(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
-	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
-	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
-	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t", &sqltypes.Result{})
-
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.mu.Lock()
-	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
-	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
-	se.mu.Unlock()
-
-	se.userTableOptimizeSem <- struct{}{}
-	se.runOptimizeUserTable("bloated_t", 1234567)
-
-	assert.Equal(t, 1, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t"))
-	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
-	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-}
-
-// TestRunOptimizeUserTableSkipsOnTabletTypeFlip verifies that an in-flight
-// goroutine spawned on a REPLICA honours a flip to PRIMARY and bails.
-func TestRunOptimizeUserTableSkipsOnTabletTypeFlip(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddRejectedQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t",
-		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "must not run on PRIMARY"))
-
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.MakePrimary(true)
-	se.mu.Lock()
-	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
-	se.mu.Unlock()
-
-	se.userTableOptimizeSem <- struct{}{}
-	se.runOptimizeUserTable("bloated_t", 1234567)
-
-	// The per-table throttle entry is cleared so the next reload retries.
-	se.mu.Lock()
-	_, stillStamped := se.userTableOptimizeLastAt["bloated_t"]
-	se.mu.Unlock()
-	assert.False(t, stillStamped)
-	assert.Equal(t, 0, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t"))
-}
-
 // TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO verifies that even
 // when OPTIMIZE itself fails, the deferred super_read_only restore still
 // runs. This is the key correctness property that protects the tablet from
@@ -374,51 +274,6 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 	se.mu.Lock()
 	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
 	se.mu.Unlock()
-}
-
-// TestRunOptimizeUserTableOptimizeFailureRestoresSRO verifies the same
-// SRO-restore-on-failure property for user-table OPTIMIZE, and that the
-// per-table throttle entry is cleared so the next reload retries.
-func TestRunOptimizeUserTableOptimizeFailureRestoresSRO(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
-	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
-	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
-	db.AddRejectedQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE bloated_t",
-		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated OPTIMIZE failure"))
-
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	se.mu.Lock()
-	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
-	se.userTableOptimizeLastAt = map[string]time.Time{"bloated_t": time.Now()}
-	se.mu.Unlock()
-
-	se.userTableOptimizeSem <- struct{}{}
-	se.runOptimizeUserTable("bloated_t", 1234567)
-
-	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-	se.mu.Lock()
-	_, stillStamped := se.userTableOptimizeLastAt["bloated_t"]
-	se.mu.Unlock()
-	assert.False(t, stillStamped, "failure path must clear the per-table throttle stamp")
-}
-
-// TestMaybeOptimizeUserTablesEmptyInput verifies the early-return for an
-// empty input map (no work to spawn). Because maybeOptimizeUserTablesLocked
-// requires the caller to hold se.mu (it's invoked from reload()), we take
-// the lock explicitly here.
-func TestMaybeOptimizeUserTablesEmptyInput(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	se.maybeOptimizeUserTablesLocked(nil)
-	se.maybeOptimizeUserTablesLocked(map[string]uint64{})
-	assert.Empty(t, se.userTableOptimizeLastAt)
 }
 
 // TestUpdateUserTableFreeSpaceDisabled verifies that when the threshold is
@@ -714,70 +569,6 @@ func TestUpdateUserTableFreeSpaceOutOfRangeThresholdTreatedAsDisabled(t *testing
 			conn.Recycle()
 		})
 	}
-}
-
-// TestMaybeOptimizeUserTablesConcurrencyCap verifies that when multiple
-// user tables are over the threshold on the same reload cycle, at most one
-// OPTIMIZE is launched (picked by largest DATA_FREE). The rest have their
-// throttle stamps rewound so the next reload reconsiders them immediately.
-func TestMaybeOptimizeUserTablesConcurrencyCap(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-	// Occupy the semaphore so selectUserTablesToOptimizeLocked stamps all
-	// candidates, then the outer loop rewinds them because spawn is blocked.
-	se.userTableOptimizeSem <- struct{}{}
-	defer func() { <-se.userTableOptimizeSem }()
-
-	se.mu.Lock()
-	defer se.mu.Unlock()
-
-	over := map[string]uint64{
-		"t_small":  100,
-		"t_medium": 500,
-		"t_big":    5000,
-	}
-	se.maybeOptimizeUserTablesLocked(over)
-
-	// No table should have a stamped throttle entry because the only "winner"
-	// couldn't acquire the sem and the losers were rewound.
-	assert.Empty(t, se.userTableOptimizeLastAt,
-		"all candidates rewound when semaphore is full")
-}
-
-// TestMaybeOptimizeUserTablesPicksWorstOffender verifies the ordering: when
-// several tables are eligible and the semaphore is free, the spawned
-// OPTIMIZE is for the table with the largest DATA_FREE, and the others are
-// rewound for a later reload.
-func TestMaybeOptimizeUserTablesPicksWorstOffender(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-
-	se.mu.Lock()
-	over := map[string]uint64{
-		"t_small":  100,
-		"t_medium": 500,
-		"t_big":    5000,
-	}
-	se.maybeOptimizeUserTablesLocked(over)
-	// Exactly one table should be stamped — the worst offender.
-	assert.Len(t, se.userTableOptimizeLastAt, 1, "only one candidate should be stamped")
-	_, ok := se.userTableOptimizeLastAt["t_big"]
-	assert.True(t, ok, "worst offender (t_big) must be the one spawned")
-	se.mu.Unlock()
-
-	// Wait for the goroutine to release the semaphore so it doesn't leak
-	// into other tests. It will fail to open a real connection pool slot
-	// (dbconfigs point at a fakesqldb that hasn't registered OPTIMIZE) and
-	// quickly exit.
-	assert.Eventually(t, func() bool {
-		se.mu.Lock()
-		defer se.mu.Unlock()
-		_, stillStamped := se.userTableOptimizeLastAt["t_big"]
-		return !stillStamped
-	}, 10*time.Second, 10*time.Millisecond,
-		"spawned goroutine should exit and release its throttle stamp")
 }
 
 // TestMakeNonPrimaryResetsSequenceInfo covers the sequence-reset branch of

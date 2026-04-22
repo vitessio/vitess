@@ -24,7 +24,6 @@ import (
 	"log/slog"
 	maps0 "maps"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -108,15 +107,6 @@ type Engine struct {
 	// gtidExecutedOptimizeLastAt records when the background OPTIMIZE of
 	// mysql.gtid_executed last ran successfully on this tablet (throttling).
 	gtidExecutedOptimizeLastAt time.Time
-	// userTableOptimizeLastAt tracks, per user table, when the opt-in background
-	// OPTIMIZE last ran successfully. Keyed by table name in the tablet's DB.
-	userTableOptimizeLastAt map[string]time.Time
-	// userTableOptimizeSem serializes user-table OPTIMIZE goroutines so that
-	// a reload cycle with many offending tables cannot launch a burst of
-	// concurrent InnoDB table rebuilds. Buffered at 1 — the worst-offender
-	// table per reload runs; the rest are rewound to re-run on the next
-	// reload. Initialized in NewEngine.
-	userTableOptimizeSem chan struct{}
 	// surfacedFreeSpaceTables tracks which user tables we last set on the
 	// tableDataFreeBytes gauge, so we can Reset labels for tables that have
 	// dropped below the threshold and avoid stale entries.
@@ -168,9 +158,8 @@ func NewEngine(env tabletenv.Env) *Engine {
 			Size:        3,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
-		ticks:                timer.NewTimer(reloadTime),
-		throttledLogger:      logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
-		userTableOptimizeSem: make(chan struct{}, 1),
+		ticks:           timer.NewTimer(reloadTime),
+		throttledLogger: logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
 	}
 	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
@@ -433,35 +422,6 @@ func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
 		return false
 	}
 	return true
-}
-
-// selectUserTablesToOptimizeLocked returns the subset of overThreshold tables
-// that are eligible for OPTIMIZE right now, and stamps
-// userTableOptimizeLastAt to prevent a concurrent reload from spawning a
-// duplicate goroutine. Returns nil if the tablet-role or stability gates
-// fail; otherwise returns the list of tables to spawn OPTIMIZE for.
-// Caller must hold se.mu.
-func (se *Engine) selectUserTablesToOptimizeLocked(now time.Time, overThreshold map[string]uint64) []string {
-	if se.isServingPrimary {
-		return nil
-	}
-	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
-		return nil
-	}
-	if se.userTableOptimizeLastAt == nil {
-		se.userTableOptimizeLastAt = make(map[string]time.Time, len(overThreshold))
-	}
-	var toOptimize []string
-	for tableName := range overThreshold {
-		if last, seen := se.userTableOptimizeLastAt[tableName]; seen && now.Sub(last) < gtidExecutedOptimizeInterval {
-			continue
-		}
-		// Mark start time now to prevent a concurrent reload from spawning a
-		// duplicate goroutine for the same table. On failure we reset below.
-		se.userTableOptimizeLastAt[tableName] = now
-		toOptimize = append(toOptimize, tableName)
-	}
-	return toOptimize
 }
 
 // EnableHistorian forces tracking to be on or off.
@@ -866,10 +826,9 @@ const userTableFreeSpaceQueryFormat = `select table_name, data_free, data_length
 // disabled and this function is a no-op (after clearing any stale gauge
 // labels from a prior enabled run).
 //
-// On non-primary tablets the surfaced tables are also run through OPTIMIZE
-// NO_WRITE_TO_BINLOG in a background goroutine (one per table), subject to
-// the per-table 24h throttle and the tablet-role stability cooldown. PRIMARY
-// tablets surface the metric/log but never have OPTIMIZE run against them.
+// This path is alerting/visibility only — the schema engine does not run
+// OPTIMIZE against user tables. Operators use the metric and log to drive
+// whatever remediation is appropriate for their environment.
 //
 // Caller must hold se.mu — this is called from reload(), which holds se.mu
 // for its entire duration. The function reads and writes
@@ -932,118 +891,6 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 		se.throttledLogger.Infof("schema engine: %d user table(s) have reclaimable free space exceeding %d%% of total size: %v",
 			len(current), percentThreshold, logSummary)
 	}
-	se.maybeOptimizeUserTablesLocked(current)
-}
-
-// maybeOptimizeUserTablesLocked kicks off a background OPTIMIZE goroutine
-// for the single worst-offending user table that passes the non-primary
-// check, the tablet-role stability cooldown, and the per-table 24h
-// throttle. Concurrency is capped at 1 via userTableOptimizeSem so we don't
-// launch a burst of concurrent InnoDB table rebuilds on the first reload
-// after the feature is enabled. Any tables we selected but didn't spawn
-// (because the lane is busy or because they're not the worst offender on
-// this reload) have their throttle stamp rewound so the next reload
-// reconsiders them immediately rather than waiting 24h. The spawned
-// OPTIMIZE uses a standalone DB connection and is bounded by
-// gtidExecutedOptimizeTimeout.
-//
-// Caller must hold se.mu — this is called from
-// updateUserTableFreeSpaceLocked, which runs under the reload() call stack
-// (se.mu held by ReloadAtEx), so re-acquiring the lock here would deadlock.
-func (se *Engine) maybeOptimizeUserTablesLocked(overThreshold map[string]uint64) {
-	if len(overThreshold) == 0 {
-		return
-	}
-	toOptimize := se.selectUserTablesToOptimizeLocked(time.Now(), overThreshold)
-	if len(toOptimize) == 0 {
-		return
-	}
-	// Worst offender (largest DATA_FREE) first.
-	sort.Slice(toOptimize, func(i, j int) bool {
-		return overThreshold[toOptimize[i]] > overThreshold[toOptimize[j]]
-	})
-	spawned := false
-	for _, tableName := range toOptimize {
-		if !spawned {
-			select {
-			case se.userTableOptimizeSem <- struct{}{}:
-				go se.runOptimizeUserTable(tableName, overThreshold[tableName])
-				spawned = true
-				continue
-			default:
-				// A prior reload's goroutine is still running.
-			}
-		}
-		// Rewind the throttle stamp selectUserTablesToOptimizeLocked set for
-		// this table so the next reload can reconsider it.
-		delete(se.userTableOptimizeLastAt, tableName)
-	}
-}
-
-// runOptimizeUserTable is the background goroutine spawned by
-// maybeOptimizeUserTablesLocked. It re-checks the tablet type before
-// executing so a type flip after spawning is honoured. Temporarily disables
-// super_read_only for the duration of OPTIMIZE and restores it via defer.
-// Releases the userTableOptimizeSem slot on exit so the next reload can
-// pick up another table.
-func (se *Engine) runOptimizeUserTable(tableName string, dataFreeAtSpawn uint64) {
-	defer func() { <-se.userTableOptimizeSem }()
-	ctx, cancel := context.WithTimeout(context.Background(), gtidExecutedOptimizeTimeout)
-	defer cancel()
-
-	se.mu.Lock()
-	stillNonPrimary := !se.isServingPrimary
-	se.mu.Unlock()
-	if !stillNonPrimary {
-		se.mu.Lock()
-		delete(se.userTableOptimizeLastAt, tableName)
-		se.mu.Unlock()
-		return
-	}
-
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
-	if err != nil {
-		log.Warn("schema engine: failed to open connection for user-table OPTIMIZE",
-			slog.String("table", tableName), slog.Any("error", err))
-		se.mu.Lock()
-		delete(se.userTableOptimizeLastAt, tableName)
-		se.mu.Unlock()
-		return
-	}
-	defer conn.Close()
-
-	restoreSRO, err := se.disableSuperReadOnly(conn)
-	// Always defer restore before running OPTIMIZE: we re-enable
-	// super_read_only no matter how the body of this function exits.
-	defer restoreSRO()
-	if err != nil {
-		log.Warn("schema engine: skipping user-table OPTIMIZE; could not disable super_read_only",
-			slog.String("table", tableName), slog.Any("error", err))
-		se.mu.Lock()
-		delete(se.userTableOptimizeLastAt, tableName)
-		se.mu.Unlock()
-		return
-	}
-
-	stmt := fmt.Sprintf("OPTIMIZE NO_WRITE_TO_BINLOG TABLE %s", sqlparser.String(sqlparser.NewIdentifierCS(tableName)))
-	start := time.Now()
-	if _, err := se.executeFetchCtx(ctx, conn, stmt, 100, false); err != nil {
-		log.Warn("schema engine: OPTIMIZE of user table failed",
-			slog.String("table", tableName),
-			slog.Any("error", err),
-			slog.Duration("elapsed", time.Since(start)),
-			slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
-		)
-		se.mu.Lock()
-		delete(se.userTableOptimizeLastAt, tableName)
-		se.mu.Unlock()
-		return
-	}
-	log.Info("schema engine: OPTIMIZE of user table completed",
-		slog.String("table", tableName),
-		slog.Duration("elapsed", time.Since(start)),
-		slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
-	)
 }
 
 // reload reloads the schema. It can also be used to initialize it.

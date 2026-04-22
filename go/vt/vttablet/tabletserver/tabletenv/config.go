@@ -88,17 +88,14 @@ var (
 	// (0-100) of a user table's total allocated space that must be free
 	// (information_schema DATA_FREE as a fraction of DATA_LENGTH +
 	// INDEX_LENGTH + DATA_FREE) before the table is surfaced via the
-	// SchemaTableDataFreeBytes metric and throttled INFO log, and (on
-	// REPLICA and RDONLY tablets) run through OPTIMIZE NO_WRITE_TO_BINLOG
-	// (subject to the per-table 24h throttle and tablet-type stability
-	// cooldown). A value of 0 disables the feature entirely. This value is
-	// backed by viper so it can be changed at runtime via the dynamic
-	// config file.
+	// SchemaTableDataFreeBytes metric and a throttled INFO log. A value of
+	// 0 disables the feature entirely. This value is backed by viper so it
+	// can be changed at runtime via the dynamic config file.
 	schemaUserTablesFreeSpacePercentThreshold = viperutil.Configure(
 		"schema_user_tables_free_space_percent_threshold",
 		viperutil.Options[int]{
 			FlagName: "schema-user-tables-free-space-percent-threshold",
-			Default:  0,
+			Default:  50,
 			Dynamic:  true,
 		},
 	)
@@ -168,7 +165,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&currentConfig.SchemaReloadInterval, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadInterval, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	fs.DurationVar(&currentConfig.SchemaChangeReloadTimeout, "schema-change-reload-timeout", defaultConfig.SchemaChangeReloadTimeout, "query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up")
-	fs.Int("schema-user-tables-free-space-percent-threshold", schemaUserTablesFreeSpacePercentThreshold.Default(), "percentage (0-100) of a user table's total allocated space that must be reclaimable free space (DATA_FREE) before the table is surfaced via the SchemaTableDataFreeBytes metric and throttled logs, and (on REPLICA and RDONLY tablets) run through OPTIMIZE NO_WRITE_TO_BINLOG TABLE (throttled to at most once per 24h per table). 0 disables the feature. Dynamically reloadable via the viper config file.")
+	fs.Int("schema-user-tables-free-space-percent-threshold", schemaUserTablesFreeSpacePercentThreshold.Default(), "percentage (0-100) of a user table's total allocated space that must be reclaimable free space (DATA_FREE) before the table is surfaced via the SchemaTableDataFreeBytes metric and a throttled INFO log. 0 disables the feature. Dynamically reloadable via the viper config file.")
 	viperutil.BindFlags(fs, schemaUserTablesFreeSpacePercentThreshold)
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema-change-signal enabled for this to work")
 	fs.DurationVar(&currentConfig.Olap.TxTimeout, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeout, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
